@@ -5,4 +5,3 @@ export default function Page() {
       <p>Deployment is working</p>
     </main>
   )
-}
