@@ -8,10 +8,11 @@ export default function Page() {
   const [bank, setBank] = useState(0)
 
   return (
-    <main style={{ padding: "24px", fontFamily: "Arial" }}>
+    <main style={{ padding: "24px", fontFamily: "Arial, sans-serif" }}>
       <h1>BSC Control Dashboard</h1>
 
-      <section>
+      {/* SALES */}
+      <section style={{ marginTop: "20px" }}>
         <h2>Today Sales</h2>
         <input
           type="number"
@@ -21,7 +22,8 @@ export default function Page() {
         <p>${sales.toFixed(2)}</p>
       </section>
 
-      <section>
+      {/* CASH */}
+      <section style={{ marginTop: "20px" }}>
         <h2>Cash in Hand</h2>
         <input
           type="number"
@@ -31,7 +33,8 @@ export default function Page() {
         <p>${cash.toFixed(2)}</p>
       </section>
 
-      <section>
+      {/* BANK */}
+      <section style={{ marginTop: "20px" }}>
         <h2>Bank</h2>
         <input
           type="number"
@@ -39,6 +42,12 @@ export default function Page() {
           onChange={(e) => setBank(Number(e.target.value))}
         />
         <p>${bank.toFixed(2)}</p>
+      </section>
+
+      {/* TOTAL */}
+      <section style={{ marginTop: "20px" }}>
+        <h2>Total Position</h2>
+        <p>${(cash + bank).toFixed(2)}</p>
       </section>
     </main>
   )
