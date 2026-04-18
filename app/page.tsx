@@ -1,8 +1,8 @@
-export default function HomePage() {
+export default function Page() {
 return (
 <main>
 <h1>BSC Dashboard</h1>
-<p>Deployment is working.</p>
+<p>Deployment is working</p>
 </main>
 )
 }
