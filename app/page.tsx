@@ -29,6 +29,9 @@ type InventoryItem = {
   unitCost: number
 }
 
+const HISTORY_KEY = "bsc-dashboard-history"
+const INVENTORY_KEY = "bsc-dashboard-inventory"
+
 export default function Page() {
   const [sales, setSales] = useState(0)
   const [cost, setCost] = useState(0)
@@ -42,32 +45,45 @@ export default function Page() {
   const [bank, setBank] = useState(0)
 
   const [history, setHistory] = useState<HistoryItem[]>([])
-
-  const [itemName, setItemName] = useState("")
-  const [stock, setStock] = useState(0)
-  const [reorderLevel, setReorderLevel] = useState(0)
-  const [reorderQty, setReorderQty] = useState(0)
-  const [unitCost, setUnitCost] = useState(0)
   const [inventory, setInventory] = useState<InventoryItem[]>([])
 
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("bsc-dashboard-history")
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory))
-    }
+  const [itemName, setItemName] = useState("")
+  const [itemStock, setItemStock] = useState(0)
+  const [itemReorderLevel, setItemReorderLevel] = useState(0)
+  const [itemReorderQty, setItemReorderQty] = useState(0)
+  const [itemUnitCost, setItemUnitCost] = useState(0)
 
-    const savedInventory = localStorage.getItem("bsc-dashboard-inventory")
-    if (savedInventory) {
-      setInventory(JSON.parse(savedInventory))
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem(HISTORY_KEY)
+      const savedInventory = localStorage.getItem(INVENTORY_KEY)
+
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory))
+      }
+
+      if (savedInventory) {
+        setInventory(JSON.parse(savedInventory))
+      }
+    } catch (error) {
+      console.error("Failed to load saved data:", error)
     }
   }, [])
 
   useEffect(() => {
-    localStorage.setItem("bsc-dashboard-history", JSON.stringify(history))
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+    } catch (error) {
+      console.error("Failed to save history:", error)
+    }
   }, [history])
 
   useEffect(() => {
-    localStorage.setItem("bsc-dashboard-inventory", JSON.stringify(inventory))
+    try {
+      localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory))
+    } catch (error) {
+      console.error("Failed to save inventory:", error)
+    }
   }, [inventory])
 
   const grossProfit = useMemo(() => sales - cost, [sales, cost])
@@ -88,62 +104,66 @@ export default function Page() {
     return inventory.filter((item) => item.stock <= item.reorderLevel)
   }, [inventory])
 
-  const totalInventoryValue = useMemo(() => {
-    return inventory.reduce((sum, item) => sum + item.stock * item.unitCost, 0)
-  }, [inventory])
-
-  const totalReorderValue = useMemo(() => {
-    return lowStockItems.reduce((sum, item) => sum + item.reorderQty * item.unitCost, 0)
-  }, [lowStockItems])
-
-  const inventoryInsight = useMemo(() => {
-    if (inventory.length === 0) return "⚠️ No inventory items entered"
-    if (lowStockItems.length >= 3) return "⚠️ Multiple items need reorder now"
-    if (lowStockItems.length > 0) return "⚠️ Reorder low stock items before they affect sales"
-    return "📦 Inventory levels look healthy"
-  }, [inventory, lowStockItems])
-
   const aiInsight = useMemo(() => {
-    if (sales <= 0) return "⚠️ No sales entered — system idle"
-    if (grossProfit < 0) return "⚠️ Cost is higher than sales"
-    if (netProfit < 0) return "⚠️ Net profit is negative — reduce expenses or raise margin"
-    if (totalPosition < 500) return "⚠️ Low cash position — prioritize sales or reduce spending"
-    if (netProfit > 0 && totalPosition > 0) return "✅ Business is profitable and cash position is positive"
-    return "📊 Review today’s numbers and update missing entries"
-  }, [sales, grossProfit, netProfit, totalPosition])
+    const messages: string[] = []
 
-  const formatMoney = (value: number) => `$${value.toFixed(2)}`
+    if (sales <= 0) {
+      messages.push("⚠️ No sales entered — system idle")
+    }
 
-  const cardStyle = {
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
-    borderRadius: "20px",
-    padding: "20px",
-    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
-  } as const
+    if (grossProfit < 0) {
+      messages.push("⚠️ Cost of goods is higher than sales")
+    }
 
-  const inputStyle = {
-    width: "100%",
-    padding: "14px 16px",
-    borderRadius: "14px",
-    border: "1px solid #cbd5e1",
-    fontSize: "18px",
-    marginTop: "8px",
-    boxSizing: "border-box" as const,
+    if (netProfit < 0) {
+      messages.push("⚠️ Net profit is negative — reduce expenses or increase sales")
+    }
+
+    if (totalPosition < 500) {
+      messages.push("⚠️ Low cash position — prioritize sales or reduce spending")
+    }
+
+    if (inventory.length === 0) {
+      messages.push("⚠️ No inventory items entered")
+    } else if (lowStockItems.length > 0) {
+      messages.push(`⚠️ ${lowStockItems.length} low-stock item(s) need reorder attention`)
+    }
+
+    if (messages.length === 0) {
+      messages.push("✅ Business numbers look stable today")
+    }
+
+    return messages
+  }, [sales, grossProfit, netProfit, totalPosition, inventory, lowStockItems])
+
+  const addInventoryItem = () => {
+    if (!itemName.trim()) return
+
+    const newItem: InventoryItem = {
+      id: crypto.randomUUID(),
+      name: itemName.trim(),
+      stock: itemStock,
+      reorderLevel: itemReorderLevel,
+      reorderQty: itemReorderQty,
+      unitCost: itemUnitCost,
+    }
+
+    setInventory((prev) => [newItem, ...prev])
+
+    setItemName("")
+    setItemStock(0)
+    setItemReorderLevel(0)
+    setItemReorderQty(0)
+    setItemUnitCost(0)
   }
 
-  const buttonStyle = {
-    padding: "14px 18px",
-    borderRadius: "14px",
-    border: "none",
-    fontSize: "18px",
-    fontWeight: 700,
-    cursor: "pointer",
-  } as const
+  const deleteInventoryItem = (id: string) => {
+    setInventory((prev) => prev.filter((item) => item.id !== id))
+  }
 
-  const saveCloseout = () => {
-    const entry: HistoryItem = {
-      id: Date.now().toString(),
+  const saveTodayCloseout = () => {
+    const newEntry: HistoryItem = {
+      id: crypto.randomUUID(),
       date: new Date().toLocaleString(),
       sales,
       cost,
@@ -157,10 +177,10 @@ export default function Page() {
       cash,
       bank,
       totalPosition,
-      aiInsight,
+      aiInsight: aiInsight.join(" | "),
     }
 
-    setHistory((prev) => [entry, ...prev])
+    setHistory((prev) => [newEntry, ...prev])
   }
 
   const clearInputs = () => {
@@ -178,37 +198,77 @@ export default function Page() {
     setHistory([])
   }
 
-  const saveInventoryItem = () => {
-    if (!itemName.trim()) return
-
-    const newItem: InventoryItem = {
-      id: Date.now().toString(),
-      name: itemName.trim(),
-      stock,
-      reorderLevel,
-      reorderQty,
-      unitCost,
-    }
-
-    setInventory((prev) => [newItem, ...prev])
-
-    setItemName("")
-    setStock(0)
-    setReorderLevel(0)
-    setReorderQty(0)
-    setUnitCost(0)
+  const cardStyle: React.CSSProperties = {
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    borderRadius: "24px",
+    padding: "24px",
+    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
   }
 
-  const clearInventoryInputs = () => {
-    setItemName("")
-    setStock(0)
-    setReorderLevel(0)
-    setReorderQty(0)
-    setUnitCost(0)
+  const statValueStyle: React.CSSProperties = {
+    fontSize: "28px",
+    fontWeight: 800,
+    marginTop: "10px",
+    color: "#0f172a",
   }
 
-  const deleteInventoryItem = (id: string) => {
-    setInventory((prev) => prev.filter((item) => item.id !== id))
+  const mutedLabelStyle: React.CSSProperties = {
+    color: "#6b7280",
+    fontSize: "14px",
+    fontWeight: 500,
+  }
+
+  const sectionTitleStyle: React.CSSProperties = {
+    fontSize: "20px",
+    fontWeight: 800,
+    marginBottom: "18px",
+    color: "#0f172a",
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "14px 16px",
+    borderRadius: "14px",
+    border: "1px solid #cbd5e1",
+    fontSize: "18px",
+    outline: "none",
+    boxSizing: "border-box",
+    marginTop: "8px",
+    background: "#ffffff",
+  }
+
+  const buttonPrimary: React.CSSProperties = {
+    background: "#0b1736",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "16px",
+    padding: "16px 20px",
+    fontSize: "18px",
+    fontWeight: 700,
+    cursor: "pointer",
+  }
+
+  const buttonSecondary: React.CSSProperties = {
+    background: "#e5e7eb",
+    color: "#111827",
+    border: "none",
+    borderRadius: "16px",
+    padding: "16px 20px",
+    fontSize: "18px",
+    fontWeight: 700,
+    cursor: "pointer",
+  }
+
+  const buttonDanger: React.CSSProperties = {
+    background: "#f8d7da",
+    color: "#b91c1c",
+    border: "none",
+    borderRadius: "16px",
+    padding: "16px 20px",
+    fontSize: "18px",
+    fontWeight: 700,
+    cursor: "pointer",
   }
 
   return (
@@ -216,17 +276,47 @@ export default function Page() {
       style={{
         minHeight: "100vh",
         background: "#f3f4f6",
-        padding: "24px",
+        padding: "28px",
         fontFamily: "Arial, sans-serif",
-        color: "#0f172a",
+        color: "#111827",
       }}
     >
-      <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-        <section style={{ marginBottom: "24px" }}>
-          <h1 style={{ fontSize: "56px", lineHeight: 1, margin: 0, fontWeight: 800 }}>
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          display: "grid",
+          gap: "24px",
+        }}
+      >
+        <section
+          style={{
+            ...cardStyle,
+            background: "#f3f4f6",
+            border: "none",
+            boxShadow: "none",
+            padding: "0",
+          }}
+        >
+          <h1
+            style={{
+              fontSize: "clamp(40px, 7vw, 72px)",
+              lineHeight: 1,
+              margin: 0,
+              fontWeight: 900,
+              color: "#0b1736",
+            }}
+          >
             BSC Control Dashboard
           </h1>
-          <p style={{ fontSize: "20px", color: "#334155", marginTop: "16px" }}>
+
+          <p
+            style={{
+              marginTop: "18px",
+              fontSize: "20px",
+              color: "#1f2937",
+            }}
+          >
             Live business control center
           </p>
         </section>
@@ -234,386 +324,366 @@ export default function Page() {
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: "16px",
-            marginBottom: "24px",
           }}
         >
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Sales</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>{formatMoney(sales)}</div>
+            <div style={mutedLabelStyle}>Sales</div>
+            <div style={statValueStyle}>${sales.toFixed(2)}</div>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Gross Profit</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>
-              {formatMoney(grossProfit)}
-            </div>
+            <div style={mutedLabelStyle}>Gross Profit</div>
+            <div style={statValueStyle}>${grossProfit.toFixed(2)}</div>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Expenses</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>
-              {formatMoney(totalExpenses)}
-            </div>
+            <div style={mutedLabelStyle}>Expenses</div>
+            <div style={statValueStyle}>${totalExpenses.toFixed(2)}</div>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Net Profit</div>
+            <div style={mutedLabelStyle}>Net Profit</div>
             <div
               style={{
-                fontSize: "28px",
-                fontWeight: 800,
-                marginTop: "8px",
-                color: netProfit >= 0 ? "#3f8f2f" : "#dc2626",
+                ...statValueStyle,
+                color: netProfit >= 0 ? "#16a34a" : "#dc2626",
               }}
             >
-              {formatMoney(netProfit)}
+              ${netProfit.toFixed(2)}
             </div>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Cash in Hand</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>{formatMoney(cash)}</div>
+            <div style={mutedLabelStyle}>Cash in Hand</div>
+            <div style={statValueStyle}>${cash.toFixed(2)}</div>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Bank</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>{formatMoney(bank)}</div>
+            <div style={mutedLabelStyle}>Bank</div>
+            <div style={statValueStyle}>${bank.toFixed(2)}</div>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Total Position</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>
-              {formatMoney(totalPosition)}
-            </div>
+            <div style={mutedLabelStyle}>Total Position</div>
+            <div style={statValueStyle}>${totalPosition.toFixed(2)}</div>
+          </div>
+        </section>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "24px",
+          }}
+        >
+          <div style={cardStyle}>
+            <h2 style={sectionTitleStyle}>Sales + Profit Input</h2>
+
+            <label style={mutedLabelStyle}>
+              Today Sales
+              <input
+                type="number"
+                value={sales}
+                onChange={(e) => setSales(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Cost of Goods
+              <input
+                type="number"
+                value={cost}
+                onChange={(e) => setCost(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Rent
+              <input
+                type="number"
+                value={rent}
+                onChange={(e) => setRent(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Payroll
+              <input
+                type="number"
+                value={payroll}
+                onChange={(e) => setPayroll(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Utilities
+              <input
+                type="number"
+                value={utilities}
+                onChange={(e) => setUtilities(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Other Expenses
+              <input
+                type="number"
+                value={otherExpenses}
+                onChange={(e) => setOtherExpenses(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Inventory Value</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>
-              {formatMoney(totalInventoryValue)}
-            </div>
-          </div>
+            <h2 style={sectionTitleStyle}>Cash Position</h2>
 
-          <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Low Stock Items</div>
+            <label style={mutedLabelStyle}>
+              Cash in Hand
+              <input
+                type="number"
+                value={cash}
+                onChange={(e) => setCash(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Bank
+              <input
+                type="number"
+                value={bank}
+                onChange={(e) => setBank(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
             <div
               style={{
-                fontSize: "28px",
+                marginTop: "24px",
+                fontSize: "22px",
                 fontWeight: 800,
-                marginTop: "8px",
-                color: lowStockItems.length > 0 ? "#dc2626" : "#3f8f2f",
+                color: "#0f172a",
               }}
             >
-              {lowStockItems.length}
+              Total Position: ${totalPosition.toFixed(2)}
             </div>
+          </div>
+        </section>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "24px",
+          }}
+        >
+          <div style={cardStyle}>
+            <h2 style={sectionTitleStyle}>Inventory Input</h2>
+
+            <label style={mutedLabelStyle}>
+              Item Name
+              <input
+                type="text"
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Current Stock
+              <input
+                type="number"
+                value={itemStock}
+                onChange={(e) => setItemStock(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Reorder Level
+              <input
+                type="number"
+                value={itemReorderLevel}
+                onChange={(e) => setItemReorderLevel(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Reorder Quantity
+              <input
+                type="number"
+                value={itemReorderQty}
+                onChange={(e) => setItemReorderQty(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ ...mutedLabelStyle, display: "block", marginTop: "16px" }}>
+              Unit Cost
+              <input
+                type="number"
+                value={itemUnitCost}
+                onChange={(e) => setItemUnitCost(Number(e.target.value) || 0)}
+                style={inputStyle}
+              />
+            </label>
+
+            <button
+              onClick={addInventoryItem}
+              style={{ ...buttonPrimary, marginTop: "20px", width: "100%" }}
+            >
+              Add Inventory Item
+            </button>
           </div>
 
           <div style={cardStyle}>
-            <div style={{ fontSize: "14px", color: "#6b7280" }}>Reorder Value</div>
-            <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "8px" }}>
-              {formatMoney(totalReorderValue)}
-            </div>
+            <h2 style={sectionTitleStyle}>Inventory Alerts</h2>
+
+            {lowStockItems.length === 0 ? (
+              <p
+                style={{
+                  fontSize: "18px",
+                  fontWeight: 700,
+                  color: "#16a34a",
+                  margin: 0,
+                }}
+              >
+                ✅ No low-stock items
+              </p>
+            ) : (
+              <div style={{ display: "grid", gap: "12px" }}>
+                {lowStockItems.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      border: "1px solid #fecaca",
+                      background: "#fef2f2",
+                      borderRadius: "16px",
+                      padding: "14px",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: "#991b1b" }}>{item.name}</div>
+                    <div style={{ color: "#b91c1c", marginTop: "6px" }}>
+                      Stock: {item.stock} | Reorder Level: {item.reorderLevel} | Suggested Reorder: {item.reorderQty}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
-        <section style={{ ...cardStyle, marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>Sales + Profit Input</h2>
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Inventory List</h2>
 
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Today Sales</div>
-            <input
-              type="number"
-              value={sales}
-              onChange={(e) => setSales(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Cost of Goods</div>
-            <input
-              type="number"
-              value={cost}
-              onChange={(e) => setCost(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Rent</div>
-            <input
-              type="number"
-              value={rent}
-              onChange={(e) => setRent(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Payroll</div>
-            <input
-              type="number"
-              value={payroll}
-              onChange={(e) => setPayroll(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Utilities</div>
-            <input
-              type="number"
-              value={utilities}
-              onChange={(e) => setUtilities(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Other Expenses</div>
-            <input
-              type="number"
-              value={otherExpenses}
-              onChange={(e) => setOtherExpenses(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>Cash Position</h2>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Cash in Hand</div>
-            <input
-              type="number"
-              value={cash}
-              onChange={(e) => setCash(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Bank</div>
-            <input
-              type="number"
-              value={bank}
-              onChange={(e) => setBank(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <div style={{ fontSize: "28px", fontWeight: 800, marginTop: "24px" }}>
-            Total Position: {formatMoney(totalPosition)}
-          </div>
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>Inventory Input</h2>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Item Name</div>
-            <input
-              type="text"
-              value={itemName}
-              onChange={(e) => setItemName(e.target.value)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Current Stock</div>
-            <input
-              type="number"
-              value={stock}
-              onChange={(e) => setStock(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Reorder Level</div>
-            <input
-              type="number"
-              value={reorderLevel}
-              onChange={(e) => setReorderLevel(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Reorder Quantity</div>
-            <input
-              type="number"
-              value={reorderQty}
-              onChange={(e) => setReorderQty(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <label>
-            <div style={{ marginTop: "16px", fontSize: "16px" }}>Unit Cost</div>
-            <input
-              type="number"
-              value={unitCost}
-              onChange={(e) => setUnitCost(Number(e.target.value) || 0)}
-              style={inputStyle}
-            />
-          </label>
-
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "24px" }}>
-            <button
-              onClick={saveInventoryItem}
-              style={{ ...buttonStyle, background: "#0f172a", color: "#ffffff" }}
-            >
-              Save Item
-            </button>
-            <button
-              onClick={clearInventoryInputs}
-              style={{ ...buttonStyle, background: "#e5e7eb", color: "#111827" }}
-            >
-              Clear Inventory Inputs
-            </button>
-          </div>
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>Inventory Alerts</h2>
-
-          {lowStockItems.length === 0 ? (
-            <p style={{ color: "#15803d", fontSize: "20px", fontWeight: 700 }}>✅ No low-stock items</p>
+          {inventory.length === 0 ? (
+            <p style={{ color: "#6b7280", fontSize: "18px", margin: 0 }}>
+              No inventory items saved yet.
+            </p>
           ) : (
-            <div style={{ display: "grid", gap: "16px" }}>
-              {lowStockItems.map((item) => (
+            <div style={{ display: "grid", gap: "14px" }}>
+              {inventory.map((item) => (
                 <div
                   key={item.id}
                   style={{
-                    border: "1px solid #fecaca",
-                    borderRadius: "16px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "18px",
                     padding: "16px",
-                    background: "#fff7f7",
+                    background: "#ffffff",
                   }}
                 >
-                  <div style={{ fontSize: "22px", fontWeight: 700 }}>{item.name}</div>
-                  <div style={{ marginTop: "8px" }}>Current Stock: {item.stock}</div>
-                  <div>Reorder Level: {item.reorderLevel}</div>
-                  <div>Reorder Quantity: {item.reorderQty}</div>
-                  <div>Estimated Reorder Cost: {formatMoney(item.reorderQty * item.unitCost)}</div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "12px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "20px", fontWeight: 800 }}>{item.name}</div>
+                      <div style={{ color: "#6b7280", marginTop: "8px" }}>
+                        Stock: {item.stock} | Reorder Level: {item.reorderLevel} | Reorder Qty: {item.reorderQty} | Unit Cost: ${item.unitCost.toFixed(2)}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => deleteInventoryItem(item.id)}
+                      style={{
+                        ...buttonDanger,
+                        padding: "12px 14px",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        <section style={{ ...cardStyle, marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>Inventory List</h2>
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>AI Insight</h2>
 
-          {inventory.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: "20px" }}>No inventory items saved yet.</p>
-          ) : (
-            <div style={{ display: "grid", gap: "16px" }}>
-              {inventory.map((item) => {
-                const isLow = item.stock <= item.reorderLevel
-
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "16px",
-                      padding: "16px",
-                      background: "#ffffff",
-                    }}
-                  >
-                    <div style={{ fontSize: "22px", fontWeight: 700 }}>{item.name}</div>
-                    <div style={{ marginTop: "8px" }}>Stock: {item.stock}</div>
-                    <div>Reorder Level: {item.reorderLevel}</div>
-                    <div>Reorder Quantity: {item.reorderQty}</div>
-                    <div>Unit Cost: {formatMoney(item.unitCost)}</div>
-                    <div>Total Stock Value: {formatMoney(item.stock * item.unitCost)}</div>
-                    <div
-                      style={{
-                        marginTop: "10px",
-                        fontWeight: 700,
-                        color: isLow ? "#dc2626" : "#15803d",
-                      }}
-                    >
-                      {isLow ? "LOW STOCK" : "OK"}
-                    </div>
-
-                    <button
-                      onClick={() => deleteInventoryItem(item.id)}
-                      style={{
-                        ...buttonStyle,
-                        background: "#fee2e2",
-                        color: "#991b1b",
-                        marginTop: "14px",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: "24px" }}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>AI Insight</h2>
-          <p
-            style={{
-              fontSize: "22px",
-              fontWeight: 700,
-              color: aiInsight.startsWith("✅") ? "#15803d" : "#dc2626",
-            }}
-          >
-            {aiInsight}
-          </p>
-          <p
-            style={{
-              fontSize: "20px",
-              fontWeight: 700,
-              color: inventoryInsight.startsWith("📦") ? "#15803d" : "#dc2626",
-              marginTop: "16px",
-            }}
-          >
-            {inventoryInsight}
-          </p>
-        </section>
-
-        <section style={{ marginBottom: "24px" }}>
-          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            <button
-              onClick={saveCloseout}
-              style={{ ...buttonStyle, background: "#0f172a", color: "#ffffff" }}
-            >
-              Save Today Closeout
-            </button>
-
-            <button
-              onClick={clearInputs}
-              style={{ ...buttonStyle, background: "#e5e7eb", color: "#111827" }}
-            >
-              Clear Inputs
-            </button>
-
-            <button
-              onClick={clearHistory}
-              style={{ ...buttonStyle, background: "#f5d7d7", color: "#9f2f2f" }}
-            >
-              Clear History
-            </button>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {aiInsight.map((message, index) => {
+              const isGood = message.includes("✅")
+              return (
+                <div
+                  key={index}
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 700,
+                    color: isGood ? "#15803d" : "#dc2626",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {message}
+                </div>
+              )
+            })}
           </div>
         </section>
 
+        <section
+          style={{
+            display: "flex",
+            gap: "16px",
+            flexWrap: "wrap",
+          }}
+        >
+          <button onClick={saveTodayCloseout} style={buttonPrimary}>
+            Save Today Closeout
+          </button>
+
+          <button onClick={clearInputs} style={buttonSecondary}>
+            Clear Inputs
+          </button>
+
+          <button onClick={clearHistory} style={buttonDanger}>
+            Clear History
+          </button>
+        </section>
+
         <section style={cardStyle}>
-          <h2 style={{ fontSize: "28px", marginTop: 0 }}>Saved Daily History</h2>
+          <h2 style={sectionTitleStyle}>Saved Daily History</h2>
 
           {history.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: "20px" }}>No closeouts saved yet.</p>
+            <p style={{ color: "#6b7280", fontSize: "18px", margin: 0 }}>
+              No closeouts saved yet.
+            </p>
           ) : (
             <div style={{ display: "grid", gap: "16px" }}>
               {history.map((entry) => (
@@ -621,18 +691,49 @@ export default function Page() {
                   key={entry.id}
                   style={{
                     border: "1px solid #e5e7eb",
-                    borderRadius: "16px",
-                    padding: "16px",
+                    borderRadius: "18px",
+                    padding: "18px",
                     background: "#ffffff",
                   }}
                 >
-                  <div style={{ fontSize: "18px", fontWeight: 700 }}>{entry.date}</div>
-                  <div style={{ marginTop: "8px" }}>Sales: {formatMoney(entry.sales)}</div>
-                  <div>Gross Profit: {formatMoney(entry.grossProfit)}</div>
-                  <div>Total Expenses: {formatMoney(entry.totalExpenses)}</div>
-                  <div>Net Profit: {formatMoney(entry.netProfit)}</div>
-                  <div>Total Position: {formatMoney(entry.totalPosition)}</div>
-                  <div style={{ marginTop: "8px", fontWeight: 700 }}>{entry.aiInsight}</div>
+                  <div style={{ fontSize: "18px", fontWeight: 800, marginBottom: "12px" }}>
+                    {entry.date}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                      gap: "10px",
+                      color: "#374151",
+                    }}
+                  >
+                    <div>Sales: ${entry.sales.toFixed(2)}</div>
+                    <div>Cost: ${entry.cost.toFixed(2)}</div>
+                    <div>Gross Profit: ${entry.grossProfit.toFixed(2)}</div>
+                    <div>Rent: ${entry.rent.toFixed(2)}</div>
+                    <div>Payroll: ${entry.payroll.toFixed(2)}</div>
+                    <div>Utilities: ${entry.utilities.toFixed(2)}</div>
+                    <div>Other Expenses: ${entry.otherExpenses.toFixed(2)}</div>
+                    <div>Total Expenses: ${entry.totalExpenses.toFixed(2)}</div>
+                    <div>Net Profit: ${entry.netProfit.toFixed(2)}</div>
+                    <div>Cash: ${entry.cash.toFixed(2)}</div>
+                    <div>Bank: ${entry.bank.toFixed(2)}</div>
+                    <div>Total Position: ${entry.totalPosition.toFixed(2)}</div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      padding: "12px 14px",
+                      borderRadius: "14px",
+                      background: "#f9fafb",
+                      color: "#111827",
+                      fontWeight: 600,
+                    }}
+                  >
+                    AI Insight: {entry.aiInsight}
+                  </div>
                 </div>
               ))}
             </div>
