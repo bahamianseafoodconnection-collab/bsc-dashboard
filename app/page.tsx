@@ -33,35 +33,33 @@ export default function Page() {
 
   const aiInsight = useMemo(() => {
     if (sales <= 0) return "⚠️ No sales entered — system idle"
-    if (grossProfit < 0) return "⚠️ Cost higher than sales — losing money"
-    if (netProfit < 0) return "⚠️ Expenses too high — negative profit"
-    if (totalPosition < 500) return "⚠️ Low cash position — tighten spending"
-    if (netProfit > 0 && totalPosition > 0)
-      return "📊 Healthy business flow — maintain and scale"
-    return "📈 Review numbers for optimization"
+    if (grossProfit < 0) return "⚠️ You are losing money on product"
+    if (netProfit < 0) return "⚠️ Expenses too high — reduce costs"
+    if (totalPosition < 500) return "⚠️ Low cash position — protect cash"
+    return "📈 Business is healthy — keep scaling"
   }, [sales, grossProfit, netProfit, totalPosition])
 
   const inputStyle = {
     width: "100%",
     padding: "10px",
-    marginTop: "5px",
-    marginBottom: "10px",
+    marginTop: "6px",
+    marginBottom: "12px",
     borderRadius: "8px",
     border: "1px solid #ccc"
   }
 
   const cardStyle = {
-    background: "#ffffff",
+    background: "#fff",
     padding: "16px",
     borderRadius: "12px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
     flex: "1",
     minWidth: "120px"
   }
 
   return (
     <main style={{ padding: "20px", background: "#f5f5f5", minHeight: "100vh", fontFamily: "Arial" }}>
-      
+
       <h1>BSC Control Dashboard</h1>
       <p>Live business control center</p>
 
@@ -71,14 +69,17 @@ export default function Page() {
           <p>Sales</p>
           <strong>${sales.toFixed(2)}</strong>
         </div>
+
         <div style={cardStyle}>
           <p>Gross Profit</p>
           <strong>${grossProfit.toFixed(2)}</strong>
         </div>
+
         <div style={cardStyle}>
-          <p>Expenses</p>
+          <p>Total Expenses</p>
           <strong>${totalExpenses.toFixed(2)}</strong>
         </div>
+
         <div style={cardStyle}>
           <p>Net Profit</p>
           <strong style={{ color: netProfit >= 0 ? "green" : "red" }}>
@@ -87,9 +88,9 @@ export default function Page() {
         </div>
       </div>
 
-      {/* INPUT SECTION */}
+      {/* INPUTS */}
       <div style={{ marginTop: "30px", background: "#fff", padding: "20px", borderRadius: "12px" }}>
-        <h2>Sales + Profit Input</h2>
+        <h2>Sales + Cost</h2>
 
         <label>Today Sales</label>
         <input type="number" style={inputStyle}
@@ -102,6 +103,8 @@ export default function Page() {
           value={cost}
           onChange={(e) => setCost(Number(e.target.value) || 0)}
         />
+
+        <h2>Expenses</h2>
 
         <label>Rent</label>
         <input type="number" style={inputStyle}
