@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClient } from "../../lib/supabase/browser"
 
 type Product = {
   id: string
@@ -12,7 +11,6 @@ type Product = {
 }
 
 export default function TestPage() {
-  const supabase = createClient()
 
   const [products, setProducts] = useState<Product[]>([])
   const [name, setName] = useState("")
@@ -21,8 +19,8 @@ export default function TestPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("products").select("*")
-      if (data) setProducts(data)
+      // TEMP: no backend yet
+      setProducts([])
     }
     load()
   }, [])
@@ -30,21 +28,15 @@ export default function TestPage() {
   const addProduct = async () => {
     if (!name) return
 
-    const { data } = await supabase
-      .from("products")
-      .insert([
-        {
-          name,
-          stock,
-          reorder_level: reorderLevel,
-          sold_today: 0,
-        },
-      ])
-      .select()
-
-    if (data) {
-      setProducts([...products, data[0]])
+    const newProduct = {
+      id: Date.now().toString(),
+      name,
+      stock,
+      reorder_level: reorderLevel,
+      sold_today: 0,
     }
+
+    setProducts([...products, newProduct])
 
     setName("")
     setStock(0)
@@ -53,7 +45,7 @@ export default function TestPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Supabase Test</h1>
+      <h1>Test Page (Safe Mode)</h1>
 
       <input
         placeholder="Product name"
