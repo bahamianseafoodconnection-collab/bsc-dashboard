@@ -1,157 +1,113 @@
-NEXT PHASE FOR BSC CONTROL DASHBOARD
+"use client"
 
-Upgrade the current BSC Control Dashboard.
+import { useState, useMemo } from "react"
 
-DO NOT remove existing working sections:
-- Sales
-- Gross Profit
-- Expenses
-- Net Profit
-- Cash in Hand
-- Bank
-- Total Position
-- Inventory Alerts
-- Inventory List
-- AI Insight
-- Saved Daily History
+export default function Page() {
+  // CORE DATA
+  const [sales, setSales] = useState(0)
+  const [cost, setCost] = useState(0)
 
-ADD THIS NEW PHASE:
+  const [rent, setRent] = useState(0)
+  const [payroll, setPayroll] = useState(0)
+  const [utilities, setUtilities] = useState(0)
+  const [otherExpenses, setOtherExpenses] = useState(0)
 
-1. CREATE A NEW TYPE:
-type ObligationItem = {
-  id: string
-  name: string
-  category: "supplier" | "rent" | "utility" | "payroll" | "loan" | "other"
-  amount: number
-  dueDate: string
-  status: "pending" | "paid"
-  priority: "high" | "medium" | "low"
+  const [cash, setCash] = useState(0)
+  const [bank, setBank] = useState(0)
+
+  // OBLIGATIONS
+  const [name, setName] = useState("")
+  const [amount, setAmount] = useState(0)
+  const [bills, setBills] = useState<any[]>([])
+
+  // CALCULATIONS
+  const grossProfit = useMemo(() => sales - cost, [sales, cost])
+  const expenses = useMemo(() => rent + payroll + utilities + otherExpenses, [rent, payroll, utilities, otherExpenses])
+  const netProfit = useMemo(() => grossProfit - expenses, [grossProfit, expenses])
+  const totalCash = useMemo(() => cash + bank, [cash, bank])
+  const totalBills = useMemo(() => bills.reduce((sum, b) => sum + b.amount, 0), [bills])
+
+  const insight = useMemo(() => {
+    if (sales === 0) return "⚠️ No sales"
+    if (netProfit < 0) return "⚠️ Losing money"
+    if (totalCash < totalBills) return "🚨 Cannot cover bills"
+    return "✅ Stable"
+  }, [sales, netProfit, totalCash, totalBills])
+
+  // ADD BILL
+  const addBill = () => {
+    if (!name || amount <= 0) return
+    setBills([...bills, { id: Date.now(), name, amount }])
+    setName("")
+    setAmount(0)
+  }
+
+  const box = {
+    background: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12
+  }
+
+  return (
+    <main style={{ padding: 20, background: "#f3f4f6", minHeight: "100vh" }}>
+      <h1>BSC Control Dashboard</h1>
+
+      {/* METRICS */}
+      <div style={box}>
+        <p>Sales: ${sales}</p>
+        <p>Gross Profit: ${grossProfit}</p>
+        <p>Expenses: ${expenses}</p>
+        <p style={{ color: netProfit >= 0 ? "green" : "red" }}>
+          Net Profit: ${netProfit}
+        </p>
+      </div>
+
+      {/* INPUT */}
+      <div style={box}>
+        <h3>Sales + Expenses</h3>
+
+        <input placeholder="Sales" type="number" value={sales} onChange={(e) => setSales(Number(e.target.value))} />
+        <input placeholder="Cost" type="number" value={cost} onChange={(e) => setCost(Number(e.target.value))} />
+
+        <input placeholder="Rent" type="number" value={rent} onChange={(e) => setRent(Number(e.target.value))} />
+        <input placeholder="Payroll" type="number" value={payroll} onChange={(e) => setPayroll(Number(e.target.value))} />
+        <input placeholder="Utilities" type="number" value={utilities} onChange={(e) => setUtilities(Number(e.target.value))} />
+        <input placeholder="Other" type="number" value={otherExpenses} onChange={(e) => setOtherExpenses(Number(e.target.value))} />
+      </div>
+
+      {/* CASH */}
+      <div style={box}>
+        <h3>Cash Position</h3>
+        <input placeholder="Cash" type="number" value={cash} onChange={(e) => setCash(Number(e.target.value))} />
+        <input placeholder="Bank" type="number" value={bank} onChange={(e) => setBank(Number(e.target.value))} />
+        <p>Total: ${totalCash}</p>
+      </div>
+
+      {/* BILLS */}
+      <div style={box}>
+        <h3>Bills / Obligations</h3>
+
+        <input placeholder="Bill name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input placeholder="Amount" type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+
+        <button onClick={addBill}>Add</button>
+
+        {bills.map(b => (
+          <div key={b.id}>
+            {b.name}: ${b.amount}
+          </div>
+        ))}
+
+        <p>Total Bills: ${totalBills}</p>
+      </div>
+
+      {/* AI */}
+      <div style={box}>
+        <h3>AI Insight</h3>
+        <p>{insight}</p>
+      </div>
+
+    </main>
+  )
 }
-
-2. ADD STATE:
-const [obligationName, setObligationName] = useState("")
-const [obligationCategory, setObligationCategory] = useState<"supplier" | "rent" | "utility" | "payroll" | "loan" | "other">("supplier")
-const [obligationAmount, setObligationAmount] = useState(0)
-const [obligationDueDate, setObligationDueDate] = useState("")
-const [obligationPriority, setObligationPriority] = useState<"high" | "medium" | "low">("medium")
-const [obligations, setObligations] = useState<ObligationItem[]>([])
-
-3. SAVE OBLIGATIONS TO LOCAL STORAGE
-Use useEffect just like history/inventory so obligations remain saved after refresh.
-
-4. ADD CALCULATIONS WITH useMemo:
-- totalObligations = sum of all pending obligations
-- overdueObligations = obligations where status is pending and dueDate is before today
-- dueSoonObligations = obligations where status is pending and dueDate is within 3 days
-- highPriorityObligations = obligations where priority is high and status is pending
-- lowStockItems = inventory items where stock <= reorderLevel
-- reorderCostEstimate = sum of lowStockItems using reorderQty * unitCost
-
-5. ADD NEW DASHBOARD CARDS:
-- Pending Obligations
-- Overdue Bills
-- Due Soon
-- Reorder Cost Estimate
-
-6. ADD NEW SECTION:
-SECTION TITLE: "Obligations Input"
-
-Include inputs:
-- Obligation Name
-- Category dropdown
-- Amount
-- Due Date
-- Priority dropdown
-
-Buttons:
-- Add Obligation
-- Clear Obligation Inputs
-
-When "Add Obligation" is pressed:
-- validate required fields
-- create new obligation item
-- add to obligations array
-- clear the obligation input fields
-
-7. ADD NEW SECTION:
-SECTION TITLE: "Pending Obligations"
-
-Display all pending obligations in clean card rows showing:
-- Name
-- Category
-- Amount
-- Due date
-- Priority
-- Status
-
-Each obligation row must have:
-- Mark Paid button
-- Delete button
-
-If Mark Paid is pressed:
-- status changes from pending to paid
-
-8. ADD NEW SECTION:
-SECTION TITLE: "Paid Obligations History"
-
-Show paid items separately.
-
-9. ADD NEW SECTION:
-SECTION TITLE: "Reorder Recommendations"
-
-For every inventory item where stock <= reorderLevel, show:
-- Item name
-- Current stock
-- Reorder level
-- Suggested reorder quantity
-- Unit cost
-- Total reorder cost
-
-If there are no low-stock items, show:
-✅ No reorder items needed
-
-10. IMPROVE AI INSIGHT LOGIC
-
-Keep existing AI insight and ADD these rules:
-- If overdueObligations.length > 0:
-  return "🚨 Overdue obligations need immediate attention"
-- If dueSoonObligations.length > 0:
-  return "⚠️ Bills are due soon — prepare cash now"
-- If lowStockItems.length > 0:
-  return "📦 Low stock items need reorder planning"
-- If totalPosition < totalObligations:
-  return "❌ Cash position is below pending obligations"
-- If totalPosition > totalObligations && lowStockItems.length === 0 && netProfit > 0:
-  return "✅ Cash flow is stronger than current obligations"
-
-11. ADD NEW SECTION:
-SECTION TITLE: "Control Summary"
-
-Show:
-- Total Position
-- Total Pending Obligations
-- Cash After Obligations = totalPosition - totalObligations
-- Estimated Reorder Cost
-- Cash After Reorders = totalPosition - totalObligations - reorderCostEstimate
-
-12. STYLING RULES:
-- Keep same current clean premium dashboard style
-- Same card design
-- Same spacing
-- Same navy/gray/white look
-- Red for danger
-- Green for good
-- Orange/yellow for warnings
-
-13. IMPORTANT:
-- Do not break any current working code
-- Keep all current features working
-- Extend the current app only
-- Make the full page mobile friendly first
-- Keep this as one single app/page.tsx file
-
-OUTPUT:
-Return the FULL COMPLETE updated page.tsx file only.
-Do not explain.
-Do not summarize.
-Do not shorten.
