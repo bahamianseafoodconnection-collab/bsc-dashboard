@@ -1,231 +1,184 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-
-type SupplierItem = {
-  id: string
-  name: string
-  amount: number
-  status: "pending" | "paid"
-}
-
-type ProductItem = {
-  id: string
-  name: string
-  costPrice: number
-  sellingPrice: number
-  stock: number
-  reorderLevel: number
-  quantitySold: number
-}
+import { useState, useMemo } from "react"
 
 export default function Page() {
 
-  // BUSINESS INPUTS
+  // FINANCIAL INPUTS
   const [sales, setSales] = useState(0)
   const [cost, setCost] = useState(0)
   const [rent, setRent] = useState(0)
   const [payroll, setPayroll] = useState(0)
   const [utilities, setUtilities] = useState(0)
   const [otherExpenses, setOtherExpenses] = useState(0)
+
   const [cash, setCash] = useState(0)
   const [bank, setBank] = useState(0)
 
-  // SUPPLIERS
-  const [suppliers, setSuppliers] = useState<SupplierItem[]>([])
-  const [supplierName, setSupplierName] = useState("")
-  const [supplierAmount, setSupplierAmount] = useState(0)
+  // DAILY OPERATIONS
+  const [openingCash, setOpeningCash] = useState(0)
+  const [cashSales, setCashSales] = useState(0)
+  const [cardSales, setCardSales] = useState(0)
+  const [payouts, setPayouts] = useState(0)
+  const [deposits, setDeposits] = useState(0)
+  const [actualCash, setActualCash] = useState(0)
+  const [note, setNote] = useState("")
 
-  // PRODUCTS
-  const [products, setProducts] = useState<ProductItem[]>([])
-  const [productName, setProductName] = useState("")
-  const [costPrice, setCostPrice] = useState(0)
-  const [sellingPrice, setSellingPrice] = useState(0)
-  const [stock, setStock] = useState(0)
-  const [reorderLevel, setReorderLevel] = useState(0)
-  const [quantitySold, setQuantitySold] = useState(0)
-
-  // STORAGE
-  useEffect(() => {
-    const s = localStorage.getItem("suppliers")
-    const p = localStorage.getItem("products")
-    if (s) setSuppliers(JSON.parse(s))
-    if (p) setProducts(JSON.parse(p))
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem("suppliers", JSON.stringify(suppliers))
-  }, [suppliers])
-
-  useEffect(() => {
-    localStorage.setItem("products", JSON.stringify(products))
-  }, [products])
-
-  // CORE CALCULATIONS
+  // CALCULATIONS
   const grossProfit = sales - cost
   const expenses = rent + payroll + utilities + otherExpenses
   const netProfit = grossProfit - expenses
   const totalPosition = cash + bank
 
-  const pendingSuppliers = suppliers.filter(s => s.status === "pending")
-  const totalOwed = pendingSuppliers.reduce((sum, s) => sum + s.amount, 0)
-  const cashAfterPayments = totalPosition - totalOwed
+  const expectedCash =
+    openingCash + cashSales - payouts - deposits
 
-  const lowStock = products.filter(p => p.stock <= p.reorderLevel)
+  const variance = actualCash - expectedCash
 
-  const productProfit = products.reduce(
-    (sum, p) => sum + (p.sellingPrice - p.costPrice) * p.quantitySold,
-    0
-  )
-
-  // 🎯 SMART DAILY TARGET
-  const targetSales = useMemo(() => {
-    const base = expenses * 1.2 // expenses + 20% profit goal
-    return Math.max(base, 1)
-  }, [expenses])
-
-  const progress = Math.min((sales / targetSales) * 100, 100)
-
-  // 🧠 AI DECISION ENGINE
+  // AI
   const ai = useMemo(() => {
-    if (sales === 0) return "⚠️ Start sales immediately"
+    if (sales === 0) return "⚠️ No sales yet"
 
-    if (sales < targetSales * 0.5)
-      return "🚨 Sales behind target — push fast moving items"
+    if (variance !== 0)
+      return "🚨 Cash mismatch — investigate immediately"
 
     if (netProfit < 0)
-      return "🚨 Losing money — reduce expenses immediately"
+      return "⚠️ Losing money — reduce expenses"
 
-    if (totalOwed > totalPosition)
-      return "🚨 Do NOT pay suppliers — protect cash"
+    if (totalPosition < 500)
+      return "⚠️ Low cash position"
 
-    if (lowStock.length > 0)
-      return "📦 Restock critical items now"
+    return "✅ Day is balanced"
+  }, [sales, variance, netProfit, totalPosition])
 
-    if (productProfit > 0)
-      return "🔥 Push profitable products"
-
-    return "✅ Business running stable"
-  }, [sales, targetSales, netProfit, totalOwed, totalPosition, lowStock, productProfit])
-
-  // 📊 PERFORMANCE SCORE
-  const score = useMemo(() => {
-    let s = 100
-
-    if (netProfit < 0) s -= 30
-    if (sales < targetSales) s -= 20
-    if (totalOwed > totalPosition) s -= 30
-    if (lowStock.length > 0) s -= 10
-
-    return Math.max(s, 0)
-  }, [netProfit, sales, targetSales, totalOwed, totalPosition, lowStock])
-
-  // ACTIONS
-  const addSupplier = () => {
-    if (!supplierName || supplierAmount <= 0) return
-    setSuppliers([
-      ...suppliers,
-      { id: Date.now().toString(), name: supplierName, amount: supplierAmount, status: "pending" }
-    ])
-    setSupplierName("")
-    setSupplierAmount(0)
+  const box = {
+    background: "#fff",
+    padding: "16px",
+    borderRadius: "12px",
+    marginBottom: "12px"
   }
 
-  const markPaid = (id: string) => {
-    setSuppliers(suppliers.map(s =>
-      s.id === id ? { ...s, status: "paid" } : s
-    ))
+  const input = {
+    width: "100%",
+    padding: "10px",
+    marginBottom: "10px"
   }
-
-  const addProduct = () => {
-    if (!productName) return
-    setProducts([
-      ...products,
-      {
-        id: Date.now().toString(),
-        name: productName,
-        costPrice,
-        sellingPrice,
-        stock,
-        reorderLevel,
-        quantitySold
-      }
-    ])
-    setProductName("")
-    setCostPrice(0)
-    setSellingPrice(0)
-    setStock(0)
-    setReorderLevel(0)
-    setQuantitySold(0)
-  }
-
-  const box = { background: "#fff", padding: 16, borderRadius: 12, marginBottom: 12 }
-  const input = { width: "100%", padding: 10, marginBottom: 10 }
 
   return (
     <main style={{ padding: 20, background: "#f3f4f6", minHeight: "100vh" }}>
       <h1>BSC Control Dashboard</h1>
 
-      {/* 🎯 TARGET */}
-      <div style={box}>
-        <h3>Daily Target</h3>
-        <p>Target Sales: ${targetSales.toFixed(0)}</p>
-        <p>Progress: {progress.toFixed(0)}%</p>
-      </div>
-
-      {/* 📊 SCORE */}
-      <div style={box}>
-        <h3>Performance Score</h3>
-        <p style={{ fontSize: 24 }}>{score}/100</p>
-      </div>
-
-      {/* 💰 FINANCIAL */}
+      {/* FINANCIAL */}
       <div style={box}>
         <p>Sales: ${sales}</p>
-        <p>Net Profit: ${netProfit}</p>
-        <p>Cash After Payments: ${cashAfterPayments}</p>
+        <p>Gross Profit: ${grossProfit}</p>
+        <p>Expenses: ${expenses}</p>
+        <p style={{ color: netProfit >= 0 ? "green" : "red" }}>
+          Net Profit: ${netProfit}
+        </p>
       </div>
 
       {/* INPUTS */}
       <div style={box}>
-        <h3>Inputs</h3>
-        <input style={input} placeholder="Sales" type="number" value={sales} onChange={e => setSales(Number(e.target.value))} />
-        <input style={input} placeholder="Cost" type="number" value={cost} onChange={e => setCost(Number(e.target.value))} />
-        <input style={input} placeholder="Rent" type="number" value={rent} onChange={e => setRent(Number(e.target.value))} />
-        <input style={input} placeholder="Payroll" type="number" value={payroll} onChange={e => setPayroll(Number(e.target.value))} />
+        <h3>Business Inputs</h3>
+
+        <input style={input} placeholder="Sales" type="number"
+          value={sales} onChange={e => setSales(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Cost"
+          type="number" value={cost}
+          onChange={e => setCost(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Rent"
+          type="number" value={rent}
+          onChange={e => setRent(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Payroll"
+          type="number" value={payroll}
+          onChange={e => setPayroll(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Utilities"
+          type="number" value={utilities}
+          onChange={e => setUtilities(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Other Expenses"
+          type="number" value={otherExpenses}
+          onChange={e => setOtherExpenses(Number(e.target.value))}
+        />
       </div>
 
-      {/* SUPPLIERS */}
+      {/* CASH */}
       <div style={box}>
-        <h3>Suppliers</h3>
-        <input style={input} placeholder="Name" value={supplierName} onChange={e => setSupplierName(e.target.value)} />
-        <input style={input} placeholder="Amount" type="number" value={supplierAmount} onChange={e => setSupplierAmount(Number(e.target.value))} />
-        <button onClick={addSupplier}>Add</button>
+        <h3>Cash Position</h3>
 
-        {pendingSuppliers.map(s => (
-          <div key={s.id}>
-            {s.name}: ${s.amount}
-            <button onClick={() => markPaid(s.id)}>Paid</button>
-          </div>
-        ))}
+        <input style={input} placeholder="Cash"
+          type="number" value={cash}
+          onChange={e => setCash(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Bank"
+          type="number" value={bank}
+          onChange={e => setBank(Number(e.target.value))}
+        />
+
+        <p>Total Position: ${totalPosition}</p>
       </div>
 
-      {/* PRODUCTS */}
+      {/* DAILY OPERATIONS */}
       <div style={box}>
-        <h3>Products</h3>
+        <h3>Daily Operations</h3>
 
-        <input style={input} placeholder="Name" value={productName} onChange={e => setProductName(e.target.value)} />
-        <input style={input} placeholder="Sell Price" type="number" value={sellingPrice} onChange={e => setSellingPrice(Number(e.target.value))} />
-        <input style={input} placeholder="Cost" type="number" value={costPrice} onChange={e => setCostPrice(Number(e.target.value))} />
-        <input style={input} placeholder="Stock" type="number" value={stock} onChange={e => setStock(Number(e.target.value))} />
-        <input style={input} placeholder="Sold" type="number" value={quantitySold} onChange={e => setQuantitySold(Number(e.target.value))} />
+        <input style={input} placeholder="Opening Cash"
+          type="number" value={openingCash}
+          onChange={e => setOpeningCash(Number(e.target.value))}
+        />
 
-        <button onClick={addProduct}>Add Product</button>
+        <input style={input} placeholder="Cash Sales"
+          type="number" value={cashSales}
+          onChange={e => setCashSales(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Card Sales"
+          type="number" value={cardSales}
+          onChange={e => setCardSales(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Payouts"
+          type="number" value={payouts}
+          onChange={e => setPayouts(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Deposits"
+          type="number" value={deposits}
+          onChange={e => setDeposits(Number(e.target.value))}
+        />
+
+        <input style={input} placeholder="Actual Cash Count"
+          type="number" value={actualCash}
+          onChange={e => setActualCash(Number(e.target.value))}
+        />
+
+        <p>Expected Cash: ${expectedCash}</p>
+
+        <p style={{ color: variance === 0 ? "green" : "red" }}>
+          Variance: ${variance}
+        </p>
+
+        <input style={input}
+          placeholder="Manager Note"
+          value={note}
+          onChange={e => setNote(e.target.value)}
+        />
       </div>
 
-      {/* 🧠 AI */}
+      {/* AI */}
       <div style={box}>
-        <h3>AI Decision</h3>
+        <h3>AI Insight</h3>
         <p>{ai}</p>
       </div>
 
