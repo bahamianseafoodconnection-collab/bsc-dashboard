@@ -19,39 +19,43 @@ export default function TestPage() {
   const [stock, setStock] = useState(0)
   const [reorderLevel, setReorderLevel] = useState(0)
 
-  // LOAD PRODUCTS
   useEffect(() => {
-    const loadProducts = async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
+    const load = async () => {
+      const { data, error } = await supabase.from("products").select("*")
 
-      if (!error && data) {
-        setProducts(data)
+      if (error) {
+        console.error("Load products error:", error)
+        return
       }
+
+      setProducts(data ?? [])
     }
 
-    loadProducts()
+    load()
   }, [])
 
-  // ADD PRODUCT
   const addProduct = async () => {
-    if (!name) return
+    if (!name.trim()) return
 
     const { data, error } = await supabase
       .from("products")
       .insert([
         {
-          name,
+          name: name.trim(),
           stock,
           reorder_level: reorderLevel,
-          sold_today: 0
-        }
+          sold_today: 0,
+        },
       ])
       .select()
 
-    if (!error && data) {
-      setProducts([...products, data[0]])
+    if (error) {
+      console.error("Add product error:", error)
+      return
+    }
+
+    if (data && data.length > 0) {
+      setProducts((prev) => [...prev, data[0]])
     }
 
     setName("")
@@ -61,10 +65,10 @@ export default function TestPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Supabase Test Page</h1>
+      <h1>Supabase Test</h1>
 
       <input
-        placeholder="Product Name"
+        placeholder="Product name"
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
