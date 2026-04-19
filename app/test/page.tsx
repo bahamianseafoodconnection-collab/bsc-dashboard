@@ -24,24 +24,28 @@ export default function TestPage() {
       const { data, error } = await supabase.from("products").select("*")
 
       if (error) {
-        console.error("Load products error:", error)
+        console.error("Load error:", error)
         return
       }
 
-      setProducts(data ?? [])
+      if (data) {
+        setProducts(data)
+      } else {
+        setProducts([])
+      }
     }
 
     load()
   }, [])
 
   const addProduct = async () => {
-    if (!name.trim()) return
+    if (!name) return
 
     const { data, error } = await supabase
       .from("products")
       .insert([
         {
-          name: name.trim(),
+          name,
           stock,
           reorder_level: reorderLevel,
           sold_today: 0,
@@ -50,12 +54,12 @@ export default function TestPage() {
       .select()
 
     if (error) {
-      console.error("Add product error:", error)
+      console.error("Insert error:", error)
       return
     }
 
     if (data && data.length > 0) {
-      setProducts((prev) => [...prev, data[0]])
+      setProducts([...products, data[0]])
     }
 
     setName("")
