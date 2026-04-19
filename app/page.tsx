@@ -1,5 +1,6 @@
 "use client"
 
+import { createClient } from "@/lib/supabase/browser"
 import { useEffect, useMemo, useState } from "react"
 
 type Product = {
