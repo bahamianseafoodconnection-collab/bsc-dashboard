@@ -1,48 +1,49 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
+
+type InventoryItem = {
+  id: string
+  name: string
+  stock: number
+  reorderLevel: number
+  reorderQty: number
+  unitCost: number
+}
 
 type ObligationItem = {
   id: string
   name: string
-  category: "supplier" | "rent" | "utility" | "payroll" | "other"
   amount: number
-  dueDate: string
   status: "pending" | "paid"
-  priority: "high" | "medium" | "low"
-}
-
-type HistoryItem = {
-  date: string
-  sales: number
-  grossProfit: number
-  expenses: number
-  netProfit: number
-  totalPosition: number
 }
 
 export default function Page() {
 
-  // CORE INPUTS
+  // SALES + CASH
   const [sales, setSales] = useState(0)
   const [cost, setCost] = useState(0)
+  const [cash, setCash] = useState(0)
+  const [bank, setBank] = useState(0)
+
+  // EXPENSES
   const [rent, setRent] = useState(0)
   const [payroll, setPayroll] = useState(0)
   const [utilities, setUtilities] = useState(0)
   const [otherExpenses, setOtherExpenses] = useState(0)
-  const [cash, setCash] = useState(0)
-  const [bank, setBank] = useState(0)
 
   // OBLIGATIONS
   const [obligations, setObligations] = useState<ObligationItem[]>([])
-  const [name, setName] = useState("")
-  const [category, setCategory] = useState<ObligationItem["category"]>("supplier")
-  const [amount, setAmount] = useState(0)
-  const [dueDate, setDueDate] = useState("")
-  const [priority, setPriority] = useState<ObligationItem["priority"]>("medium")
+  const [obName, setObName] = useState("")
+  const [obAmount, setObAmount] = useState(0)
 
-  // HISTORY
-  const [history, setHistory] = useState<HistoryItem[]>([])
+  // INVENTORY
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [itemName, setItemName] = useState("")
+  const [stock, setStock] = useState(0)
+  const [reorderLevel, setReorderLevel] = useState(0)
+  const [reorderQty, setReorderQty] = useState(0)
+  const [unitCost, setUnitCost] = useState(0)
 
   // CALCULATIONS
   const grossProfit = sales - cost
@@ -50,57 +51,77 @@ export default function Page() {
   const netProfit = grossProfit - expenses
   const totalPosition = cash + bank
 
-  const pending = obligations.filter(o => o.status === "pending")
-  const paid = obligations.filter(o => o.status === "paid")
+  const pendingObligations = obligations.filter(o => o.status === "pending")
+  const totalPending = pendingObligations.reduce((sum, o) => sum + o.amount, 0)
 
-  const totalPending = pending.reduce((sum, o) => sum + o.amount, 0)
+  const lowStockItems = inventory.filter(i => i.stock <= i.reorderLevel)
+  const reorderCost = lowStockItems.reduce(
+    (sum, i) => sum + (i.reorderQty * i.unitCost),
+    0
+  )
 
-  const today = new Date()
-  const overdue = pending.filter(o => new Date(o.dueDate) < today)
-  const dueSoon = pending.filter(o => {
-    const diff = (new Date(o.dueDate).getTime() - today.getTime()) / (1000 * 3600 * 24)
-    return diff <= 3 && diff >= 0
-  })
+  const ai = useMemo(() => {
+    if (sales === 0) return "⚠️ No sales"
+    if (netProfit < 0) return "⚠️ Losing money"
+    if (totalPending > totalPosition) return "🚨 Can't cover bills"
+    if (lowStockItems.length > 0) return "📦 Reorder needed"
+    return "✅ Stable"
+  }, [sales, netProfit, totalPending, totalPosition, lowStockItems])
 
   // LOCAL STORAGE
   useEffect(() => {
-    const saved = localStorage.getItem("bsc-obligations")
-    if (saved) setObligations(JSON.parse(saved))
+    const savedInv = localStorage.getItem("inv")
+    const savedOb = localStorage.getItem("ob")
+
+    if (savedInv) setInventory(JSON.parse(savedInv))
+    if (savedOb) setObligations(JSON.parse(savedOb))
   }, [])
 
   useEffect(() => {
-    localStorage.setItem("bsc-obligations", JSON.stringify(obligations))
+    localStorage.setItem("inv", JSON.stringify(inventory))
+  }, [inventory])
+
+  useEffect(() => {
+    localStorage.setItem("ob", JSON.stringify(obligations))
   }, [obligations])
 
-  useEffect(() => {
-    const saved = localStorage.getItem("bsc-history")
-    if (saved) setHistory(JSON.parse(saved))
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem("bsc-history", JSON.stringify(history))
-  }, [history])
-
   // ACTIONS
-  const addObligation = () => {
-    if (!name || amount <= 0 || !dueDate) return
+  const addInventory = () => {
+    if (!itemName) return
 
-    setObligations([
-      ...obligations,
+    setInventory([
+      ...inventory,
       {
         id: Date.now().toString(),
-        name,
-        category,
-        amount,
-        dueDate,
-        status: "pending",
-        priority
+        name: itemName,
+        stock,
+        reorderLevel,
+        reorderQty,
+        unitCost
       }
     ])
 
-    setName("")
-    setAmount(0)
-    setDueDate("")
+    setItemName("")
+    setStock(0)
+    setReorderLevel(0)
+    setReorderQty(0)
+    setUnitCost(0)
+  }
+
+  const deleteItem = (id: string) => {
+    setInventory(inventory.filter(i => i.id !== id))
+  }
+
+  const addObligation = () => {
+    if (!obName || obAmount <= 0) return
+
+    setObligations([
+      ...obligations,
+      { id: Date.now().toString(), name: obName, amount: obAmount, status: "pending" }
+    ])
+
+    setObName("")
+    setObAmount(0)
   }
 
   const markPaid = (id: string) => {
@@ -108,34 +129,6 @@ export default function Page() {
       o.id === id ? { ...o, status: "paid" } : o
     ))
   }
-
-  const deleteItem = (id: string) => {
-    setObligations(obligations.filter(o => o.id !== id))
-  }
-
-  const saveDay = () => {
-    setHistory([
-      {
-        date: new Date().toLocaleDateString(),
-        sales,
-        grossProfit,
-        expenses,
-        netProfit,
-        totalPosition
-      },
-      ...history
-    ])
-  }
-
-  // AI
-  const ai = useMemo(() => {
-    if (sales === 0) return "⚠️ No sales yet"
-    if (netProfit < 0) return "⚠️ Losing money"
-    if (overdue.length > 0) return "🚨 Overdue bills"
-    if (totalPending > totalPosition) return "🚨 Not enough cash for bills"
-    if (dueSoon.length > 0) return "⚠️ Bills due soon"
-    return "✅ Stable"
-  }, [sales, netProfit, overdue, totalPending, totalPosition, dueSoon])
 
   const box = {
     background: "#fff",
@@ -154,6 +147,7 @@ export default function Page() {
     <main style={{ padding: 20, background: "#f3f4f6", minHeight: "100vh" }}>
       <h1>BSC Control Dashboard</h1>
 
+      {/* METRICS */}
       <div style={box}>
         <p>Sales: ${sales}</p>
         <p>Gross Profit: ${grossProfit}</p>
@@ -163,70 +157,70 @@ export default function Page() {
         </p>
       </div>
 
+      {/* INPUT */}
       <div style={box}>
-        <h3>Inputs</h3>
-
-        <input placeholder="Sales" type="number" style={input} value={sales} onChange={e => setSales(Number(e.target.value))} />
-        <input placeholder="Cost" type="number" style={input} value={cost} onChange={e => setCost(Number(e.target.value))} />
-        <input placeholder="Rent" type="number" style={input} value={rent} onChange={e => setRent(Number(e.target.value))} />
-        <input placeholder="Payroll" type="number" style={input} value={payroll} onChange={e => setPayroll(Number(e.target.value))} />
-        <input placeholder="Utilities" type="number" style={input} value={utilities} onChange={e => setUtilities(Number(e.target.value))} />
-        <input placeholder="Other" type="number" style={input} value={otherExpenses} onChange={e => setOtherExpenses(Number(e.target.value))} />
+        <h3>Sales + Expenses</h3>
+        <input style={input} placeholder="Sales" type="number" value={sales} onChange={e => setSales(Number(e.target.value))} />
+        <input style={input} placeholder="Cost" type="number" value={cost} onChange={e => setCost(Number(e.target.value))} />
+        <input style={input} placeholder="Rent" type="number" value={rent} onChange={e => setRent(Number(e.target.value))} />
+        <input style={input} placeholder="Payroll" type="number" value={payroll} onChange={e => setPayroll(Number(e.target.value))} />
+        <input style={input} placeholder="Utilities" type="number" value={utilities} onChange={e => setUtilities(Number(e.target.value))} />
+        <input style={input} placeholder="Other" type="number" value={otherExpenses} onChange={e => setOtherExpenses(Number(e.target.value))} />
       </div>
 
+      {/* CASH */}
       <div style={box}>
         <h3>Cash</h3>
-        <input placeholder="Cash" type="number" style={input} value={cash} onChange={e => setCash(Number(e.target.value))} />
-        <input placeholder="Bank" type="number" style={input} value={bank} onChange={e => setBank(Number(e.target.value))} />
+        <input style={input} placeholder="Cash" type="number" value={cash} onChange={e => setCash(Number(e.target.value))} />
+        <input style={input} placeholder="Bank" type="number" value={bank} onChange={e => setBank(Number(e.target.value))} />
         <p>Total: ${totalPosition}</p>
       </div>
 
+      {/* OBLIGATIONS */}
       <div style={box}>
-        <h3>Add Obligation</h3>
-
-        <input placeholder="Name" style={input} value={name} onChange={e => setName(e.target.value)} />
-
-        <select style={input} value={category} onChange={e => setCategory(e.target.value as any)}>
-          <option value="supplier">Supplier</option>
-          <option value="rent">Rent</option>
-          <option value="utility">Utility</option>
-          <option value="payroll">Payroll</option>
-          <option value="other">Other</option>
-        </select>
-
-        <input placeholder="Amount" type="number" style={input} value={amount} onChange={e => setAmount(Number(e.target.value))} />
-
-        <input type="date" style={input} value={dueDate} onChange={e => setDueDate(e.target.value)} />
-
+        <h3>Obligations</h3>
+        <input style={input} placeholder="Name" value={obName} onChange={e => setObName(e.target.value)} />
+        <input style={input} placeholder="Amount" type="number" value={obAmount} onChange={e => setObAmount(Number(e.target.value))} />
         <button onClick={addObligation}>Add</button>
-      </div>
 
-      <div style={box}>
-        <h3>Pending Obligations</h3>
-
-        {pending.map(o => (
+        {pendingObligations.map(o => (
           <div key={o.id}>
-            {o.name} - ${o.amount}
+            {o.name}: ${o.amount}
             <button onClick={() => markPaid(o.id)}>Paid</button>
-            <button onClick={() => deleteItem(o.id)}>Delete</button>
           </div>
         ))}
       </div>
 
+      {/* INVENTORY */}
+      <div style={box}>
+        <h3>Inventory</h3>
+
+        <input style={input} placeholder="Item Name" value={itemName} onChange={e => setItemName(e.target.value)} />
+        <input style={input} placeholder="Stock" type="number" value={stock} onChange={e => setStock(Number(e.target.value))} />
+        <input style={input} placeholder="Reorder Level" type="number" value={reorderLevel} onChange={e => setReorderLevel(Number(e.target.value))} />
+        <input style={input} placeholder="Reorder Qty" type="number" value={reorderQty} onChange={e => setReorderQty(Number(e.target.value))} />
+        <input style={input} placeholder="Unit Cost" type="number" value={unitCost} onChange={e => setUnitCost(Number(e.target.value))} />
+
+        <button onClick={addInventory}>Add Item</button>
+
+        {inventory.map(i => (
+          <div key={i.id}>
+            {i.name} (Stock: {i.stock})
+            <button onClick={() => deleteItem(i.id)}>Delete</button>
+          </div>
+        ))}
+
+        <p style={{ color: lowStockItems.length ? "red" : "green" }}>
+          {lowStockItems.length ? "⚠️ Reorder needed" : "✅ Inventory OK"}
+        </p>
+
+        <p>Reorder Cost: ${reorderCost}</p>
+      </div>
+
+      {/* AI */}
       <div style={box}>
         <h3>AI Insight</h3>
         <p>{ai}</p>
-      </div>
-
-      <button onClick={saveDay}>Save Day</button>
-
-      <div style={box}>
-        <h3>History</h3>
-        {history.map((h, i) => (
-          <div key={i}>
-            {h.date} - ${h.netProfit}
-          </div>
-        ))}
       </div>
 
     </main>
