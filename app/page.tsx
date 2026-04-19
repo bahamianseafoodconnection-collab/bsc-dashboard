@@ -2,18 +2,15 @@
 
 import { useState, useMemo } from "react"
 
+type Product = {
+  id: string
+  name: string
+  stock: number
+  reorderLevel: number
+  soldToday: number
+}
+
 export default function Page() {
-
-  // FINANCIAL INPUTS
-  const [sales, setSales] = useState(0)
-  const [cost, setCost] = useState(0)
-  const [rent, setRent] = useState(0)
-  const [payroll, setPayroll] = useState(0)
-  const [utilities, setUtilities] = useState(0)
-  const [otherExpenses, setOtherExpenses] = useState(0)
-
-  const [cash, setCash] = useState(0)
-  const [bank, setBank] = useState(0)
 
   // DAILY OPERATIONS
   const [openingCash, setOpeningCash] = useState(0)
@@ -22,34 +19,67 @@ export default function Page() {
   const [payouts, setPayouts] = useState(0)
   const [deposits, setDeposits] = useState(0)
   const [actualCash, setActualCash] = useState(0)
-  const [note, setNote] = useState("")
+
+  // INVENTORY
+  const [products, setProducts] = useState<Product[]>([])
+  const [name, setName] = useState("")
+  const [stock, setStock] = useState(0)
+  const [reorderLevel, setReorderLevel] = useState(0)
+  const [soldToday, setSoldToday] = useState(0)
 
   // CALCULATIONS
-  const grossProfit = sales - cost
-  const expenses = rent + payroll + utilities + otherExpenses
-  const netProfit = grossProfit - expenses
-  const totalPosition = cash + bank
-
-  const expectedCash =
-    openingCash + cashSales - payouts - deposits
-
+  const expectedCash = openingCash + cashSales - payouts - deposits
   const variance = actualCash - expectedCash
+
+  const lowStock = products.filter(p => p.stock <= p.reorderLevel)
+
+  const totalSold = products.reduce((sum, p) => sum + p.soldToday, 0)
+
+  // ACTIONS
+  const addProduct = () => {
+    if (!name) return
+
+    setProducts([
+      ...products,
+      {
+        id: Date.now().toString(),
+        name,
+        stock,
+        reorderLevel,
+        soldToday
+      }
+    ])
+
+    setName("")
+    setStock(0)
+    setReorderLevel(0)
+    setSoldToday(0)
+  }
+
+  const sellProduct = (id: string) => {
+    setProducts(products.map(p => {
+      if (p.id === id && p.stock > 0) {
+        return {
+          ...p,
+          stock: p.stock - 1,
+          soldToday: p.soldToday + 1
+        }
+      }
+      return p
+    }))
+  }
+
+  const deleteProduct = (id: string) => {
+    setProducts(products.filter(p => p.id !== id))
+  }
 
   // AI
   const ai = useMemo(() => {
-    if (sales === 0) return "⚠️ No sales yet"
-
-    if (variance !== 0)
-      return "🚨 Cash mismatch — investigate immediately"
-
-    if (netProfit < 0)
-      return "⚠️ Losing money — reduce expenses"
-
-    if (totalPosition < 500)
-      return "⚠️ Low cash position"
-
-    return "✅ Day is balanced"
-  }, [sales, variance, netProfit, totalPosition])
+    if (variance !== 0) return "🚨 Cash mismatch"
+    if (lowStock.length > 0) return "⚠️ Low stock — reorder soon"
+    if (totalSold === 0) return "⚠️ No product movement"
+    return "✅ Operations running"
+  }, [variance, lowStock, totalSold])
 
   const box = {
     background: "#fff",
@@ -68,112 +98,62 @@ export default function Page() {
     <main style={{ padding: 20, background: "#f3f4f6", minHeight: "100vh" }}>
       <h1>BSC Control Dashboard</h1>
 
-      {/* FINANCIAL */}
-      <div style={box}>
-        <p>Sales: ${sales}</p>
-        <p>Gross Profit: ${grossProfit}</p>
-        <p>Expenses: ${expenses}</p>
-        <p style={{ color: netProfit >= 0 ? "green" : "red" }}>
-          Net Profit: ${netProfit}
-        </p>
-      </div>
-
-      {/* INPUTS */}
-      <div style={box}>
-        <h3>Business Inputs</h3>
-
-        <input style={input} placeholder="Sales" type="number"
-          value={sales} onChange={e => setSales(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Cost"
-          type="number" value={cost}
-          onChange={e => setCost(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Rent"
-          type="number" value={rent}
-          onChange={e => setRent(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Payroll"
-          type="number" value={payroll}
-          onChange={e => setPayroll(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Utilities"
-          type="number" value={utilities}
-          onChange={e => setUtilities(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Other Expenses"
-          type="number" value={otherExpenses}
-          onChange={e => setOtherExpenses(Number(e.target.value))}
-        />
-      </div>
-
-      {/* CASH */}
-      <div style={box}>
-        <h3>Cash Position</h3>
-
-        <input style={input} placeholder="Cash"
-          type="number" value={cash}
-          onChange={e => setCash(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Bank"
-          type="number" value={bank}
-          onChange={e => setBank(Number(e.target.value))}
-        />
-
-        <p>Total Position: ${totalPosition}</p>
-      </div>
-
       {/* DAILY OPERATIONS */}
       <div style={box}>
         <h3>Daily Operations</h3>
 
-        <input style={input} placeholder="Opening Cash"
-          type="number" value={openingCash}
-          onChange={e => setOpeningCash(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Cash Sales"
-          type="number" value={cashSales}
-          onChange={e => setCashSales(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Card Sales"
-          type="number" value={cardSales}
-          onChange={e => setCardSales(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Payouts"
-          type="number" value={payouts}
-          onChange={e => setPayouts(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Deposits"
-          type="number" value={deposits}
-          onChange={e => setDeposits(Number(e.target.value))}
-        />
-
-        <input style={input} placeholder="Actual Cash Count"
-          type="number" value={actualCash}
-          onChange={e => setActualCash(Number(e.target.value))}
-        />
+        <input style={input} placeholder="Opening Cash" type="number" value={openingCash} onChange={e => setOpeningCash(Number(e.target.value))} />
+        <input style={input} placeholder="Cash Sales" type="number" value={cashSales} onChange={e => setCashSales(Number(e.target.value))} />
+        <input style={input} placeholder="Card Sales" type="number" value={cardSales} onChange={e => setCardSales(Number(e.target.value))} />
+        <input style={input} placeholder="Payouts" type="number" value={payouts} onChange={e => setPayouts(Number(e.target.value))} />
+        <input style={input} placeholder="Deposits" type="number" value={deposits} onChange={e => setDeposits(Number(e.target.value))} />
+        <input style={input} placeholder="Actual Cash" type="number" value={actualCash} onChange={e => setActualCash(Number(e.target.value))} />
 
         <p>Expected Cash: ${expectedCash}</p>
-
         <p style={{ color: variance === 0 ? "green" : "red" }}>
           Variance: ${variance}
         </p>
+      </div>
 
-        <input style={input}
-          placeholder="Manager Note"
-          value={note}
-          onChange={e => setNote(e.target.value)}
-        />
+      {/* INVENTORY INPUT */}
+      <div style={box}>
+        <h3>Add Product</h3>
+
+        <input style={input} placeholder="Product Name" value={name} onChange={e => setName(e.target.value)} />
+        <input style={input} placeholder="Stock" type="number" value={stock} onChange={e => setStock(Number(e.target.value))} />
+        <input style={input} placeholder="Reorder Level" type="number" value={reorderLevel} onChange={e => setReorderLevel(Number(e.target.value))} />
+        <input style={input} placeholder="Sold Today" type="number" value={soldToday} onChange={e => setSoldToday(Number(e.target.value))} />
+
+        <button onClick={addProduct}>Add Product</button>
+      </div>
+
+      {/* INVENTORY LIST */}
+      <div style={box}>
+        <h3>Inventory</h3>
+
+        {products.map(p => (
+          <div key={p.id}>
+            {p.name} | Stock: {p.stock} | Sold: {p.soldToday}
+
+            <button onClick={() => sellProduct(p.id)}>Sell 1</button>
+            <button onClick={() => deleteProduct(p.id)}>Delete</button>
+
+            {p.stock <= p.reorderLevel && (
+              <p style={{ color: "red" }}>
+                ⚠️ Reorder Needed ({p.reorderLevel - p.stock})
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* SUMMARY */}
+      <div style={box}>
+        <h3>Inventory Summary</h3>
+        <p>Total Sold Today: {totalSold}</p>
+        <p style={{ color: lowStock.length ? "red" : "green" }}>
+          {lowStock.length ? "Low stock items present" : "Inventory OK"}
+        </p>
       </div>
 
       {/* AI */}
