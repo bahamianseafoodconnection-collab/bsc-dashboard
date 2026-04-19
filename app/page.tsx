@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useMemo, useState } from "react"
 
 type Product = {
   id: string
@@ -8,10 +8,18 @@ type Product = {
   stock: number
   reorderLevel: number
   soldToday: number
+  supplier: string
+  reorderCost: number
+}
+
+type SupplierPayment = {
+  id: string
+  name: string
+  amount: number
+  status: "pending" | "paid"
 }
 
 export default function Page() {
-
   // DAILY OPERATIONS
   const [openingCash, setOpeningCash] = useState(0)
   const [cashSales, setCashSales] = useState(0)
@@ -20,148 +28,288 @@ export default function Page() {
   const [deposits, setDeposits] = useState(0)
   const [actualCash, setActualCash] = useState(0)
 
-  // INVENTORY
+  // PRODUCTS
   const [products, setProducts] = useState<Product[]>([])
-  const [name, setName] = useState("")
+  const [productName, setProductName] = useState("")
   const [stock, setStock] = useState(0)
   const [reorderLevel, setReorderLevel] = useState(0)
   const [soldToday, setSoldToday] = useState(0)
+  const [supplier, setSupplier] = useState("")
+  const [reorderCost, setReorderCost] = useState(0)
+
+  // SUPPLIER PAYMENTS
+  const [supplierName, setSupplierName] = useState("")
+  const [supplierAmount, setSupplierAmount] = useState(0)
+  const [supplierPayments, setSupplierPayments] = useState<SupplierPayment[]>([])
 
   // CALCULATIONS
   const expectedCash = openingCash + cashSales - payouts - deposits
   const variance = actualCash - expectedCash
+  const totalSalesToday = cashSales + cardSales
 
-  const lowStock = products.filter(p => p.stock <= p.reorderLevel)
+  const lowStockItems = products.filter((p) => p.stock <= p.reorderLevel)
+  const totalUnitsSold = products.reduce((sum, p) => sum + p.soldToday, 0)
 
-  const totalSold = products.reduce((sum, p) => sum + p.soldToday, 0)
+  const totalReorderNeed = lowStockItems.reduce((sum, p) => {
+    const needed = Math.max(p.reorderLevel - p.stock, 0)
+    return sum + needed * p.reorderCost
+  }, 0)
+
+  const pendingPayments = supplierPayments.filter((p) => p.status === "pending")
+  const totalSupplierDue = pendingPayments.reduce((sum, p) => sum + p.amount, 0)
+
+  const cashAvailableAfterSuppliers = actualCash - totalSupplierDue
+  const cashAvailableAfterReorders = cashAvailableAfterSuppliers - totalReorderNeed
+
+  const topMovingProduct = useMemo(() => {
+    if (products.length === 0) return null
+    return [...products].sort((a, b) => b.soldToday - a.soldToday)[0]
+  }, [products])
+
+  const aiPriority = useMemo(() => {
+    if (variance !== 0) return "🚨 Cash mismatch — investigate drawer immediately"
+    if (totalSalesToday === 0) return "⚠️ No sales activity today"
+    if (totalSupplierDue > actualCash) return "🚨 Do not pay suppliers yet — cash too low"
+    if (lowStockItems.length > 0 && cashAvailableAfterSuppliers > totalReorderNeed) {
+      return "📦 Reorder low stock items now"
+    }
+    if (lowStockItems.length > 0 && cashAvailableAfterSuppliers <= totalReorderNeed) {
+      return "⚠️ Low stock exists but cash is tight — prioritize only critical items"
+    }
+    if (topMovingProduct && topMovingProduct.soldToday > 0) {
+      return `🔥 Push ${topMovingProduct.name} — best moving product today`
+    }
+    return "✅ Operations stable"
+  }, [
+    variance,
+    totalSalesToday,
+    totalSupplierDue,
+    actualCash,
+    lowStockItems,
+    cashAvailableAfterSuppliers,
+    totalReorderNeed,
+    topMovingProduct,
+  ])
+
+  const score = useMemo(() => {
+    let s = 100
+    if (variance !== 0) s -= 35
+    if (totalSalesToday === 0) s -= 20
+    if (lowStockItems.length > 0) s -= 15
+    if (totalSupplierDue > actualCash) s -= 20
+    if (cashAvailableAfterReorders < 0) s -= 10
+    return Math.max(s, 0)
+  }, [
+    variance,
+    totalSalesToday,
+    lowStockItems.length,
+    totalSupplierDue,
+    actualCash,
+    cashAvailableAfterReorders,
+  ])
 
   // ACTIONS
   const addProduct = () => {
-    if (!name) return
+    if (!productName || !supplier) return
 
     setProducts([
       ...products,
       {
         id: Date.now().toString(),
-        name,
+        name: productName,
         stock,
         reorderLevel,
-        soldToday
-      }
+        soldToday,
+        supplier,
+        reorderCost,
+      },
     ])
 
-    setName("")
+    setProductName("")
     setStock(0)
     setReorderLevel(0)
     setSoldToday(0)
+    setSupplier("")
+    setReorderCost(0)
   }
 
-  const sellProduct = (id: string) => {
-    setProducts(products.map(p => {
-      if (p.id === id && p.stock > 0) {
-        return {
-          ...p,
-          stock: p.stock - 1,
-          soldToday: p.soldToday + 1
-        }
-      }
-      return p
-    }))
+  const sellOne = (id: string) => {
+    setProducts(
+      products.map((p) =>
+        p.id === id && p.stock > 0
+          ? { ...p, stock: p.stock - 1, soldToday: p.soldToday + 1 }
+          : p
+      )
+    )
   }
 
   const deleteProduct = (id: string) => {
-    setProducts(products.filter(p => p.id !== id))
+    setProducts(products.filter((p) => p.id !== id))
   }
 
-  // AI
-  const ai = useMemo(() => {
-    if (variance !== 0) return "🚨 Cash mismatch"
-    if (lowStock.length > 0) return "⚠️ Low stock — reorder soon"
-    if (totalSold === 0) return "⚠️ No product movement"
-    return "✅ Operations running"
-  }, [variance, lowStock, totalSold])
+  const addSupplierPayment = () => {
+    if (!supplierName || supplierAmount <= 0) return
 
-  const box = {
+    setSupplierPayments([
+      ...supplierPayments,
+      {
+        id: Date.now().toString(),
+        name: supplierName,
+        amount: supplierAmount,
+        status: "pending",
+      },
+    ])
+
+    setSupplierName("")
+    setSupplierAmount(0)
+  }
+
+  const markSupplierPaid = (id: string) => {
+    setSupplierPayments(
+      supplierPayments.map((p) =>
+        p.id === id ? { ...p, status: "paid" } : p
+      )
+    )
+  }
+
+  const deleteSupplierPayment = (id: string) => {
+    setSupplierPayments(supplierPayments.filter((p) => p.id !== id))
+  }
+
+  const box: React.CSSProperties = {
     background: "#fff",
     padding: "16px",
     borderRadius: "12px",
-    marginBottom: "12px"
+    marginBottom: "12px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
   }
 
-  const input = {
+  const input: React.CSSProperties = {
     width: "100%",
     padding: "10px",
-    marginBottom: "10px"
+    marginBottom: "10px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    boxSizing: "border-box",
+  }
+
+  const button: React.CSSProperties = {
+    padding: "8px 12px",
+    marginRight: "8px",
+    marginBottom: "8px",
+    borderRadius: "8px",
+    border: "none",
+    cursor: "pointer",
   }
 
   return (
-    <main style={{ padding: 20, background: "#f3f4f6", minHeight: "100vh" }}>
+    <main style={{ padding: 20, background: "#f3f4f6", minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
       <h1>BSC Control Dashboard</h1>
+      <p>Operations Engine</p>
 
-      {/* DAILY OPERATIONS */}
+      <div style={box}>
+        <h3>Control Center Score</h3>
+        <p style={{ fontSize: 28, fontWeight: 700 }}>{score}/100</p>
+      </div>
+
       <div style={box}>
         <h3>Daily Operations</h3>
 
-        <input style={input} placeholder="Opening Cash" type="number" value={openingCash} onChange={e => setOpeningCash(Number(e.target.value))} />
-        <input style={input} placeholder="Cash Sales" type="number" value={cashSales} onChange={e => setCashSales(Number(e.target.value))} />
-        <input style={input} placeholder="Card Sales" type="number" value={cardSales} onChange={e => setCardSales(Number(e.target.value))} />
-        <input style={input} placeholder="Payouts" type="number" value={payouts} onChange={e => setPayouts(Number(e.target.value))} />
-        <input style={input} placeholder="Deposits" type="number" value={deposits} onChange={e => setDeposits(Number(e.target.value))} />
-        <input style={input} placeholder="Actual Cash" type="number" value={actualCash} onChange={e => setActualCash(Number(e.target.value))} />
+        <input style={input} placeholder="Opening Cash" type="number" value={openingCash} onChange={(e) => setOpeningCash(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Cash Sales" type="number" value={cashSales} onChange={(e) => setCashSales(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Card Sales" type="number" value={cardSales} onChange={(e) => setCardSales(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Payouts" type="number" value={payouts} onChange={(e) => setPayouts(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Deposits" type="number" value={deposits} onChange={(e) => setDeposits(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Actual Cash" type="number" value={actualCash} onChange={(e) => setActualCash(Number(e.target.value) || 0)} />
 
-        <p>Expected Cash: ${expectedCash}</p>
+        <p>Expected Cash: ${expectedCash.toFixed(2)}</p>
         <p style={{ color: variance === 0 ? "green" : "red" }}>
-          Variance: ${variance}
+          Variance: ${variance.toFixed(2)}
         </p>
+        <p>Total Sales Today: ${totalSalesToday.toFixed(2)}</p>
       </div>
 
-      {/* INVENTORY INPUT */}
       <div style={box}>
         <h3>Add Product</h3>
+        <input style={input} placeholder="Product Name" value={productName} onChange={(e) => setProductName(e.target.value)} />
+        <input style={input} placeholder="Stock" type="number" value={stock} onChange={(e) => setStock(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Reorder Level" type="number" value={reorderLevel} onChange={(e) => setReorderLevel(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Sold Today" type="number" value={soldToday} onChange={(e) => setSoldToday(Number(e.target.value) || 0)} />
+        <input style={input} placeholder="Supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+        <input style={input} placeholder="Reorder Cost Per Unit" type="number" value={reorderCost} onChange={(e) => setReorderCost(Number(e.target.value) || 0)} />
 
-        <input style={input} placeholder="Product Name" value={name} onChange={e => setName(e.target.value)} />
-        <input style={input} placeholder="Stock" type="number" value={stock} onChange={e => setStock(Number(e.target.value))} />
-        <input style={input} placeholder="Reorder Level" type="number" value={reorderLevel} onChange={e => setReorderLevel(Number(e.target.value))} />
-        <input style={input} placeholder="Sold Today" type="number" value={soldToday} onChange={e => setSoldToday(Number(e.target.value))} />
-
-        <button onClick={addProduct}>Add Product</button>
+        <button style={{ ...button, background: "#0f172a", color: "#fff" }} onClick={addProduct}>
+          Add Product
+        </button>
       </div>
 
-      {/* INVENTORY LIST */}
       <div style={box}>
-        <h3>Inventory</h3>
+        <h3>Inventory Movement</h3>
 
-        {products.map(p => (
-          <div key={p.id}>
-            {p.name} | Stock: {p.stock} | Sold: {p.soldToday}
+        {products.length === 0 && <p>No products entered</p>}
 
-            <button onClick={() => sellProduct(p.id)}>Sell 1</button>
-            <button onClick={() => deleteProduct(p.id)}>Delete</button>
-
+        {products.map((p) => (
+          <div key={p.id} style={{ marginBottom: 10 }}>
+            <strong>{p.name}</strong> | Stock: {p.stock} | Sold: {p.soldToday} | Supplier: {p.supplier}
+            <div style={{ marginTop: 6 }}>
+              <button style={{ ...button, background: "#16a34a", color: "#fff" }} onClick={() => sellOne(p.id)}>
+                Sell 1
+              </button>
+              <button style={{ ...button, background: "#ef4444", color: "#fff" }} onClick={() => deleteProduct(p.id)}>
+                Delete
+              </button>
+            </div>
             {p.stock <= p.reorderLevel && (
               <p style={{ color: "red" }}>
-                ⚠️ Reorder Needed ({p.reorderLevel - p.stock})
+                ⚠️ Reorder Needed ({Math.max(p.reorderLevel - p.stock, 0)})
               </p>
             )}
           </div>
         ))}
+
+        <p>Total Units Sold: {totalUnitsSold}</p>
+        <p>Estimated Reorder Need: ${totalReorderNeed.toFixed(2)}</p>
       </div>
 
-      {/* SUMMARY */}
       <div style={box}>
-        <h3>Inventory Summary</h3>
-        <p>Total Sold Today: {totalSold}</p>
-        <p style={{ color: lowStock.length ? "red" : "green" }}>
-          {lowStock.length ? "Low stock items present" : "Inventory OK"}
+        <h3>Supplier Payments</h3>
+        <input style={input} placeholder="Supplier Name" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />
+        <input style={input} placeholder="Amount" type="number" value={supplierAmount} onChange={(e) => setSupplierAmount(Number(e.target.value) || 0)} />
+
+        <button style={{ ...button, background: "#0f172a", color: "#fff" }} onClick={addSupplierPayment}>
+          Add Supplier Payment
+        </button>
+
+        {pendingPayments.length === 0 && <p>No pending supplier payments</p>}
+
+        {pendingPayments.map((s) => (
+          <div key={s.id} style={{ marginBottom: 8 }}>
+            {s.name}: ${s.amount.toFixed(2)}
+            <div style={{ marginTop: 6 }}>
+              <button style={{ ...button, background: "#16a34a", color: "#fff" }} onClick={() => markSupplierPaid(s.id)}>
+                Paid
+              </button>
+              <button style={{ ...button, background: "#ef4444", color: "#fff" }} onClick={() => deleteSupplierPayment(s.id)}>
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <p>Total Supplier Due: ${totalSupplierDue.toFixed(2)}</p>
+        <p style={{ color: cashAvailableAfterPayments >= 0 ? "green" : "red" }}>
+          Cash After Supplier Payments: ${cashAvailableAfterPayments.toFixed(2)}
+        </p>
+        <p style={{ color: cashAvailableAfterReorders >= 0 ? "green" : "red" }}>
+          Cash After Reorders: ${cashAvailableAfterReorders.toFixed(2)}
         </p>
       </div>
 
-      {/* AI */}
       <div style={box}>
-        <h3>AI Insight</h3>
-        <p>{ai}</p>
+        <h3>AI Priority</h3>
+        <p>{aiPriority}</p>
+        {topMovingProduct && <p>Top Moving Product: {topMovingProduct.name}</p>}
       </div>
-
     </main>
   )
 }
