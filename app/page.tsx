@@ -1,5 +1,8 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { createClient } from "../../lib/supabase/browser"
+
 type Product = {
   id: string
   name: string
@@ -16,7 +19,6 @@ export default function TestPage() {
   const [stock, setStock] = useState(0)
   const [reorderLevel, setReorderLevel] = useState(0)
 
-  // LOAD PRODUCTS
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase.from("products").select("*")
@@ -25,7 +27,6 @@ export default function TestPage() {
     load()
   }, [])
 
-  // ADD PRODUCT
   const addProduct = async () => {
     if (!name) return
 
@@ -36,8 +37,8 @@ export default function TestPage() {
           name,
           stock,
           reorder_level: reorderLevel,
-          sold_today: 0
-        }
+          sold_today: 0,
+        },
       ])
       .select()
 
