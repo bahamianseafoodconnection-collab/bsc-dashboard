@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/browser"
 import { useEffect, useMemo, useState } from "react"
-
 type Product = {
   id: string
   name: string
