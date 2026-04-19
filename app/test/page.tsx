@@ -18,13 +18,19 @@ export default function TestPage() {
   const [name, setName] = useState("")
   const [stock, setStock] = useState(0)
   const [reorderLevel, setReorderLevel] = useState(0)
+  const [status, setStatus] = useState("Ready")
+  const [errorMessage, setErrorMessage] = useState("")
 
   useEffect(() => {
     const load = async () => {
+      setStatus("Loading products...")
+      setErrorMessage("")
+
       const { data, error } = await supabase.from("products").select("*")
 
       if (error) {
-        console.error("Load error:", error)
+        setStatus("Load failed")
+        setErrorMessage(error.message)
         return
       }
 
@@ -33,19 +39,27 @@ export default function TestPage() {
       } else {
         setProducts([])
       }
+
+      setStatus("Products loaded")
     }
 
     load()
   }, [])
 
   const addProduct = async () => {
-    if (!name) return
+    if (!name.trim()) {
+      setStatus("Missing product name")
+      return
+    }
+
+    setStatus("Saving product...")
+    setErrorMessage("")
 
     const { data, error } = await supabase
       .from("products")
       .insert([
         {
-          name,
+          name: name.trim(),
           stock,
           reorder_level: reorderLevel,
           sold_today: 0,
@@ -54,12 +68,16 @@ export default function TestPage() {
       .select()
 
     if (error) {
-      console.error("Insert error:", error)
+      setStatus("Save failed")
+      setErrorMessage(error.message)
       return
     }
 
     if (data && data.length > 0) {
       setProducts([...products, data[0]])
+      setStatus("Product saved")
+    } else {
+      setStatus("Saved, but no row returned")
     }
 
     setName("")
@@ -70,6 +88,14 @@ export default function TestPage() {
   return (
     <div style={{ padding: 20 }}>
       <h1>Supabase Test</h1>
+
+      <p><strong>Status:</strong> {status}</p>
+
+      {errorMessage ? (
+        <p style={{ color: "red" }}>
+          <strong>Error:</strong> {errorMessage}
+        </p>
+      ) : null}
 
       <input
         placeholder="Product name"
