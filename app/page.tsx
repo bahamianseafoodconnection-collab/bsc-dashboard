@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { createClient } from "../lib/supabase/browser"
 
 type Product = {
   id: string
@@ -10,33 +11,65 @@ type Product = {
   sold_today: number
 }
 
-export default function TestPage() {
+export default function Page() {
+  const supabase = createClient()
 
   const [products, setProducts] = useState<Product[]>([])
   const [name, setName] = useState("")
   const [stock, setStock] = useState(0)
   const [reorderLevel, setReorderLevel] = useState(0)
+  const [status, setStatus] = useState("Ready")
 
+  // LOAD PRODUCTS FROM DB
   useEffect(() => {
-    const load = async () => {
-      // TEMP: no backend yet
-      setProducts([])
+    const loadProducts = async () => {
+      setStatus("Loading...")
+
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+
+      if (error) {
+        console.error(error)
+        setStatus("Load failed")
+        return
+      }
+
+      setProducts(data || [])
+      setStatus("Loaded")
     }
-    load()
+
+    loadProducts()
   }, [])
 
+  // ADD PRODUCT TO DB
   const addProduct = async () => {
     if (!name) return
 
-    const newProduct = {
-      id: Date.now().toString(),
-      name,
-      stock,
-      reorder_level: reorderLevel,
-      sold_today: 0,
+    setStatus("Saving...")
+
+    const { data, error } = await supabase
+      .from("products")
+      .insert([
+        {
+          name,
+          stock,
+          reorder_level: reorderLevel,
+          sold_today: 0
+        }
+      ])
+      .select()
+
+    if (error) {
+      console.error(error)
+      setStatus("Save failed")
+      return
     }
 
-    setProducts([...products, newProduct])
+    if (data) {
+      setProducts([...products, data[0]])
+      setStatus("Saved")
+    }
 
     setName("")
     setStock(0)
@@ -45,7 +78,9 @@ export default function TestPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Test Page (Safe Mode)</h1>
+      <h1>BSC Product Manager</h1>
+
+      <p>Status: {status}</p>
 
       <input
         placeholder="Product name"
