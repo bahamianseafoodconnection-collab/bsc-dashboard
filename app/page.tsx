@@ -3,10 +3,11 @@ import Link from "next/link"
 export default function DashboardPage() {
   return (
     <>
-      <h2 className="page-title">Dashboard</h2>
+      <h2 className="page-title">BSC Dashboard</h2>
 
+      {/* ===== TODAY SUMMARY ===== */}
       <div className="summary-card">
-        <h2>Today&apos;s Summary</h2>
+        <h2>Today’s Summary</h2>
 
         <div className="metric">
           <span>Bills Collected</span>
@@ -34,30 +35,62 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ===== BUSINESS CONTROL ===== */}
       <div className="summary-card">
-        <h2>Quick Actions</h2>
+        <h2>Control Center</h2>
 
         <div className="quick-actions">
           <Link href="/bills" className="action-btn">
-            Bills
+            💡 Bills
           </Link>
 
           <Link href="/inventory" className="action-btn">
-            Inventory
+            📦 Inventory
           </Link>
 
           <Link href="/cash" className="action-btn">
-            Cash
+            💰 Cash
           </Link>
         </div>
       </div>
 
+      {/* ===== DECISION ENGINE ===== */}
+      <div className="summary-card">
+        <h2>AI Decision Status</h2>
+
+        <div className="metric">
+          <span>System Mode</span>
+          <span>Monitoring</span>
+        </div>
+
+        <div className="metric">
+          <span>Alerts</span>
+          <span>0</span>
+        </div>
+
+        <div className="metric">
+          <span>Recommendations</span>
+          <span>Ready</span>
+        </div>
+      </div>
+
+      {/* ===== SYSTEM STATUS ===== */}
       <div className="summary-card">
         <h2>System Status</h2>
 
         <div className="metric">
-          <span>App Status</span>
-          <span>Stage 1 Active</span>
+          <span>Backend</span>
+          <span>Connected</span>
+        </div>
+
+        <div className="metric">
+          <span>Database</span>
+          <span>Ready</span>
+        </div>
+
+        <div className="metric">
+          <span>Version</span>
+          <span>Stage 2</span>
         </div>
       </div>
     </>
