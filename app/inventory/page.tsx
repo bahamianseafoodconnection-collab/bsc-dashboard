@@ -1,13 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientInstance } from "../../lib/supabase/browser"
+import { createClientInstance } from "@/lib/supabase/browser"
 
 type InventoryItem = {
   id: number
-  name: string
-  quantity: number
-  reorder_level: number
 }
 
 export default function InventoryPage() {
@@ -15,31 +12,30 @@ export default function InventoryPage() {
   const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
-    const supabase = createClientInstance()
-
     const loadInventory = async () => {
-      const { data, error } = await supabase
-        .from("inventory")
-        .select("id, name, quantity, reorder_level")
-        .order("id", { ascending: true })
+      try {
+        const supabase = createClientInstance()
 
-      if (error) {
+        const { data, error } = await supabase
+          .from("inventory")
+          .select("*")
+
+        if (error) {
+          console.error(error)
+          setStatus("Error loading inventory")
+          return
+        }
+
+        setItems(data || [])
+        setStatus("Ready")
+      } catch (err) {
+        console.error(err)
         setStatus("Error loading inventory")
-        return
       }
-
-      setItems(data || [])
-      setStatus("Inventory ready")
     }
 
     loadInventory()
   }, [])
-
-  const totalItems = items.length
-  const lowStockItems = items.filter(
-    (item) => item.quantity <= item.reorder_level
-  ).length
-  const reorderSuggestions = lowStockItems
 
   return (
     <>
@@ -50,17 +46,17 @@ export default function InventoryPage() {
 
         <div className="metric">
           <span>Items Tracked</span>
-          <span>{totalItems}</span>
+          <span>{items.length}</span>
         </div>
 
         <div className="metric">
           <span>Low Stock Items</span>
-          <span>{lowStockItems}</span>
+          <span>0</span>
         </div>
 
         <div className="metric">
           <span>Reorder Suggestions</span>
-          <span>{reorderSuggestions}</span>
+          <span>0</span>
         </div>
       </div>
 
