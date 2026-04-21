@@ -1,11 +1,5 @@
-import type { Metadata } from "next"
 import "./globals.css"
 import AppShell from "./AppShell"
-
-export const metadata: Metadata = {
-  title: "BSC Control",
-  description: "BSC operating system",
-}
 
 export default function RootLayout({
   children,
