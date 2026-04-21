@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientInstance } from "@/lib/supabase/browser"
+import { createClientInstance } from "../../lib/supabase/browser"
 
 type InventoryItem = {
   id: number
@@ -11,16 +11,17 @@ type InventoryItem = {
 }
 
 export default function InventoryPage() {
-  const supabase = createClientInstance()
-
   const [items, setItems] = useState<InventoryItem[]>([])
   const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
-    const load = async () => {
+    const supabase = createClientInstance()
+
+    const loadInventory = async () => {
       const { data, error } = await supabase
         .from("inventory")
-        .select("*")
+        .select("id, name, quantity, reorder_level")
+        .order("id", { ascending: true })
 
       if (error) {
         setStatus("Error loading inventory")
@@ -28,18 +29,20 @@ export default function InventoryPage() {
       }
 
       setItems(data || [])
-      setStatus("Loaded")
+      setStatus("Inventory ready")
     }
 
-    load()
+    loadInventory()
   }, [])
 
   const totalItems = items.length
-  const lowStock = items.filter(i => i.quantity < i.reorder_level).length
-  const reorderSuggestions = lowStock
+  const lowStockItems = items.filter(
+    (item) => item.quantity <= item.reorder_level
+  ).length
+  const reorderSuggestions = lowStockItems
 
   return (
-    <div>
+    <>
       <h2 className="page-title">Inventory</h2>
 
       <div className="summary-card">
@@ -52,7 +55,7 @@ export default function InventoryPage() {
 
         <div className="metric">
           <span>Low Stock Items</span>
-          <span>{lowStock}</span>
+          <span>{lowStockItems}</span>
         </div>
 
         <div className="metric">
@@ -63,8 +66,12 @@ export default function InventoryPage() {
 
       <div className="summary-card">
         <h2>System Status</h2>
-        <p>{status}</p>
+
+        <div className="metric">
+          <span>Inventory Status</span>
+          <span>{status}</span>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
