@@ -1,36 +1,25 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientInstance } from "@/lib/supabase/browser"
-
-type InventoryItem = {
-  id: number
-}
+import { createClientInstance } from "../../lib/supabase/browser"
 
 export default function InventoryPage() {
-  const [items, setItems] = useState<InventoryItem[]>([])
-  const [status, setStatus] = useState("Loading...")
+  const supabase = createClientInstance()
+
+  const [items, setItems] = useState<any[]>([])
+  const [status, setStatus] = useState("Loading")
 
   useEffect(() => {
     const loadInventory = async () => {
-      try {
-        const supabase = createClientInstance()
+      const { data, error } = await supabase
+        .from("inventory")
+        .select("*")
 
-        const { data, error } = await supabase
-          .from("inventory")
-          .select("*")
-
-        if (error) {
-          console.error(error)
-          setStatus("Error loading inventory")
-          return
-        }
-
+      if (error) {
+        setStatus("Error loading inventory")
+      } else {
         setItems(data || [])
         setStatus("Ready")
-      } catch (err) {
-        console.error(err)
-        setStatus("Error loading inventory")
       }
     }
 
