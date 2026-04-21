@@ -24,6 +24,26 @@ type DailyReport = {
   net_cash: number
 }
 
+type DailyClosure = {
+  id: number
+  report_date: string
+  bills_total: number
+  bills_count: number
+  cash_in: number
+  cash_out: number
+  net_cash: number
+  closed_at: string
+}
+
+function todayString() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function isToday(dateValue?: string) {
+  if (!dateValue) return false
+  return dateValue.slice(0, 10) === todayString()
+}
+
 export default function Page() {
   const supabase = createClient()
 
@@ -45,59 +65,91 @@ export default function Page() {
   const [cashOut, setCashOut] = useState(0)
   const [dailyReportId, setDailyReportId] = useState<number | null>(null)
 
+  // CLOSED DAYS
+  const [closures, setClosures] = useState<DailyClosure[]>([])
+
   const netCash = useMemo(() => cashIn - cashOut, [cashIn, cashOut])
 
-  useEffect(() => {
-    const loadSystem = async () => {
-      setStatus("Loading...")
-      setErrorMessage("")
+  const todaysBills = useMemo(
+    () => bills.filter((bill) => isToday(bill.created_at)),
+    [bills]
+  )
 
-      const [
-        productsResult,
-        billsResult,
-        dailyReportResult,
-      ] = await Promise.all([
-        supabase.from("products").select("*").order("name"),
-        supabase.from("bills").select("*").order("id", { ascending: false }),
-        supabase
-          .from("daily_reports")
-          .select("*")
-          .eq("report_date", new Date().toISOString().slice(0, 10))
-          .order("id", { ascending: false })
-          .limit(1),
-      ])
+  const todaysBillsTotal = useMemo(
+    () => todaysBills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0),
+    [todaysBills]
+  )
 
-      if (productsResult.error) {
-        console.error(productsResult.error)
-        setErrorMessage(productsResult.error.message)
-      } else {
-        setProducts((productsResult.data as Product[]) || [])
-      }
+  const todaysBillsCount = todaysBills.length
 
-      if (billsResult.error) {
-        console.error(billsResult.error)
-        setErrorMessage((prev) => prev || billsResult.error!.message)
-      } else {
-        setBills((billsResult.data as Bill[]) || [])
-      }
+  const loadSystem = async () => {
+    setStatus("Loading...")
+    setErrorMessage("")
 
-      if (dailyReportResult.error) {
-        console.error(dailyReportResult.error)
-        setErrorMessage((prev) => prev || dailyReportResult.error!.message)
-      } else {
-        const report = dailyReportResult.data?.[0] as DailyReport | undefined
-        if (report) {
-          setDailyReportId(report.id)
-          setCashIn(Number(report.cash_in || 0))
-          setCashOut(Number(report.cash_out || 0))
-        }
-      }
+    const [
+      productsResult,
+      billsResult,
+      dailyReportResult,
+      closuresResult,
+    ] = await Promise.all([
+      supabase.from("products").select("*").order("name"),
+      supabase.from("bills").select("*").order("id", { ascending: false }),
+      supabase
+        .from("daily_reports")
+        .select("*")
+        .eq("report_date", todayString())
+        .order("id", { ascending: false })
+        .limit(1),
+      supabase
+        .from("daily_closures")
+        .select("*")
+        .order("report_date", { ascending: false })
+        .limit(10),
+    ])
 
-      setStatus("Loaded")
+    if (productsResult.error) {
+      console.error(productsResult.error)
+      setErrorMessage(productsResult.error.message)
+    } else {
+      setProducts((productsResult.data as Product[]) || [])
     }
 
+    if (billsResult.error) {
+      console.error(billsResult.error)
+      setErrorMessage((prev) => prev || `Bills load error: ${billsResult.error!.message}`)
+    } else {
+      setBills((billsResult.data as Bill[]) || [])
+    }
+
+    if (dailyReportResult.error) {
+      console.error(dailyReportResult.error)
+      setErrorMessage((prev) => prev || `Cash load error: ${dailyReportResult.error!.message}`)
+    } else {
+      const report = dailyReportResult.data?.[0] as DailyReport | undefined
+      if (report) {
+        setDailyReportId(report.id)
+        setCashIn(Number(report.cash_in || 0))
+        setCashOut(Number(report.cash_out || 0))
+      } else {
+        setDailyReportId(null)
+        setCashIn(0)
+        setCashOut(0)
+      }
+    }
+
+    if (closuresResult.error) {
+      console.error(closuresResult.error)
+      setErrorMessage((prev) => prev || `Closures load error: ${closuresResult.error!.message}`)
+    } else {
+      setClosures((closuresResult.data as DailyClosure[]) || [])
+    }
+
+    setStatus("Loaded")
+  }
+
+  useEffect(() => {
     loadSystem()
-  }, [supabase])
+  }, [])
 
   const addProduct = async () => {
     if (!name.trim()) {
@@ -150,7 +202,7 @@ export default function Page() {
     if (error) {
       console.error(error)
       setStatus("Bill save failed")
-      setErrorMessage(error.message)
+      setErrorMessage(`Bill save error: ${error.message}`)
       return
     }
 
@@ -159,6 +211,11 @@ export default function Page() {
       setBillType("")
       setBillAmount(0)
       setStatus("Bill saved")
+    } else {
+      setStatus("Bill saved")
+      setBillType("")
+      setBillAmount(0)
+      await loadSystem()
     }
   }
 
@@ -166,7 +223,7 @@ export default function Page() {
     setStatus("Saving cash control...")
     setErrorMessage("")
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayString()
 
     if (dailyReportId) {
       const { error } = await supabase
@@ -214,12 +271,76 @@ export default function Page() {
     }
   }
 
+  const closeDay = async () => {
+    setStatus("Closing day...")
+    setErrorMessage("")
+
+    const existing = closures.find((item) => item.report_date === todayString())
+
+    if (existing) {
+      const { error } = await supabase
+        .from("daily_closures")
+        .update({
+          bills_total: todaysBillsTotal,
+          bills_count: todaysBillsCount,
+          cash_in: cashIn,
+          cash_out: cashOut,
+          net_cash: netCash,
+          closed_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id)
+
+      if (error) {
+        console.error(error)
+        setStatus("Close day failed")
+        setErrorMessage(error.message)
+        return
+      }
+    } else {
+      const { error } = await supabase
+        .from("daily_closures")
+        .insert([
+          {
+            report_date: todayString(),
+            bills_total: todaysBillsTotal,
+            bills_count: todaysBillsCount,
+            cash_in: cashIn,
+            cash_out: cashOut,
+            net_cash: netCash,
+          },
+        ])
+
+      if (error) {
+        console.error(error)
+        setStatus("Close day failed")
+        setErrorMessage(error.message)
+        return
+      }
+    }
+
+    setStatus("Day closed")
+    await loadSystem()
+  }
+
   return (
     <div style={{ padding: 20 }}>
       <h1>BSC CONTROL SYSTEM</h1>
 
       <p>Status: {status}</p>
       {errorMessage ? <p style={{ color: "red" }}>Error: {errorMessage}</p> : null}
+
+      <hr />
+
+      <h2>Today&apos;s Summary</h2>
+      <div>Total Bills Collected: ${todaysBillsTotal}</div>
+      <div>Bill Payments Count: {todaysBillsCount}</div>
+      <div>Cash In: ${cashIn}</div>
+      <div>Cash Out: ${cashOut}</div>
+      <div><strong>Net Cash: ${netCash}</strong></div>
+
+      <button onClick={closeDay} style={{ marginTop: 12 }}>
+        Close Day
+      </button>
 
       <hr />
 
@@ -269,6 +390,7 @@ export default function Page() {
       <button onClick={addBill}>Pay Bill</button>
 
       <div style={{ marginTop: 12 }}>
+        {bills.length === 0 ? <div>No saved bills yet</div> : null}
         {bills.map((b) => (
           <div key={b.id}>
             {b.bill_type} Bill Paid: ${b.amount}
@@ -297,6 +419,22 @@ export default function Page() {
       <button onClick={saveCashControl}>Save Cash Control</button>
 
       <h3>Net Cash: ${netCash}</h3>
+
+      <hr />
+
+      <h2>Closed Days</h2>
+      {closures.length === 0 ? <div>No closed days yet</div> : null}
+      {closures.map((item) => (
+        <div key={item.id} style={{ marginBottom: 12 }}>
+          <div>Date: {item.report_date}</div>
+          <div>Bills Total: ${item.bills_total}</div>
+          <div>Bills Count: {item.bills_count}</div>
+          <div>Cash In: ${item.cash_in}</div>
+          <div>Cash Out: ${item.cash_out}</div>
+          <div><strong>Net Cash: ${item.net_cash}</strong></div>
+          <div>Closed At: {new Date(item.closed_at).toLocaleString()}</div>
+        </div>
+      ))}
     </div>
   )
 }
