@@ -30,19 +30,20 @@ export default function POSPage() {
       return
     }
 
-    // 2. REDUCE INVENTORY
+    // 2. FIND INVENTORY MATCH (STRONG MATCH FIX)
     const { data: invData } = await supabase
       .from("inventory")
       .select("id, quantity, products(name)")
-    
+
     const match = (invData || []).find((row: any) => {
-      return (
-        row.products &&
-        row.products.name &&
-        row.products.name.toLowerCase() === item.toLowerCase()
-      )
+      if (!row.products || !row.products.name) return false
+
+      return row.products.name
+        .toLowerCase()
+        .includes(item.toLowerCase())
     })
 
+    // 3. UPDATE INVENTORY
     if (match) {
       await supabase
         .from("inventory")
@@ -50,9 +51,11 @@ export default function POSPage() {
           quantity: Number(match.quantity || 0) - 1,
         })
         .eq("id", match.id)
+    } else {
+      console.warn("No inventory match found")
     }
 
-    // 3. RESET INPUT
+    // 4. RESET
     setItem("")
     setAmount("")
 
