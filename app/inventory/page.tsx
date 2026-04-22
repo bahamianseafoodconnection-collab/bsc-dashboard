@@ -4,9 +4,8 @@ import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
 type InventoryItem = {
-  id: number
+  id: string
   quantity: number
-  reorder_level: number
 }
 
 export default function InventoryPage() {
@@ -21,28 +20,31 @@ export default function InventoryPage() {
     const loadInventory = async () => {
       const { data, error } = await supabase
         .from("inventory")
-        .select("*")
+        .select("id, quantity")
 
       if (error) {
+        console.error(error)
         setStatus("Error loading inventory")
         return
       }
 
-      const items = data as InventoryItem[]
+      const rows = data as InventoryItem[]
 
-      setItemsTracked(items.length)
+      // TOTAL ITEMS
+      setItemsTracked(rows.length)
 
-      const low = items.filter(i => i.quantity < i.reorder_level)
-      setLowStock(low.length)
+      // LOW STOCK RULE (LESS THAN OR EQUAL TO 20)
+      const low = rows.filter((item) => item.quantity <= 20).length
+      setLowStock(low)
 
-      const suggest = items.filter(i => i.quantity < i.reorder_level)
-      setSuggestions(suggest.length)
+      // SIMPLE SUGGESTION RULE
+      setSuggestions(low)
 
       setStatus("Ready")
     }
 
     loadInventory()
-  }, [])
+  }, [supabase])
 
   return (
     <>
