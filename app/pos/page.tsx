@@ -10,15 +10,32 @@ type Sale = {
   created_at: string
 }
 
+type Product = {
+  id: string
+  name: string
+}
+
 export default function POSPage() {
   const [item, setItem] = useState("")
   const [amount, setAmount] = useState("")
   const [sales, setSales] = useState<Sale[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [status, setStatus] = useState("Ready")
 
   useEffect(() => {
     loadSales()
+    loadProducts()
   }, [])
+
+  async function loadProducts() {
+    const supabase = createClientInstance()
+
+    const { data } = await supabase
+      .from("products")
+      .select("id, name")
+
+    setProducts(data || [])
+  }
 
   async function loadSales() {
     const supabase = createClientInstance()
@@ -36,6 +53,10 @@ export default function POSPage() {
 
     if (!item || !amount) return
 
+    const product = products.find(
+      (p) => p.name?.toLowerCase() === item.toLowerCase()
+    )
+
     // 1. Save sale
     const { error } = await supabase.from("sales").insert({
       item,
@@ -47,15 +68,7 @@ export default function POSPage() {
       return
     }
 
-    // 2. REDUCE INVENTORY
-    const { data: products } = await supabase
-      .from("products")
-      .select("id, name")
-
-    const product = products?.find(
-      (p) => p.name?.toLowerCase() === item.toLowerCase()
-    )
-
+    // 2. Reduce inventory IF product found
     if (product) {
       const { data: inventory } = await supabase
         .from("inventory")
