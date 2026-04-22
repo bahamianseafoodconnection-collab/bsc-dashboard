@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type Bill = {
+type BillRow = {
   id: string
   name: string
   amount: number
@@ -12,50 +12,76 @@ type Bill = {
 export default function BillsPage() {
   const supabase = createClientInstance()
 
-  const [bills, setBills] = useState<Bill[]>([])
-  const [name, setName] = useState("")
+  const [bills, setBills] = useState<BillRow[]>([])
+  const [billName, setBillName] = useState("")
   const [amount, setAmount] = useState("")
+  const [status, setStatus] = useState("Loading...")
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadBills()
   }, [])
 
   async function loadBills() {
-    const { data } = await supabase.from("bills").select("*")
-    setBills(data || [])
+    const { data, error } = await supabase
+      .from("bills")
+      .select("id, name, amount")
+      .order("id", { ascending: false })
+
+    if (error) {
+      console.error(error)
+      setStatus("Error loading bills")
+      setLoading(false)
+      return
+    }
+
+    setBills((data as BillRow[]) || [])
+    setStatus("Ready")
+    setLoading(false)
   }
 
   async function addBill() {
-    if (!name || !amount) return
-
+    const cleanName = billName.trim()
     const billAmount = Number(amount)
 
-    // 1. Insert bill
+    if (!cleanName || !billAmount) return
+
+    setStatus("Saving...")
+
     const { error: billError } = await supabase.from("bills").insert({
-      name,
+      name: cleanName,
       amount: billAmount,
     })
 
     if (billError) {
       console.error(billError)
+      setStatus("Error saving bill")
       return
     }
 
-    // 2. 🔥 AUTO INSERT INTO CASH (OUTFLOW)
     const { error: cashError } = await supabase.from("cash").insert({
       amount: billAmount,
       type: "out",
-      note: name,
+      note: cleanName,
     })
 
     if (cashError) {
       console.error(cashError)
+      setStatus("Bill saved, but cash entry failed")
+      await loadBills()
+      setBillName("")
+      setAmount("")
+      return
     }
 
-    setName("")
+    setBillName("")
     setAmount("")
-    loadBills()
+    await loadBills()
+    setStatus("Ready")
   }
+
+  const totalBills = bills.length
+  const totalAmount = bills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0)
 
   return (
     <>
@@ -65,9 +91,9 @@ export default function BillsPage() {
         <h2>Add Bill</h2>
 
         <input
-          placeholder="Bill name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          placeholder="Bill type"
+          value={billName}
+          onChange={(e) => setBillName(e.target.value)}
         />
 
         <input
@@ -81,14 +107,39 @@ export default function BillsPage() {
       </div>
 
       <div className="summary-card">
-        <h2>Bills List</h2>
+        <h2>Bills Summary</h2>
 
-        {bills.map((bill) => (
-          <div key={bill.id} className="metric">
-            <span>{bill.name}</span>
-            <span>${bill.amount}</span>
-          </div>
-        ))}
+        <div className="metric">
+          <span>Total Bills</span>
+          <span>{totalBills}</span>
+        </div>
+
+        <div className="metric">
+          <span>Total Amount</span>
+          <span>${totalAmount.toFixed(2)}</span>
+        </div>
+
+        <div className="metric">
+          <span>Status</span>
+          <span>{status}</span>
+        </div>
+      </div>
+
+      <div className="summary-card">
+        <h2>Recent Bills</h2>
+
+        {loading ? (
+          <p>Loading...</p>
+        ) : bills.length === 0 ? (
+          <p>No bills yet</p>
+        ) : (
+          bills.map((bill) => (
+            <div key={bill.id} className="metric">
+              <span>{bill.name}</span>
+              <span>${Number(bill.amount).toFixed(2)}</span>
+            </div>
+          ))
+        )}
       </div>
     </>
   )
