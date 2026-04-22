@@ -6,77 +6,52 @@ import { createClientInstance } from "../../lib/supabase/browser"
 type InventoryItem = {
   id: string
   quantity: number
+  unit: string
+  cost_per_unit: number
+  selling_price: number
 }
 
 export default function InventoryPage() {
   const supabase = createClientInstance()
 
-  const [itemsTracked, setItemsTracked] = useState(0)
-  const [lowStock, setLowStock] = useState(0)
-  const [suggestions, setSuggestions] = useState(0)
-  const [status, setStatus] = useState("Loading...")
+  const [items, setItems] = useState<InventoryItem[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadInventory = async () => {
+    async function loadInventory() {
       const { data, error } = await supabase
         .from("inventory")
-        .select("id, quantity")
+        .select("*")
 
       if (error) {
         console.error(error)
-        setStatus("Error loading inventory")
-        return
+      } else {
+        setItems(data || [])
       }
 
-      const rows = data as InventoryItem[]
-
-      // TOTAL ITEMS
-      setItemsTracked(rows.length)
-
-      // LOW STOCK RULE (LESS THAN OR EQUAL TO 20)
-      const low = rows.filter((item) => item.quantity <= 20).length
-      setLowStock(low)
-
-      // SIMPLE SUGGESTION RULE
-      setSuggestions(low)
-
-      setStatus("Ready")
+      setLoading(false)
     }
 
     loadInventory()
-  }, [supabase])
+  }, [])
 
   return (
-    <>
+    <div>
       <h2 className="page-title">Inventory</h2>
 
       <div className="summary-card">
-        <h2>Inventory Screen</h2>
+        <h2>Inventory List</h2>
 
-        <div className="metric">
-          <span>Items Tracked</span>
-          <span>{itemsTracked}</span>
-        </div>
+        {loading && <p>Loading...</p>}
 
-        <div className="metric">
-          <span>Low Stock Items</span>
-          <span>{lowStock}</span>
-        </div>
-
-        <div className="metric">
-          <span>Reorder Suggestions</span>
-          <span>{suggestions}</span>
-        </div>
+        {!loading &&
+          items.map((item) => (
+            <div key={item.id} className="metric">
+              <span>{item.unit}</span>
+              <span>{item.quantity}</span>
+            </div>
+          ))}
       </div>
-
-      <div className="summary-card">
-        <h2>System Status</h2>
-
-        <div className="metric">
-          <span>Inventory Status</span>
-          <span>{status}</span>
-        </div>
-      </div>
-    </>
+    </div>
   )
 }
