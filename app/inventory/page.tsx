@@ -10,21 +10,24 @@ type InventoryRow = {
   product_id: string | null
   cost_per_unit?: number | null
   selling_price?: number | null
-  products:
-    | {
-        name: string
-      }[]
-    | null
+}
+
+type ProductRow = {
+  id: string
+  name: string
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([])
+  const [productMap, setProductMap] = useState<Record<string, string>>({})
   const [status, setStatus] = useState("Loading...")
   const supabase = createClientInstance()
 
   useEffect(() => {
     async function loadInventory() {
-      const { data, error } = await supabase
+      setStatus("Loading...")
+
+      const { data: inventoryData, error: inventoryError } = await supabase
         .from("inventory")
         .select(`
           id,
@@ -32,19 +35,45 @@ export default function InventoryPage() {
           unit,
           product_id,
           cost_per_unit,
-          selling_price,
-          products (
-            name
-          )
+          selling_price
         `)
 
-      if (error) {
-        console.error("Inventory load error:", error)
+      if (inventoryError) {
+        console.error("Inventory load error:", inventoryError)
         setStatus("Error loading inventory")
         return
       }
 
-      setItems((data as InventoryRow[]) || [])
+      const inventoryRows = (inventoryData as InventoryRow[]) || []
+      setItems(inventoryRows)
+
+      const productIds = inventoryRows
+        .map((item) => item.product_id)
+        .filter((id): id is string => Boolean(id))
+
+      if (productIds.length === 0) {
+        setProductMap({})
+        setStatus("Ready")
+        return
+      }
+
+      const { data: productData, error: productError } = await supabase
+        .from("products")
+        .select("id, name")
+        .in("id", productIds)
+
+      if (productError) {
+        console.error("Products load error:", productError)
+        setStatus("Inventory loaded / product names missing")
+        return
+      }
+
+      const map: Record<string, string> = {}
+      ;((productData as ProductRow[]) || []).forEach((product) => {
+        map[product.id] = product.name
+      })
+
+      setProductMap(map)
       setStatus("Ready")
     }
 
@@ -87,10 +116,9 @@ export default function InventoryPage() {
           <p>No inventory found</p>
         ) : (
           items.map((item) => {
-            const name =
-              item.products && item.products.length > 0
-                ? item.products[0].name
-                : "Missing Product Link"
+            const name = item.product_id
+              ? productMap[item.product_id] || "Missing Product Link"
+              : "Missing Product Link"
 
             return (
               <div key={item.id} className="metric">
