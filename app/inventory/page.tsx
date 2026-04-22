@@ -5,90 +5,55 @@ import { createClientInstance } from "../../lib/supabase/browser"
 
 type InventoryRow = {
   id: string
-  quantity: number
-  unit: string | null
+  quantity: number | null
+  cost_per_unit: number | null
   product_id: string | null
-  cost_per_unit?: number | null
-  selling_price?: number | null
-}
-
-type ProductRow = {
-  id: string
-  name: string
+  products: {
+    name: string
+  }[] | null
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([])
-  const [productMap, setProductMap] = useState<Record<string, string>>({})
   const [status, setStatus] = useState("Loading...")
-  const supabase = createClientInstance()
 
   useEffect(() => {
-    async function loadInventory() {
-      setStatus("Loading...")
+    loadInventory()
+  }, [])
 
-      const { data: inventoryData, error: inventoryError } = await supabase
-        .from("inventory")
-        .select(`
-          id,
-          quantity,
-          unit,
-          product_id,
-          cost_per_unit,
-          selling_price
-        `)
+  async function loadInventory() {
+    const supabase = createClientInstance()
 
-      if (inventoryError) {
-        console.error("Inventory load error:", inventoryError)
-        setStatus("Error loading inventory")
-        return
-      }
+    const { data, error } = await supabase
+      .from("inventory")
+      .select(`
+        id,
+        quantity,
+        cost_per_unit,
+        product_id,
+        products ( name )
+      `)
 
-      const inventoryRows = (inventoryData as InventoryRow[]) || []
-      setItems(inventoryRows)
+    if (error) {
+      console.log("Inventory error:", error)
+      setStatus("Error loading inventory")
 
-      const productIds = inventoryRows
-        .map((item) => item.product_id)
-        .filter((id): id is string => Boolean(id))
-
-      if (productIds.length === 0) {
-        setProductMap({})
-        setStatus("Ready")
-        return
-      }
-
-      const { data: productData, error: productError } = await supabase
-        .from("products")
-        .select("id, name")
-        .in("id", productIds)
-
-      if (productError) {
-        console.error("Products load error:", productError)
-        setStatus("Inventory loaded / product names missing")
-        return
-      }
-
-      const map: Record<string, string> = {}
-      ;((productData as ProductRow[]) || []).forEach((product) => {
-        map[product.id] = product.name
-      })
-
-      setProductMap(map)
-      setStatus("Ready")
+      // IMPORTANT: still show data if available
+      setItems((data as InventoryRow[]) || [])
+      return
     }
 
-    loadInventory()
-  }, [supabase])
+    setItems((data as InventoryRow[]) || [])
+    setStatus("Ready")
+  }
 
-  const totalInventoryValue = items.reduce((total, item) => {
-    const sellPrice = Number(item.selling_price || 0)
-    const qty = Number(item.quantity || 0)
-    return total + sellPrice * qty
+  const totalValue = items.reduce((sum, item) => {
+    return sum + (item.quantity || 0) * (item.cost_per_unit || 0)
   }, 0)
 
   return (
     <>
-      <h2 className="page-title">Inventory</h2>
+      <h1 className="page-title">Inventory</h1>
 
       <div className="summary-card">
         <h2>Inventory Summary</h2>
@@ -100,7 +65,7 @@ export default function InventoryPage() {
 
         <div className="metric">
           <span>Total Inventory Value</span>
-          <span>${totalInventoryValue.toFixed(2)}</span>
+          <span>${totalValue.toFixed(2)}</span>
         </div>
 
         <div className="metric">
@@ -116,9 +81,10 @@ export default function InventoryPage() {
           <p>No inventory found</p>
         ) : (
           items.map((item) => {
-            const name = item.product_id
-              ? productMap[item.product_id] || "Missing Product Link"
-              : "Missing Product Link"
+            const name =
+              item.products && item.products.length > 0
+                ? item.products[0].name
+                : "Missing Product Link"
 
             return (
               <div key={item.id} className="metric">
