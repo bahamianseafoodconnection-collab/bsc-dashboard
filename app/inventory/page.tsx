@@ -10,49 +10,24 @@ type InventoryRow = {
   cost_per_unit: number | null
   selling_price: number | null
   last_updated: string | null
-  products:
-    | {
-        name: string
-      }[]
-    | null
-}
-
-type InventoryItem = {
-  id: string
-  name: string
-  quantity: number
-  unit: string | null
-  cost_per_unit: number | null
-  selling_price: number | null
-  last_updated: string | null
-}
-
-type ReorderItem = {
-  name: string
-  needed: number
-}
-
-type VelocityItem = {
-  name: string
-  daysLeft: number
+  products: {
+    name: string
+  } | null
 }
 
 export default function InventoryPage() {
   const supabase = createClientInstance()
 
-  const [items, setItems] = useState<InventoryItem[]>([])
+  const [items, setItems] = useState<InventoryRow[]>([])
   const [status, setStatus] = useState("Loading...")
   const [loading, setLoading] = useState(true)
 
   const [lowStockCount, setLowStockCount] = useState(0)
-  const [reorderItems, setReorderItems] = useState<ReorderItem[]>([])
-  const [velocityData, setVelocityData] = useState<VelocityItem[]>([])
-  const [totalValue, setTotalValue] = useState(0)
+  const [reorderItems, setReorderItems] = useState<any[]>([])
+  const [velocityData, setVelocityData] = useState<any[]>([])
 
   useEffect(() => {
     async function loadInventory() {
-      setLoading(true)
-
       const { data, error } = await supabase
         .from("inventory")
         .select(`
@@ -62,95 +37,59 @@ export default function InventoryPage() {
           cost_per_unit,
           selling_price,
           last_updated,
-          products (
-            name
-          )
+          products ( name )
         `)
 
       if (error) {
         console.error(error)
         setStatus("Error loading inventory")
-        setItems([])
-        setLowStockCount(0)
-        setReorderItems([])
-        setVelocityData([])
-        setTotalValue(0)
         setLoading(false)
         return
       }
 
-      const rows: InventoryRow[] = Array.isArray(data) ? (data as InventoryRow[]) : []
-
-      const cleanItems: InventoryItem[] = rows.map((row) => ({
-        id: row.id,
-        name: row.products?.[0]?.name ?? "Unknown Product",
-        quantity: Number(row.quantity ?? 0),
-        unit: row.unit,
-        cost_per_unit: row.cost_per_unit,
-        selling_price: row.selling_price,
-        last_updated: row.last_updated,
-      }))
+      const rows = (data ?? []) as InventoryRow[]
+      setItems(rows)
 
       let low = 0
-      let total = 0
+      const reorderList: any[] = []
+      const velocityList: any[] = []
 
-      const reorderList: ReorderItem[] = []
-      const velocityList: VelocityItem[] = []
-
-      cleanItems.forEach((item) => {
+      rows.forEach((item) => {
         const TARGET = 50
-        const DAILY_USAGE = 5
-        const cost = Number(item.cost_per_unit ?? 0)
 
-        total += item.quantity * cost
-
-        if (item.quantity <= 20) {
-          low++
-        }
+        if (item.quantity <= 20) low++
 
         if (item.quantity < TARGET) {
           reorderList.push({
-            name: item.name,
+            name: item.products?.name ?? "Unknown",
             needed: TARGET - item.quantity,
           })
         }
+
+        const DAILY_USAGE = 5
 
         const daysLeft =
           item.quantity > 0 ? Math.floor(item.quantity / DAILY_USAGE) : 0
 
         velocityList.push({
-          name: item.name,
+          name: item.products?.name ?? "Unknown",
           daysLeft,
         })
       })
 
-      setItems(cleanItems)
       setLowStockCount(low)
       setReorderItems(reorderList)
       setVelocityData(velocityList)
-      setTotalValue(total)
+
       setStatus("Ready")
       setLoading(false)
     }
 
     loadInventory()
-  }, [supabase])
+  }, [])
 
-  function money(value: number) {
-    return `$${value.toFixed(2)}`
-  }
-
-  if (loading) {
-    return (
-      <>
-        <h2 className="page-title">Inventory</h2>
-
-        <div className="summary-card">
-          <h2>Inventory</h2>
-          <p>Loading inventory...</p>
-        </div>
-      </>
-    )
+  function money(value: number | null) {
+    return `$${Number(value ?? 0).toFixed(2)}`
   }
 
   return (
@@ -163,11 +102,6 @@ export default function InventoryPage() {
         <div className="metric">
           <span>Items Tracked</span>
           <span>{items.length}</span>
-        </div>
-
-        <div className="metric">
-          <span>Total Inventory Value</span>
-          <span>{money(totalValue)}</span>
         </div>
 
         <div className="metric">
@@ -188,11 +122,11 @@ export default function InventoryPage() {
       <div className="summary-card">
         <h2>Stock Runout Prediction</h2>
 
-        {velocityData.length === 0 ? (
-          <p>No inventory data available</p>
+        {loading ? (
+          <p>Loading...</p>
         ) : (
-          velocityData.map((item) => (
-            <div key={item.name} className="metric">
+          velocityData.map((item, i) => (
+            <div key={i} className="metric">
               <span>{item.name}</span>
               <span style={{ color: item.daysLeft <= 3 ? "red" : "inherit" }}>
                 {item.daysLeft} days left
@@ -205,11 +139,13 @@ export default function InventoryPage() {
       <div className="summary-card">
         <h2>Reorder Suggestions</h2>
 
-        {reorderItems.length === 0 ? (
+        {loading ? (
+          <p>Loading...</p>
+        ) : reorderItems.length === 0 ? (
           <p>Stock levels are good</p>
         ) : (
-          reorderItems.map((item) => (
-            <div key={item.name} className="metric">
+          reorderItems.map((item, i) => (
+            <div key={i} className="metric">
               <span>{item.name}</span>
               <span style={{ color: "red" }}>Buy {item.needed}</span>
             </div>
@@ -220,8 +156,8 @@ export default function InventoryPage() {
       <div className="summary-card">
         <h2>Inventory List</h2>
 
-        {items.length === 0 ? (
-          <p>No inventory found</p>
+        {loading ? (
+          <p>Loading...</p>
         ) : (
           items.map((item) => (
             <div key={item.id} className="metric" style={{ display: "block" }}>
@@ -232,14 +168,14 @@ export default function InventoryPage() {
                   fontWeight: 700,
                 }}
               >
-                <span>{item.name}</span>
+                <span>{item.products?.name}</span>
                 <span>{item.quantity}</span>
               </div>
 
               <div style={{ fontSize: 14, color: "#64748b" }}>
-                Unit: {item.unit ?? "-"} <br />
-                Cost: {money(Number(item.cost_per_unit ?? 0))} <br />
-                Price: {money(Number(item.selling_price ?? 0))} <br />
+                Unit: {item.unit} <br />
+                Cost: {money(item.cost_per_unit)} <br />
+                Price: {money(item.selling_price)} <br />
                 Value: {money(item.quantity * Number(item.cost_per_unit ?? 0))}
               </div>
             </div>
