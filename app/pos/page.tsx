@@ -5,9 +5,8 @@ import { createClientInstance } from "@/lib/supabase/browser"
 
 type ProductOption = {
   inventoryId: string
-  productId: string
   name: string
-  sellingPrice: number
+  price: number
   quantity: number
 }
 
@@ -17,41 +16,24 @@ type SaleRow = {
   amount: number
 }
 
-function getProductName(products: unknown): string {
-  if (!products) return "Unknown Item"
-
-  if (Array.isArray(products)) {
-    const first = products[0] as { name?: unknown } | undefined
-    return typeof first?.name === "string" ? first.name : "Unknown Item"
-  }
-
-  if (typeof products === "object") {
-    const record = products as { name?: unknown }
-    return typeof record.name === "string" ? record.name : "Unknown Item"
-  }
-
-  return "Unknown Item"
-}
-
 export default function POSPage() {
   const supabase = createClientInstance()
 
   const [products, setProducts] = useState<ProductOption[]>([])
-  const [selectedInventoryId, setSelectedInventoryId] = useState("")
+  const [selectedProductId, setSelectedProductId] = useState("")
   const [amount, setAmount] = useState("")
   const [status, setStatus] = useState("Loading...")
   const [transactionsToday, setTransactionsToday] = useState(0)
   const [salesToday, setSalesToday] = useState(0)
   const [recentSales, setRecentSales] = useState<SaleRow[]>([])
 
-  async function loadPOSData() {
+  async function loadData() {
     setStatus("Loading...")
 
-    const { data: inventoryData, error: inventoryError } = await supabase
+    const { data: inventory, error: inventoryError } = await supabase
       .from("inventory")
       .select(`
         id,
-        product_id,
         quantity,
         selling_price,
         products (
@@ -61,113 +43,102 @@ export default function POSPage() {
       .order("created_at", { ascending: true })
 
     if (inventoryError) {
-      setStatus("Error loading products")
+      setStatus("Error loading inventory")
       return
     }
 
-    const normalizedProducts: ProductOption[] = ((inventoryData as any[]) || [])
-      .filter((row) => Number(row.quantity) > 0)
-      .map((row) => ({
-        inventoryId: String(row.id),
-        productId: String(row.product_id),
-        name: getProductName(row.products),
-        sellingPrice: Number(row.selling_price ?? 0),
-        quantity: Number(row.quantity ?? 0),
-      }))
+    const mapped: ProductOption[] = ((inventory as any[]) || []).map((item) => ({
+      inventoryId: String(item.id),
+      name: item.products?.name || "Unknown",
+      price: Number(item.selling_price || 0),
+      quantity: Number(item.quantity || 0),
+    }))
 
-    setProducts(normalizedProducts)
+    setProducts(mapped)
 
-    if (
-      normalizedProducts.length > 0 &&
-      !normalizedProducts.some((item) => item.inventoryId === selectedInventoryId)
-    ) {
-      setSelectedInventoryId(normalizedProducts[0].inventoryId)
+    if (mapped.length > 0) {
+      setSelectedProductId((current) => {
+        const stillExists = mapped.some((p) => p.inventoryId === current)
+        return stillExists ? current : mapped[0].inventoryId
+      })
     }
 
-    const today = new Date()
-    const startOfDay = new Date(today)
-    startOfDay.setHours(0, 0, 0, 0)
-
-    const { data: todaySalesData, error: todaySalesError } = await supabase
+    const { data: sales, error: salesError } = await supabase
       .from("sales")
-      .select("id, item, amount")
-      .gte("created_at", startOfDay.toISOString())
+      .select("*")
       .order("created_at", { ascending: false })
 
-    if (todaySalesError) {
+    if (salesError) {
       setStatus("Error loading sales")
       return
     }
 
-    const safeTodaySales = ((todaySalesData as any[]) || []).map((row) => ({
-      id: String(row.id),
-      item: String(row.item ?? ""),
-      amount: Number(row.amount ?? 0),
+    const safeSales: SaleRow[] = ((sales as any[]) || []).map((sale) => ({
+      id: String(sale.id),
+      item: String(sale.item || ""),
+      amount: Number(sale.amount || 0),
     }))
 
-    setTransactionsToday(safeTodaySales.length)
+    setTransactionsToday(safeSales.length)
     setSalesToday(
-      safeTodaySales.reduce((total, sale) => total + Number(sale.amount || 0), 0)
+      safeSales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0)
     )
-    setRecentSales(safeTodaySales.slice(0, 5))
+    setRecentSales(safeSales.slice(0, 5))
     setStatus("Ready")
   }
 
   useEffect(() => {
-    loadPOSData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadData()
   }, [])
 
-  async function handleRecordSale() {
-    const selectedProduct = products.find(
-      (product) => product.inventoryId === selectedInventoryId
-    )
+  async function handleSale() {
+    const product = products.find((p) => p.inventoryId === selectedProductId)
 
-    if (!selectedProduct) {
-      setStatus("Select a product")
+    if (!product) {
+      setStatus("Select product")
       return
     }
 
-    const numericAmount = Number(amount)
+    const value = Number(amount)
 
-    if (!amount || Number.isNaN(numericAmount) || numericAmount <= 0) {
-      setStatus("Enter valid amount")
+    if (!amount || Number.isNaN(value) || value <= 0) {
+      setStatus("Enter amount")
       return
     }
 
-    if (selectedProduct.quantity <= 0) {
+    if (product.quantity <= 0) {
       setStatus("Out of stock")
       return
     }
 
-    setStatus("Saving sale...")
+    setStatus("Saving...")
 
-    const { error: insertError } = await supabase.from("sales").insert({
-      item: selectedProduct.name,
-      amount: numericAmount,
+    const { error: saleError } = await supabase.from("sales").insert({
+      item: product.name,
+      amount: value,
     })
 
-    if (insertError) {
+    if (saleError) {
       setStatus("Error saving sale")
       return
     }
 
-    const { error: updateError } = await supabase
+    const { error: inventoryUpdateError } = await supabase
       .from("inventory")
       .update({
-        quantity: selectedProduct.quantity - 1,
+        quantity: product.quantity - 1,
       })
-      .eq("id", selectedProduct.inventoryId)
+      .eq("id", product.inventoryId)
 
-    if (updateError) {
+    if (inventoryUpdateError) {
       setStatus("Sale saved, inventory update failed")
-      await loadPOSData()
+      await loadData()
       return
     }
 
     setAmount("")
     setStatus("Sale recorded")
-    await loadPOSData()
+    await loadData()
   }
 
   return (
@@ -177,45 +148,28 @@ export default function POSPage() {
       <div className="summary-card">
         <h2>New Sale</h2>
 
-        <div
-          style={{
-            display: "grid",
-            gap: "12px",
-          }}
+        <select
+          value={selectedProductId}
+          onChange={(e) => setSelectedProductId(e.target.value)}
         >
-          <select
-            value={selectedInventoryId}
-            onChange={(e) => setSelectedInventoryId(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "14px 16px",
-              borderRadius: "16px",
-              border: "1px solid #cbd5e1",
-              fontSize: "16px",
-              background: "white",
-            }}
-          >
-            {products.length === 0 ? (
-              <option value="">No products available</option>
-            ) : (
-              products.map((product) => (
-                <option key={product.inventoryId} value={product.inventoryId}>
-                  {product.name} ({product.quantity} in stock)
-                </option>
-              ))
-            )}
-          </select>
+          {products.length === 0 ? (
+            <option value="">No products available</option>
+          ) : (
+            products.map((product) => (
+              <option key={product.inventoryId} value={product.inventoryId}>
+                {product.name} ({product.quantity})
+              </option>
+            ))
+          )}
+        </select>
 
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+        <input
+          placeholder="Amount"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
 
-          <button onClick={handleRecordSale}>Record Sale</button>
-        </div>
+        <button onClick={handleSale}>Record Sale</button>
       </div>
 
       <div className="summary-card">
@@ -244,9 +198,9 @@ export default function POSPage() {
           <p>No sales yet</p>
         ) : (
           recentSales.map((sale) => (
-            <div className="metric" key={sale.id}>
+            <div key={sale.id} className="metric">
               <span>{sale.item}</span>
-              <span>${Number(sale.amount).toFixed(2)}</span>
+              <span>${sale.amount.toFixed(2)}</span>
             </div>
           ))
         )}
