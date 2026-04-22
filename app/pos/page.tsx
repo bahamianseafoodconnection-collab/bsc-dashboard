@@ -15,12 +15,23 @@ type Product = {
   name: string
 }
 
+type InventoryRow = {
+  id: string
+  product_id: string
+  quantity: number
+}
+
+function normalizeName(value: string) {
+  return value.toLowerCase().replace(/\s+/g, "").trim()
+}
+
 export default function POSPage() {
   const [item, setItem] = useState("")
   const [amount, setAmount] = useState("")
   const [sales, setSales] = useState<Sale[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [status, setStatus] = useState("Ready")
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     loadSales()
@@ -30,70 +41,123 @@ export default function POSPage() {
   async function loadProducts() {
     const supabase = createClientInstance()
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("products")
       .select("id, name")
+      .order("name", { ascending: true })
 
-    setProducts(data || [])
+    if (!error) {
+      setProducts(data || [])
+    }
   }
 
   async function loadSales() {
     const supabase = createClientInstance()
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("sales")
       .select("*")
       .order("created_at", { ascending: false })
 
-    setSales(data || [])
+    if (!error) {
+      setSales(data || [])
+    }
   }
 
   async function handleSale() {
-    const supabase = createClientInstance()
-
     if (!item || !amount) return
 
-    const product = products.find(
-      (p) => p.name?.toLowerCase() === item.toLowerCase()
-    )
+    setIsSaving(true)
+    setStatus("Saving sale...")
 
-    // 1. Save sale
-    const { error } = await supabase.from("sales").insert({
-      item,
-      amount: parseFloat(amount),
-    })
+    const supabase = createClientInstance()
+    const parsedAmount = parseFloat(amount)
 
-    if (error) {
-      setStatus("Error saving sale")
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      setStatus("Enter valid amount")
+      setIsSaving(false)
       return
     }
 
-    // 2. Reduce inventory IF product found
-    if (product) {
-      const { data: inventory } = await supabase
-        .from("inventory")
-        .select("*")
-        .eq("product_id", product.id)
-        .single()
+    const cleanInput = normalizeName(item)
 
-      if (inventory) {
-        await supabase
-          .from("inventory")
-          .update({
-            quantity: (inventory.quantity || 0) - 1,
-          })
-          .eq("id", inventory.id)
-      }
+    const matchedProduct = products.find(
+      (product) => normalizeName(product.name) === cleanInput
+    )
+
+    const { error: saleError } = await supabase.from("sales").insert({
+      item: item.trim(),
+      amount: parsedAmount,
+    })
+
+    if (saleError) {
+      setStatus("Error saving sale")
+      setIsSaving(false)
+      return
+    }
+
+    if (!matchedProduct) {
+      setStatus("Sale saved - no inventory match")
+      setItem("")
+      setAmount("")
+      await loadSales()
+      setIsSaving(false)
+      return
+    }
+
+    const { data: inventoryRows, error: inventoryReadError } = await supabase
+      .from("inventory")
+      .select("id, product_id, quantity")
+      .eq("product_id", matchedProduct.id)
+      .limit(1)
+
+    if (inventoryReadError) {
+      setStatus("Sale saved - inventory read error")
+      setItem("")
+      setAmount("")
+      await loadSales()
+      setIsSaving(false)
+      return
+    }
+
+    const inventoryRow: InventoryRow | undefined = inventoryRows?.[0]
+
+    if (!inventoryRow) {
+      setStatus("Sale saved - inventory row missing")
+      setItem("")
+      setAmount("")
+      await loadSales()
+      setIsSaving(false)
+      return
+    }
+
+    const newQuantity = Math.max((inventoryRow.quantity || 0) - 1, 0)
+
+    const { error: inventoryUpdateError } = await supabase
+      .from("inventory")
+      .update({
+        quantity: newQuantity,
+      })
+      .eq("id", inventoryRow.id)
+
+    if (inventoryUpdateError) {
+      setStatus("Sale saved - inventory update error")
+      setItem("")
+      setAmount("")
+      await loadSales()
+      setIsSaving(false)
+      return
     }
 
     setItem("")
     setAmount("")
     setStatus("Sale recorded")
 
-    loadSales()
+    await loadSales()
+    setIsSaving(false)
   }
 
-  const totalSales = sales.reduce((sum, s) => sum + Number(s.amount), 0)
+  const totalSales = sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0)
 
   return (
     <>
@@ -111,12 +175,15 @@ export default function POSPage() {
 
           <input
             placeholder="Amount"
+            inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
         </div>
 
-        <button onClick={handleSale}>Record Sale</button>
+        <button onClick={handleSale} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Record Sale"}
+        </button>
       </div>
 
       <div className="summary-card">
@@ -141,12 +208,16 @@ export default function POSPage() {
       <div className="summary-card">
         <h2>Recent POS Activity</h2>
 
-        {sales.map((sale) => (
-          <div key={sale.id} className="metric">
-            <span>{sale.item}</span>
-            <span>${sale.amount}</span>
-          </div>
-        ))}
+        {sales.length === 0 ? (
+          <p>No sales yet</p>
+        ) : (
+          sales.slice(0, 5).map((sale) => (
+            <div key={sale.id} className="metric">
+              <span>{sale.item}</span>
+              <span>${Number(sale.amount).toFixed(2)}</span>
+            </div>
+          ))
+        )}
       </div>
     </>
   )
