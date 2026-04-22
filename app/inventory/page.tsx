@@ -8,9 +8,13 @@ type InventoryRow = {
   quantity: number
   unit: string | null
   product_id: string | null
-  products: {
-    name: string
-  } | null
+  cost_per_unit?: number | null
+  selling_price?: number | null
+  products:
+    | {
+        name: string
+      }[]
+    | null
 }
 
 export default function InventoryPage() {
@@ -27,23 +31,31 @@ export default function InventoryPage() {
           quantity,
           unit,
           product_id,
+          cost_per_unit,
+          selling_price,
           products (
             name
           )
         `)
 
       if (error) {
-        console.error(error)
+        console.error("Inventory load error:", error)
         setStatus("Error loading inventory")
         return
       }
 
-      setItems(data || [])
+      setItems((data as InventoryRow[]) || [])
       setStatus("Ready")
     }
 
     loadInventory()
-  }, [])
+  }, [supabase])
+
+  const totalInventoryValue = items.reduce((total, item) => {
+    const sellPrice = Number(item.selling_price || 0)
+    const qty = Number(item.quantity || 0)
+    return total + sellPrice * qty
+  }, 0)
 
   return (
     <>
@@ -58,6 +70,11 @@ export default function InventoryPage() {
         </div>
 
         <div className="metric">
+          <span>Total Inventory Value</span>
+          <span>${totalInventoryValue.toFixed(2)}</span>
+        </div>
+
+        <div className="metric">
           <span>Status</span>
           <span>{status}</span>
         </div>
@@ -66,16 +83,23 @@ export default function InventoryPage() {
       <div className="summary-card">
         <h2>Inventory List</h2>
 
-        {items.map((item) => {
-          const name = item.products?.name || "⚠️ Missing Product Link"
+        {items.length === 0 ? (
+          <p>No inventory found</p>
+        ) : (
+          items.map((item) => {
+            const name =
+              item.products && item.products.length > 0
+                ? item.products[0].name
+                : "Missing Product Link"
 
-          return (
-            <div key={item.id} className="metric">
-              <span>{name}</span>
-              <span>{item.quantity}</span>
-            </div>
-          )
-        })}
+            return (
+              <div key={item.id} className="metric">
+                <span>{name}</span>
+                <span>{item.quantity}</span>
+              </div>
+            )
+          })
+        )}
       </div>
     </>
   )
