@@ -13,12 +13,16 @@ export default function POSPage() {
   const [transactions, setTransactions] = useState(0)
   const [recent, setRecent] = useState<any[]>([])
 
+  function normalize(text: string) {
+    return text.toLowerCase().replace(/\s/g, "")
+  }
+
   async function recordSale() {
     if (!item || !amount) return
 
     setStatus("Saving...")
 
-    // 1. SAVE SALE
+    // SAVE SALE
     const { error: saleError } = await supabase.from("sales").insert({
       item,
       amount: Number(amount),
@@ -30,20 +34,18 @@ export default function POSPage() {
       return
     }
 
-    // 2. FIND INVENTORY MATCH (STRONG MATCH FIX)
+    // FIND INVENTORY MATCH (FIXED)
     const { data: invData } = await supabase
       .from("inventory")
       .select("id, quantity, products(name)")
 
     const match = (invData || []).find((row: any) => {
-      if (!row.products || !row.products.name) return false
+      if (!row.products?.name) return false
 
-      return row.products.name
-        .toLowerCase()
-        .includes(item.toLowerCase())
+      return normalize(row.products.name) === normalize(item)
     })
 
-    // 3. UPDATE INVENTORY
+    // UPDATE INVENTORY
     if (match) {
       await supabase
         .from("inventory")
@@ -52,10 +54,9 @@ export default function POSPage() {
         })
         .eq("id", match.id)
     } else {
-      console.warn("No inventory match found")
+      console.warn("NO MATCH FOUND:", item)
     }
 
-    // 4. RESET
     setItem("")
     setAmount("")
 
@@ -112,7 +113,7 @@ export default function POSPage() {
         <h2>POS Summary</h2>
 
         <div className="metric">
-          <span>Register Status</span>
+          <span>Status</span>
           <span>{status}</span>
         </div>
 
