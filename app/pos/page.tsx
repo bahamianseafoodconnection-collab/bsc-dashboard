@@ -1,54 +1,66 @@
 "use client"
 
+import { useState } from "react"
+import { createClientInstance } from "@/lib/supabase/browser"
+
 export default function POSPage() {
+  const supabase = createClientInstance()
+
+  const [item, setItem] = useState("")
+  const [amount, setAmount] = useState("")
+  const [status, setStatus] = useState("Ready")
+
+  async function handleSale() {
+    if (!item || !amount) {
+      setStatus("Enter item + amount")
+      return
+    }
+
+    const { error } = await supabase.from("cash").insert([
+      {
+        amount: Number(amount),
+        type: "in",
+        note: item,
+      },
+    ])
+
+    if (error) {
+      setStatus("Error saving sale")
+    } else {
+      setStatus("Sale recorded")
+      setItem("")
+      setAmount("")
+    }
+  }
+
   return (
     <>
       <h2 className="page-title">POS</h2>
 
       <div className="summary-card">
-        <h2>POS Summary</h2>
+        <h2>New Sale</h2>
 
-        <div className="metric">
-          <span>Register Status</span>
-          <span>Ready</span>
-        </div>
+        <input
+          placeholder="Item"
+          value={item}
+          onChange={(e) => setItem(e.target.value)}
+        />
 
-        <div className="metric">
-          <span>Transactions Today</span>
-          <span>0</span>
-        </div>
+        <input
+          placeholder="Amount"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
 
-        <div className="metric">
-          <span>Sales Today</span>
-          <span>$0.00</span>
-        </div>
+        <button onClick={handleSale}>Record Sale</button>
       </div>
 
       <div className="summary-card">
-        <h2>Quick Actions</h2>
+        <h2>Status</h2>
 
         <div className="metric">
-          <span>New Sale</span>
-          <span>Coming Next</span>
-        </div>
-
-        <div className="metric">
-          <span>Open Register</span>
-          <span>Coming Next</span>
-        </div>
-
-        <div className="metric">
-          <span>Close Out</span>
-          <span>Coming Next</span>
-        </div>
-      </div>
-
-      <div className="summary-card">
-        <h2>System Status</h2>
-
-        <div className="metric">
-          <span>Status</span>
-          <span>POS Route Live</span>
+          <span>POS</span>
+          <span>{status}</span>
         </div>
       </div>
     </>
