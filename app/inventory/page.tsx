@@ -8,13 +8,16 @@ type InventoryRow = {
   quantity: number | null
   cost_per_unit: number | null
   product_id: string | null
-  products: {
-    name: string
-  }[] | null
+}
+
+type ProductRow = {
+  id: string
+  name: string | null
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([])
+  const [productMap, setProductMap] = useState<Record<string, string>>({})
   const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
@@ -24,26 +27,35 @@ export default function InventoryPage() {
   async function loadInventory() {
     const supabase = createClientInstance()
 
-    const { data, error } = await supabase
-      .from("inventory")
-      .select(`
-        id,
-        quantity,
-        cost_per_unit,
-        product_id,
-        products ( name )
-      `)
+    const [{ data: inventoryData, error: inventoryError }, { data: productsData, error: productsError }] =
+      await Promise.all([
+        supabase
+          .from("inventory")
+          .select("id, quantity, cost_per_unit, product_id"),
+        supabase
+          .from("products")
+          .select("id, name"),
+      ])
 
-    if (error) {
-      console.log("Inventory error:", error)
+    if (inventoryError || productsError) {
+      console.log("Inventory error:", inventoryError)
+      console.log("Products error:", productsError)
+
+      setItems((inventoryData as InventoryRow[]) || [])
       setStatus("Error loading inventory")
-
-      // IMPORTANT: still show data if available
-      setItems((data as InventoryRow[]) || [])
       return
     }
 
-    setItems((data as InventoryRow[]) || [])
+    const map: Record<string, string> = {}
+
+    ;((productsData as ProductRow[]) || []).forEach((product) => {
+      if (product.id) {
+        map[product.id] = product.name || "Unnamed Product"
+      }
+    })
+
+    setProductMap(map)
+    setItems((inventoryData as InventoryRow[]) || [])
     setStatus("Ready")
   }
 
@@ -81,15 +93,14 @@ export default function InventoryPage() {
           <p>No inventory found</p>
         ) : (
           items.map((item) => {
-            const name =
-              item.products && item.products.length > 0
-                ? item.products[0].name
-                : "Missing Product Link"
+            const name = item.product_id
+              ? productMap[item.product_id] || "Missing Product Link"
+              : "Missing Product Link"
 
             return (
               <div key={item.id} className="metric">
                 <span>{name}</span>
-                <span>{item.quantity}</span>
+                <span>{item.quantity ?? 0}</span>
               </div>
             )
           })
