@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientInstance } from "@/lib/supabase/browser"
+import { createClientInstance } from "../../lib/supabase/browser"
 
 type InventoryRow = {
   id: string
@@ -46,8 +46,6 @@ export default function InventoryPage() {
     loadInventory()
   }, [])
 
-  let totalValue = 0
-
   return (
     <>
       <h2 className="page-title">Inventory</h2>
@@ -73,8 +71,7 @@ export default function InventoryPage() {
           <p>No inventory found</p>
         ) : (
           items.map((item) => {
-            const name =
-              item.products?.name || "⚠️ Missing Product Link"
+            const name = item.products?.name || "Missing Product Link"
 
             return (
               <div key={item.id} className="metric">
