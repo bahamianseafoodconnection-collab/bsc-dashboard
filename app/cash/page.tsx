@@ -3,19 +3,18 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type CashRow = {
-  id: string
-  amount: number
-  type: string | null
-  note: string | null
-  created_at: string | null
-}
-
 type BillRow = {
   id: number
   bill_type: string
   amount: number
-  created_at: string | null
+  created_at: string
+}
+
+type SaleRow = {
+  id: number
+  item: string
+  amount: number
+  created_at: string
 }
 
 type FeedItem = {
@@ -23,78 +22,73 @@ type FeedItem = {
   label: string
   amount: number
   kind: "in" | "out"
-  created_at: string | null
+  created_at: string
 }
 
 export default function CashPage() {
-  const [cashRows, setCashRows] = useState<CashRow[]>([])
-  const [billRows, setBillRows] = useState<BillRow[]>([])
-  const [status, setStatus] = useState("Loading...")
-  const [loading, setLoading] = useState(true)
+  const supabase = createClientInstance()
+
+  const [cashIn, setCashIn] = useState(0)
+  const [cashOut, setCashOut] = useState(0)
+  const [status, setStatus] = useState("Loading")
+  const [feed, setFeed] = useState<FeedItem[]>([])
 
   useEffect(() => {
-    const supabase = createClientInstance()
+    async function loadCashData() {
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select("id, item, amount, created_at")
+        .order("created_at", { ascending: false })
 
-    async function load() {
-      const [cashRes, billRes] = await Promise.all([
-        supabase.from("cash").select("*"),
-        supabase.from("bills").select("*"),
-      ])
+      const { data: billsData, error: billsError } = await supabase
+        .from("bills")
+        .select("id, bill_type, amount, created_at")
+        .order("created_at", { ascending: false })
 
-      if (cashRes.error) console.error(cashRes.error)
-      if (billRes.error) console.error(billRes.error)
+      if (salesError || billsError) {
+        console.error("Sales error:", salesError)
+        console.error("Bills error:", billsError)
+        setStatus("Error loading cash")
+        return
+      }
 
-      setCashRows(cashRes.data ?? [])
-      setBillRows(billRes.data ?? [])
+      const sales: SaleRow[] = salesData || []
+      const bills: BillRow[] = billsData || []
 
-      setStatus(
-        cashRes.error || billRes.error ? "Partial error" : "Ready"
-      )
+      const totalIn = sales.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+      const totalOut = bills.reduce((sum, row) => sum + Number(row.amount || 0), 0)
 
-      setLoading(false)
+      setCashIn(totalIn)
+      setCashOut(totalOut)
+
+      const salesFeed: FeedItem[] = sales.map((row) => ({
+        id: `sale-${row.id}`,
+        label: `Sale: ${row.item}`,
+        amount: Number(row.amount || 0),
+        kind: "in",
+        created_at: row.created_at,
+      }))
+
+      const billsFeed: FeedItem[] = bills.map((row) => ({
+        id: `bill-${row.id}`,
+        label: `Bill: ${row.bill_type}`,
+        amount: Number(row.amount || 0),
+        kind: "out",
+        created_at: row.created_at,
+      }))
+
+      const combinedFeed = [...salesFeed, ...billsFeed].sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
+
+      setFeed(combinedFeed)
+      setStatus("Ready")
     }
 
-    load()
-  }, [])
+    loadCashData()
+  }, [supabase])
 
-  // 🔢 CALCULATIONS
-  const totalCashIn = cashRows
-    .filter((x) => x.type === "in")
-    .reduce((sum, x) => sum + Number(x.amount), 0)
-
-  const totalCashOutManual = cashRows
-    .filter((x) => x.type === "out")
-    .reduce((sum, x) => sum + Number(x.amount), 0)
-
-  const totalBillsOut = billRows.reduce(
-    (sum, x) => sum + Number(x.amount),
-    0
-  )
-
-  const totalCashOut = totalCashOutManual + totalBillsOut
-  const netCash = totalCashIn - totalCashOut
-
-  // ✅ FIXED FEED (TYPE SAFE)
-  const feed: FeedItem[] = [
-    ...cashRows.map((x): FeedItem => ({
-      id: "cash-" + x.id,
-      label: x.note || (x.type === "in" ? "Cash In" : "Cash Out"),
-      amount: Number(x.amount),
-      kind: x.type === "in" ? "in" : "out",
-      created_at: x.created_at,
-    })),
-    ...billRows.map((x): FeedItem => ({
-      id: "bill-" + x.id,
-      label: "Bill: " + x.bill_type,
-      amount: Number(x.amount),
-      kind: "out", // 👈 forced correct type
-      created_at: x.created_at,
-    })),
-  ]
-
-  function money(v: number) {
-    return `$${v.toFixed(2)}`
-  }
+  const netCash = cashIn - cashOut
 
   return (
     <>
@@ -105,38 +99,31 @@ export default function CashPage() {
 
         <div className="metric">
           <span>Cash In</span>
-          <span>{money(totalCashIn)}</span>
+          <span>${cashIn.toFixed(2)}</span>
         </div>
 
         <div className="metric">
           <span>Cash Out</span>
-          <span>{money(totalCashOut)}</span>
+          <span>${cashOut.toFixed(2)}</span>
         </div>
 
         <div className="metric">
           <span>Net Cash</span>
-          <span>{money(netCash)}</span>
+          <span>${netCash.toFixed(2)}</span>
         </div>
       </div>
 
       <div className="summary-card">
         <h2>Recent Activity</h2>
 
-        {loading ? (
-          <p>Loading...</p>
-        ) : feed.length === 0 ? (
-          <p>No transactions</p>
+        {feed.length === 0 ? (
+          <p>No cash activity yet</p>
         ) : (
-          feed.map((item) => (
-            <div key={item.id} className="metric">
-              <span>{item.label}</span>
-              <span
-                style={{
-                  color: item.kind === "out" ? "red" : "green",
-                }}
-              >
-                {item.kind === "out" ? "-" : "+"}
-                {money(item.amount)}
+          feed.slice(0, 10).map((entry) => (
+            <div key={entry.id} className="metric">
+              <span>{entry.label}</span>
+              <span>
+                {entry.kind === "in" ? "+" : "-"}${entry.amount.toFixed(2)}
               </span>
             </div>
           ))
@@ -149,6 +136,16 @@ export default function CashPage() {
         <div className="metric">
           <span>Status</span>
           <span>{status}</span>
+        </div>
+
+        <div className="metric">
+          <span>POS Sync to Cash</span>
+          <span>Active</span>
+        </div>
+
+        <div className="metric">
+          <span>Bills Sync to Cash</span>
+          <span>Active</span>
         </div>
       </div>
     </>
