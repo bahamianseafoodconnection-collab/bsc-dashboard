@@ -10,12 +10,6 @@ type ProductOption = {
   quantity: number
 }
 
-type SaleRow = {
-  id: string
-  item: string
-  amount: number
-}
-
 export default function POSPage() {
   const supabase = createClientInstance()
 
@@ -26,26 +20,19 @@ export default function POSPage() {
   const [status, setStatus] = useState("Loading...")
   const [transactionsToday, setTransactionsToday] = useState(0)
   const [salesToday, setSalesToday] = useState(0)
-  const [recentSales, setRecentSales] = useState<SaleRow[]>([])
+
+  const MIN_STOCK = 5
+  const LARGE_SALE_THRESHOLD = 20
 
   async function loadData() {
-    setStatus("Loading...")
-
-    const { data: inventory, error } = await supabase
+    const { data: inventory } = await supabase
       .from("inventory")
       .select(`
         id,
         quantity,
         selling_price,
-        products (
-          name
-        )
+        products ( name )
       `)
-
-    if (error) {
-      setStatus("Error loading inventory")
-      return
-    }
 
     const mapped = (inventory || []).map((item: any) => ({
       inventoryId: item.id,
@@ -56,26 +43,16 @@ export default function POSPage() {
 
     setProducts(mapped)
 
-    if (mapped.length > 0 && !selectedProductId) {
+    if (mapped.length && !selectedProductId) {
       setSelectedProductId(mapped[0].inventoryId)
     }
 
-    const { data: sales } = await supabase
-      .from("sales")
-      .select("*")
-      .order("created_at", { ascending: false })
+    const { data: sales } = await supabase.from("sales").select("*")
 
-    const safeSales = (sales || []).map((sale: any) => ({
-      id: String(sale.id),
-      item: String(sale.item || ""),
-      amount: Number(sale.amount || 0),
-    }))
-
-    setTransactionsToday(safeSales.length)
+    setTransactionsToday(sales?.length || 0)
     setSalesToday(
-      safeSales.reduce((sum, s) => sum + s.amount, 0)
+      (sales || []).reduce((sum: number, s: any) => sum + Number(s.amount || 0), 0)
     )
-    setRecentSales(safeSales.slice(0, 5))
 
     setStatus("Ready")
   }
@@ -84,17 +61,19 @@ export default function POSPage() {
     loadData()
   }, [])
 
-  const selectedProduct = useMemo(() => {
-    return products.find(p => p.inventoryId === selectedProductId) || null
-  }, [products, selectedProductId])
+  const selectedProduct = useMemo(
+    () => products.find(p => p.inventoryId === selectedProductId),
+    [products, selectedProductId]
+  )
 
+  // CLEAN INPUT (removes leading zeros)
   const cleanQty = Number(qty) || 0
+
   const total = selectedProduct ? cleanQty * selectedProduct.price : 0
   const remaining = selectedProduct ? selectedProduct.quantity - cleanQty : 0
 
-  // 🔴 RULES
-  const isOverStock = selectedProduct && cleanQty > selectedProduct.quantity
-  const isLowStock = selectedProduct && remaining <= 5
+  const belowMinimum = selectedProduct && remaining < MIN_STOCK
+  const overStock = selectedProduct && cleanQty > selectedProduct.quantity
 
   async function handleSale() {
     if (!selectedProduct) return
@@ -104,50 +83,51 @@ export default function POSPage() {
       return
     }
 
-    if (isOverStock) {
+    if (overStock) {
       setStatus("❌ Not enough stock")
       return
+    }
+
+    // 🚨 PREVENT FULL DEPLETION
+    if (remaining < MIN_STOCK) {
+      setStatus(`❌ Must keep at least ${MIN_STOCK} in stock`)
+      return
+    }
+
+    // ⚠️ LARGE SALE CONFIRM
+    if (cleanQty >= LARGE_SALE_THRESHOLD) {
+      const confirm = window.confirm("Large sale detected. Continue?")
+      if (!confirm) return
     }
 
     setStatus("Saving...")
 
     const totalAmount = selectedProduct.price * cleanQty
 
-    const { error: insertError } = await supabase
-      .from("sales")
-      .insert({
-        item: selectedProduct.name,
-        amount: totalAmount,
-      })
+    await supabase.from("sales").insert({
+      item: selectedProduct.name,
+      amount: totalAmount,
+    })
 
-    if (insertError) {
-      setStatus("Error saving sale")
-      return
-    }
-
-    const { error: updateError } = await supabase
+    await supabase
       .from("inventory")
       .update({
         quantity: selectedProduct.quantity - cleanQty,
       })
       .eq("id", selectedProduct.inventoryId)
 
-    if (updateError) {
-      setStatus("Error updating inventory")
-      return
-    }
-
     setQty(1)
     await loadData()
+
     setStatus("✅ Sale recorded")
   }
 
   return (
     <>
-      <h2 className="page-title">POS</h2>
+      <h2>POS</h2>
 
-      <div className="summary-card">
-        <h2>New Sale</h2>
+      <div>
+        <h3>New Sale</h3>
 
         <select
           value={selectedProductId}
@@ -169,71 +149,25 @@ export default function POSPage() {
         <button onClick={handleSale}>Record Sale</button>
       </div>
 
-      <div className="summary-card">
-        <h2>Sale Preview</h2>
+      <div>
+        <h3>Sale Preview</h3>
 
-        <div className="metric">
-          <span>Product</span>
-          <span>{selectedProduct?.name}</span>
-        </div>
+        <p>Product: {selectedProduct?.name}</p>
+        <p>Unit Price: ${selectedProduct?.price}</p>
+        <p>Quantity: {cleanQty}</p>
+        <p>Total: ${total}</p>
+        <p>Stock After: {remaining}</p>
 
-        <div className="metric">
-          <span>Unit Price</span>
-          <span>${selectedProduct?.price.toFixed(2)}</span>
-        </div>
-
-        <div className="metric">
-          <span>Quantity</span>
-          <span>{cleanQty}</span>
-        </div>
-
-        <div className="metric">
-          <span>Total</span>
-          <span>${total.toFixed(2)}</span>
-        </div>
-
-        <div className="metric">
-          <span>Stock After</span>
-          <span>{remaining}</span>
-        </div>
-
-        {isOverStock && (
-          <p style={{ color: "red" }}>❌ Not enough stock</p>
-        )}
-
-        {isLowStock && !isOverStock && (
-          <p style={{ color: "orange" }}>⚠️ Low stock warning</p>
-        )}
+        {overStock && <p style={{ color: "red" }}>❌ Not enough stock</p>}
+        {belowMinimum && <p style={{ color: "orange" }}>⚠️ Low stock warning</p>}
       </div>
 
-      <div className="summary-card">
-        <h2>POS Summary</h2>
+      <div>
+        <h3>POS Summary</h3>
 
-        <div className="metric">
-          <span>Status</span>
-          <span>{status}</span>
-        </div>
-
-        <div className="metric">
-          <span>Transactions Today</span>
-          <span>{transactionsToday}</span>
-        </div>
-
-        <div className="metric">
-          <span>Sales Today</span>
-          <span>${salesToday.toFixed(2)}</span>
-        </div>
-      </div>
-
-      <div className="summary-card">
-        <h2>Recent POS Activity</h2>
-
-        {recentSales.map(sale => (
-          <div key={sale.id} className="metric">
-            <span>{sale.item}</span>
-            <span>${sale.amount.toFixed(2)}</span>
-          </div>
-        ))}
+        <p>Status: {status}</p>
+        <p>Transactions Today: {transactionsToday}</p>
+        <p>Sales Today: ${salesToday}</p>
       </div>
     </>
   )
