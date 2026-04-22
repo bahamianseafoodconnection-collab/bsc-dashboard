@@ -3,110 +3,60 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type InventoryDbRow = {
+type InventoryRow = {
   id: string
-  quantity: number | null
-  cost_per_unit: number | null
-  product_id: string | null
-  products?:
-    | { name?: string | null }
-    | { name?: string | null }[]
-    | null
-}
-
-type ProductRow = {
-  id: string
-  name: string | null
-}
-
-type InventoryViewRow = {
-  id: string
-  name: string
   quantity: number
-  cost_per_unit: number
-  value: number
-  daysLeft: number
-  dailyTarget: number
-  reorderQty: number
+  unit: string | null
+  cost_per_unit: number | null
+  selling_price: number | null
+  last_updated: string | null
+  product_id: string | null
+  products: {
+    name: string
+  } | null
 }
 
 export default function InventoryPage() {
-  const [items, setItems] = useState<InventoryViewRow[]>([])
+  const [items, setItems] = useState<InventoryRow[]>([])
   const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
     const supabase = createClientInstance()
 
     async function loadInventory() {
-      setStatus("Loading...")
+      const { data, error } = await supabase
+        .from("inventory")
+        .select(`
+          id,
+          quantity,
+          unit,
+          cost_per_unit,
+          selling_price,
+          last_updated,
+          product_id,
+          products ( name )
+        `)
 
-      const [{ data: inventoryData }, { data: productsData }] =
-        await Promise.all([
-          supabase.from("inventory").select(`
-            id,
-            quantity,
-            cost_per_unit,
-            product_id,
-            products ( name )
-          `),
-          supabase.from("products").select("id, name"),
-        ])
-
-      const productMap = new Map<string, string>()
-      for (const p of productsData || []) {
-        productMap.set(p.id, p.name ?? "Unknown")
+      if (error) {
+        console.error(error)
+        setStatus("Error loading inventory")
+        return
       }
 
-      const rows: InventoryViewRow[] = (inventoryData || []).map((row: InventoryDbRow) => {
-        let joinedName: string | null = null
-
-        if (Array.isArray(row.products)) {
-          joinedName = row.products[0]?.name ?? null
-        } else if (row.products && typeof row.products === "object") {
-          joinedName = row.products.name ?? null
-        }
-
-        const fallbackName = row.product_id
-          ? productMap.get(row.product_id)
-          : null
-
-        const name = joinedName ?? fallbackName ?? "Unknown"
-
-        const quantity = Number(row.quantity ?? 0)
-        const cost = Number(row.cost_per_unit ?? 0)
-        const value = quantity * cost
-
-        const dailySales = 5
-        const daysLeft = quantity > 0 ? Math.floor(quantity / dailySales) : 0
-
-        const reorderLevel = 10 * dailySales
-        const reorderQty =
-          quantity < reorderLevel ? reorderLevel - quantity : 0
-
-        return {
-          id: row.id,
-          name,
-          quantity,
-          cost_per_unit: cost,
-          value,
-          daysLeft,
-          dailyTarget: dailySales,
-          reorderQty,
-        }
-      })
-
-      setItems(rows)
+      setItems(data || [])
       setStatus("Ready")
     }
 
     loadInventory()
   }, [])
 
-  const totalValue = items.reduce((sum, i) => sum + i.value, 0)
-  const lowStock = items.filter((i) => i.daysLeft <= 3)
-  const reorderItems = items.filter((i) => i.reorderQty > 0)
+  let totalValue = 0
 
-  const money = (v: number) => `$${v.toFixed(2)}`
+  items.forEach((item) => {
+    if (item.cost_per_unit) {
+      totalValue += item.quantity * item.cost_per_unit
+    }
+  })
 
   return (
     <>
@@ -122,41 +72,29 @@ export default function InventoryPage() {
 
         <div className="metric">
           <span>Total Inventory Value</span>
-          <span>{money(totalValue)}</span>
+          <span>${totalValue.toFixed(2)}</span>
         </div>
 
         <div className="metric">
-          <span>Low Stock</span>
-          <span style={{ color: lowStock.length ? "red" : "" }}>
-            {lowStock.length}
-          </span>
-        </div>
-
-        <div className="metric">
-          <span>Reorder Items</span>
-          <span style={{ color: reorderItems.length ? "red" : "" }}>
-            {reorderItems.length}
-          </span>
+          <span>Status</span>
+          <span>{status}</span>
         </div>
       </div>
 
       <div className="summary-card">
-        <h2>Stock Runout + Daily Target</h2>
+        <h2>Inventory List</h2>
 
-        {items.map((i) => (
-          <div key={i.id} className="metric">
-            <span>{i.name}</span>
-            <span style={{ color: i.daysLeft <= 3 ? "red" : "" }}>
-              {i.daysLeft} days | Sell {i.dailyTarget}/day
-            </span>
-          </div>
-        ))}
+        {items.length === 0 ? (
+          <p>No inventory found</p>
+        ) : (
+          items.map((item) => (
+            <div key={item.id} className="metric">
+              <span>{item.products?.name || "Unknown"}</span>
+              <span>{item.quantity}</span>
+            </div>
+          ))
+        )}
       </div>
-
-      <div className="summary-card">
-        <h2>Reorder Suggestions</h2>
-
-        {reorderItems.map((i) => (
-          <div key={i.id} className="metric">
-            <span>{i.name}</span>
-            <span style={{ color
+    </>
+  )
+}
