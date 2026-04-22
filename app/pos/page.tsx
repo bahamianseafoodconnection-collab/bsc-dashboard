@@ -1,62 +1,87 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
-
-type Sale = {
-  id: number
-  item: string
-  amount: number
-  created_at: string
-}
 
 export default function POSPage() {
   const supabase = createClientInstance()
 
   const [item, setItem] = useState("")
   const [amount, setAmount] = useState("")
-  const [sales, setSales] = useState<Sale[]>([])
   const [status, setStatus] = useState("Ready")
+  const [salesToday, setSalesToday] = useState(0)
+  const [transactions, setTransactions] = useState(0)
+  const [recent, setRecent] = useState<any[]>([])
 
-  const fetchSales = async () => {
-    const { data, error } = await supabase
+  async function recordSale() {
+    if (!item || !amount) return
+
+    setStatus("Saving...")
+
+    // 1. SAVE SALE
+    const { error: saleError } = await supabase.from("sales").insert({
+      item,
+      amount: Number(amount),
+    })
+
+    if (saleError) {
+      console.error(saleError)
+      setStatus("Error saving sale")
+      return
+    }
+
+    // 2. REDUCE INVENTORY
+    const { data: invData } = await supabase
+      .from("inventory")
+      .select("id, quantity, products(name)")
+    
+    const match = (invData || []).find((row: any) => {
+      return (
+        row.products &&
+        row.products.name &&
+        row.products.name.toLowerCase() === item.toLowerCase()
+      )
+    })
+
+    if (match) {
+      await supabase
+        .from("inventory")
+        .update({
+          quantity: Number(match.quantity || 0) - 1,
+        })
+        .eq("id", match.id)
+    }
+
+    // 3. RESET INPUT
+    setItem("")
+    setAmount("")
+
+    loadData()
+    setStatus("Sale recorded")
+  }
+
+  async function loadData() {
+    const { data } = await supabase
       .from("sales")
       .select("*")
       .order("created_at", { ascending: false })
 
-    if (error) {
-      setStatus("Error loading sales")
-    } else {
-      setSales(data || [])
-    }
+    const sales = data || []
+
+    setTransactions(sales.length)
+
+    const total = sales.reduce(
+      (sum: number, s: any) => sum + Number(s.amount || 0),
+      0
+    )
+
+    setSalesToday(total)
+    setRecent(sales.slice(0, 5))
   }
 
   useEffect(() => {
-    fetchSales()
+    loadData()
   }, [])
-
-  const handleSale = async () => {
-    if (!item || !amount) return
-
-    const { error } = await supabase.from("sales").insert([
-      {
-        item: item,
-        amount: parseFloat(amount),
-      },
-    ])
-
-    if (error) {
-      console.error(error)
-      setStatus("Error saving sale")
-    } else {
-      setStatus("Sale recorded")
-      setItem("")
-      setAmount("")
-      fetchSales()
-    }
-  }
-
-  const totalSales = sales.reduce((sum, s) => sum + s.amount, 0)
 
   return (
     <>
@@ -64,17 +89,20 @@ export default function POSPage() {
 
       <div className="summary-card">
         <h2>New Sale</h2>
+
         <input
           placeholder="Item"
           value={item}
           onChange={(e) => setItem(e.target.value)}
         />
+
         <input
           placeholder="Amount"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
-        <button onClick={handleSale}>Record Sale</button>
+
+        <button onClick={recordSale}>Record Sale</button>
       </div>
 
       <div className="summary-card">
@@ -87,24 +115,25 @@ export default function POSPage() {
 
         <div className="metric">
           <span>Transactions Today</span>
-          <span>{sales.length}</span>
+          <span>{transactions}</span>
         </div>
 
         <div className="metric">
           <span>Sales Today</span>
-          <span>${totalSales.toFixed(2)}</span>
+          <span>${salesToday.toFixed(2)}</span>
         </div>
       </div>
 
       <div className="summary-card">
         <h2>Recent POS Activity</h2>
-        {sales.length === 0 ? (
+
+        {recent.length === 0 ? (
           <p>No sales yet</p>
         ) : (
-          sales.map((sale) => (
-            <div key={sale.id} className="metric">
-              <span>{sale.item}</span>
-              <span>${sale.amount}</span>
+          recent.map((r) => (
+            <div key={r.id} className="metric">
+              <span>{r.item}</span>
+              <span>${Number(r.amount).toFixed(2)}</span>
             </div>
           ))
         )}
