@@ -10,30 +10,38 @@ type InventoryRow = {
   cost_per_unit: number | null
   selling_price: number | null
   last_updated: string | null
-  products: {
-    name: string
-  } | null
+  products:
+    | {
+        name: string
+      }[]
+    | null
+}
+
+type ReorderItem = {
+  name: string
+  needed: number
+}
+
+type VelocityItem = {
+  name: string
+  daysLeft: number
+  daily: number
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([])
-  const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState("Loading...")
+  const [loading, setLoading] = useState(true)
 
   const [lowStockCount, setLowStockCount] = useState(0)
-  const [reorderItems, setReorderItems] = useState<any[]>([])
-
-  // 🔥 NEW CASH INTELLIGENCE
-  const [inventoryValue, setInventoryValue] = useState(0)
-  const [decision, setDecision] = useState("Analyzing...")
+  const [reorderItems, setReorderItems] = useState<ReorderItem[]>([])
+  const [velocityData, setVelocityData] = useState<VelocityItem[]>([])
 
   useEffect(() => {
     const supabase = createClientInstance()
 
     async function loadInventory() {
-      const { data, error } = await supabase
-        .from("inventory")
-        .select(`
+      const { data, error } = await supabase.from("inventory").select(`
           id,
           quantity,
           unit,
@@ -50,47 +58,49 @@ export default function InventoryPage() {
         return
       }
 
-      const rows = (data ?? []) as InventoryRow[]
+      const rows: InventoryRow[] = (data ?? []).map((item: any) => ({
+        id: item.id,
+        quantity: Number(item.quantity ?? 0),
+        unit: item.unit ?? null,
+        cost_per_unit: item.cost_per_unit ?? null,
+        selling_price: item.selling_price ?? null,
+        last_updated: item.last_updated ?? null,
+        products: Array.isArray(item.products) ? item.products : [],
+      }))
+
       setItems(rows)
 
       let low = 0
-      let totalValue = 0
-      const reorderList: any[] = []
+      const reorderList: ReorderItem[] = []
+      const velocityList: VelocityItem[] = []
 
       rows.forEach((item) => {
         const TARGET = 50
+        const productName = item.products?.[0]?.name ?? "Unknown"
 
-        const cost = Number(item.cost_per_unit ?? 0)
-        const qty = Number(item.quantity ?? 0)
+        if (item.quantity <= 20) low++
 
-        const value = cost * qty
-        totalValue += value
-
-        if (qty <= 20) low++
-
-        if (qty < TARGET) {
+        if (item.quantity < TARGET) {
           reorderList.push({
-            name: item.products?.name ?? "Unknown",
-            needed: TARGET - qty,
+            name: productName,
+            needed: TARGET - item.quantity,
           })
         }
+
+        const DAILY_USAGE = 5
+        const daysLeft =
+          item.quantity > 0 ? Math.floor(item.quantity / DAILY_USAGE) : 0
+
+        velocityList.push({
+          name: productName,
+          daysLeft,
+          daily: DAILY_USAGE,
+        })
       })
 
-      // 🔥 DECISION ENGINE
-      let decisionText = "Stable"
-
-      if (totalValue > 5000) {
-        decisionText = "⚠️ High cash tied in inventory — slow purchasing"
-      } else if (low > 2) {
-        decisionText = "⚠️ Low stock risk — reorder carefully"
-      } else {
-        decisionText = "✅ Healthy inventory balance"
-      }
-
-      setInventoryValue(totalValue)
       setLowStockCount(low)
       setReorderItems(reorderList)
-      setDecision(decisionText)
+      setVelocityData(velocityList)
 
       setStatus("Ready")
       setLoading(false)
@@ -99,15 +109,14 @@ export default function InventoryPage() {
     loadInventory()
   }, [])
 
-  function money(v: number) {
-    return `$${v.toFixed(2)}`
+  function money(value: number | null) {
+    return `$${Number(value ?? 0).toFixed(2)}`
   }
 
   return (
     <>
       <h2 className="page-title">Inventory</h2>
 
-      {/* 🔥 SUMMARY */}
       <div className="summary-card">
         <h2>Inventory Summary</h2>
 
@@ -131,22 +140,29 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* 🔥 CASH INTELLIGENCE */}
       <div className="summary-card">
-        <h2>Inventory Cash Impact</h2>
+        <h2>Stock Runout Prediction</h2>
 
-        <div className="metric">
-          <span>Total Inventory Value</span>
-          <span>{money(inventoryValue)}</span>
-        </div>
-
-        <div className="metric">
-          <span>Decision</span>
-          <span>{decision}</span>
-        </div>
+        {loading ? (
+          <p>Loading...</p>
+        ) : velocityData.length === 0 ? (
+          <p>No inventory data</p>
+        ) : (
+          velocityData.map((item, i) => (
+            <div key={i} className="metric">
+              <span>{item.name}</span>
+              <span
+                style={{
+                  color: item.daysLeft <= 3 ? "red" : "inherit",
+                }}
+              >
+                {item.daysLeft} days left
+              </span>
+            </div>
+          ))
+        )}
       </div>
 
-      {/* REORDER */}
       <div className="summary-card">
         <h2>Reorder Suggestions</h2>
 
@@ -164,12 +180,13 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {/* LIST */}
       <div className="summary-card">
         <h2>Inventory List</h2>
 
         {loading ? (
           <p>Loading...</p>
+        ) : items.length === 0 ? (
+          <p>No inventory found</p>
         ) : (
           items.map((item) => (
             <div key={item.id} className="metric" style={{ display: "block" }}>
@@ -180,18 +197,15 @@ export default function InventoryPage() {
                   fontWeight: 700,
                 }}
               >
-                <span>{item.products?.name}</span>
+                <span>{item.products?.[0]?.name ?? "Unknown"}</span>
                 <span>{item.quantity}</span>
               </div>
 
               <div style={{ fontSize: 14, color: "#64748b" }}>
-                Unit: {item.unit} <br />
-                Cost: {money(Number(item.cost_per_unit ?? 0))} <br />
-                Price: {money(Number(item.selling_price ?? 0))} <br />
-                Value:{" "}
-                {money(
-                  Number(item.quantity) * Number(item.cost_per_unit ?? 0)
-                )}
+                Unit: {item.unit ?? "-"} <br />
+                Cost: {money(item.cost_per_unit)} <br />
+                Price: {money(item.selling_price)} <br />
+                Value: {money(item.quantity * Number(item.cost_per_unit ?? 0))}
               </div>
             </div>
           ))
