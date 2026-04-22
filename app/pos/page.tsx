@@ -3,19 +3,18 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type SaleRow = {
+type Sale = {
   id: string
-  item: string | null
-  amount: number | null
-  created_at: string | null
+  item: string
+  amount: number
+  created_at: string
 }
 
 export default function POSPage() {
   const [item, setItem] = useState("")
   const [amount, setAmount] = useState("")
-  const [sales, setSales] = useState<SaleRow[]>([])
-  const [status, setStatus] = useState("Loading...")
-  const [isSaving, setIsSaving] = useState(false)
+  const [sales, setSales] = useState<Sale[]>([])
+  const [status, setStatus] = useState("Ready")
 
   useEffect(() => {
     loadSales()
@@ -24,62 +23,64 @@ export default function POSPage() {
   async function loadSales() {
     const supabase = createClientInstance()
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("sales")
-      .select("id, item, amount, created_at")
+      .select("*")
       .order("created_at", { ascending: false })
 
-    if (error) {
-      console.log("POS load error:", error)
-      setStatus("Error loading sales")
-      setSales([])
-      return
-    }
-
-    setSales((data as SaleRow[]) || [])
-    setStatus("Ready")
+    setSales(data || [])
   }
 
-  async function handleRecordSale() {
-    if (!item.trim() || !amount.trim()) {
-      setStatus("Enter item and amount")
-      return
-    }
-
-    const numericAmount = Number(amount)
-
-    if (Number.isNaN(numericAmount) || numericAmount <= 0) {
-      setStatus("Enter valid amount")
-      return
-    }
-
-    setIsSaving(true)
-
+  async function handleSale() {
     const supabase = createClientInstance()
 
-    const { error } = await supabase.from("sales").insert([
-      {
-        item: item.trim(),
-        amount: numericAmount,
-      },
-    ])
+    if (!item || !amount) return
+
+    // 1. Save sale
+    const { error } = await supabase.from("sales").insert({
+      item,
+      amount: parseFloat(amount),
+    })
 
     if (error) {
-      console.log("POS save error:", error)
       setStatus("Error saving sale")
-      setIsSaving(false)
       return
+    }
+
+    // 2. REDUCE INVENTORY
+    const { data: products } = await supabase
+      .from("products")
+      .select("id, name")
+
+    const product = products?.find(
+      (p) => p.name?.toLowerCase() === item.toLowerCase()
+    )
+
+    if (product) {
+      const { data: inventory } = await supabase
+        .from("inventory")
+        .select("*")
+        .eq("product_id", product.id)
+        .single()
+
+      if (inventory) {
+        await supabase
+          .from("inventory")
+          .update({
+            quantity: (inventory.quantity || 0) - 1,
+          })
+          .eq("id", inventory.id)
+      }
     }
 
     setItem("")
     setAmount("")
     setStatus("Sale recorded")
-    setIsSaving(false)
+
     loadSales()
   }
 
-  const transactionsToday = sales.length
-  const salesToday = sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0)
+  const totalSales = sales.reduce((sum, s) => sum + Number(s.amount), 0)
 
   return (
     <>
@@ -88,63 +89,21 @@ export default function POSPage() {
       <div className="summary-card">
         <h2>New Sale</h2>
 
-        <div
-          style={{
-            display: "grid",
-            gap: "12px",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "12px",
-            }}
-          >
-            <input
-              value={item}
-              onChange={(e) => setItem(e.target.value)}
-              placeholder="Item"
-              style={{
-                padding: "14px 16px",
-                borderRadius: "14px",
-                border: "1px solid #d1d5db",
-                fontSize: "16px",
-              }}
-            />
+        <div className="metric">
+          <input
+            placeholder="Item"
+            value={item}
+            onChange={(e) => setItem(e.target.value)}
+          />
 
-            <input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Amount"
-              inputMode="decimal"
-              style={{
-                padding: "14px 16px",
-                borderRadius: "14px",
-                border: "1px solid #d1d5db",
-                fontSize: "16px",
-              }}
-            />
-          </div>
-
-          <button
-            onClick={handleRecordSale}
-            disabled={isSaving}
-            style={{
-              width: "fit-content",
-              background: "#2563eb",
-              color: "white",
-              border: "none",
-              borderRadius: "14px",
-              padding: "14px 22px",
-              fontSize: "16px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            {isSaving ? "Saving..." : "Record Sale"}
-          </button>
+          <input
+            placeholder="Amount"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
         </div>
+
+        <button onClick={handleSale}>Record Sale</button>
       </div>
 
       <div className="summary-card">
@@ -157,28 +116,24 @@ export default function POSPage() {
 
         <div className="metric">
           <span>Transactions Today</span>
-          <span>{transactionsToday}</span>
+          <span>{sales.length}</span>
         </div>
 
         <div className="metric">
           <span>Sales Today</span>
-          <span>${salesToday.toFixed(2)}</span>
+          <span>${totalSales.toFixed(2)}</span>
         </div>
       </div>
 
       <div className="summary-card">
         <h2>Recent POS Activity</h2>
 
-        {sales.length === 0 ? (
-          <p>No sales yet</p>
-        ) : (
-          sales.slice(0, 5).map((sale) => (
-            <div key={sale.id} className="metric">
-              <span>{sale.item || "Unnamed sale"}</span>
-              <span>${Number(sale.amount || 0).toFixed(2)}</span>
-            </div>
-          ))
-        )}
+        {sales.map((sale) => (
+          <div key={sale.id} className="metric">
+            <span>{sale.item}</span>
+            <span>${sale.amount}</span>
+          </div>
+        ))}
       </div>
     </>
   )
