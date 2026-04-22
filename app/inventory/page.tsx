@@ -8,15 +8,9 @@ type InventoryDbRow = {
   quantity: number | null
   cost_per_unit: number | null
   product_id: string | null
-  selling_price?: number | null
-  last_updated?: string | null
   products?:
-    | {
-        name?: string | null
-      }
-    | {
-        name?: string | null
-      }[]
+    | { name?: string | null }
+    | { name?: string | null }[]
     | null
 }
 
@@ -32,6 +26,8 @@ type InventoryViewRow = {
   cost_per_unit: number
   value: number
   daysLeft: number
+  dailyTarget: number
+  reorderQty: number
 }
 
 export default function InventoryPage() {
@@ -44,45 +40,24 @@ export default function InventoryPage() {
     async function loadInventory() {
       setStatus("Loading...")
 
-      const [{ data: inventoryData, error: inventoryError }, { data: productsData, error: productsError }] =
+      const [{ data: inventoryData }, { data: productsData }] =
         await Promise.all([
-          supabase
-            .from("inventory")
-            .select(`
-              id,
-              quantity,
-              cost_per_unit,
-              product_id,
-              selling_price,
-              last_updated,
-              products ( name )
-            `),
-          supabase
-            .from("products")
-            .select("id, name"),
+          supabase.from("inventory").select(`
+            id,
+            quantity,
+            cost_per_unit,
+            product_id,
+            products ( name )
+          `),
+          supabase.from("products").select("id, name"),
         ])
 
-      if (inventoryError) {
-        console.error("Inventory load error:", inventoryError)
-        setStatus("Error loading inventory")
-        return
-      }
-
-      if (productsError) {
-        console.error("Products load error:", productsError)
-      }
-
-      const inventoryRows: InventoryDbRow[] = Array.isArray(inventoryData) ? inventoryData : []
-      const productRows: ProductRow[] = Array.isArray(productsData) ? productsData : []
-
       const productMap = new Map<string, string>()
-      for (const product of productRows) {
-        if (product.id) {
-          productMap.set(product.id, product.name ?? "Unknown")
-        }
+      for (const p of productsData || []) {
+        productMap.set(p.id, p.name ?? "Unknown")
       }
 
-      const viewRows: InventoryViewRow[] = inventoryRows.map((row) => {
+      const rows: InventoryViewRow[] = (inventoryData || []).map((row: InventoryDbRow) => {
         let joinedName: string | null = null
 
         if (Array.isArray(row.products)) {
@@ -91,40 +66,47 @@ export default function InventoryPage() {
           joinedName = row.products.name ?? null
         }
 
-        const fallbackName = row.product_id ? productMap.get(row.product_id) ?? null : null
-        const finalName = joinedName ?? fallbackName ?? "Unknown"
+        const fallbackName = row.product_id
+          ? productMap.get(row.product_id)
+          : null
+
+        const name = joinedName ?? fallbackName ?? "Unknown"
 
         const quantity = Number(row.quantity ?? 0)
-        const costPerUnit = Number(row.cost_per_unit ?? 0)
-        const value = quantity * costPerUnit
+        const cost = Number(row.cost_per_unit ?? 0)
+        const value = quantity * cost
 
         const dailySales = 5
         const daysLeft = quantity > 0 ? Math.floor(quantity / dailySales) : 0
 
+        const reorderLevel = 10 * dailySales
+        const reorderQty =
+          quantity < reorderLevel ? reorderLevel - quantity : 0
+
         return {
           id: row.id,
-          name: finalName,
+          name,
           quantity,
-          cost_per_unit: costPerUnit,
+          cost_per_unit: cost,
           value,
           daysLeft,
+          dailyTarget: dailySales,
+          reorderQty,
         }
       })
 
-      setItems(viewRows)
+      setItems(rows)
       setStatus("Ready")
     }
 
     loadInventory()
   }, [])
 
-  const totalInventoryValue = items.reduce((sum, item) => sum + item.value, 0)
-  const lowStockItems = items.filter((item) => item.daysLeft <= 3)
-  const reorderItems = items.filter((item) => item.daysLeft <= 10)
+  const totalValue = items.reduce((sum, i) => sum + i.value, 0)
+  const lowStock = items.filter((i) => i.daysLeft <= 3)
+  const reorderItems = items.filter((i) => i.reorderQty > 0)
 
-  function money(value: number) {
-    return `$${value.toFixed(2)}`
-  }
+  const money = (v: number) => `$${v.toFixed(2)}`
 
   return (
     <>
@@ -140,49 +122,41 @@ export default function InventoryPage() {
 
         <div className="metric">
           <span>Total Inventory Value</span>
-          <span>{money(totalInventoryValue)}</span>
+          <span>{money(totalValue)}</span>
         </div>
 
         <div className="metric">
           <span>Low Stock</span>
-          <span style={{ color: lowStockItems.length > 0 ? "red" : "inherit" }}>
-            {lowStockItems.length}
+          <span style={{ color: lowStock.length ? "red" : "" }}>
+            {lowStock.length}
           </span>
         </div>
 
         <div className="metric">
           <span>Reorder Items</span>
-          <span style={{ color: reorderItems.length > 0 ? "red" : "inherit" }}>
+          <span style={{ color: reorderItems.length ? "red" : "" }}>
             {reorderItems.length}
           </span>
         </div>
       </div>
 
       <div className="summary-card">
-        <h2>Stock Runout</h2>
+        <h2>Stock Runout + Daily Target</h2>
 
-        {items.length === 0 ? (
-          <p>No inventory items</p>
-        ) : (
-          items.map((item) => (
-            <div key={item.id} className="metric">
-              <span>{item.name}</span>
-              <span style={{ color: item.daysLeft <= 3 ? "red" : "inherit" }}>
-                {item.daysLeft} days left
-              </span>
-            </div>
-          ))
-        )}
+        {items.map((i) => (
+          <div key={i.id} className="metric">
+            <span>{i.name}</span>
+            <span style={{ color: i.daysLeft <= 3 ? "red" : "" }}>
+              {i.daysLeft} days | Sell {i.dailyTarget}/day
+            </span>
+          </div>
+        ))}
       </div>
 
       <div className="summary-card">
-        <h2>System Status</h2>
+        <h2>Reorder Suggestions</h2>
 
-        <div className="metric">
-          <span>Status</span>
-          <span>{status}</span>
-        </div>
-      </div>
-    </>
-  )
-}
+        {reorderItems.map((i) => (
+          <div key={i.id} className="metric">
+            <span>{i.name}</span>
+            <span style={{ color
