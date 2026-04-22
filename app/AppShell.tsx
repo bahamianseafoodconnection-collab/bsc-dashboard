@@ -14,8 +14,8 @@ export default function AppShell({
     { href: "/", label: "Dashboard", icon: "🏠" },
     { href: "/bills", label: "Bills", icon: "💡" },
     { href: "/inventory", label: "Inventory", icon: "📦" },
+    { href: "/pos", label: "POS", icon: "🧾" },
     { href: "/cash", label: "Cash", icon: "💵" },
-    { href: "/more", label: "More", icon: "☰" },
   ]
 
   return (
@@ -32,10 +32,10 @@ export default function AppShell({
             <Link
               key={item.href}
               href={item.href}
-              className={`nav-link ${active ? "active" : ""}`}
+              className={`nav-item ${active ? "active" : ""}`}
             >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
             </Link>
           )
         })}
