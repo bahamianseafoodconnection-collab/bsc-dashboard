@@ -3,20 +3,22 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type InventoryItem = {
+type InventoryRow = {
   id: string
-  quantity: number
-  unit: string
-  product: {
-    name: string
-  }[]   // 👈 FIX: ARRAY
+  quantity: number | null
+  unit: string | null
+  product_id: string
+  products: {
+    name: string | null
+  } | null
 }
 
 export default function InventoryPage() {
   const supabase = createClientInstance()
 
-  const [items, setItems] = useState<InventoryItem[]>([])
+  const [items, setItems] = useState<InventoryRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState("Loading inventory...")
 
   useEffect(() => {
     async function loadInventory() {
@@ -26,20 +28,29 @@ export default function InventoryPage() {
           id,
           quantity,
           unit,
-          product:products ( name )
+          product_id,
+          products (
+            name
+          )
         `)
+        .order("created_at", { ascending: true })
 
       if (error) {
-        console.error(error)
-      } else {
-        setItems(data || [])
+        console.error("Inventory load error:", error)
+        setStatus("Error loading inventory")
+        setItems([])
+        setLoading(false)
+        return
       }
 
+      const rows = (data ?? []) as InventoryRow[]
+      setItems(rows)
+      setStatus("Ready")
       setLoading(false)
     }
 
     loadInventory()
-  }, [])
+  }, [supabase])
 
   return (
     <div>
@@ -48,15 +59,36 @@ export default function InventoryPage() {
       <div className="summary-card">
         <h2>Inventory List</h2>
 
-        {loading && <p>Loading...</p>}
-
-        {!loading &&
+        {loading ? (
+          <div className="metric">
+            <span>Loading...</span>
+            <span>...</span>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="metric">
+            <span>No inventory found</span>
+            <span>0</span>
+          </div>
+        ) : (
           items.map((item) => (
-            <div key={item.id} className="metric">
-              <span>{item.product?.[0]?.name || "Unknown Item"}</span>
-              <span>{item.quantity} {item.unit}</span>
+            <div className="metric" key={item.id}>
+              <span>
+                {item.products?.name ?? "Unknown Product"}
+                {item.unit ? ` (${item.unit})` : ""}
+              </span>
+              <span>{item.quantity ?? 0}</span>
             </div>
-          ))}
+          ))
+        )}
+      </div>
+
+      <div className="summary-card">
+        <h2>System Status</h2>
+
+        <div className="metric">
+          <span>Inventory Status</span>
+          <span>{status}</span>
+        </div>
       </div>
     </div>
   )
