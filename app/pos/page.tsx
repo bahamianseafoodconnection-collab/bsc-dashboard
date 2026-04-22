@@ -34,15 +34,14 @@ export default function POSPage() {
       return
     }
 
-    // FIND INVENTORY MATCH (FIXED)
+    // 🚨 FIX: GET INVENTORY DIRECTLY (NO RELATION)
     const { data: invData } = await supabase
       .from("inventory")
-      .select("id, quantity, products(name)")
+      .select("*")
 
     const match = (invData || []).find((row: any) => {
-      if (!row.products?.name) return false
-
-      return normalize(row.products.name) === normalize(item)
+      if (!row.name) return false
+      return normalize(row.name) === normalize(item)
     })
 
     // UPDATE INVENTORY
