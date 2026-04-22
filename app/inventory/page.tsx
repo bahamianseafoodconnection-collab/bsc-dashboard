@@ -7,8 +7,9 @@ type InventoryItem = {
   id: string
   quantity: number
   unit: string
-  cost_per_unit: number
-  selling_price: number
+  product: {
+    name: string
+  }
 }
 
 export default function InventoryPage() {
@@ -21,7 +22,12 @@ export default function InventoryPage() {
     async function loadInventory() {
       const { data, error } = await supabase
         .from("inventory")
-        .select("*")
+        .select(`
+          id,
+          quantity,
+          unit,
+          product:products ( name )
+        `)
 
       if (error) {
         console.error(error)
@@ -47,8 +53,8 @@ export default function InventoryPage() {
         {!loading &&
           items.map((item) => (
             <div key={item.id} className="metric">
-              <span>{item.unit}</span>
-              <span>{item.quantity}</span>
+              <span>{item.product?.name || "Unknown Item"}</span>
+              <span>{item.quantity} {item.unit}</span>
             </div>
           ))}
       </div>
