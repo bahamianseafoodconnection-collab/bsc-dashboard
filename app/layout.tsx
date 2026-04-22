@@ -1,3 +1,11 @@
+import "./globals.css"
+import AppShell from "./AppShell"
+
+export const metadata = {
+  title: "BSC CONTROL",
+  description: "BSC Control Dashboard",
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -5,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   )
 }
