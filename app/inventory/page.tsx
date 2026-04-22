@@ -6,125 +6,97 @@ import { createClientInstance } from "../../lib/supabase/browser"
 type InventoryRow = {
   id: string
   quantity: number
-  unit: string | null
   cost_per_unit: number | null
-  selling_price: number | null
-  last_updated: string | null
   product_id: string | null
   products: {
     name: string
   } | null
 }
 
-type ReorderItem = {
-  name: string
-  needed: number
+type BillRow = {
+  bill_type: string
+  amount: number
+  created_at: string
 }
 
 type VelocityItem = {
   name: string
   daysLeft: number
-  dailyTarget: number
+  dailySales: number
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([])
-  const [status, setStatus] = useState("Loading...")
-  const [loading, setLoading] = useState(true)
-
-  const [lowStockCount, setLowStockCount] = useState(0)
-  const [reorderItems, setReorderItems] = useState<ReorderItem[]>([])
-  const [velocityData, setVelocityData] = useState<VelocityItem[]>([])
-
+  const [velocity, setVelocity] = useState<VelocityItem[]>([])
   const [totalValue, setTotalValue] = useState(0)
-  const [lowStockValue, setLowStockValue] = useState(0)
+  const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
     const supabase = createClientInstance()
 
-    async function loadInventory() {
-      const { data, error } = await supabase.from("inventory").select(`
+    async function loadData() {
+      // INVENTORY
+      const { data: inventory } = await supabase.from("inventory").select(`
         id,
         quantity,
-        unit,
         cost_per_unit,
-        selling_price,
-        last_updated,
         product_id,
         products ( name )
       `)
 
-      if (error) {
-        console.error(error)
+      // SALES (using bills as movement proxy)
+      const { data: bills } = await supabase
+        .from("bills")
+        .select("bill_type, amount, created_at")
+
+      if (!inventory) {
         setStatus("Error loading inventory")
-        setLoading(false)
         return
       }
 
-      const rows: InventoryRow[] = (data ?? []).map((item: any) => ({
-        id: item.id,
-        quantity: Number(item.quantity ?? 0),
-        unit: item.unit ?? null,
-        cost_per_unit: item.cost_per_unit ?? 0,
-        selling_price: item.selling_price ?? 0,
-        last_updated: item.last_updated ?? null,
-        product_id: item.product_id ?? null,
-        products: item.products ?? null,
-      }))
+      const invRows: InventoryRow[] = inventory
 
-      setItems(rows)
+      let total = 0
 
-      let low = 0
-      let totalVal = 0
-      let lowVal = 0
-
-      const reorderList: ReorderItem[] = []
       const velocityList: VelocityItem[] = []
 
-      rows.forEach((item) => {
-        const TARGET = 50
-        const DAILY_USAGE = 5
-
+      invRows.forEach((item) => {
         const name = item.products?.name ?? "Unknown"
+
         const cost = Number(item.cost_per_unit ?? 0)
-        const value = item.quantity * cost
+        total += item.quantity * cost
 
-        totalVal += value
+        // 🔥 REAL SALES LOGIC
+        const sales =
+          bills?.filter((b: BillRow) =>
+            b.bill_type.toLowerCase().includes(name.toLowerCase())
+          ) || []
 
-        if (item.quantity <= 20) {
-          low++
-          lowVal += value
-        }
+        const totalSold = sales.reduce(
+          (sum: number, s: BillRow) => sum + s.amount,
+          0
+        )
 
-        if (item.quantity < TARGET) {
-          reorderList.push({
-            name,
-            needed: TARGET - item.quantity,
-          })
-        }
+        // average daily sales (simple version)
+        const dailySales = totalSold > 0 ? totalSold / 7 : 1
 
         const daysLeft =
-          item.quantity > 0 ? Math.floor(item.quantity / DAILY_USAGE) : 0
+          item.quantity > 0 ? Math.floor(item.quantity / dailySales) : 0
 
         velocityList.push({
           name,
           daysLeft,
-          dailyTarget: DAILY_USAGE,
+          dailySales: Number(dailySales.toFixed(1)),
         })
       })
 
-      setLowStockCount(low)
-      setLowStockValue(lowVal)
-      setTotalValue(totalVal)
-
-      setReorderItems(reorderList)
-      setVelocityData(velocityList)
-
+      setItems(invRows)
+      setVelocity(velocityList)
+      setTotalValue(total)
       setStatus("Ready")
-      setLoading(false)
     }
 
-    loadInventory()
+    loadData()
   }, [])
 
   function money(val: number) {
@@ -136,58 +108,23 @@ export default function InventoryPage() {
       <h2 className="page-title">Inventory</h2>
 
       <div className="summary-card">
-        <h2>Inventory Summary</h2>
+        <h2>Inventory Value</h2>
 
         <div className="metric">
-          <span>Items Tracked</span>
-          <span>{items.length}</span>
-        </div>
-
-        <div className="metric">
-          <span>Total Inventory Value</span>
+          <span>Total Value</span>
           <span>{money(totalValue)}</span>
-        </div>
-
-        <div className="metric">
-          <span>Low Stock</span>
-          <span style={{ color: lowStockCount > 0 ? "red" : "inherit" }}>
-            {lowStockCount}
-          </span>
-        </div>
-
-        <div className="metric">
-          <span>Low Stock Value</span>
-          <span style={{ color: "red" }}>{money(lowStockValue)}</span>
-        </div>
-
-        <div className="metric">
-          <span>Reorder Items</span>
-          <span style={{ color: reorderItems.length > 0 ? "red" : "inherit" }}>
-            {reorderItems.length}
-          </span>
         </div>
       </div>
 
       <div className="summary-card">
-        <h2>Stock Runout + Daily Target</h2>
+        <h2>REAL Sales Velocity</h2>
 
-        {velocityData.map((item, i) => (
+        {velocity.map((item, i) => (
           <div key={i} className="metric">
             <span>{item.name}</span>
             <span>
-              {item.daysLeft} days | Sell {item.dailyTarget}/day
+              {item.daysLeft} days | {item.dailySales}/day
             </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="summary-card">
-        <h2>Reorder Suggestions</h2>
-
-        {reorderItems.map((item, i) => (
-          <div key={i} className="metric">
-            <span>{item.name}</span>
-            <span style={{ color: "red" }}>Buy {item.needed}</span>
           </div>
         ))}
       </div>
