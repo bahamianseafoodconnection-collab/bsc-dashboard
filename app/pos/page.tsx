@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type SaleRow = {
+type Sale = {
   id: number
   item: string
   amount: number
@@ -15,10 +15,10 @@ export default function POSPage() {
 
   const [item, setItem] = useState("")
   const [amount, setAmount] = useState("")
-  const [sales, setSales] = useState<SaleRow[]>([])
-  const [status, setStatus] = useState("Loading...")
+  const [sales, setSales] = useState<Sale[]>([])
+  const [status, setStatus] = useState("Ready")
 
-  const loadSales = async () => {
+  const fetchSales = async () => {
     const { data, error } = await supabase
       .from("sales")
       .select("*")
@@ -28,38 +28,31 @@ export default function POSPage() {
       setStatus("Error loading sales")
     } else {
       setSales(data || [])
-      setStatus("Ready")
     }
   }
 
   useEffect(() => {
-    loadSales()
+    fetchSales()
   }, [])
 
-  const recordSale = async () => {
+  const handleSale = async () => {
     if (!item || !amount) return
 
-    const amt = parseFloat(amount)
+    const { error } = await supabase.from("sales").insert([
+      {
+        item: item,
+        amount: parseFloat(amount),
+      },
+    ])
 
-    // 1. Save sale
-    const { error: saleError } = await supabase.from("sales").insert({
-      item,
-      amount: amt,
-    })
-
-    // 2. Sync to CASH (THIS IS THE POWER)
-    const { error: cashError } = await supabase.from("cash").insert({
-      type: "in",
-      amount: amt,
-      note: `POS Sale: ${item}`,
-    })
-
-    if (saleError || cashError) {
+    if (error) {
+      console.error(error)
       setStatus("Error saving sale")
     } else {
+      setStatus("Sale recorded")
       setItem("")
       setAmount("")
-      loadSales()
+      fetchSales()
     }
   }
 
@@ -71,7 +64,6 @@ export default function POSPage() {
 
       <div className="summary-card">
         <h2>New Sale</h2>
-
         <input
           placeholder="Item"
           value={item}
@@ -82,8 +74,7 @@ export default function POSPage() {
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
-
-        <button onClick={recordSale}>Record Sale</button>
+        <button onClick={handleSale}>Record Sale</button>
       </div>
 
       <div className="summary-card">
@@ -107,14 +98,13 @@ export default function POSPage() {
 
       <div className="summary-card">
         <h2>Recent POS Activity</h2>
-
         {sales.length === 0 ? (
           <p>No sales yet</p>
         ) : (
-          sales.map((s) => (
-            <div key={s.id} className="metric">
-              <span>{s.item}</span>
-              <span>${s.amount.toFixed(2)}</span>
+          sales.map((sale) => (
+            <div key={sale.id} className="metric">
+              <span>{sale.item}</span>
+              <span>${sale.amount}</span>
             </div>
           ))
         )}
