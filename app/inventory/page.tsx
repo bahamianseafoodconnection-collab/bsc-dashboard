@@ -22,7 +22,9 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
 
   const [lowStockCount, setLowStockCount] = useState(0)
-  const [reorderCount, setReorderCount] = useState(0)
+  const [reorderItems, setReorderItems] = useState<
+    { name: string; needed: number }[]
+  >([])
 
   useEffect(() => {
     async function loadInventory() {
@@ -49,17 +51,24 @@ export default function InventoryPage() {
       const rows = (data ?? []) as unknown as InventoryRow[]
       setItems(rows)
 
-      // 🔴 CONTROL LOGIC
       let low = 0
-      let reorder = 0
+      const reorderList: { name: string; needed: number }[] = []
 
       rows.forEach((item) => {
+        const TARGET = 50
+
         if (item.quantity <= 20) low++
-        if (item.quantity <= 10) reorder++
+
+        if (item.quantity < TARGET) {
+          reorderList.push({
+            name: item.products?.name ?? "Unknown",
+            needed: TARGET - item.quantity,
+          })
+        }
       })
 
       setLowStockCount(low)
-      setReorderCount(reorder)
+      setReorderItems(reorderList)
 
       setStatus("Ready")
       setLoading(false)
@@ -68,20 +77,15 @@ export default function InventoryPage() {
     loadInventory()
   }, [supabase])
 
-  function formatMoney(value: number | null) {
-    if (!value) return "$0.00"
-    return `$${Number(value).toFixed(2)}`
-  }
-
-  function stockValue(qty: number, cost: number | null) {
-    return qty * Number(cost ?? 0)
+  function money(value: number | null) {
+    return `$${Number(value ?? 0).toFixed(2)}`
   }
 
   return (
     <>
       <h2 className="page-title">Inventory</h2>
 
-      {/* 🔴 CONTROL SUMMARY */}
+      {/* SUMMARY */}
       <div className="summary-card">
         <h2>Inventory Summary</h2>
 
@@ -91,21 +95,37 @@ export default function InventoryPage() {
         </div>
 
         <div className="metric">
-          <span>Low Stock Items</span>
+          <span>Low Stock</span>
           <span style={{ color: lowStockCount > 0 ? "red" : "inherit" }}>
             {lowStockCount}
           </span>
         </div>
 
         <div className="metric">
-          <span>Reorder Needed</span>
-          <span style={{ color: reorderCount > 0 ? "red" : "inherit" }}>
-            {reorderCount}
+          <span>Reorder Items</span>
+          <span style={{ color: reorderItems.length > 0 ? "red" : "inherit" }}>
+            {reorderItems.length}
           </span>
         </div>
       </div>
 
-      {/* 🔴 INVENTORY LIST */}
+      {/* 🔴 REORDER ENGINE */}
+      <div className="summary-card">
+        <h2>Reorder Suggestions</h2>
+
+        {reorderItems.length === 0 ? (
+          <p>Stock levels are good</p>
+        ) : (
+          reorderItems.map((item, i) => (
+            <div key={i} className="metric">
+              <span>{item.name}</span>
+              <span style={{ color: "red" }}>Buy {item.needed}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* INVENTORY LIST */}
       <div className="summary-card">
         <h2>Inventory List</h2>
 
@@ -127,9 +147,9 @@ export default function InventoryPage() {
 
               <div style={{ fontSize: 14, color: "#64748b" }}>
                 Unit: {item.unit} <br />
-                Cost: {formatMoney(item.cost_per_unit)} <br />
-                Price: {formatMoney(item.selling_price)} <br />
-                Value: {formatMoney(stockValue(item.quantity, item.cost_per_unit))}
+                Cost: {money(item.cost_per_unit)} <br />
+                Price: {money(item.selling_price)} <br />
+                Value: {money(item.quantity * Number(item.cost_per_unit ?? 0))}
               </div>
             </div>
           ))
@@ -140,7 +160,7 @@ export default function InventoryPage() {
         <h2>System Status</h2>
 
         <div className="metric">
-          <span>Inventory Status</span>
+          <span>Status</span>
           <span>{status}</span>
         </div>
       </div>
