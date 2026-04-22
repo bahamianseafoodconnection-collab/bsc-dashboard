@@ -21,6 +21,8 @@ export default function POSPage() {
 
   const [products, setProducts] = useState<ProductOption[]>([])
   const [selectedProductId, setSelectedProductId] = useState("")
+  const [qty, setQty] = useState(1)
+
   const [status, setStatus] = useState("Loading...")
   const [transactionsToday, setTransactionsToday] = useState(0)
   const [salesToday, setSalesToday] = useState(0)
@@ -84,26 +86,34 @@ export default function POSPage() {
       return
     }
 
-    if (product.quantity <= 0) {
-      setStatus("Out of stock")
+    if (qty <= 0) {
+      setStatus("Invalid qty")
+      return
+    }
+
+    if (product.quantity < qty) {
+      setStatus("Not enough stock")
       return
     }
 
     setStatus("Saving...")
 
+    const totalAmount = product.price * qty
+
     await supabase.from("sales").insert({
       item: product.name,
-      amount: product.price
+      amount: totalAmount
     })
 
     await supabase
       .from("inventory")
       .update({
-        quantity: product.quantity - 1,
+        quantity: product.quantity - qty,
       })
       .eq("id", product.inventoryId)
 
     setStatus("Sale recorded")
+    setQty(1)
 
     await loadData()
   }
@@ -125,6 +135,13 @@ export default function POSPage() {
             </option>
           ))}
         </select>
+
+        <input
+          type="number"
+          value={qty}
+          onChange={(e) => setQty(Number(e.target.value))}
+          placeholder="Qty"
+        />
 
         <button onClick={handleSale}>Record Sale</button>
       </div>
