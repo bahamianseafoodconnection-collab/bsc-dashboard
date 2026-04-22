@@ -1,34 +1,71 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { createClientInstance } from "../../lib/supabase/browser"
+
+type Bill = {
+  id: number
+  bill_type: string
+  amount: number
+  created_at: string
+}
 
 export default function BillsPage() {
-  const [billType, setBillType] = useState("Light")
+  const supabase = createClientInstance()
+
+  const [billType, setBillType] = useState("")
   const [amount, setAmount] = useState("")
-  const [bills, setBills] = useState<any[]>([])
-  const [status, setStatus] = useState("Ready")
+  const [bills, setBills] = useState<Bill[]>([])
+  const [status, setStatus] = useState("Loading")
 
-  function addBill() {
-    const value = Number(amount)
+  async function loadBills() {
+    const { data, error } = await supabase
+      .from("bills")
+      .select("*")
+      .order("id", { ascending: false })
 
-    if (!amount || isNaN(value) || value <= 0) {
-      setStatus("Enter valid amount")
+    if (error) {
+      setStatus("Error loading bills")
       return
     }
 
-    const newBill = {
-      id: Date.now(),
-      type: billType,
-      amount: value,
-      date: new Date().toLocaleString()
-    }
-
-    setBills([newBill, ...bills])
-    setAmount("")
-    setStatus("Bill added")
+    setBills((data as Bill[]) || [])
+    setStatus("Ready")
   }
 
-  const total = bills.reduce((sum, b) => sum + b.amount, 0)
+  useEffect(() => {
+    loadBills()
+  }, [])
+
+  async function addBill() {
+    const value = Number(amount)
+
+    if (!billType.trim() || !amount || isNaN(value) || value <= 0) {
+      setStatus("Enter valid bill type and amount")
+      return
+    }
+
+    const { error } = await supabase.from("bills").insert([
+      {
+        bill_type: billType.trim(),
+        amount: value,
+      },
+    ])
+
+    if (error) {
+      setStatus("Error adding bill")
+      return
+    }
+
+    setBillType("")
+    setAmount("")
+    setStatus("Bill added")
+    loadBills()
+  }
+
+  const total = useMemo(() => {
+    return bills.reduce((sum, bill) => sum + Number(bill.amount), 0)
+  }, [bills])
 
   return (
     <>
@@ -37,54 +74,86 @@ export default function BillsPage() {
       <div className="summary-card">
         <h2>Add Bill</h2>
 
-        <select
-          className="form-input"
-          value={billType}
-          onChange={(e) => setBillType(e.target.value)}
-        >
-          <option>Light</option>
-          <option>Water</option>
-          <option>Internet</option>
-          <option>Phone</option>
-        </select>
+        <div style={{ display: "grid", gap: "12px" }}>
+          <input
+            value={billType}
+            onChange={(e) => setBillType(e.target.value)}
+            placeholder="Bill type"
+            style={{
+              padding: "12px",
+              borderRadius: "12px",
+              border: "1px solid #dbe3ea",
+              fontSize: "16px",
+            }}
+          />
 
-        <input
-          className="form-input"
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Amount"
+            inputMode="decimal"
+            style={{
+              padding: "12px",
+              borderRadius: "12px",
+              border: "1px solid #dbe3ea",
+              fontSize: "16px",
+            }}
+          />
 
-        <button className="action-btn" onClick={addBill}>
-          Save Bill
-        </button>
-
-        <p>{status}</p>
+          <button
+            onClick={addBill}
+            style={{
+              padding: "12px",
+              borderRadius: "12px",
+              border: "none",
+              background: "#1d9bf0",
+              color: "#ffffff",
+              fontSize: "16px",
+              fontWeight: 700,
+            }}
+          >
+            Add Bill
+          </button>
+        </div>
       </div>
 
       <div className="summary-card">
-        <h2>Summary</h2>
+        <h2>Bills Summary</h2>
 
         <div className="metric">
-          <span>Total</span>
-          <strong>${total}</strong>
+          <span>Total Bills</span>
+          <span>{bills.length}</span>
         </div>
 
         <div className="metric">
-          <span>Count</span>
-          <strong>{bills.length}</strong>
+          <span>Total Amount</span>
+          <span>${total}</span>
+        </div>
+
+        <div className="metric">
+          <span>Status</span>
+          <span>{status}</span>
         </div>
       </div>
 
       <div className="summary-card">
-        <h2>Recent</h2>
+        <h2>Recent Bills</h2>
 
-        {bills.map((b) => (
-          <div key={b.id} className="metric">
-            <span>{b.type}</span>
-            <strong>${b.amount}</strong>
+        {bills.length === 0 ? (
+          <p style={{ margin: 0 }}>No bills added yet.</p>
+        ) : (
+          <div style={{ display: "grid", gap: "10px" }}>
+            {bills.slice(0, 10).map((bill) => (
+              <div
+                key={bill.id}
+                className="metric"
+              >
+                <span>{bill.bill_type}</span>
+                <span>${bill.amount}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </>
   )
