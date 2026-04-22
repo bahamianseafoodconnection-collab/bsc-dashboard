@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { createClientInstance } from "@/lib/supabase/browser"
+import { createClientInstance } from "../../lib/supabase/browser"
 
 export default function POSPage() {
   const supabase = createClientInstance()
