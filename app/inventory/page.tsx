@@ -21,6 +21,9 @@ export default function InventoryPage() {
   const [status, setStatus] = useState("Loading...")
   const [loading, setLoading] = useState(true)
 
+  const [lowStockCount, setLowStockCount] = useState(0)
+  const [reorderCount, setReorderCount] = useState(0)
+
   useEffect(() => {
     async function loadInventory() {
       const { data, error } = await supabase
@@ -35,7 +38,6 @@ export default function InventoryPage() {
             name
           )
         `)
-        .order("created_at", { ascending: true })
 
       if (error) {
         console.error(error)
@@ -46,6 +48,19 @@ export default function InventoryPage() {
 
       const rows = (data ?? []) as unknown as InventoryRow[]
       setItems(rows)
+
+      // 🔴 CONTROL LOGIC
+      let low = 0
+      let reorder = 0
+
+      rows.forEach((item) => {
+        if (item.quantity <= 20) low++
+        if (item.quantity <= 10) reorder++
+      })
+
+      setLowStockCount(low)
+      setReorderCount(reorder)
+
       setStatus("Ready")
       setLoading(false)
     }
@@ -54,25 +69,48 @@ export default function InventoryPage() {
   }, [supabase])
 
   function formatMoney(value: number | null) {
-    if (value === null || value === undefined) return "$0.00"
+    if (!value) return "$0.00"
     return `$${Number(value).toFixed(2)}`
   }
 
-  function getStockValue(quantity: number, costPerUnit: number | null) {
-    return quantity * Number(costPerUnit ?? 0)
+  function stockValue(qty: number, cost: number | null) {
+    return qty * Number(cost ?? 0)
   }
 
   return (
     <>
       <h2 className="page-title">Inventory</h2>
 
+      {/* 🔴 CONTROL SUMMARY */}
+      <div className="summary-card">
+        <h2>Inventory Summary</h2>
+
+        <div className="metric">
+          <span>Items Tracked</span>
+          <span>{items.length}</span>
+        </div>
+
+        <div className="metric">
+          <span>Low Stock Items</span>
+          <span style={{ color: lowStockCount > 0 ? "red" : "inherit" }}>
+            {lowStockCount}
+          </span>
+        </div>
+
+        <div className="metric">
+          <span>Reorder Needed</span>
+          <span style={{ color: reorderCount > 0 ? "red" : "inherit" }}>
+            {reorderCount}
+          </span>
+        </div>
+      </div>
+
+      {/* 🔴 INVENTORY LIST */}
       <div className="summary-card">
         <h2>Inventory List</h2>
 
         {loading ? (
-          <p>Loading inventory...</p>
-        ) : items.length === 0 ? (
-          <p>No inventory found.</p>
+          <p>Loading...</p>
         ) : (
           items.map((item) => (
             <div key={item.id} className="metric" style={{ display: "block" }}>
@@ -80,36 +118,18 @@ export default function InventoryPage() {
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  gap: "12px",
-                  marginBottom: "8px",
                   fontWeight: 700,
                 }}
               >
-                <span>{item.products?.name ?? "Unnamed Product"}</span>
+                <span>{item.products?.name}</span>
                 <span>{item.quantity}</span>
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  rowGap: "6px",
-                  columnGap: "12px",
-                  fontSize: "14px",
-                  color: "#475569",
-                }}
-              >
-                <span>Unit</span>
-                <span>{item.unit ?? "-"}</span>
-
-                <span>Cost Per Unit</span>
-                <span>{formatMoney(item.cost_per_unit)}</span>
-
-                <span>Selling Price</span>
-                <span>{formatMoney(item.selling_price)}</span>
-
-                <span>Stock Value</span>
-                <span>{formatMoney(getStockValue(item.quantity, item.cost_per_unit))}</span>
+              <div style={{ fontSize: 14, color: "#64748b" }}>
+                Unit: {item.unit} <br />
+                Cost: {formatMoney(item.cost_per_unit)} <br />
+                Price: {formatMoney(item.selling_price)} <br />
+                Value: {formatMoney(stockValue(item.quantity, item.cost_per_unit))}
               </div>
             </div>
           ))
