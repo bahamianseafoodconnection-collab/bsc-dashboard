@@ -8,17 +8,18 @@ type InventoryRow = {
   quantity: number
   unit: string | null
   product_id: string | null
-  products: { name: string }[] | null
+  products: {
+    name: string
+  } | null
 }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryRow[]>([])
   const [status, setStatus] = useState("Loading...")
+  const supabase = createClientInstance()
 
   useEffect(() => {
-    const loadInventory = async () => {
-      const supabase = createClientInstance()
-
+    async function loadInventory() {
       const { data, error } = await supabase
         .from("inventory")
         .select(`
@@ -37,7 +38,7 @@ export default function InventoryPage() {
         return
       }
 
-      setItems((data as InventoryRow[]) || [])
+      setItems(data || [])
       setStatus("Ready")
     }
 
@@ -57,16 +58,6 @@ export default function InventoryPage() {
         </div>
 
         <div className="metric">
-          <span>Total Inventory Value</span>
-          <span>
-            $
-            {items
-              .reduce((sum, item) => sum + Number(item.quantity || 0) * 0, 0)
-              .toFixed(2)}
-          </span>
-        </div>
-
-        <div className="metric">
           <span>Status</span>
           <span>{status}</span>
         </div>
@@ -75,23 +66,16 @@ export default function InventoryPage() {
       <div className="summary-card">
         <h2>Inventory List</h2>
 
-        {items.length === 0 ? (
-          <p>No inventory found</p>
-        ) : (
-          items.map((item) => {
-            const productName =
-              item.products && item.products.length > 0
-                ? item.products[0].name
-                : "Missing Product Link"
+        {items.map((item) => {
+          const name = item.products?.name || "⚠️ Missing Product Link"
 
-            return (
-              <div key={item.id} className="metric">
-                <span>{productName}</span>
-                <span>{item.quantity}</span>
-              </div>
-            )
-          })
-        )}
+          return (
+            <div key={item.id} className="metric">
+              <span>{name}</span>
+              <span>{item.quantity}</span>
+            </div>
+          )
+        })}
       </div>
     </>
   )
