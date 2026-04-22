@@ -3,22 +3,12 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type InventoryRow = {
-  id: string
-  quantity: number | null
-  unit: string | null
-  product_id: string
-  products: {
-    name: string | null
-  } | null
-}
-
 export default function InventoryPage() {
   const supabase = createClientInstance()
 
-  const [items, setItems] = useState<InventoryRow[]>([])
+  const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState("Loading inventory...")
+  const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
     async function loadInventory() {
@@ -29,28 +19,23 @@ export default function InventoryPage() {
           quantity,
           unit,
           product_id,
-          products (
-            name
-          )
+          products ( name )
         `)
-        .order("created_at", { ascending: true })
 
       if (error) {
-        console.error("Inventory load error:", error)
-        setStatus("Error loading inventory")
+        console.error(error)
+        setStatus("Error")
         setItems([])
-        setLoading(false)
-        return
+      } else {
+        setItems(data || [])
+        setStatus("Ready")
       }
 
-      const rows = (data ?? []) as InventoryRow[]
-      setItems(rows)
-      setStatus("Ready")
       setLoading(false)
     }
 
     loadInventory()
-  }, [supabase])
+  }, [])
 
   return (
     <div>
@@ -66,17 +51,16 @@ export default function InventoryPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="metric">
-            <span>No inventory found</span>
+            <span>No inventory</span>
             <span>0</span>
           </div>
         ) : (
           items.map((item) => (
             <div className="metric" key={item.id}>
               <span>
-                {item.products?.name ?? "Unknown Product"}
-                {item.unit ? ` (${item.unit})` : ""}
+                {item.products?.name || "Unknown"} ({item.unit})
               </span>
-              <span>{item.quantity ?? 0}</span>
+              <span>{item.quantity}</span>
             </div>
           ))
         )}
@@ -84,7 +68,6 @@ export default function InventoryPage() {
 
       <div className="summary-card">
         <h2>System Status</h2>
-
         <div className="metric">
           <span>Inventory Status</span>
           <span>{status}</span>
