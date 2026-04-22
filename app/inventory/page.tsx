@@ -18,9 +18,7 @@ export default function InventoryPage() {
   const [status, setStatus] = useState("Loading")
 
   async function loadInventory() {
-    const { data, error } = await supabase
-      .from("inventory")
-      .select("*")
+    const { data, error } = await supabase.from("inventory").select("*")
 
     if (error) {
       setStatus("Error loading inventory")
@@ -31,10 +29,10 @@ export default function InventoryPage() {
 
     setItemsTracked(items.length)
 
-    const low = items.filter(i => i.quantity < i.reorder_level)
+    const low = items.filter((i) => i.quantity < i.reorder_level)
     setLowStock(low.length)
 
-    const suggest = low.filter(i => i.reorder_level - i.quantity > 0)
+    const suggest = low.filter((i) => i.reorder_level - i.quantity > 0)
     setSuggestions(suggest.length)
 
     setStatus("Ready")
