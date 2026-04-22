@@ -13,7 +13,7 @@ type InventoryRow = {
   product_id: string | null
   products: {
     name: string
-  } | null
+  }[] | null   // ✅ FIX: ARRAY instead of single object
 }
 
 export default function InventoryPage() {
@@ -89,7 +89,9 @@ export default function InventoryPage() {
         ) : (
           items.map((item) => (
             <div key={item.id} className="metric">
-              <span>{item.products?.name || "Unknown"}</span>
+              <span>
+                {item.products?.[0]?.name || "Unknown"}
+              </span>
               <span>{item.quantity}</span>
             </div>
           ))
