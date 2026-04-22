@@ -5,9 +5,9 @@ import { createClientInstance } from "../../lib/supabase/browser"
 
 type SaleRow = {
   id: string
-  item: string
-  amount: number
-  created_at: string
+  item: string | null
+  amount: number | null
+  created_at: string | null
 }
 
 export default function POSPage() {
@@ -17,7 +17,11 @@ export default function POSPage() {
   const [status, setStatus] = useState("Loading...")
   const [isSaving, setIsSaving] = useState(false)
 
-  const loadSales = async () => {
+  useEffect(() => {
+    loadSales()
+  }, [])
+
+  async function loadSales() {
     const supabase = createClientInstance()
 
     const { data, error } = await supabase
@@ -26,100 +30,60 @@ export default function POSPage() {
       .order("created_at", { ascending: false })
 
     if (error) {
+      console.log("POS load error:", error)
       setStatus("Error loading sales")
+      setSales([])
       return
     }
 
-    setSales(data || [])
+    setSales((data as SaleRow[]) || [])
     setStatus("Ready")
   }
 
-  useEffect(() => {
-    loadSales()
-  }, [])
+  async function handleRecordSale() {
+    if (!item.trim() || !amount.trim()) {
+      setStatus("Enter item and amount")
+      return
+    }
 
-  const handleRecordSale = async () => {
-    const trimmedItem = item.trim()
-    const parsedAmount = Number(amount)
+    const numericAmount = Number(amount)
 
-    if (!trimmedItem || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      setStatus("Enter valid item and amount")
+    if (Number.isNaN(numericAmount) || numericAmount <= 0) {
+      setStatus("Enter valid amount")
       return
     }
 
     setIsSaving(true)
-    setStatus("Saving sale...")
 
     const supabase = createClientInstance()
 
-    // 1. Save sale first
-    const { error: saleError } = await supabase.from("sales").insert({
-      item: trimmedItem,
-      amount: parsedAmount,
-    })
+    const { error } = await supabase.from("sales").insert([
+      {
+        item: item.trim(),
+        amount: numericAmount,
+      },
+    ])
 
-    if (saleError) {
+    if (error) {
+      console.log("POS save error:", error)
       setStatus("Error saving sale")
       setIsSaving(false)
       return
     }
 
-    // 2. Try to match product by name
-    const { data: productMatch, error: productError } = await supabase
-      .from("products")
-      .select("id, name")
-      .ilike("name", trimmedItem)
-      .limit(1)
-      .maybeSingle()
-
-    if (!productError && productMatch) {
-      // 3. Find inventory row for that product
-      const { data: inventoryRow, error: inventoryError } = await supabase
-        .from("inventory")
-        .select("id, quantity")
-        .eq("product_id", productMatch.id)
-        .limit(1)
-        .maybeSingle()
-
-      if (!inventoryError && inventoryRow) {
-        const nextQty = Math.max(0, Number(inventoryRow.quantity || 0) - 1)
-
-        const { error: updateError } = await supabase
-          .from("inventory")
-          .update({ quantity: nextQty })
-          .eq("id", inventoryRow.id)
-
-        if (updateError) {
-          setStatus("Sale saved - inventory update failed")
-          await loadSales()
-          setItem("")
-          setAmount("")
-          setIsSaving(false)
-          return
-        }
-
-        setStatus("Sale recorded - inventory updated")
-      } else {
-        setStatus("Sale recorded - no inventory row found")
-      }
-    } else {
-      setStatus("Sale recorded - no product match found")
-    }
-
-    // 4. Refresh page data
-    await loadSales()
-
-    // 5. Reset form
     setItem("")
     setAmount("")
+    setStatus("Sale recorded")
     setIsSaving(false)
+    loadSales()
   }
 
+  const transactionsToday = sales.length
   const salesToday = sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0)
 
   return (
     <>
-      <h2 className="page-title">POS</h2>
+      <h1 className="page-title">POS</h1>
 
       <div className="summary-card">
         <h2>New Sale</h2>
@@ -127,54 +91,60 @@ export default function POSPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "8px",
-            marginTop: "12px",
+            gap: "12px",
           }}
         >
-          <input
-            value={item}
-            onChange={(e) => setItem(e.target.value)}
-            placeholder="Item"
+          <div
             style={{
-              padding: "12px",
-              borderRadius: "12px",
-              border: "1px solid #d1d5db",
-              fontSize: "16px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px",
             }}
-          />
+          >
+            <input
+              value={item}
+              onChange={(e) => setItem(e.target.value)}
+              placeholder="Item"
+              style={{
+                padding: "14px 16px",
+                borderRadius: "14px",
+                border: "1px solid #d1d5db",
+                fontSize: "16px",
+              }}
+            />
 
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Amount"
-            inputMode="decimal"
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount"
+              inputMode="decimal"
+              style={{
+                padding: "14px 16px",
+                borderRadius: "14px",
+                border: "1px solid #d1d5db",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <button
+            onClick={handleRecordSale}
+            disabled={isSaving}
             style={{
-              padding: "12px",
-              borderRadius: "12px",
-              border: "1px solid #d1d5db",
+              width: "fit-content",
+              background: "#2563eb",
+              color: "white",
+              border: "none",
+              borderRadius: "14px",
+              padding: "14px 22px",
               fontSize: "16px",
+              fontWeight: 700,
+              cursor: "pointer",
             }}
-          />
+          >
+            {isSaving ? "Saving..." : "Record Sale"}
+          </button>
         </div>
-
-        <button
-          onClick={handleRecordSale}
-          disabled={isSaving}
-          style={{
-            marginTop: "12px",
-            padding: "12px 16px",
-            borderRadius: "12px",
-            border: "none",
-            background: "#2563eb",
-            color: "#ffffff",
-            fontSize: "16px",
-            fontWeight: 600,
-            opacity: isSaving ? 0.7 : 1,
-          }}
-        >
-          {isSaving ? "Saving..." : "Record Sale"}
-        </button>
       </div>
 
       <div className="summary-card">
@@ -187,7 +157,7 @@ export default function POSPage() {
 
         <div className="metric">
           <span>Transactions Today</span>
-          <span>{sales.length}</span>
+          <span>{transactionsToday}</span>
         </div>
 
         <div className="metric">
@@ -204,8 +174,8 @@ export default function POSPage() {
         ) : (
           sales.slice(0, 5).map((sale) => (
             <div key={sale.id} className="metric">
-              <span>{sale.item}</span>
-              <span>${Number(sale.amount).toFixed(2)}</span>
+              <span>{sale.item || "Unnamed sale"}</span>
+              <span>${Number(sale.amount || 0).toFixed(2)}</span>
             </div>
           ))
         )}
