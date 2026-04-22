@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientInstance } from "@/lib/supabase/browser"
+import { createClientInstance } from "../../lib/supabase/browser"
 
 type ProductOption = {
   inventoryId: string
@@ -40,43 +40,34 @@ export default function POSPage() {
           name
         )
       `)
-      .order("created_at", { ascending: true })
 
     if (inventoryError) {
       setStatus("Error loading inventory")
       return
     }
 
-    const mapped: ProductOption[] = ((inventory as any[]) || []).map((item) => ({
-      inventoryId: String(item.id),
+    const mapped = (inventory || []).map((item: any) => ({
+      inventoryId: item.id,
       name: item.products?.name || "Unknown",
-      price: Number(item.selling_price || 0),
-      quantity: Number(item.quantity || 0),
+      price: item.selling_price || 0,
+      quantity: item.quantity || 0,
     }))
 
     setProducts(mapped)
 
-    if (mapped.length > 0) {
-      setSelectedProductId((current) => {
-        const stillExists = mapped.some((p) => p.inventoryId === current)
-        return stillExists ? current : mapped[0].inventoryId
-      })
+    if (mapped.length > 0 && !selectedProductId) {
+      setSelectedProductId(mapped[0].inventoryId)
     }
 
-    const { data: sales, error: salesError } = await supabase
+    const { data: sales } = await supabase
       .from("sales")
       .select("*")
       .order("created_at", { ascending: false })
 
-    if (salesError) {
-      setStatus("Error loading sales")
-      return
-    }
-
-    const safeSales: SaleRow[] = ((sales as any[]) || []).map((sale) => ({
-      id: String(sale.id),
-      item: String(sale.item || ""),
-      amount: Number(sale.amount || 0),
+    const safeSales = (sales || []).map((sale: any) => ({
+      id: sale.id,
+      item: sale.item,
+      amount: sale.amount,
     }))
 
     setTransactionsToday(safeSales.length)
@@ -101,7 +92,7 @@ export default function POSPage() {
 
     const value = Number(amount)
 
-    if (!amount || Number.isNaN(value) || value <= 0) {
+    if (!amount || value <= 0) {
       setStatus("Enter amount")
       return
     }
@@ -113,31 +104,21 @@ export default function POSPage() {
 
     setStatus("Saving...")
 
-    const { error: saleError } = await supabase.from("sales").insert({
+    await supabase.from("sales").insert({
       item: product.name,
       amount: value,
     })
 
-    if (saleError) {
-      setStatus("Error saving sale")
-      return
-    }
-
-    const { error: inventoryUpdateError } = await supabase
+    await supabase
       .from("inventory")
       .update({
         quantity: product.quantity - 1,
       })
       .eq("id", product.inventoryId)
 
-    if (inventoryUpdateError) {
-      setStatus("Sale saved, inventory update failed")
-      await loadData()
-      return
-    }
-
     setAmount("")
     setStatus("Sale recorded")
+
     await loadData()
   }
 
@@ -152,15 +133,11 @@ export default function POSPage() {
           value={selectedProductId}
           onChange={(e) => setSelectedProductId(e.target.value)}
         >
-          {products.length === 0 ? (
-            <option value="">No products available</option>
-          ) : (
-            products.map((product) => (
-              <option key={product.inventoryId} value={product.inventoryId}>
-                {product.name} ({product.quantity})
-              </option>
-            ))
-          )}
+          {products.map((p) => (
+            <option key={p.inventoryId} value={p.inventoryId}>
+              {p.name} ({p.quantity})
+            </option>
+          ))}
         </select>
 
         <input
@@ -194,16 +171,12 @@ export default function POSPage() {
       <div className="summary-card">
         <h2>Recent POS Activity</h2>
 
-        {recentSales.length === 0 ? (
-          <p>No sales yet</p>
-        ) : (
-          recentSales.map((sale) => (
-            <div key={sale.id} className="metric">
-              <span>{sale.item}</span>
-              <span>${sale.amount.toFixed(2)}</span>
-            </div>
-          ))
-        )}
+        {recentSales.map((sale) => (
+          <div key={sale.id} className="metric">
+            <span>{sale.item}</span>
+            <span>${sale.amount}</span>
+          </div>
+        ))}
       </div>
     </>
   )
