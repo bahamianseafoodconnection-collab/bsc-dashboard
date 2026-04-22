@@ -3,26 +3,44 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
+type InventoryItem = {
+  id: number
+  quantity: number
+  reorder_level: number
+}
+
 export default function InventoryPage() {
   const supabase = createClientInstance()
 
-  const [items, setItems] = useState<any[]>([])
+  const [itemsTracked, setItemsTracked] = useState(0)
+  const [lowStock, setLowStock] = useState(0)
+  const [suggestions, setSuggestions] = useState(0)
   const [status, setStatus] = useState("Loading")
 
-  useEffect(() => {
-    const loadInventory = async () => {
-      const { data, error } = await supabase
-        .from("inventory")
-        .select("*")
+  async function loadInventory() {
+    const { data, error } = await supabase
+      .from("inventory")
+      .select("*")
 
-      if (error) {
-        setStatus("Error loading inventory")
-      } else {
-        setItems(data || [])
-        setStatus("Ready")
-      }
+    if (error) {
+      setStatus("Error loading inventory")
+      return
     }
 
+    const items = (data as InventoryItem[]) || []
+
+    setItemsTracked(items.length)
+
+    const low = items.filter(i => i.quantity < i.reorder_level)
+    setLowStock(low.length)
+
+    const suggest = low.filter(i => i.reorder_level - i.quantity > 0)
+    setSuggestions(suggest.length)
+
+    setStatus("Ready")
+  }
+
+  useEffect(() => {
     loadInventory()
   }, [])
 
@@ -35,17 +53,17 @@ export default function InventoryPage() {
 
         <div className="metric">
           <span>Items Tracked</span>
-          <span>{items.length}</span>
+          <span>{itemsTracked}</span>
         </div>
 
         <div className="metric">
           <span>Low Stock Items</span>
-          <span>0</span>
+          <span>{lowStock}</span>
         </div>
 
         <div className="metric">
           <span>Reorder Suggestions</span>
-          <span>0</span>
+          <span>{suggestions}</span>
         </div>
       </div>
 
