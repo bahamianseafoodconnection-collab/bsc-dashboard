@@ -1,7 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClientInstance } from "@/lib/supabase/browser"
+import { createClientInstance } from "../../lib/supabase/browser"
+
+type ProductRelation =
+  | { name: string }
+  | { name?: string | null }
+  | null
 
 type InventoryRow = {
   id: string
@@ -11,11 +16,7 @@ type InventoryRow = {
   selling_price: number | null
   last_updated: string | null
   product_id: string | null
-  products:
-    | {
-        name: string
-      }[]
-    | null
+  products?: ProductRelation | ProductRelation[] | null
 }
 
 export default function InventoryPage() {
@@ -33,26 +34,53 @@ export default function InventoryPage() {
     try {
       const { data, error } = await supabase
         .from("inventory")
-        .select("*, products(name)")
+        .select("id, quantity, unit, cost_per_unit, selling_price, last_updated, product_id, products(name)")
 
       if (error) throw error
 
-      const rows = (data ?? []) as InventoryRow[]
+      const rows: InventoryRow[] = (data ?? []).map((item: any) => ({
+        id: String(item.id),
+        quantity: Number(item.quantity ?? 0),
+        unit: item.unit ?? null,
+        cost_per_unit:
+          item.cost_per_unit === null || item.cost_per_unit === undefined
+            ? null
+            : Number(item.cost_per_unit),
+        selling_price:
+          item.selling_price === null || item.selling_price === undefined
+            ? null
+            : Number(item.selling_price),
+        last_updated: item.last_updated ?? null,
+        product_id: item.product_id ?? null,
+        products: item.products ?? null,
+      }))
+
       setItems(rows)
 
-      let total = 0
-      rows.forEach((item) => {
-        if (item.cost_per_unit && item.quantity) {
-          total += item.cost_per_unit * item.quantity
-        }
-      })
+      const total = rows.reduce((sum, item) => {
+        const cost = item.cost_per_unit ?? 0
+        const qty = item.quantity ?? 0
+        return sum + cost * qty
+      }, 0)
 
       setTotalValue(total)
       setStatus("Ready")
     } catch (err) {
-      console.error(err)
+      console.error("Inventory load error:", err)
       setStatus("Error loading inventory")
+      setItems([])
+      setTotalValue(0)
     }
+  }
+
+  function getProductName(item: InventoryRow) {
+    if (!item.products) return "⚠️ Missing Product Link"
+
+    if (Array.isArray(item.products)) {
+      return item.products[0]?.name || "⚠️ Missing Product Link"
+    }
+
+    return item.products.name || "⚠️ Missing Product Link"
   }
 
   return (
@@ -84,19 +112,12 @@ export default function InventoryPage() {
         {items.length === 0 ? (
           <p>No inventory found</p>
         ) : (
-          items.map((item) => {
-            const name =
-              item.products && item.products.length > 0
-                ? item.products[0].name
-                : "⚠️ Missing Product Link"
-
-            return (
-              <div key={item.id} className="metric">
-                <span>{name}</span>
-                <span>{item.quantity}</span>
-              </div>
-            )
-          })
+          items.map((item) => (
+            <div key={item.id} className="metric">
+              <span>{getProductName(item)}</span>
+              <span>{item.quantity}</span>
+            </div>
+          ))
         )}
       </div>
     </>
