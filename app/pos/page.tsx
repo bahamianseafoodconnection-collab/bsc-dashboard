@@ -21,7 +21,6 @@ export default function POSPage() {
 
   const [products, setProducts] = useState<ProductOption[]>([])
   const [selectedProductId, setSelectedProductId] = useState("")
-  const [amount, setAmount] = useState("")
   const [status, setStatus] = useState("Loading...")
   const [transactionsToday, setTransactionsToday] = useState(0)
   const [salesToday, setSalesToday] = useState(0)
@@ -30,7 +29,7 @@ export default function POSPage() {
   async function loadData() {
     setStatus("Loading...")
 
-    const { data: inventory, error: inventoryError } = await supabase
+    const { data: inventory } = await supabase
       .from("inventory")
       .select(`
         id,
@@ -40,11 +39,6 @@ export default function POSPage() {
           name
         )
       `)
-
-    if (inventoryError) {
-      setStatus("Error loading inventory")
-      return
-    }
 
     const mapped = (inventory || []).map((item: any) => ({
       inventoryId: item.id,
@@ -90,13 +84,6 @@ export default function POSPage() {
       return
     }
 
-    const value = Number(amount)
-
-    if (!amount || value <= 0) {
-      setStatus("Enter amount")
-      return
-    }
-
     if (product.quantity <= 0) {
       setStatus("Out of stock")
       return
@@ -106,7 +93,7 @@ export default function POSPage() {
 
     await supabase.from("sales").insert({
       item: product.name,
-      amount: value,
+      amount: product.price
     })
 
     await supabase
@@ -116,7 +103,6 @@ export default function POSPage() {
       })
       .eq("id", product.inventoryId)
 
-    setAmount("")
     setStatus("Sale recorded")
 
     await loadData()
@@ -135,16 +121,10 @@ export default function POSPage() {
         >
           {products.map((p) => (
             <option key={p.inventoryId} value={p.inventoryId}>
-              {p.name} ({p.quantity})
+              {p.name} (${p.price}) ({p.quantity})
             </option>
           ))}
         </select>
-
-        <input
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
 
         <button onClick={handleSale}>Record Sale</button>
       </div>
