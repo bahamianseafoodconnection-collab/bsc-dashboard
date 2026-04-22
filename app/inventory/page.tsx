@@ -9,6 +9,7 @@ type InventoryRow = {
   unit: string | null
   cost_per_unit: number | null
   selling_price: number | null
+  last_updated: string | null
   products: {
     name: string
   } | null
@@ -22,9 +23,8 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
 
   const [lowStockCount, setLowStockCount] = useState(0)
-  const [reorderItems, setReorderItems] = useState<
-    { name: string; needed: number }[]
-  >([])
+  const [reorderItems, setReorderItems] = useState<any[]>([])
+  const [velocityData, setVelocityData] = useState<any[]>([])
 
   useEffect(() => {
     async function loadInventory() {
@@ -36,9 +36,8 @@ export default function InventoryPage() {
           unit,
           cost_per_unit,
           selling_price,
-          products (
-            name
-          )
+          last_updated,
+          products ( name )
         `)
 
       if (error) {
@@ -52,23 +51,39 @@ export default function InventoryPage() {
       setItems(rows)
 
       let low = 0
-      const reorderList: { name: string; needed: number }[] = []
+      const reorderList: any[] = []
+      const velocityList: any[] = []
 
       rows.forEach((item) => {
         const TARGET = 50
 
+        // LOW STOCK
         if (item.quantity <= 20) low++
 
+        // REORDER
         if (item.quantity < TARGET) {
           reorderList.push({
             name: item.products?.name ?? "Unknown",
             needed: TARGET - item.quantity,
           })
         }
+
+        // 🔥 VELOCITY (simple version)
+        const DAILY_USAGE = 5 // placeholder (we upgrade later)
+
+        const daysLeft =
+          item.quantity > 0 ? Math.floor(item.quantity / DAILY_USAGE) : 0
+
+        velocityList.push({
+          name: item.products?.name ?? "Unknown",
+          daysLeft,
+          daily: DAILY_USAGE,
+        })
       })
 
       setLowStockCount(low)
       setReorderItems(reorderList)
+      setVelocityData(velocityList)
 
       setStatus("Ready")
       setLoading(false)
@@ -109,7 +124,25 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* 🔴 REORDER ENGINE */}
+      {/* 🔥 VELOCITY */}
+      <div className="summary-card">
+        <h2>Stock Runout Prediction</h2>
+
+        {velocityData.map((item, i) => (
+          <div key={i} className="metric">
+            <span>{item.name}</span>
+            <span
+              style={{
+                color: item.daysLeft <= 3 ? "red" : "inherit",
+              }}
+            >
+              {item.daysLeft} days left
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* REORDER */}
       <div className="summary-card">
         <h2>Reorder Suggestions</h2>
 
@@ -125,7 +158,7 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {/* INVENTORY LIST */}
+      {/* LIST */}
       <div className="summary-card">
         <h2>Inventory List</h2>
 
