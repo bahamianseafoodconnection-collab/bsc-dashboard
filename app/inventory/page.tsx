@@ -3,40 +3,34 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
-type InventoryItem = {
+type InventoryRow = {
   id: string
-  name: string
   quantity: number
   unit: string | null
   cost_per_unit: number | null
   selling_price: number | null
   last_updated: string | null
-}
-
-type ReorderItem = {
-  name: string
-  needed: number
-}
-
-type VelocityItem = {
-  name: string
-  daysLeft: number
+  products: {
+    name: string
+  } | null
 }
 
 export default function InventoryPage() {
-  const [items, setItems] = useState<InventoryItem[]>([])
-  const [status, setStatus] = useState("Loading...")
+  const [items, setItems] = useState<InventoryRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState("Loading...")
+
   const [lowStockCount, setLowStockCount] = useState(0)
-  const [reorderItems, setReorderItems] = useState<ReorderItem[]>([])
-  const [velocityData, setVelocityData] = useState<VelocityItem[]>([])
+  const [reorderItems, setReorderItems] = useState<any[]>([])
+
+  // 🔥 NEW CASH INTELLIGENCE
+  const [inventoryValue, setInventoryValue] = useState(0)
+  const [decision, setDecision] = useState("Analyzing...")
 
   useEffect(() => {
     const supabase = createClientInstance()
 
     async function loadInventory() {
-      setLoading(true)
-
       const { data, error } = await supabase
         .from("inventory")
         .select(`
@@ -52,68 +46,52 @@ export default function InventoryPage() {
       if (error) {
         console.error(error)
         setStatus("Error loading inventory")
-        setItems([])
-        setLowStockCount(0)
-        setReorderItems([])
-        setVelocityData([])
         setLoading(false)
         return
       }
 
-      const normalizedItems: InventoryItem[] = ((data ?? []) as any[]).map((row) => {
-        const relatedProduct = Array.isArray(row.products)
-          ? row.products[0] ?? null
-          : row.products ?? null
-
-        return {
-          id: String(row.id),
-          name: relatedProduct?.name ?? "Unknown",
-          quantity: Number(row.quantity ?? 0),
-          unit: row.unit ?? null,
-          cost_per_unit:
-            row.cost_per_unit !== null && row.cost_per_unit !== undefined
-              ? Number(row.cost_per_unit)
-              : null,
-          selling_price:
-            row.selling_price !== null && row.selling_price !== undefined
-              ? Number(row.selling_price)
-              : null,
-          last_updated: row.last_updated ?? null,
-        }
-      })
-
-      const TARGET = 50
-      const DAILY_USAGE = 5
+      const rows = (data ?? []) as InventoryRow[]
+      setItems(rows)
 
       let low = 0
-      const reorderList: ReorderItem[] = []
-      const velocityList: VelocityItem[] = []
+      let totalValue = 0
+      const reorderList: any[] = []
 
-      normalizedItems.forEach((item) => {
-        if (item.quantity <= 20) {
-          low++
-        }
+      rows.forEach((item) => {
+        const TARGET = 50
 
-        if (item.quantity < TARGET) {
+        const cost = Number(item.cost_per_unit ?? 0)
+        const qty = Number(item.quantity ?? 0)
+
+        const value = cost * qty
+        totalValue += value
+
+        if (qty <= 20) low++
+
+        if (qty < TARGET) {
           reorderList.push({
-            name: item.name,
-            needed: TARGET - item.quantity,
+            name: item.products?.name ?? "Unknown",
+            needed: TARGET - qty,
           })
         }
-
-        const daysLeft =
-          item.quantity > 0 ? Math.floor(item.quantity / DAILY_USAGE) : 0
-
-        velocityList.push({
-          name: item.name,
-          daysLeft,
-        })
       })
 
-      setItems(normalizedItems)
+      // 🔥 DECISION ENGINE
+      let decisionText = "Stable"
+
+      if (totalValue > 5000) {
+        decisionText = "⚠️ High cash tied in inventory — slow purchasing"
+      } else if (low > 2) {
+        decisionText = "⚠️ Low stock risk — reorder carefully"
+      } else {
+        decisionText = "✅ Healthy inventory balance"
+      }
+
+      setInventoryValue(totalValue)
       setLowStockCount(low)
       setReorderItems(reorderList)
-      setVelocityData(velocityList)
+      setDecision(decisionText)
+
       setStatus("Ready")
       setLoading(false)
     }
@@ -121,14 +99,15 @@ export default function InventoryPage() {
     loadInventory()
   }, [])
 
-  function money(value: number | null) {
-    return `$${Number(value ?? 0).toFixed(2)}`
+  function money(v: number) {
+    return `$${v.toFixed(2)}`
   }
 
   return (
     <>
       <h2 className="page-title">Inventory</h2>
 
+      {/* 🔥 SUMMARY */}
       <div className="summary-card">
         <h2>Inventory Summary</h2>
 
@@ -152,25 +131,22 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      {/* 🔥 CASH INTELLIGENCE */}
       <div className="summary-card">
-        <h2>Stock Runout Prediction</h2>
+        <h2>Inventory Cash Impact</h2>
 
-        {loading ? (
-          <p>Loading...</p>
-        ) : velocityData.length === 0 ? (
-          <p>No inventory data found</p>
-        ) : (
-          velocityData.map((item) => (
-            <div key={item.name} className="metric">
-              <span>{item.name}</span>
-              <span style={{ color: item.daysLeft <= 3 ? "red" : "inherit" }}>
-                {item.daysLeft} days left
-              </span>
-            </div>
-          ))
-        )}
+        <div className="metric">
+          <span>Total Inventory Value</span>
+          <span>{money(inventoryValue)}</span>
+        </div>
+
+        <div className="metric">
+          <span>Decision</span>
+          <span>{decision}</span>
+        </div>
       </div>
 
+      {/* REORDER */}
       <div className="summary-card">
         <h2>Reorder Suggestions</h2>
 
@@ -179,8 +155,8 @@ export default function InventoryPage() {
         ) : reorderItems.length === 0 ? (
           <p>Stock levels are good</p>
         ) : (
-          reorderItems.map((item) => (
-            <div key={item.name} className="metric">
+          reorderItems.map((item, i) => (
+            <div key={i} className="metric">
               <span>{item.name}</span>
               <span style={{ color: "red" }}>Buy {item.needed}</span>
             </div>
@@ -188,13 +164,12 @@ export default function InventoryPage() {
         )}
       </div>
 
+      {/* LIST */}
       <div className="summary-card">
         <h2>Inventory List</h2>
 
         {loading ? (
-          <p>Loading inventory...</p>
-        ) : items.length === 0 ? (
-          <p>No inventory found</p>
+          <p>Loading...</p>
         ) : (
           items.map((item) => (
             <div key={item.id} className="metric" style={{ display: "block" }}>
@@ -203,18 +178,20 @@ export default function InventoryPage() {
                   display: "flex",
                   justifyContent: "space-between",
                   fontWeight: 700,
-                  marginBottom: 8,
                 }}
               >
-                <span>{item.name}</span>
+                <span>{item.products?.name}</span>
                 <span>{item.quantity}</span>
               </div>
 
               <div style={{ fontSize: 14, color: "#64748b" }}>
-                Unit: {item.unit ?? "-"} <br />
-                Cost: {money(item.cost_per_unit)} <br />
-                Price: {money(item.selling_price)} <br />
-                Value: {money(item.quantity * Number(item.cost_per_unit ?? 0))}
+                Unit: {item.unit} <br />
+                Cost: {money(Number(item.cost_per_unit ?? 0))} <br />
+                Price: {money(Number(item.selling_price ?? 0))} <br />
+                Value:{" "}
+                {money(
+                  Number(item.quantity) * Number(item.cost_per_unit ?? 0)
+                )}
               </div>
             </div>
           ))
