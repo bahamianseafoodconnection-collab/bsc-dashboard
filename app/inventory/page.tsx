@@ -15,30 +15,32 @@ export default function InventoryPage() {
   const [itemsTracked, setItemsTracked] = useState(0)
   const [lowStock, setLowStock] = useState(0)
   const [suggestions, setSuggestions] = useState(0)
-  const [status, setStatus] = useState("Loading")
-
-  async function loadInventory() {
-    const { data, error } = await supabase.from("inventory").select("*")
-
-    if (error) {
-      setStatus("Error loading inventory")
-      return
-    }
-
-    const items = (data as InventoryItem[]) || []
-
-    setItemsTracked(items.length)
-
-    const low = items.filter((i) => i.quantity < i.reorder_level)
-    setLowStock(low.length)
-
-    const suggest = low.filter((i) => i.reorder_level - i.quantity > 0)
-    setSuggestions(suggest.length)
-
-    setStatus("Ready")
-  }
+  const [status, setStatus] = useState("Loading...")
 
   useEffect(() => {
+    const loadInventory = async () => {
+      const { data, error } = await supabase
+        .from("inventory")
+        .select("*")
+
+      if (error) {
+        setStatus("Error loading inventory")
+        return
+      }
+
+      const items = data as InventoryItem[]
+
+      setItemsTracked(items.length)
+
+      const low = items.filter(i => i.quantity < i.reorder_level)
+      setLowStock(low.length)
+
+      const suggest = items.filter(i => i.quantity < i.reorder_level)
+      setSuggestions(suggest.length)
+
+      setStatus("Ready")
+    }
+
     loadInventory()
   }, [])
 
