@@ -10,11 +10,10 @@ type InventoryRow = {
   cost_per_unit: number | null
   selling_price: number | null
   last_updated: string | null
-  products:
-    | {
-        name: string
-      }[]
-    | null
+  product_id: string | null
+  products: {
+    name: string
+  } | null
 }
 
 type ReorderItem = {
@@ -25,7 +24,6 @@ type ReorderItem = {
 type VelocityItem = {
   name: string
   daysLeft: number
-  daily: number
 }
 
 export default function InventoryPage() {
@@ -48,6 +46,7 @@ export default function InventoryPage() {
           cost_per_unit,
           selling_price,
           last_updated,
+          product_id,
           products ( name )
         `)
 
@@ -65,7 +64,8 @@ export default function InventoryPage() {
         cost_per_unit: item.cost_per_unit ?? null,
         selling_price: item.selling_price ?? null,
         last_updated: item.last_updated ?? null,
-        products: Array.isArray(item.products) ? item.products : [],
+        product_id: item.product_id ?? null,
+        products: item.products ?? null,
       }))
 
       setItems(rows)
@@ -76,7 +76,7 @@ export default function InventoryPage() {
 
       rows.forEach((item) => {
         const TARGET = 50
-        const productName = item.products?.[0]?.name ?? "Unknown"
+        const productName = item.products?.name ?? "Unknown"
 
         if (item.quantity <= 20) low++
 
@@ -94,7 +94,6 @@ export default function InventoryPage() {
         velocityList.push({
           name: productName,
           daysLeft,
-          daily: DAILY_USAGE,
         })
       })
 
@@ -197,7 +196,7 @@ export default function InventoryPage() {
                   fontWeight: 700,
                 }}
               >
-                <span>{item.products?.[0]?.name ?? "Unknown"}</span>
+                <span>{item.products?.name ?? "Unknown"}</span>
                 <span>{item.quantity}</span>
               </div>
 
