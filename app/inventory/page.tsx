@@ -9,7 +9,7 @@ type InventoryItem = {
   unit: string
   product: {
     name: string
-  }
+  }[]   // 👈 FIX: ARRAY
 }
 
 export default function InventoryPage() {
@@ -53,7 +53,7 @@ export default function InventoryPage() {
         {!loading &&
           items.map((item) => (
             <div key={item.id} className="metric">
-              <span>{item.product?.name || "Unknown Item"}</span>
+              <span>{item.product?.[0]?.name || "Unknown Item"}</span>
               <span>{item.quantity} {item.unit}</span>
             </div>
           ))}
