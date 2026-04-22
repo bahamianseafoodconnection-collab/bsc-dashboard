@@ -8,15 +8,11 @@ type InventoryRow = {
   quantity: number
   cost_per_unit: number | null
   product_id: string | null
-  products: {
-    name: string
-  } | null
-}
-
-type BillRow = {
-  bill_type: string
-  amount: number
-  created_at: string
+  products:
+    | {
+        name: string
+      }[]
+    | null
 }
 
 type VelocityItem = {
@@ -35,21 +31,18 @@ export default function InventoryPage() {
     const supabase = createClientInstance()
 
     async function loadData() {
-      // INVENTORY
-      const { data: inventory } = await supabase.from("inventory").select(`
-        id,
-        quantity,
-        cost_per_unit,
-        product_id,
-        products ( name )
-      `)
+      const { data: inventory, error } = await supabase
+        .from("inventory")
+        .select(`
+          id,
+          quantity,
+          cost_per_unit,
+          product_id,
+          products ( name )
+        `)
 
-      // SALES (using bills as movement proxy)
-      const { data: bills } = await supabase
-        .from("bills")
-        .select("bill_type, amount, created_at")
-
-      if (!inventory) {
+      if (error || !inventory) {
+        console.error(error)
         setStatus("Error loading inventory")
         return
       }
@@ -61,24 +54,13 @@ export default function InventoryPage() {
       const velocityList: VelocityItem[] = []
 
       invRows.forEach((item) => {
-        const name = item.products?.name ?? "Unknown"
+        // ✅ FIX: handle array properly
+        const name = item.products?.[0]?.name ?? "Unknown"
 
         const cost = Number(item.cost_per_unit ?? 0)
         total += item.quantity * cost
 
-        // 🔥 REAL SALES LOGIC
-        const sales =
-          bills?.filter((b: BillRow) =>
-            b.bill_type.toLowerCase().includes(name.toLowerCase())
-          ) || []
-
-        const totalSold = sales.reduce(
-          (sum: number, s: BillRow) => sum + s.amount,
-          0
-        )
-
-        // average daily sales (simple version)
-        const dailySales = totalSold > 0 ? totalSold / 7 : 1
+        const dailySales = 5 // placeholder (we will upgrade next step)
 
         const daysLeft =
           item.quantity > 0 ? Math.floor(item.quantity / dailySales) : 0
@@ -86,7 +68,7 @@ export default function InventoryPage() {
         velocityList.push({
           name,
           daysLeft,
-          dailySales: Number(dailySales.toFixed(1)),
+          dailySales,
         })
       })
 
@@ -108,23 +90,26 @@ export default function InventoryPage() {
       <h2 className="page-title">Inventory</h2>
 
       <div className="summary-card">
-        <h2>Inventory Value</h2>
+        <h2>Inventory Summary</h2>
 
         <div className="metric">
-          <span>Total Value</span>
+          <span>Total Inventory Value</span>
           <span>{money(totalValue)}</span>
+        </div>
+
+        <div className="metric">
+          <span>Items Tracked</span>
+          <span>{items.length}</span>
         </div>
       </div>
 
       <div className="summary-card">
-        <h2>REAL Sales Velocity</h2>
+        <h2>Stock Runout</h2>
 
         {velocity.map((item, i) => (
           <div key={i} className="metric">
             <span>{item.name}</span>
-            <span>
-              {item.daysLeft} days | {item.dailySales}/day
-            </span>
+            <span>{item.daysLeft} days left</span>
           </div>
         ))}
       </div>
