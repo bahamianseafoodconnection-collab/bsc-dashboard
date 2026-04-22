@@ -23,7 +23,6 @@ type ReorderItem = {
 type VelocityItem = {
   name: string
   daysLeft: number
-  daily: number
 }
 
 export default function InventoryPage() {
@@ -36,6 +35,8 @@ export default function InventoryPage() {
   const [lowStockCount, setLowStockCount] = useState(0)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>([])
   const [velocityData, setVelocityData] = useState<VelocityItem[]>([])
+
+  const [totalValue, setTotalValue] = useState(0)
 
   useEffect(() => {
     async function loadInventory() {
@@ -50,41 +51,22 @@ export default function InventoryPage() {
           cost_per_unit,
           selling_price,
           last_updated,
-          products (
-            name
-          )
+          products ( name )
         `)
 
       if (error) {
         console.error(error)
         setStatus("Error loading inventory")
-        setItems([])
-        setLowStockCount(0)
-        setReorderItems([])
-        setVelocityData([])
         setLoading(false)
         return
       }
 
-      const rows: InventoryRow[] = Array.isArray(data)
-        ? data.map((item: any) => ({
-            id: String(item.id),
-            quantity: Number(item.quantity ?? 0),
-            unit: item.unit ?? null,
-            cost_per_unit: item.cost_per_unit !== null ? Number(item.cost_per_unit) : null,
-            selling_price: item.selling_price !== null ? Number(item.selling_price) : null,
-            last_updated: item.last_updated ?? null,
-            products: item.products
-              ? {
-                  name: String(item.products.name ?? "Unknown"),
-                }
-              : null,
-          }))
-        : []
-
+      const rows = (data ?? []) as InventoryRow[]
       setItems(rows)
 
       let low = 0
+      let total = 0
+
       const reorderList: ReorderItem[] = []
       const velocityList: VelocityItem[] = []
 
@@ -92,10 +74,15 @@ export default function InventoryPage() {
         const TARGET = 50
         const DAILY_USAGE = 5
 
-        if (item.quantity <= 20) {
-          low++
-        }
+        const cost = Number(item.cost_per_unit ?? 0)
 
+        // TOTAL VALUE
+        total += item.quantity * cost
+
+        // LOW STOCK
+        if (item.quantity <= 20) low++
+
+        // REORDER
         if (item.quantity < TARGET) {
           reorderList.push({
             name: item.products?.name ?? "Unknown",
@@ -103,19 +90,21 @@ export default function InventoryPage() {
           })
         }
 
+        // VELOCITY
         const daysLeft =
           item.quantity > 0 ? Math.floor(item.quantity / DAILY_USAGE) : 0
 
         velocityList.push({
           name: item.products?.name ?? "Unknown",
           daysLeft,
-          daily: DAILY_USAGE,
         })
       })
 
+      setTotalValue(total)
       setLowStockCount(low)
       setReorderItems(reorderList)
       setVelocityData(velocityList)
+
       setStatus("Ready")
       setLoading(false)
     }
@@ -123,20 +112,26 @@ export default function InventoryPage() {
     loadInventory()
   }, [supabase])
 
-  function money(value: number | null) {
-    return `$${Number(value ?? 0).toFixed(2)}`
+  function money(value: number) {
+    return `$${value.toFixed(2)}`
   }
 
   return (
     <>
       <h2 className="page-title">Inventory</h2>
 
+      {/* SUMMARY */}
       <div className="summary-card">
         <h2>Inventory Summary</h2>
 
         <div className="metric">
           <span>Items Tracked</span>
           <span>{items.length}</span>
+        </div>
+
+        <div className="metric">
+          <span>Total Inventory Value</span>
+          <span>{money(totalValue)}</span>
         </div>
 
         <div className="metric">
@@ -154,76 +149,51 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      {/* VELOCITY */}
       <div className="summary-card">
         <h2>Stock Runout Prediction</h2>
 
-        {loading ? (
-          <p>Loading...</p>
-        ) : velocityData.length === 0 ? (
-          <p>No inventory data found</p>
-        ) : (
-          velocityData.map((item) => (
-            <div key={item.name} className="metric">
-              <span>{item.name}</span>
-              <span
-                style={{
-                  color: item.daysLeft <= 3 ? "red" : "inherit",
-                }}
-              >
-                {item.daysLeft} days left
-              </span>
-            </div>
-          ))
-        )}
+        {velocityData.map((item, i) => (
+          <div key={i} className="metric">
+            <span>{item.name}</span>
+            <span style={{ color: item.daysLeft <= 3 ? "red" : "inherit" }}>
+              {item.daysLeft} days left
+            </span>
+          </div>
+        ))}
       </div>
 
+      {/* REORDER */}
       <div className="summary-card">
         <h2>Reorder Suggestions</h2>
 
-        {loading ? (
-          <p>Loading...</p>
-        ) : reorderItems.length === 0 ? (
-          <p>Stock levels are good</p>
-        ) : (
-          reorderItems.map((item) => (
-            <div key={item.name} className="metric">
-              <span>{item.name}</span>
-              <span style={{ color: "red" }}>Buy {item.needed}</span>
-            </div>
-          ))
-        )}
+        {reorderItems.map((item, i) => (
+          <div key={i} className="metric">
+            <span>{item.name}</span>
+            <span style={{ color: "red" }}>Buy {item.needed}</span>
+          </div>
+        ))}
       </div>
 
+      {/* LIST */}
       <div className="summary-card">
         <h2>Inventory List</h2>
 
-        {loading ? (
-          <p>Loading...</p>
-        ) : items.length === 0 ? (
-          <p>No inventory data found</p>
-        ) : (
-          items.map((item) => (
-            <div key={item.id} className="metric" style={{ display: "block" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontWeight: 700,
-                }}
-              >
-                <span>{item.products?.name ?? "Unknown"}</span>
-                <span>{item.quantity}</span>
-              </div>
-
-              <div style={{ fontSize: 14, color: "#64748b" }}>
-                Unit: {item.unit ?? "-"} <br />
-                Cost: {money(item.cost_per_unit)} <br />
-                Price: {money(item.selling_price)} <br />
-                Value: {money(item.quantity * Number(item.cost_per_unit ?? 0))}
-              </div>
+        {items.map((item) => (
+          <div key={item.id} className="metric" style={{ display: "block" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+              <span>{item.products?.name}</span>
+              <span>{item.quantity}</span>
             </div>
-          ))
-        )}
+
+            <div style={{ fontSize: 14, color: "#64748b" }}>
+              Unit: {item.unit} <br />
+              Cost: {money(Number(item.cost_per_unit ?? 0))} <br />
+              Price: {money(Number(item.selling_price ?? 0))} <br />
+              Value: {money(item.quantity * Number(item.cost_per_unit ?? 0))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="summary-card">
