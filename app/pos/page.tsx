@@ -31,7 +31,7 @@ export default function POSPage() {
   async function loadData() {
     setStatus("Loading...")
 
-    const { data: inventory, error: inventoryError } = await supabase
+    const { data: inventory, error } = await supabase
       .from("inventory")
       .select(`
         id,
@@ -42,7 +42,7 @@ export default function POSPage() {
         )
       `)
 
-    if (inventoryError) {
+    if (error) {
       setStatus("Error loading inventory")
       return
     }
@@ -60,15 +60,10 @@ export default function POSPage() {
       setSelectedProductId(mapped[0].inventoryId)
     }
 
-    const { data: sales, error: salesError } = await supabase
+    const { data: sales } = await supabase
       .from("sales")
       .select("*")
       .order("created_at", { ascending: false })
-
-    if (salesError) {
-      setStatus("Error loading sales")
-      return
-    }
 
     const safeSales = (sales || []).map((sale: any) => ({
       id: String(sale.id),
@@ -78,9 +73,10 @@ export default function POSPage() {
 
     setTransactionsToday(safeSales.length)
     setSalesToday(
-      safeSales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0)
+      safeSales.reduce((sum, s) => sum + s.amount, 0)
     )
     setRecentSales(safeSales.slice(0, 5))
+
     setStatus("Ready")
   }
 
@@ -89,39 +85,40 @@ export default function POSPage() {
   }, [])
 
   const selectedProduct = useMemo(() => {
-    return products.find((p) => p.inventoryId === selectedProductId) || null
+    return products.find(p => p.inventoryId === selectedProductId) || null
   }, [products, selectedProductId])
 
-  const cleanQty = Number.isFinite(qty) && qty > 0 ? qty : 0
-  const previewTotal = selectedProduct ? selectedProduct.price * cleanQty : 0
-  const remainingStock = selectedProduct ? selectedProduct.quantity - cleanQty : 0
+  const cleanQty = Number(qty) || 0
+  const total = selectedProduct ? cleanQty * selectedProduct.price : 0
+  const remaining = selectedProduct ? selectedProduct.quantity - cleanQty : 0
+
+  // 🔴 RULES
+  const isOverStock = selectedProduct && cleanQty > selectedProduct.quantity
+  const isLowStock = selectedProduct && remaining <= 5
 
   async function handleSale() {
-    const product = selectedProduct
-
-    if (!product) {
-      setStatus("Select product")
-      return
-    }
+    if (!selectedProduct) return
 
     if (cleanQty <= 0) {
-      setStatus("Invalid qty")
+      setStatus("Invalid quantity")
       return
     }
 
-    if (product.quantity < cleanQty) {
-      setStatus("Not enough stock")
+    if (isOverStock) {
+      setStatus("❌ Not enough stock")
       return
     }
 
     setStatus("Saving...")
 
-    const totalAmount = product.price * cleanQty
+    const totalAmount = selectedProduct.price * cleanQty
 
-    const { error: insertError } = await supabase.from("sales").insert({
-      item: product.name,
-      amount: totalAmount,
-    })
+    const { error: insertError } = await supabase
+      .from("sales")
+      .insert({
+        item: selectedProduct.name,
+        amount: totalAmount,
+      })
 
     if (insertError) {
       setStatus("Error saving sale")
@@ -131,9 +128,9 @@ export default function POSPage() {
     const { error: updateError } = await supabase
       .from("inventory")
       .update({
-        quantity: product.quantity - cleanQty,
+        quantity: selectedProduct.quantity - cleanQty,
       })
-      .eq("id", product.inventoryId)
+      .eq("id", selectedProduct.inventoryId)
 
     if (updateError) {
       setStatus("Error updating inventory")
@@ -141,8 +138,8 @@ export default function POSPage() {
     }
 
     setQty(1)
-    setStatus("Sale recorded")
     await loadData()
+    setStatus("✅ Sale recorded")
   }
 
   return (
@@ -156,7 +153,7 @@ export default function POSPage() {
           value={selectedProductId}
           onChange={(e) => setSelectedProductId(e.target.value)}
         >
-          {products.map((p) => (
+          {products.map(p => (
             <option key={p.inventoryId} value={p.inventoryId}>
               {p.name} (${p.price}) ({p.quantity})
             </option>
@@ -165,10 +162,8 @@ export default function POSPage() {
 
         <input
           type="number"
-          min="1"
           value={qty}
           onChange={(e) => setQty(Number(e.target.value))}
-          placeholder="Qty"
         />
 
         <button onClick={handleSale}>Record Sale</button>
@@ -179,12 +174,12 @@ export default function POSPage() {
 
         <div className="metric">
           <span>Product</span>
-          <span>{selectedProduct ? selectedProduct.name : "-"}</span>
+          <span>{selectedProduct?.name}</span>
         </div>
 
         <div className="metric">
           <span>Unit Price</span>
-          <span>${selectedProduct ? selectedProduct.price.toFixed(2) : "0.00"}</span>
+          <span>${selectedProduct?.price.toFixed(2)}</span>
         </div>
 
         <div className="metric">
@@ -193,14 +188,22 @@ export default function POSPage() {
         </div>
 
         <div className="metric">
-          <span>Total Sale</span>
-          <span>${previewTotal.toFixed(2)}</span>
+          <span>Total</span>
+          <span>${total.toFixed(2)}</span>
         </div>
 
         <div className="metric">
-          <span>Stock After Sale</span>
-          <span>{selectedProduct ? remainingStock : 0}</span>
+          <span>Stock After</span>
+          <span>{remaining}</span>
         </div>
+
+        {isOverStock && (
+          <p style={{ color: "red" }}>❌ Not enough stock</p>
+        )}
+
+        {isLowStock && !isOverStock && (
+          <p style={{ color: "orange" }}>⚠️ Low stock warning</p>
+        )}
       </div>
 
       <div className="summary-card">
@@ -225,16 +228,12 @@ export default function POSPage() {
       <div className="summary-card">
         <h2>Recent POS Activity</h2>
 
-        {recentSales.length === 0 ? (
-          <p>No sales yet</p>
-        ) : (
-          recentSales.map((sale) => (
-            <div key={sale.id} className="metric">
-              <span>{sale.item}</span>
-              <span>${sale.amount.toFixed(2)}</span>
-            </div>
-          ))
-        )}
+        {recentSales.map(sale => (
+          <div key={sale.id} className="metric">
+            <span>{sale.item}</span>
+            <span>${sale.amount.toFixed(2)}</span>
+          </div>
+        ))}
       </div>
     </>
   )
