@@ -1,420 +1,247 @@
-"use client";
+'use client'
 
-import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { useEffect, useMemo, useState } from 'react'
+import { createBrowserClient } from '../../lib/supabase/browser'
 
-type InventoryOption = {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-};
+type ProductOption = {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
 
 type SaleRow = {
-  id: string;
-  item: string;
-  amount: number;
-  created_at?: string;
-};
+  id: string
+  product_name: string
+  amount: number
+  created_at: string
+}
 
-const supabase = createClient();
+export default function PosPage() {
+  const supabase = useMemo(() => createBrowserClient(), [])
 
-export default function POSPage() {
-  const [items, setItems] = useState<InventoryOption[]>([]);
-  const [sales, setSales] = useState<SaleRow[]>([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [status, setStatus] = useState("Loading...");
-  const [isSaving, setIsSaving] = useState(false);
+  const [products, setProducts] = useState<ProductOption[]>([])
+  const [sales, setSales] = useState<SaleRow[]>([])
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [quantityInput, setQuantityInput] = useState('1')
+  const [status, setStatus] = useState('Loading...')
+  const [isSaving, setIsSaving] = useState(false)
 
-  const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedId) || null,
-    [items, selectedId]
-  );
+  async function loadData() {
+    setStatus('Loading...')
 
-  const minimumStock = useMemo(() => {
-    if (!selectedItem) return 0;
-    const lowerName = selectedItem.name.toLowerCase();
-    return lowerName.includes("case") ? 2 : 10;
-  }, [selectedItem]);
+    const { data: inventoryData, error: inventoryError } = await supabase
+      .from('inventory')
+      .select(`
+        id,
+        quantity,
+        products (
+          id,
+          name,
+          price
+        )
+      `)
+      .order('id', { ascending: true })
 
-  const maxAllowedQuantity = useMemo(() => {
-    if (!selectedItem) return 0;
-    return Math.max(selectedItem.stock - minimumStock, 0);
-  }, [selectedItem, minimumStock]);
+    const { data: salesData, error: salesError } = await supabase
+      .from('sales')
+      .select('id, product_name, amount, created_at')
+      .order('created_at', { ascending: false })
+      .limit(10)
 
-  const saleAmount = useMemo(() => {
-    if (!selectedItem) return 0;
-    return Number((selectedItem.price * quantity).toFixed(2));
-  }, [selectedItem, quantity]);
+    if (inventoryError || salesError) {
+      setStatus('Error loading sales')
+      return
+    }
 
-  const stockAfterSale = useMemo(() => {
-    if (!selectedItem) return 0;
-    return selectedItem.stock - quantity;
-  }, [selectedItem, quantity]);
+    const mappedProducts: ProductOption[] =
+      (inventoryData || [])
+        .filter((row: any) => row.products)
+        .map((row: any) => ({
+          id: row.products.id,
+          name: row.products.name,
+          price: Number(row.products.price || 0),
+          quantity: Number(row.quantity || 0),
+        })) || []
 
-  const totalSalesToday = useMemo(() => {
-    return sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
-  }, [sales]);
+    setProducts(mappedProducts)
+    setSales((salesData as SaleRow[]) || [])
+    setStatus('Ready')
+
+    if (!selectedProductId && mappedProducts.length > 0) {
+      setSelectedProductId(mappedProducts[0].id)
+    }
+  }
 
   useEffect(() => {
-    void loadPageData();
-  }, []);
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  useEffect(() => {
-    if (!selectedItem) return;
+  const selectedProduct = products.find((item) => item.id === selectedProductId)
 
-    if (maxAllowedQuantity <= 0) {
-      setQuantity(0);
-      return;
-    }
-
-    if (quantity < 1) {
-      setQuantity(1);
-      return;
-    }
-
-    if (quantity > maxAllowedQuantity) {
-      setQuantity(maxAllowedQuantity);
-    }
-  }, [selectedItem, maxAllowedQuantity, quantity]);
-
-  async function loadPageData() {
-    setStatus("Loading...");
-
-    const [inventoryResult, salesResult] = await Promise.all([
-      supabase
-        .from("inventory")
-        .select("id, quantity, selling_price, products(name)")
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("sales")
-        .select("id, item, amount, created_at")
-        .order("created_at", { ascending: false }),
-    ]);
-
-    if (inventoryResult.error) {
-      console.error("Inventory load error:", inventoryResult.error);
-      setStatus("Error loading inventory");
-    }
-
-    if (salesResult.error) {
-      console.error("Sales load error:", salesResult.error);
-      setStatus("Error loading sales");
-    }
-
-    const inventoryRows = (inventoryResult.data || []) as any[];
-    const salesRows = ((salesResult.data || []) as any[]).map((sale) => ({
-      id: String(sale.id),
-      item: String(sale.item ?? ""),
-      amount: Number(sale.amount ?? 0),
-      created_at: sale.created_at ? String(sale.created_at) : undefined,
-    }));
-
-    const mappedItems: InventoryOption[] = inventoryRows
-      .map((row) => {
-        const productName =
-          row?.products && !Array.isArray(row.products)
-            ? String(row.products.name ?? "")
-            : row?.products?.[0]?.name
-              ? String(row.products[0].name)
-              : "Missing Product Link";
-
-        return {
-          id: String(row.id),
-          name: productName,
-          price: Number(row.selling_price ?? 0),
-          stock: Number(row.quantity ?? 0),
-        };
-      })
-      .filter((item) => item.stock > 0);
-
-    setItems(mappedItems);
-    setSales(salesRows);
-
-    if (mappedItems.length > 0) {
-      setSelectedId((current) => {
-        const stillExists = mappedItems.some((item) => item.id === current);
-        return stillExists ? current : mappedItems[0].id;
-      });
-    } else {
-      setSelectedId("");
-      setQuantity(0);
-    }
-
-    if (!inventoryResult.error && !salesResult.error) {
-      setStatus("Ready");
-    }
-  }
-
-  function changeQuantity(next: number) {
-    if (!selectedItem) return;
-    if (maxAllowedQuantity <= 0) {
-      setQuantity(0);
-      return;
-    }
-    const safeValue = Math.min(Math.max(next, 1), maxAllowedQuantity);
-    setQuantity(safeValue);
-  }
-
-  function addQuantity(step: number) {
-    changeQuantity(quantity + step);
-  }
+  const quantity = Number(quantityInput || 0)
+  const unitPrice = Number(selectedProduct?.price || 0)
+  const totalSale = unitPrice * quantity
+  const stockAfterSale = Number(selectedProduct?.quantity || 0) - quantity
 
   async function recordSale() {
-    if (!selectedItem) {
-      setStatus("Select a product");
-      return;
+    if (!selectedProduct) {
+      setStatus('Select a product')
+      return
     }
 
-    if (maxAllowedQuantity <= 0) {
-      setStatus(`Must keep at least ${minimumStock} in stock`);
-      return;
+    if (!quantity || quantity <= 0) {
+      setStatus('Enter valid quantity')
+      return
     }
 
-    if (quantity < 1) {
-      setStatus("Choose quantity");
-      return;
+    const currentQty = Number(selectedProduct.quantity || 0)
+
+    if (quantity > currentQty) {
+      setStatus('Not enough stock')
+      return
     }
 
-    if (quantity > maxAllowedQuantity) {
-      setStatus(`Must keep at least ${minimumStock} in stock`);
-      return;
+    setIsSaving(true)
+
+    const { error: saleError } = await supabase.from('sales').insert({
+      product_name: selectedProduct.name,
+      amount: totalSale,
+    })
+
+    if (saleError) {
+      setStatus('Error recording sale')
+      setIsSaving(false)
+      return
     }
 
-    if (quantity >= 10) {
-      const confirmed = window.confirm("Large sale detected. Continue?");
-      if (!confirmed) return;
+    const { error: inventoryError } = await supabase
+      .from('inventory')
+      .update({
+        quantity: currentQty - quantity,
+      })
+      .eq('product_id', selectedProduct.id)
+
+    if (inventoryError) {
+      setStatus('Sale saved but inventory failed')
+      setIsSaving(false)
+      return
     }
 
-    setIsSaving(true);
-    setStatus("Saving...");
-
-    const amount = Number((selectedItem.price * quantity).toFixed(2));
-    const updatedStock = selectedItem.stock - quantity;
-
-    const saleInsert = await supabase.from("sales").insert({
-      item: selectedItem.name,
-      amount,
-    });
-
-    if (saleInsert.error) {
-      console.error("Sale insert error:", saleInsert.error);
-      setStatus("Error saving sale");
-      setIsSaving(false);
-      return;
-    }
-
-    const inventoryUpdate = await supabase
-      .from("inventory")
-      .update({ quantity: updatedStock })
-      .eq("id", selectedItem.id);
-
-    if (inventoryUpdate.error) {
-      console.error("Inventory update error:", inventoryUpdate.error);
-      setStatus("Error updating inventory");
-      setIsSaving(false);
-      return;
-    }
-
-    await loadPageData();
-
-    setQuantity(1);
-    setStatus("Sale recorded");
-    setIsSaving(false);
+    setQuantityInput('1')
+    setStatus('Sale recorded')
+    await loadData()
+    setIsSaving(false)
   }
 
-  const canSell =
-    !!selectedItem && maxAllowedQuantity > 0 && quantity >= 1 && !isSaving;
+  const transactionsToday = sales.length
+  const salesToday = sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0)
 
   return (
-    <main className="min-h-screen bg-neutral-100 pb-24">
-      <div className="mx-auto max-w-md">
-        <div className="bg-sky-500 px-6 py-7">
-          <h1 className="text-4xl font-extrabold tracking-wide text-white">
-            BSC CONTROL
-          </h1>
-        </div>
-
-        <div className="px-4 py-6">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900">POS</h2>
-
-          <section className="mb-6 rounded-[28px] border border-neutral-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-5 text-2xl font-bold text-slate-900">New Sale</h3>
-
-            <div className="space-y-4">
-              <select
-                value={selectedId}
-                onChange={(e) => {
-                  setSelectedId(e.target.value);
-                  setQuantity(1);
-                }}
-                className="w-full rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-lg text-slate-900 outline-none"
-              >
-                {items.length === 0 ? (
-                  <option value="">No products available</option>
-                ) : (
-                  items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} (${item.price}) ({item.stock})
-                    </option>
-                  ))
-                )}
-              </select>
-
-              <div className="grid grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => addQuantity(-1)}
-                  disabled={!selectedItem || quantity <= 1 || isSaving}
-                  className="rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 disabled:opacity-40"
-                >
-                  -1
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => addQuantity(1)}
-                  disabled={!selectedItem || maxAllowedQuantity <= 0 || isSaving}
-                  className="rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 disabled:opacity-40"
-                >
-                  +1
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => addQuantity(5)}
-                  disabled={!selectedItem || maxAllowedQuantity <= 0 || isSaving}
-                  className="rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 disabled:opacity-40"
-                >
-                  +5
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => addQuantity(10)}
-                  disabled={!selectedItem || maxAllowedQuantity <= 0 || isSaving}
-                  className="rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-lg font-semibold text-slate-900 disabled:opacity-40"
-                >
-                  +10
-                </button>
-              </div>
-
-              <div className="rounded-2xl border border-neutral-300 bg-neutral-50 px-4 py-3">
-                <div className="text-sm font-medium text-slate-500">Quantity</div>
-                <div className="text-3xl font-bold text-slate-900">
-                  {quantity}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={recordSale}
-                disabled={!canSell}
-                className="w-full rounded-2xl bg-blue-600 px-4 py-4 text-xl font-bold text-white shadow-sm disabled:opacity-40"
-              >
-                {isSaving ? "Saving..." : "Record Sale"}
-              </button>
-            </div>
-          </section>
-
-          <section className="mb-6 rounded-[28px] border border-neutral-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-5 text-2xl font-bold text-slate-900">
-              Sale Preview
-            </h3>
-
-            {selectedItem ? (
-              <div className="space-y-4 text-lg text-slate-900">
-                <div className="flex items-center justify-between gap-4 border-b border-neutral-200 pb-3">
-                  <span>Product</span>
-                  <span className="text-right font-medium">{selectedItem.name}</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 border-b border-neutral-200 pb-3">
-                  <span>Unit Price</span>
-                  <span className="font-medium">
-                    ${selectedItem.price.toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 border-b border-neutral-200 pb-3">
-                  <span>Quantity</span>
-                  <span className="font-medium">{quantity}</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 border-b border-neutral-200 pb-3">
-                  <span>Total Sale</span>
-                  <span className="font-medium">${saleAmount.toFixed(2)}</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 border-b border-neutral-200 pb-3">
-                  <span>Stock After Sale</span>
-                  <span className="font-medium">{stockAfterSale}</span>
-                </div>
-
-                {maxAllowedQuantity <= 0 ? (
-                  <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-800">
-                    Low stock warning. Must keep at least {minimumStock} in stock.
-                  </div>
-                ) : stockAfterSale < minimumStock ? (
-                  <div className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-red-700">
-                    Must keep at least {minimumStock} in stock.
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <p className="text-lg text-slate-500">Select a product to preview.</p>
-            )}
-          </section>
-
-          <section className="mb-6 rounded-[28px] border border-neutral-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-5 text-2xl font-bold text-slate-900">
-              POS Summary
-            </h3>
-
-            <div className="space-y-0 text-lg text-slate-900">
-              <div className="flex items-center justify-between gap-4 border-b border-neutral-200 py-4">
-                <span>Status</span>
-                <span className="text-right font-medium">{status}</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 border-b border-neutral-200 py-4">
-                <span>Transactions Today</span>
-                <span className="font-medium">{sales.length}</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 py-4">
-                <span>Sales Today</span>
-                <span className="font-medium">${totalSalesToday.toFixed(2)}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-[28px] border border-neutral-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-5 text-2xl font-bold text-slate-900">
-              Recent POS Activity
-            </h3>
-
-            {sales.length === 0 ? (
-              <p className="text-lg text-slate-500">No sales yet</p>
-            ) : (
-              <div className="space-y-0">
-                {sales.slice(0, 5).map((sale) => (
-                  <div
-                    key={sale.id}
-                    className="flex items-center justify-between gap-4 border-b border-neutral-200 py-4 last:border-b-0 last:pb-0"
-                  >
-                    <span className="text-lg text-slate-900">{sale.item}</span>
-                    <span className="text-lg font-medium text-slate-900">
-                      ${Number(sale.amount).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
+    <main className="mx-auto max-w-md p-4">
+      <div className="mb-6 bg-blue-500 p-4 text-3xl font-bold text-white">
+        BSC CONTROL
       </div>
+
+      <h1 className="mb-4 text-2xl font-bold">POS</h1>
+
+      <section className="mb-4 rounded-3xl border bg-white p-4">
+        <h2 className="mb-4 text-2xl font-bold">New Sale</h2>
+
+        <div className="space-y-3">
+          <select
+            className="w-full rounded-xl border p-3"
+            value={selectedProductId}
+            onChange={(e) => setSelectedProductId(e.target.value)}
+          >
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name} (${product.price}) ({product.quantity})
+              </option>
+            ))}
+          </select>
+
+          <input
+            className="w-full rounded-xl border p-3"
+            inputMode="numeric"
+            value={quantityInput}
+            onChange={(e) => setQuantityInput(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="Quantity"
+          />
+
+          <button
+            className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50"
+            onClick={recordSale}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Record Sale'}
+          </button>
+        </div>
+      </section>
+
+      <section className="mb-4 rounded-3xl border bg-white p-4">
+        <h2 className="mb-4 text-2xl font-bold">Sale Preview</h2>
+
+        <div className="space-y-3 text-lg">
+          <div className="flex justify-between gap-4">
+            <span>Product</span>
+            <span className="text-right">{selectedProduct?.name || '-'}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span>Unit Price</span>
+            <span>${unitPrice.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span>Quantity</span>
+            <span>{quantity}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span>Total Sale</span>
+            <span>${totalSale.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span>Stock After Sale</span>
+            <span>{stockAfterSale}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-4 rounded-3xl border bg-white p-4">
+        <h2 className="mb-4 text-2xl font-bold">POS Summary</h2>
+
+        <div className="space-y-3 text-lg">
+          <div className="flex justify-between">
+            <span>Status</span>
+            <span>{status}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Transactions Today</span>
+            <span>{transactionsToday}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Sales Today</span>
+            <span>${salesToday.toFixed(2)}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border bg-white p-4">
+        <h2 className="mb-4 text-2xl font-bold">Recent POS Activity</h2>
+
+        <div className="space-y-3">
+          {sales.length === 0 ? (
+            <p>No sales yet</p>
+          ) : (
+            sales.map((sale) => (
+              <div key={sale.id} className="flex justify-between gap-4 border-b pb-2 last:border-b-0">
+                <span>{sale.product_name}</span>
+                <span>${Number(sale.amount || 0).toFixed(2)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </main>
-  );
+  )
 }
