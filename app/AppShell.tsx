@@ -2,82 +2,82 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
 
-export default function AppShell({ children }: { children: ReactNode }) {
+export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const tabs = [
-    { name: "Dashboard", icon: "🏠", path: "/" },
-    { name: "Bills", icon: "💡", path: "/bills" },
-    { name: "Inventory", icon: "📦", path: "/inventory" },
-    { name: "POS", icon: "🧾", path: "/pos" },
-    { name: "Cash", icon: "💵", path: "/cash" },
+    { name: "Dashboard", path: "/" },
+    { name: "Bills", path: "/bills" },
+    { name: "Inventory", path: "/inventory" },
+    { name: "POS", path: "/pos" },
+    { name: "Cash", path: "/cash" },
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f7f8fb" }}>
-      <header
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        background: "#f8fafc",
+      }}
+    >
+      {/* HEADER */}
+      <div
         style={{
-          background: "#2f86c7",
+          background: "linear-gradient(90deg, #2f86c7, #1b4f72)",
           color: "white",
-          padding: "18px 16px",
-          fontWeight: 800,
+          padding: "18px",
+          fontWeight: "bold",
           fontSize: "22px",
           textAlign: "center",
           letterSpacing: "1px",
         }}
       >
         BSC CONTROL
-      </header>
+      </div>
 
-      <main
+      {/* MAIN CONTENT */}
+      <div
         style={{
-          padding: "16px",
-          paddingBottom: "96px",
-          maxWidth: "920px",
+          flex: 1,
+          padding: "20px",
+          maxWidth: "900px",
+          width: "100%",
           margin: "0 auto",
         }}
       >
         {children}
-      </main>
+      </div>
 
-      <nav
+      {/* BOTTOM NAV */}
+      <div
         style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 1000,
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
+          display: "flex",
+          justifyContent: "space-around",
           borderTop: "1px solid #ddd",
+          padding: "12px 0",
           background: "#ffffff",
-          padding: "8px 0 calc(8px + env(safe-area-inset-bottom))",
+          position: "sticky",
+          bottom: 0,
         }}
       >
-        {tabs.map((tab) => {
-          const active = pathname === tab.path;
-
-          return (
-            <Link
-              key={tab.path}
-              href={tab.path}
+        {tabs.map((tab) => (
+          <Link key={tab.path} href={tab.path}>
+            <span
               style={{
-                textDecoration: "none",
-                color: active ? "#2f86c7" : "#333",
-                fontWeight: active ? 800 : 500,
-                textAlign: "center",
-                fontSize: "13px",
-                lineHeight: 1.2,
+                fontSize: "14px",
+                color: pathname === tab.path ? "#2f86c7" : "#777",
+                fontWeight: pathname === tab.path ? "bold" : "normal",
+                cursor: "pointer",
               }}
             >
-              <div style={{ fontSize: "18px", marginBottom: "3px" }}>{tab.icon}</div>
-              <div>{tab.name}</div>
-            </Link>
-          );
-        })}
-      </nav>
+              {tab.name}
+            </span>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
