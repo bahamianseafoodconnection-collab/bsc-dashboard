@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Product = {
+type Item = {
   name: string;
   price: number;
   stock: number;
@@ -10,49 +10,72 @@ type Product = {
 };
 
 export default function POSPage() {
-  const [products, setProducts] = useState<Product[]>([
-    { name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, min: 2 },
-    { name: "Salmon 6oz", price: 10.5, stock: 37, min: 10 },
-    { name: "Grouper Fillet", price: 12, stock: 19, min: 10 },
+  const [items, setItems] = useState<Item[]>([
+    { name: "Salmon 6oz", price: 10.5, stock: 36, min: 10 },
+    { name: "Grouper Fillet", price: 12, stock: 27, min: 5 },
     { name: "Snapper Whole", price: 9.32, stock: 149, min: 10 },
     { name: "Snapper Fillet Portion 7oz", price: 8.2, stock: 50, min: 10 },
+    { name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, min: 2 },
   ]);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [qty, setQty] = useState(1);
   const [message, setMessage] = useState("");
+  const [sales, setSales] = useState<any[]>([]);
 
-  const product = products[selectedIndex];
+  const selectedItem = items[selectedIndex];
 
-  function handleSale() {
-    const remaining = product.stock - qty;
+  // 🔥 RESET quantity when switching product (fix your bug)
+  const handleSelectChange = (index: number) => {
+    setSelectedIndex(index);
+    setQty(1);
+    setMessage("");
+  };
 
-    if (remaining < product.min) {
-      setMessage(`❌ Must keep at least ${product.min} in stock`);
+  const handleSale = () => {
+    const product = items[selectedIndex];
+    const stockAfter = product.stock - qty;
+
+    // 🔒 PROTECTION RULE (REAL FIX)
+    if (stockAfter < product.min) {
+      setMessage(`❌ Cannot sell. Must keep at least ${product.min} in stock`);
       return;
     }
 
-    const updated = [...products];
-    updated[selectedIndex].stock = remaining;
-    setProducts(updated);
+    const updatedItems = [...items];
+    updatedItems[selectedIndex] = {
+      ...product,
+      stock: stockAfter,
+    };
+
+    setItems(updatedItems);
+
+    setSales([
+      ...sales,
+      {
+        product: product.name,
+        total: qty * product.price,
+      },
+    ]);
 
     setMessage("✅ Sale recorded");
-  }
+    setQty(1);
+  };
 
   return (
     <div>
-      <h2>POS</h2>
+      <h1>POS</h1>
 
-      <div style={{ border: "1px solid #ddd", padding: 20, borderRadius: 10 }}>
-        <h3>New Sale</h3>
+      <div>
+        <h2>New Sale</h2>
 
         <select
           value={selectedIndex}
-          onChange={(e) => setSelectedIndex(Number(e.target.value))}
+          onChange={(e) => handleSelectChange(Number(e.target.value))}
         >
-          {products.map((p, i) => (
-            <option key={i} value={i}>
-              {p.name} (${p.price}) ({p.stock})
+          {items.map((item, index) => (
+            <option key={index} value={index}>
+              {item.name} (${item.price}) ({item.stock})
             </option>
           ))}
         </select>
@@ -61,36 +84,24 @@ export default function POSPage() {
           type="number"
           value={qty}
           onChange={(e) => setQty(Number(e.target.value))}
-          style={{ display: "block", marginTop: 10 }}
         />
 
-        <button
-          onClick={handleSale}
-          style={{
-            marginTop: 10,
-            width: "100%",
-            padding: 10,
-            background: "#2f86c7",
-            color: "white",
-            border: "none",
-            borderRadius: 5,
-          }}
-        >
-          Record Sale
-        </button>
+        <button onClick={handleSale}>Record Sale</button>
       </div>
 
-      <div style={{ marginTop: 20 }}>
+      <div>
         <h3>Sale Preview</h3>
-        <p>Product: {product.name}</p>
-        <p>Price: ${product.price}</p>
+        <p>Product: {selectedItem.name}</p>
+        <p>Price: ${selectedItem.price}</p>
         <p>Qty: {qty}</p>
-        <p>Total: ${product.price * qty}</p>
-        <p>Stock After: {product.stock - qty}</p>
+        <p>Total: ${qty * selectedItem.price}</p>
+        <p>Stock After: {selectedItem.stock - qty}</p>
+        <p>Protected Minimum: {selectedItem.min}</p>
       </div>
 
-      <div style={{ marginTop: 20 }}>
-        <strong>{message}</strong>
+      <div>
+        <h3>Status</h3>
+        <p>{message}</p>
       </div>
     </div>
   );
