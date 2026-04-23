@@ -1,6 +1,6 @@
 "use client";
 
-import SupplierChatModule from "@/components/suppliers/SupplierChatModule";
+import SupplierChatModule from "../components/suppliers/SupplierChatModule";
 
 export default function Page() {
   return (
@@ -10,12 +10,10 @@ export default function Page() {
         BSC Control Dashboard
       </h1>
 
-      {/* EXISTING DASHBOARD PLACEHOLDER */}
       <div style={{ marginBottom: 30 }}>
         <p>Dashboard modules will appear here...</p>
       </div>
 
-      {/* SUPPLIER CHAT MODULE */}
       <SupplierChatModule
         currentRole="admin"
         currentUserName="Dedrick"
