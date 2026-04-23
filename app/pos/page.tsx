@@ -1,327 +1,196 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 type Product = {
-  id: string;
   name: string;
   price: number;
   stock: number;
-  protectedMinimum: number;
-  unitType: "piece" | "case";
+  min: number;
 };
 
-type CartItem = Product & {
-  quantity: number;
+type CartItem = {
+  name: string;
+  price: number;
+  qty: number;
 };
-
-const startingProducts: Product[] = [
-  {
-    id: "salmon-6oz",
-    name: "Salmon 6oz",
-    price: 10.5,
-    stock: 36,
-    protectedMinimum: 10,
-    unitType: "piece",
-  },
-  {
-    id: "grouper-fillet",
-    name: "Grouper Fillet",
-    price: 12,
-    stock: 24,
-    protectedMinimum: 5,
-    unitType: "piece",
-  },
-  {
-    id: "snapper-whole",
-    name: "Snapper Whole",
-    price: 9.32,
-    stock: 149,
-    protectedMinimum: 10,
-    unitType: "piece",
-  },
-  {
-    id: "snapper-fillet-portion-7oz",
-    name: "Snapper Fillet Portion 7oz",
-    price: 8.2,
-    stock: 50,
-    protectedMinimum: 10,
-    unitType: "piece",
-  },
-  {
-    id: "snapper-fillet-case-10lb",
-    name: "Snapper Fillet Case 10lb",
-    price: 139.5,
-    stock: 8,
-    protectedMinimum: 2,
-    unitType: "case",
-  },
-];
 
 export default function POSPage() {
-  const [products, setProducts] = useState<Product[]>(startingProducts);
-  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id ?? "");
-  const [quantity, setQuantity] = useState("1");
+  const [products, setProducts] = useState<Product[]>([
+    { name: "Salmon 6oz", price: 10.5, stock: 36, min: 10 },
+    { name: "Grouper Fillet", price: 12, stock: 24, min: 5 },
+    { name: "Snapper Whole", price: 9.32, stock: 149, min: 10 },
+    { name: "Snapper Fillet Portion 7oz", price: 8.2, stock: 50, min: 10 },
+    { name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, min: 2 },
+  ]);
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [qty, setQty] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
   const [status, setStatus] = useState("");
 
-  const selectedProduct = products.find((p) => p.id === selectedProductId);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
 
-  const quantityNumber = Math.max(1, Number(quantity) || 1);
+  const selectedProduct = products[selectedIndex];
 
-  const cartTotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  }, [cart]);
-
-  function getCartQuantity(productId: string) {
-    return cart
-      .filter((item) => item.id === productId)
-      .reduce((sum, item) => sum + item.quantity, 0);
-  }
-
+  // ------------------------
+  // ADD TO CART
+  // ------------------------
   function addToCart() {
     if (!selectedProduct) return;
 
-    const alreadyInCart = getCartQuantity(selectedProduct.id);
-    const totalRequested = alreadyInCart + quantityNumber;
-    const stockAfter = selectedProduct.stock - totalRequested;
+    const remaining = selectedProduct.stock - qty;
 
-    if (stockAfter < selectedProduct.protectedMinimum) {
-      setStatus(
-        `❌ Cannot add ${quantityNumber}. ${selectedProduct.name} must keep at least ${selectedProduct.protectedMinimum} ${selectedProduct.unitType === "case" ? "cases" : "pieces/portions"} in stock.`
-      );
+    if (remaining < selectedProduct.min) {
+      setStatus(`❌ Must keep at least ${selectedProduct.min} in stock`);
       return;
     }
 
-    setCart((currentCart) => {
-      const existing = currentCart.find((item) => item.id === selectedProduct.id);
+    setCart((prev) => {
+      const existing = prev.find((i) => i.name === selectedProduct.name);
 
       if (existing) {
-        return currentCart.map((item) =>
-          item.id === selectedProduct.id
-            ? { ...item, quantity: item.quantity + quantityNumber }
-            : item
+        return prev.map((i) =>
+          i.name === selectedProduct.name
+            ? { ...i, qty: i.qty + qty }
+            : i
         );
       }
 
-      return [...currentCart, { ...selectedProduct, quantity: quantityNumber }];
+      return [...prev, { name: selectedProduct.name, price: selectedProduct.price, qty }];
     });
 
-    setQuantity("1");
+    // 🔥 RESET INPUT CLEANLY
+    setQty(1);
     setStatus(`✅ Added ${selectedProduct.name} to cart`);
   }
 
-  function removeFromCart(productId: string) {
-    setCart((currentCart) => currentCart.filter((item) => item.id !== productId));
-    setStatus("Item removed from cart");
+  // ------------------------
+  // REMOVE ITEM
+  // ------------------------
+  function removeItem(name: string) {
+    setCart(cart.filter((i) => i.name !== name));
   }
 
+  // ------------------------
+  // COMPLETE SALE
+  // ------------------------
   function completeSale() {
+    if (!customerName || !customerPhone) {
+      setStatus("❌ Customer name and phone required");
+      return;
+    }
+
     if (cart.length === 0) {
       setStatus("❌ Cart is empty");
       return;
     }
 
-    for (const item of cart) {
-      const product = products.find((p) => p.id === item.id);
-      if (!product) continue;
+    const updatedProducts = products.map((p) => {
+      const cartItem = cart.find((i) => i.name === p.name);
+      if (!cartItem) return p;
 
-      const stockAfter = product.stock - item.quantity;
+      return {
+        ...p,
+        stock: p.stock - cartItem.qty,
+      };
+    });
 
-      if (stockAfter < product.protectedMinimum) {
-        setStatus(
-          `❌ Sale blocked. ${product.name} must keep at least ${product.protectedMinimum} ${product.unitType === "case" ? "cases" : "pieces/portions"} in stock.`
-        );
-        return;
-      }
-    }
-
-    setProducts((currentProducts) =>
-      currentProducts.map((product) => {
-        const cartItem = cart.find((item) => item.id === product.id);
-
-        if (!cartItem) return product;
-
-        return {
-          ...product,
-          stock: product.stock - cartItem.quantity,
-        };
-      })
-    );
-
+    setProducts(updatedProducts);
     setCart([]);
-    setQuantity("1");
-    setStatus(
-      `✅ Sale completed. Customer: ${
-        customerName || "Walk-in"
-      }. Total: $${cartTotal.toFixed(2)}`
-    );
+    setCustomerName("");
+    setCustomerPhone("");
+    setStatus("✅ Sale completed successfully");
   }
 
-  function clearCart() {
-    setCart([]);
-    setQuantity("1");
-    setStatus("Cart cleared");
-  }
+  const total = cart.reduce((sum, i) => sum + i.qty * i.price, 0);
 
   return (
-    <main style={{ padding: "20px", maxWidth: "900px", margin: "0 auto" }}>
-      <h1>POS</h1>
+    <div>
+      <h2>POS</h2>
 
-      <section style={{ border: "1px solid #ddd", padding: "16px", borderRadius: "12px", marginBottom: "20px" }}>
-        <h2>New Sale</h2>
+      {/* ------------------------
+          PRODUCT SELECT
+      ------------------------ */}
+      <h3>New Sale</h3>
 
-        <label>
-          Product
-          <select
-            value={selectedProductId}
-            onChange={(e) => {
-              setSelectedProductId(e.target.value);
-              setQuantity("1");
-              setStatus("");
-            }}
-            style={{ display: "block", width: "100%", padding: "10px", marginTop: "6px", marginBottom: "12px" }}
-          >
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name} (${product.price}) ({product.stock})
-              </option>
-            ))}
-          </select>
-        </label>
+      <select
+        value={selectedIndex}
+        onChange={(e) => {
+          setSelectedIndex(Number(e.target.value));
+          setQty(1); // 🔥 reset qty when switching product
+        }}
+      >
+        {products.map((p, i) => (
+          <option key={i} value={i}>
+            {p.name} (${p.price}) ({p.stock})
+          </option>
+        ))}
+      </select>
 
-        <label>
-          Quantity
-          <input
-            type="number"
-            min="1"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            style={{ display: "block", width: "100%", padding: "10px", marginTop: "6px", marginBottom: "12px" }}
-          />
-        </label>
+      <input
+        type="number"
+        value={qty}
+        min={1}
+        onChange={(e) => setQty(Number(e.target.value))}
+      />
 
-        {selectedProduct && (
-          <div style={{ marginBottom: "12px" }}>
-            <p>Product: {selectedProduct.name}</p>
-            <p>Price: ${selectedProduct.price.toFixed(2)}</p>
-            <p>Qty: {quantityNumber}</p>
-            <p>Total: ${(selectedProduct.price * quantityNumber).toFixed(2)}</p>
-            <p>Stock After If Added: {selectedProduct.stock - getCartQuantity(selectedProduct.id) - quantityNumber}</p>
-            <p>Protected Minimum: {selectedProduct.protectedMinimum}</p>
-          </div>
-        )}
+      <button onClick={addToCart}>Add to Cart</button>
 
-        <button
-          onClick={addToCart}
-          style={{
-            width: "100%",
-            padding: "12px",
-            background: "#2f86c7",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            fontWeight: "bold",
-          }}
-        >
-          Add to Cart
-        </button>
-      </section>
+      {/* ------------------------
+          PREVIEW
+      ------------------------ */}
+      <h4>Preview</h4>
+      <p>{selectedProduct.name}</p>
+      <p>Price: ${selectedProduct.price}</p>
+      <p>Qty: {qty}</p>
+      <p>Stock After If Added: {selectedProduct.stock - qty}</p>
+      <p>Protected Minimum: {selectedProduct.min}</p>
 
-      <section style={{ border: "1px solid #ddd", padding: "16px", borderRadius: "12px", marginBottom: "20px" }}>
-        <h2>Customer Info</h2>
+      {/* ------------------------
+          CUSTOMER INFO
+      ------------------------ */}
+      <h3>Customer Info</h3>
 
-        <input
-          type="text"
-          placeholder="Customer name"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          style={{ display: "block", width: "100%", padding: "10px", marginBottom: "10px" }}
-        />
+      <input
+        placeholder="Customer Name"
+        value={customerName}
+        onChange={(e) => setCustomerName(e.target.value)}
+      />
 
-        <input
-          type="tel"
-          placeholder="Customer phone / WhatsApp"
-          value={customerPhone}
-          onChange={(e) => setCustomerPhone(e.target.value)}
-          style={{ display: "block", width: "100%", padding: "10px" }}
-        />
-      </section>
+      <input
+        placeholder="Phone / WhatsApp"
+        value={customerPhone}
+        onChange={(e) => setCustomerPhone(e.target.value)}
+      />
 
-      <section style={{ border: "1px solid #ddd", padding: "16px", borderRadius: "12px", marginBottom: "20px" }}>
-        <h2>Cart</h2>
+      {/* ------------------------
+          CART
+      ------------------------ */}
+      <h3>Cart</h3>
 
-        {cart.length === 0 ? (
-          <p>No items in cart</p>
-        ) : (
-          <>
-            {cart.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "10px",
-                  borderBottom: "1px solid #eee",
-                  padding: "8px 0",
-                }}
-              >
-                <div>
-                  <strong>{item.name}</strong>
-                  <p>
-                    Qty: {item.quantity} × ${item.price.toFixed(2)}
-                  </p>
-                </div>
+      {cart.map((item, i) => (
+        <div key={i}>
+          <strong>{item.name}</strong>
+          <p>
+            Qty: {item.qty} × ${item.price}
+          </p>
+          <p>Total: ${(item.qty * item.price).toFixed(2)}</p>
+          <button onClick={() => removeItem(item.name)}>Remove</button>
+        </div>
+      ))}
 
-                <div style={{ textAlign: "right" }}>
-                  <strong>${(item.price * item.quantity).toFixed(2)}</strong>
-                  <br />
-                  <button onClick={() => removeFromCart(item.id)}>Remove</button>
-                </div>
-              </div>
-            ))}
+      <h3>Total: ${total.toFixed(2)}</h3>
 
-            <h3>Total: ${cartTotal.toFixed(2)}</h3>
+      <button onClick={completeSale}>Complete Sale</button>
 
-            <button
-              onClick={completeSale}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: "green",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontWeight: "bold",
-                marginBottom: "10px",
-              }}
-            >
-              Complete Sale
-            </button>
+      <button onClick={() => setCart([])}>Clear Cart</button>
 
-            <button
-              onClick={clearCart}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: "#999",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-              }}
-            >
-              Clear Cart
-            </button>
-          </>
-        )}
-      </section>
-
-      <section>
-        <h2>Status</h2>
-        <p>{status}</p>
-      </section>
-    </main>
+      {/* ------------------------
+          STATUS
+      ------------------------ */}
+      <p>{status}</p>
+    </div>
   );
 }
