@@ -3,76 +3,64 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: "🏠" },
-  { href: "/bills", label: "Bills", icon: "💡" },
-  { href: "/inventory", label: "Inventory", icon: "📦" },
-  { href: "/pos", label: "POS", icon: "🧾" },
-  { href: "/cash", label: "Cash", icon: "💵" },
-];
-
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
+  const tabs = [
+    { name: "Dashboard", path: "/" },
+    { name: "Bills", path: "/bills" },
+    { name: "Inventory", path: "/inventory" },
+    { name: "POS", path: "/pos" },
+    { name: "Cash", path: "/cash" },
+  ];
+
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
-      <header
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      
+      {/* Header */}
+      <div
         style={{
-          background: "#4a9be8",
+          background: "#2f86c7",
           color: "white",
-          padding: "28px 24px",
-          fontSize: 34,
-          fontWeight: 900,
-          letterSpacing: 2,
+          padding: "16px",
+          fontWeight: "bold",
+          fontSize: "20px",
+          textAlign: "center",
         }}
       >
         BSC CONTROL
-      </header>
+      </div>
 
-      <div style={{ paddingBottom: 96 }}>{children}</div>
+      {/* Content */}
+      <div style={{ flex: 1, padding: "16px" }}>
+        {children}
+      </div>
 
-      <nav
+      {/* Bottom Nav */}
+      <div
         style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
+          display: "flex",
+          justifyContent: "space-around",
+          borderTop: "1px solid #ddd",
+          padding: "10px 0",
+          background: "#fff",
+          position: "sticky",
           bottom: 0,
-          height: 78,
-          background: "white",
-          borderTop: "1px solid #d1d5db",
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          zIndex: 9999,
         }}
       >
-        {navItems.map((item) => {
-          const active =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
+        {tabs.map((tab) => (
+          <Link key={tab.path} href={tab.path}>
+            <span
               style={{
-                textDecoration: "none",
-                color: active ? "#2563eb" : "#111827",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 15,
-                fontWeight: active ? 800 : 500,
-                gap: 4,
-                WebkitTapHighlightColor: "transparent",
+                color: pathname === tab.path ? "#2f86c7" : "#777",
+                fontWeight: pathname === tab.path ? "bold" : "normal",
               }}
             >
-              <span style={{ fontSize: 22 }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+              {tab.name}
+            </span>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
