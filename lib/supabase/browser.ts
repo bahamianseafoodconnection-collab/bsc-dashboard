@@ -7,7 +7,7 @@ export function createBrowserClient() {
   )
 }
 
-// BACKWARD COMPATIBILITY (fixes your errors instantly)
+// Compatibility fix
 export const createClientInstance = createBrowserClient
 
 export default createBrowserClient
