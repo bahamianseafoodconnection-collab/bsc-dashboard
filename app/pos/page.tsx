@@ -1,195 +1,97 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 type Product = {
-  id: string;
   name: string;
   price: number;
   stock: number;
-  protectedMinimum: number;
+  min: number;
 };
 
-const startingProducts: Product[] = [
-  { id: "snapper-case", name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, protectedMinimum: 2 },
-  { id: "salmon-6oz", name: "Salmon 6oz", price: 10.5, stock: 37, protectedMinimum: 10 },
-  { id: "grouper-fillet", name: "Grouper Fillet", price: 12, stock: 27, protectedMinimum: 10 },
-  { id: "snapper-whole", name: "Snapper Whole", price: 9.32, stock: 149, protectedMinimum: 10 },
-  { id: "snapper-portion", name: "Snapper Fillet Portion 7oz", price: 8.2, stock: 50, protectedMinimum: 10 },
-];
-
 export default function POSPage() {
-  const [products, setProducts] = useState<Product[]>(startingProducts);
-  const [selectedId, setSelectedId] = useState(products[0].id);
-  const [quantityText, setQuantityText] = useState("1");
+  const [products, setProducts] = useState<Product[]>([
+    { name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, min: 2 },
+    { name: "Salmon 6oz", price: 10.5, stock: 37, min: 10 },
+    { name: "Grouper Fillet", price: 12, stock: 19, min: 10 },
+    { name: "Snapper Whole", price: 9.32, stock: 149, min: 10 },
+    { name: "Snapper Fillet Portion 7oz", price: 8.2, stock: 50, min: 10 },
+  ]);
+
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [qty, setQty] = useState(1);
   const [message, setMessage] = useState("");
 
-  const selectedProduct = products.find((p) => p.id === selectedId) ?? products[0];
-  const quantity = Math.max(0, Number(quantityText) || 0);
+  const product = products[selectedIndex];
 
-  const stockAfterSale = selectedProduct.stock - quantity;
-  const totalSale = selectedProduct.price * quantity;
-  const blocked = stockAfterSale < selectedProduct.protectedMinimum;
+  function handleSale() {
+    const remaining = product.stock - qty;
 
-  const recentWarning = useMemo(() => {
-    if (blocked) {
-      return `Must keep at least ${selectedProduct.protectedMinimum} pieces/portions in stock`;
-    }
-
-    if (quantity >= 10) {
-      return "Large sale detected. Review before recording.";
-    }
-
-    return "";
-  }, [blocked, quantity, selectedProduct.protectedMinimum]);
-
-  function recordSale() {
-    if (quantity <= 0) {
-      setMessage("❌ Enter a valid quantity.");
+    if (remaining < product.min) {
+      setMessage(`❌ Must keep at least ${product.min} in stock`);
       return;
     }
 
-    if (blocked) {
-      setMessage(`❌ Sale blocked. Must keep at least ${selectedProduct.protectedMinimum} in stock.`);
-      return;
-    }
-
-    setProducts((current) =>
-      current.map((product) =>
-        product.id === selectedProduct.id
-          ? { ...product, stock: product.stock - quantity }
-          : product
-      )
-    );
+    const updated = [...products];
+    updated[selectedIndex].stock = remaining;
+    setProducts(updated);
 
     setMessage("✅ Sale recorded");
-    setQuantityText("1");
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "16px" }}>
-      <h1 style={{ fontSize: 34, fontWeight: 800, marginBottom: 24 }}>POS</h1>
+    <div>
+      <h2>POS</h2>
 
-      <section style={cardStyle}>
-        <h2 style={sectionTitle}>New Sale</h2>
+      <div style={{ border: "1px solid #ddd", padding: 20, borderRadius: 10 }}>
+        <h3>New Sale</h3>
 
-        <label style={labelStyle}>Product</label>
         <select
-          value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          style={inputStyle}
+          value={selectedIndex}
+          onChange={(e) => setSelectedIndex(Number(e.target.value))}
         >
-          {products.map((product) => (
-            <option key={product.id} value={product.id}>
-              {product.name} (${product.price.toFixed(2)}) ({product.stock})
+          {products.map((p, i) => (
+            <option key={i} value={i}>
+              {p.name} (${p.price}) ({p.stock})
             </option>
           ))}
         </select>
 
-        <label style={labelStyle}>Quantity</label>
         <input
-          value={quantityText}
-          onChange={(e) => setQuantityText(e.target.value)}
-          inputMode="numeric"
-          style={inputStyle}
+          type="number"
+          value={qty}
+          onChange={(e) => setQty(Number(e.target.value))}
+          style={{ display: "block", marginTop: 10 }}
         />
 
-        <button onClick={recordSale} style={buttonStyle}>
+        <button
+          onClick={handleSale}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            padding: 10,
+            background: "#2f86c7",
+            color: "white",
+            border: "none",
+            borderRadius: 5,
+          }}
+        >
           Record Sale
         </button>
-      </section>
+      </div>
 
-      <section style={cardStyle}>
-        <h2 style={sectionTitle}>Sale Preview</h2>
+      <div style={{ marginTop: 20 }}>
+        <h3>Sale Preview</h3>
+        <p>Product: {product.name}</p>
+        <p>Price: ${product.price}</p>
+        <p>Qty: {qty}</p>
+        <p>Total: ${product.price * qty}</p>
+        <p>Stock After: {product.stock - qty}</p>
+      </div>
 
-        <Row label="Product" value={selectedProduct.name} />
-        <Row label="Unit Price" value={`$${selectedProduct.price.toFixed(2)}`} />
-        <Row label="Quantity" value={quantity.toString()} />
-        <Row label="Total Sale" value={`$${totalSale.toFixed(2)}`} />
-        <Row label="Stock After Sale" value={stockAfterSale.toString()} />
-        <Row label="Protected Minimum" value={selectedProduct.protectedMinimum.toString()} />
-
-        {recentWarning && (
-          <div
-            style={{
-              marginTop: 16,
-              padding: 12,
-              borderRadius: 12,
-              background: blocked ? "#fde2e2" : "#fff3cd",
-              color: blocked ? "#8a1f1f" : "#7a5a00",
-              fontWeight: 700,
-            }}
-          >
-            {recentWarning}
-          </div>
-        )}
-      </section>
-
-      <section style={cardStyle}>
-        <h2 style={sectionTitle}>POS Summary</h2>
-        <Row label="Status" value={message || "Ready"} />
-      </section>
-    </main>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 16,
-        padding: "12px 0",
-        borderBottom: "1px solid #eee",
-        fontSize: 18,
-      }}
-    >
-      <span>{label}</span>
-      <strong style={{ textAlign: "right" }}>{value}</strong>
+      <div style={{ marginTop: 20 }}>
+        <strong>{message}</strong>
+      </div>
     </div>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  background: "white",
-  border: "1px solid #e5e7eb",
-  borderRadius: 18,
-  padding: 18,
-  marginBottom: 20,
-  boxShadow: "0 4px 12px rgba(0,0,0,0.04)",
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 26,
-  fontWeight: 800,
-  marginBottom: 18,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontWeight: 700,
-  marginBottom: 8,
-  marginTop: 12,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "14px",
-  borderRadius: 12,
-  border: "1px solid #d1d5db",
-  fontSize: 18,
-  marginBottom: 10,
-};
-
-const buttonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "16px",
-  borderRadius: 14,
-  border: "none",
-  background: "#2f86c7",
-  color: "white",
-  fontSize: 18,
-  fontWeight: 800,
-  marginTop: 12,
-};
