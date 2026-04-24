@@ -20,91 +20,100 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0a1729] text-white pb-28">
-      {/* Header */}
-      <div className="bg-[#0a1729] border-b border-white/10 p-6 sticky top-0 z-50">
+      {/* Top Header */}
+      <div className="sticky top-0 z-50 bg-[#0a1729] border-b border-white/10 p-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-bold text-amber-400 tracking-tighter">BSC Control</h1>
             <p className="text-white/60 mt-1">Nassau Marketplace • April 24, 2026</p>
           </div>
-          <div className="text-right text-green-400 font-medium">OPEN • 7 Cashiers</div>
+          <div className="px-4 py-2 bg-green-500/10 text-green-400 rounded-2xl text-sm font-medium">
+            OPEN • 7 Cashiers
+          </div>
         </div>
       </div>
 
       <div className="p-6 space-y-8 max-w-5xl mx-auto">
-        {/* KPI Cards */}
+        {/* KPI Cards - Clean Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
-            <div className="text-white/60 text-sm">Today&apos;s Revenue</div>
-            <div className="text-4xl font-bold mt-3">${summary.revenue.toLocaleString()}</div>
-            <div className="text-green-400 text-sm mt-2">↑ 18.4%</div>
+          {/* Revenue */}
+          <div className="bg-gradient-to-br from-white/5 to-white/10 border border-white/10 rounded-3xl p-6">
+            <div className="text-white/60 text-sm mb-1">Today&apos;s Revenue</div>
+            <div className="text-4xl font-bold tracking-tight">${summary.revenue.toLocaleString()}</div>
+            <div className="flex items-center gap-2 text-green-400 text-sm mt-3">
+              ↑ 18.4% from yesterday
+            </div>
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
-            <div className="text-white/60 text-sm">BSC Keeps (7%)</div>
-            <div className="text-4xl font-bold text-amber-400 mt-3">${summary.bscKeeps.toFixed(2)}</div>
-            <div className="text-amber-400 text-sm mt-1">Profit Today</div>
+          {/* BSC Keeps */}
+          <div className="bg-gradient-to-br from-amber-400/10 to-amber-500/10 border border-amber-400/20 rounded-3xl p-6">
+            <div className="text-amber-400/70 text-sm mb-1">BSC Keeps (7%)</div>
+            <div className="text-4xl font-bold text-amber-400 tracking-tight">${summary.bscKeeps.toFixed(2)}</div>
+            <div className="text-amber-400 text-sm mt-3">Profit Today</div>
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
-            <div className="text-white/60 text-sm">Supplier Owed (93%)</div>
-            <div className="text-4xl font-bold mt-3">${summary.supplierOwed.toFixed(2)}</div>
+          {/* Supplier Owed */}
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 col-span-2 md:col-span-1">
+            <div className="text-white/60 text-sm mb-1">Supplier Owed (93%)</div>
+            <div className="text-4xl font-bold tracking-tight">${summary.supplierOwed.toFixed(2)}</div>
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
-            <div className="text-white/60 text-sm">Transactions</div>
-            <div className="text-4xl font-bold mt-3">{summary.transactions}</div>
-            <div className="text-white/60 text-sm mt-1">Avg $143.45</div>
+          {/* Transactions */}
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 col-span-2 md:col-span-1">
+            <div className="text-white/60 text-sm mb-1">Transactions</div>
+            <div className="text-4xl font-bold tracking-tight">{summary.transactions}</div>
+            <div className="text-white/60 text-sm mt-1">Avg ${Math.round(summary.revenue / summary.transactions)}</div>
           </div>
         </div>
 
         {/* Inventory Alert */}
-        <div className="bg-red-900/20 border border-red-500/30 rounded-3xl p-6">
-          <div className="flex items-start gap-3">
-            <span className="text-3xl">⚠️</span>
-            <div>
-              <h3 className="font-semibold text-red-400">Inventory Alerts</h3>
-              <p className="text-white/90">{summary.lowStockItems} items below minimum stock</p>
-              <Link href="/inventory" className="text-amber-400 hover:underline text-sm mt-3 inline-block">
-                View full inventory →
-              </Link>
-            </div>
+        <div className="bg-red-950/50 border border-red-500/30 rounded-3xl p-6 flex gap-4 items-start">
+          <div className="text-4xl mt-1">⚠️</div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-red-400 text-lg">Inventory Alert</h3>
+            <p className="text-white/90 mt-1">{summary.lowStockItems} items below minimum stock level</p>
+            <Link 
+              href="/inventory" 
+              className="inline-block mt-4 text-amber-400 hover:text-amber-300 font-medium"
+            >
+              Manage Inventory →
+            </Link>
           </div>
         </div>
 
         {/* Recent Sales */}
         <div>
-          <div className="flex justify-between items-center mb-5">
-            <h3 className="font-semibold text-xl">Recent Sales</h3>
-            <Link href="/report" className="text-amber-400 hover:underline">All Reports →</Link>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-xl font-semibold">Recent Sales</h3>
+            <Link href="/report" className="text-amber-400 hover:underline text-sm font-medium">All Reports →</Link>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {recentSales.map((sale) => (
-              <div key={sale.id} className="bg-white/5 border border-white/10 rounded-3xl p-5 flex justify-between items-center">
+              <div key={sale.id} className="bg-white/5 border border-white/10 rounded-3xl p-5 flex justify-between items-center hover:border-white/30 transition-colors">
                 <div>
-                  <div className="font-mono text-amber-400 text-lg">{sale.id}</div>
+                  <div className="font-mono text-amber-400 font-medium">{sale.id}</div>
                   <div className="text-white/70 text-sm mt-1">{sale.time} • {sale.customer}</div>
                 </div>
-                <div className="text-right font-bold text-2xl text-white">
-                  ${sale.total}
+                <div className="text-right">
+                  <div className="text-2xl font-bold">${sale.total}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Quick Action Buttons */}
+        <div className="grid grid-cols-2 gap-4 pt-4">
           <Link 
-            href="/pos" 
-            className="bg-gradient-to-br from-amber-400 to-yellow-500 text-black rounded-3xl py-10 text-center font-bold text-2xl active:scale-95 shadow-xl shadow-amber-500/30"
+            href="/pos"
+            className="bg-gradient-to-br from-amber-400 via-yellow-400 to-amber-500 text-black font-bold text-2xl py-10 rounded-3xl flex items-center justify-center active:scale-95 shadow-2xl shadow-amber-500/40 transition-all"
           >
             Open POS
           </Link>
           <Link 
-            href="/report" 
-            className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-3xl py-10 text-center font-semibold text-xl active:scale-95 transition-all"
+            href="/report"
+            className="bg-white/10 hover:bg-white/20 border border-white/20 font-semibold text-xl py-10 rounded-3xl flex items-center justify-center active:scale-95 transition-all"
           >
             View All Invoices
           </Link>
