@@ -15,23 +15,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-[#0a1729]">
-      {children}
+    <div className="min-h-screen bg-[#0a1729] flex flex-col">
+      <main className="flex-1">
+        {children}
+      </main>
 
-      {/* Bottom Navigation – Mobile-first */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#0a1729] border-t border-white/10 z-50 max-w-md mx-auto">
-        <div className="flex items-center justify-around py-3">
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#0a1729] border-t border-white/10 z-50 max-w-md mx-auto w-full">
+        <div className="flex items-center justify-around py-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || 
-                           (item.href === '/' && pathname === '/');
+            const isActive = pathname === item.href || (item.href === '/' && pathname === '/');
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center w-full py-2 transition-all ${isActive ? 'text-amber-400' : 'text-white/60 hover:text-white/80'}`}
+                className={`flex flex-col items-center py-2 px-3 flex-1 transition-all ${isActive ? 'text-amber-400' : 'text-white/60 hover:text-white'}`}
               >
-                <span className="text-2xl mb-1">{item.icon}</span>
-                <span className="text-xs font-medium tracking-widest">{item.label}</span>
+                <span className="text-3xl mb-0.5">{item.icon}</span>
+                <span className="text-[10px] font-medium tracking-widest">{item.label}</span>
               </Link>
             );
           })}
