@@ -1,123 +1,286 @@
+// File: app/page.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
+import { getFinancialSummary } from '../lib/finance';
+import { getInvoices } from '../lib/invoices';
+import { products } from '../lib/store';
 
 export default function Dashboard() {
-  const [summary] = useState({
-    revenue: 12480.75,
-    bscKeeps: 873.65,
-    supplierOwed: 7862.88,
-    transactions: 87,
-    lowStockItems: 7,
+  const finance = getFinancialSummary();
+  const invoices = getInvoices();
+  const recentInvoices = [...invoices].reverse().slice(0, 5);
+
+  const lowStockItems = products.filter(
+    (p) => p.stock <= p.minStock + 2
+  );
+
+  const avgTransaction =
+    finance.transactions > 0
+      ? (finance.revenue / finance.transactions).toFixed(2)
+      : '0.00';
+
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 
-  const recentSales = [
-    { id: 'INV-238491', time: 'Today 2:34 PM', customer: 'Sarah Smith', total: 184.97 },
-    { id: 'INV-238490', time: 'Today 1:12 PM', customer: 'John Doe', total: 79.99 },
-    { id: 'INV-238489', time: 'Yesterday', customer: 'Michael Johnson', total: 342.50 },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#0a1729] text-white pb-28">
-      {/* Top Header */}
-      <div className="sticky top-0 z-50 bg-[#0a1729] border-b border-white/10 p-6">
-        <div className="flex justify-between items-center">
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#0a0f1e',
+      color: '#ffffff',
+      fontFamily: 'sans-serif',
+      paddingBottom: 100,
+    }}>
+
+      {/* HEADER */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+        backgroundColor: '#0a0f1e',
+        borderBottom: '1px solid #1e2d4a',
+        padding: '20px 20px 16px',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 className="text-4xl font-bold text-amber-400 tracking-tighter">BSC Control</h1>
-            <p className="text-white/60 mt-1">Nassau Marketplace • April 24, 2026</p>
+            <h1 style={{ margin: 0, color: '#f5c518', fontSize: 26, fontWeight: 'bold' }}>
+              BSC Control
+            </h1>
+            <p style={{ margin: '4px 0 0', color: '#555', fontSize: 12 }}>
+              Nassau Marketplace · {today}
+            </p>
           </div>
-          <div className="px-4 py-2 bg-green-500/10 text-green-400 rounded-2xl text-sm font-medium">
-            OPEN • 7 Cashiers
+          <div style={{
+            padding: '6px 14px',
+            backgroundColor: '#0f2a0f',
+            color: '#4ade80',
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 'bold',
+            border: '1px solid #4ade80'
+          }}>
+            ● LIVE
           </div>
         </div>
       </div>
 
-      <div className="p-6 space-y-8 max-w-5xl mx-auto">
-        {/* KPI Cards - Clean Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Revenue */}
-          <div className="bg-gradient-to-br from-white/5 to-white/10 border border-white/10 rounded-3xl p-6">
-            <div className="text-white/60 text-sm mb-1">Today&apos;s Revenue</div>
-            <div className="text-4xl font-bold tracking-tight">${summary.revenue.toLocaleString()}</div>
-            <div className="flex items-center gap-2 text-green-400 text-sm mt-3">
-              ↑ 18.4% from yesterday
+      <div style={{ padding: 20, maxWidth: 600, margin: '0 auto' }}>
+
+        {/* KPI CARDS */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+
+          {/* REVENUE */}
+          <div style={{
+            backgroundColor: '#1a2235',
+            borderRadius: 16,
+            padding: 18,
+            border: '1px solid #2a3550',
+          }}>
+            <p style={{ margin: 0, color: '#aaa', fontSize: 11 }}>REVENUE</p>
+            <h2 style={{ margin: '6px 0 0', color: '#ffffff', fontSize: 22, fontWeight: 'bold' }}>
+              ${finance.revenue.toFixed(2)}
+            </h2>
+            <p style={{ margin: '4px 0 0', color: '#4ade80', fontSize: 11 }}>
+              {finance.transactions} transactions
+            </p>
+          </div>
+
+          {/* BSC PROFIT */}
+          <div style={{
+            backgroundColor: '#1a1a0a',
+            borderRadius: 16,
+            padding: 18,
+            border: '1px solid #f5c51833',
+          }}>
+            <p style={{ margin: 0, color: '#f5c518aa', fontSize: 11 }}>BSC KEEPS (7%)</p>
+            <h2 style={{ margin: '6px 0 0', color: '#f5c518', fontSize: 22, fontWeight: 'bold' }}>
+              ${finance.profit.toFixed(2)}
+            </h2>
+            <p style={{ margin: '4px 0 0', color: '#f5c518aa', fontSize: 11 }}>
+              Avg ${avgTransaction}/sale
+            </p>
+          </div>
+
+          {/* SUPPLIER OWED */}
+          <div style={{
+            backgroundColor: '#1a2235',
+            borderRadius: 16,
+            padding: 18,
+            border: '1px solid #2a3550',
+            gridColumn: 'span 2',
+          }}>
+            <p style={{ margin: 0, color: '#aaa', fontSize: 11 }}>SUPPLIER OWED (93%)</p>
+            <h2 style={{ margin: '6px 0 0', color: '#60a5fa', fontSize: 26, fontWeight: 'bold' }}>
+              ${finance.supplierOwed.toFixed(2)}
+            </h2>
+            <p style={{ margin: '4px 0 0', color: '#555', fontSize: 11 }}>
+              Pending payout to suppliers
+            </p>
+          </div>
+
+        </div>
+
+        {/* LOW STOCK ALERT */}
+        {lowStockItems.length > 0 && (
+          <div style={{
+            backgroundColor: '#1a0a0a',
+            border: '1px solid #7f1d1d',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 20,
+            display: 'flex',
+            gap: 14,
+            alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: 28 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, color: '#f87171', fontWeight: 'bold', fontSize: 15 }}>
+                Inventory Alert
+              </p>
+              <p style={{ margin: '4px 0 8px', color: '#aaa', fontSize: 13 }}>
+                {lowStockItems.length} item{lowStockItems.length > 1 ? 's' : ''} near minimum stock:
+              </p>
+              {lowStockItems.map((p) => (
+                <p key={p.id} style={{ margin: '2px 0', color: '#f87171', fontSize: 12 }}>
+                  · {p.name} — {p.stock} left (min: {p.minStock})
+                </p>
+              ))}
+              <Link href="/inventory" style={{
+                display: 'inline-block',
+                marginTop: 10,
+                color: '#f5c518',
+                fontSize: 13,
+                textDecoration: 'none',
+                fontWeight: 'bold',
+              }}>
+                Manage Inventory →
+              </Link>
             </div>
           </div>
+        )}
 
-          {/* BSC Keeps */}
-          <div className="bg-gradient-to-br from-amber-400/10 to-amber-500/10 border border-amber-400/20 rounded-3xl p-6">
-            <div className="text-amber-400/70 text-sm mb-1">BSC Keeps (7%)</div>
-            <div className="text-4xl font-bold text-amber-400 tracking-tight">${summary.bscKeeps.toFixed(2)}</div>
-            <div className="text-amber-400 text-sm mt-3">Profit Today</div>
-          </div>
-
-          {/* Supplier Owed */}
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 col-span-2 md:col-span-1">
-            <div className="text-white/60 text-sm mb-1">Supplier Owed (93%)</div>
-            <div className="text-4xl font-bold tracking-tight">${summary.supplierOwed.toFixed(2)}</div>
-          </div>
-
-          {/* Transactions */}
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 col-span-2 md:col-span-1">
-            <div className="text-white/60 text-sm mb-1">Transactions</div>
-            <div className="text-4xl font-bold tracking-tight">{summary.transactions}</div>
-            <div className="text-white/60 text-sm mt-1">Avg ${Math.round(summary.revenue / summary.transactions)}</div>
-          </div>
-        </div>
-
-        {/* Inventory Alert */}
-        <div className="bg-red-950/50 border border-red-500/30 rounded-3xl p-6 flex gap-4 items-start">
-          <div className="text-4xl mt-1">⚠️</div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-red-400 text-lg">Inventory Alert</h3>
-            <p className="text-white/90 mt-1">{summary.lowStockItems} items below minimum stock level</p>
-            <Link 
-              href="/inventory" 
-              className="inline-block mt-4 text-amber-400 hover:text-amber-300 font-medium"
-            >
-              Manage Inventory →
+        {/* RECENT INVOICES */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+          }}>
+            <h3 style={{ margin: 0, color: '#f5c518', fontSize: 16 }}>Recent Sales</h3>
+            <Link href="/report" style={{
+              color: '#f5c518',
+              fontSize: 12,
+              textDecoration: 'none',
+            }}>
+              All Reports →
             </Link>
           </div>
-        </div>
 
-        {/* Recent Sales */}
-        <div>
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-xl font-semibold">Recent Sales</h3>
-            <Link href="/report" className="text-amber-400 hover:underline text-sm font-medium">All Reports →</Link>
-          </div>
-
-          <div className="space-y-3">
-            {recentSales.map((sale) => (
-              <div key={sale.id} className="bg-white/5 border border-white/10 rounded-3xl p-5 flex justify-between items-center hover:border-white/30 transition-colors">
+          {recentInvoices.length === 0 ? (
+            <div style={{
+              backgroundColor: '#1a2235',
+              borderRadius: 12,
+              padding: 20,
+              textAlign: 'center',
+              border: '1px solid #2a3550',
+            }}>
+              <p style={{ color: '#555', margin: 0, fontSize: 13 }}>
+                No sales yet today. Start a sale from POS.
+              </p>
+            </div>
+          ) : (
+            recentInvoices.map((inv) => (
+              <div key={inv.id} style={{
+                backgroundColor: '#1a2235',
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 10,
+                border: '1px solid #2a3550',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
                 <div>
-                  <div className="font-mono text-amber-400 font-medium">{sale.id}</div>
-                  <div className="text-white/70 text-sm mt-1">{sale.time} • {sale.customer}</div>
+                  <p style={{ margin: 0, color: '#f5c518', fontSize: 12, fontFamily: 'monospace' }}>
+                    {inv.id}
+                  </p>
+                  <p style={{ margin: '2px 0 0', color: '#aaa', fontSize: 12 }}>
+                    {inv.customerName} · {inv.date}
+                  </p>
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold">${sale.total}</div>
-                </div>
+                <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>
+                  ${inv.total.toFixed(2)}
+                </p>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
 
-        {/* Quick Action Buttons */}
-        <div className="grid grid-cols-2 gap-4 pt-4">
-          <Link 
-            href="/pos"
-            className="bg-gradient-to-br from-amber-400 via-yellow-400 to-amber-500 text-black font-bold text-2xl py-10 rounded-3xl flex items-center justify-center active:scale-95 shadow-2xl shadow-amber-500/40 transition-all"
-          >
-            Open POS
+        {/* QUICK ACTIONS */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Link href="/pos" style={{
+            backgroundColor: '#f5c518',
+            color: '#000',
+            fontWeight: 'bold',
+            fontSize: 16,
+            padding: '20px 10px',
+            borderRadius: 16,
+            textAlign: 'center',
+            textDecoration: 'none',
+            display: 'block',
+          }}>
+            🛒 Open POS
           </Link>
-          <Link 
-            href="/report"
-            className="bg-white/10 hover:bg-white/20 border border-white/20 font-semibold text-xl py-10 rounded-3xl flex items-center justify-center active:scale-95 transition-all"
-          >
-            View All Invoices
+          <Link href="/market" style={{
+            backgroundColor: '#1a2235',
+            color: '#fff',
+            fontWeight: 'bold',
+            fontSize: 16,
+            padding: '20px 10px',
+            borderRadius: 16,
+            textAlign: 'center',
+            textDecoration: 'none',
+            display: 'block',
+            border: '1px solid #2a3550',
+          }}>
+            🏪 Market
+          </Link>
+          <Link href="/inventory" style={{
+            backgroundColor: '#1a2235',
+            color: '#60a5fa',
+            fontWeight: 'bold',
+            fontSize: 15,
+            padding: '16px 10px',
+            borderRadius: 16,
+            textAlign: 'center',
+            textDecoration: 'none',
+            display: 'block',
+            border: '1px solid #2a3550',
+          }}>
+            📦 Inventory
+          </Link>
+          <Link href="/report" style={{
+            backgroundColor: '#1a2235',
+            color: '#4ade80',
+            fontWeight: 'bold',
+            fontSize: 15,
+            padding: '16px 10px',
+            borderRadius: 16,
+            textAlign: 'center',
+            textDecoration: 'none',
+            display: 'block',
+            border: '1px solid #2a3550',
+          }}>
+            📊 Reports
           </Link>
         </div>
+
       </div>
     </div>
   );
