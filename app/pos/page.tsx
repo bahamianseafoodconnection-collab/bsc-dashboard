@@ -238,7 +238,7 @@ export default function POSPage() {
       )}
 
       {/* ACTIONS */}
-      <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ display: "flex", gap: 10, paddingBottom: 80 }}>
         <button
           onClick={handleCompleteSale}
           style={{
