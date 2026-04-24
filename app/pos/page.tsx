@@ -42,7 +42,7 @@ export default function POSPage() {
       setCart([...cart, { ...selectedProduct, qty }]);
     }
     setQty(1);
-    setStatus(`Added ${selectedProduct.name} to cart`);
+    setStatus(`✅ Added ${selectedProduct.name} to cart`);
   }
 
   function removeItem(id: string) {
@@ -84,8 +84,8 @@ export default function POSPage() {
     recordSaleFinancials(cartTotal);
     const invoice = createInvoice(sale);
 
-    // ✅ REDIRECT TO INVOICE
-    router.push(`/report/${invoice.id}`);
+    // ✅ REDIRECT TO INVOICE PAGE
+    router.push(`/invoice?id=${encodeURIComponent(invoice.id)}`);
   }
 
   return (
@@ -124,8 +124,12 @@ export default function POSPage() {
         padding: 14, marginBottom: 16, border: "1px solid #2a3550"
       }}>
         <p style={{ margin: "4px 0" }}>📦 <b>{selectedProduct.name}</b></p>
-        <p style={{ margin: "4px 0", color: "#4ade80" }}>Price: ${selectedProduct.price}</p>
-        <p style={{ margin: "4px 0", color: "#60a5fa" }}>Stock: {selectedProduct.stock} | Min: {selectedProduct.minStock}</p>
+        <p style={{ margin: "4px 0", color: "#4ade80" }}>
+          Price: ${selectedProduct.price.toFixed(2)}
+        </p>
+        <p style={{ margin: "4px 0", color: "#60a5fa" }}>
+          Stock: {selectedProduct.stock} | Min: {selectedProduct.minStock}
+        </p>
       </div>
 
       {/* QTY + ADD */}
@@ -183,7 +187,9 @@ export default function POSPage() {
 
       {/* CART */}
       <h3 style={{ color: "#f5c518" }}>Cart</h3>
-      {cart.length === 0 && <p style={{ color: "#666" }}>No items added yet</p>}
+      {cart.length === 0 && (
+        <p style={{ color: "#666" }}>No items added yet</p>
+      )}
       {cart.map((item) => (
         <div key={item.id} style={{
           backgroundColor: "#1a2235", borderRadius: 10,
@@ -191,7 +197,10 @@ export default function POSPage() {
         }}>
           <p style={{ margin: "2px 0", fontWeight: "bold" }}>{item.name}</p>
           <p style={{ margin: "2px 0", color: "#aaa" }}>
-            {item.qty} × ${item.price} = <span style={{ color: "#4ade80" }}>${(item.qty * item.price).toFixed(2)}</span>
+            {item.qty} × ${item.price.toFixed(2)} ={" "}
+            <span style={{ color: "#4ade80" }}>
+              ${(item.qty * item.price).toFixed(2)}
+            </span>
           </p>
           <button
             onClick={() => removeItem(item.id)}
@@ -206,11 +215,14 @@ export default function POSPage() {
         </div>
       ))}
 
+      {/* TOTAL */}
       <div style={{
         backgroundColor: "#0f1f0f", border: "1px solid #4ade80",
         borderRadius: 10, padding: 14, marginBottom: 20
       }}>
-        <h3 style={{ margin: 0, color: "#4ade80" }}>Total: ${cartTotal.toFixed(2)}</h3>
+        <h3 style={{ margin: 0, color: "#4ade80" }}>
+          Total: ${cartTotal.toFixed(2)}
+        </h3>
       </div>
 
       {/* STATUS */}
