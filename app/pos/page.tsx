@@ -15,38 +15,32 @@ type CartItem = {
   qty: number;
 };
 
+type Sale = {
+  customerName: string;
+  phone: string;
+  items: CartItem[];
+  total: number;
+  date: string;
+};
+
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([
     { name: "Salmon 6oz", price: 10.5, stock: 36, min: 10 },
     { name: "Grouper Fillet", price: 12, stock: 24, min: 5 },
-    { name: "Snapper Whole", price: 9.32, stock: 149, min: 10 },
-    { name: "Snapper Fillet Portion 7oz", price: 8.2, stock: 50, min: 10 },
-    { name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, min: 2 },
+    { name: "Snapper Whole", price: 9.32, stock: 149, min: 20 },
   ]);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [qty, setQty] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [status, setStatus] = useState("");
-
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [status, setStatus] = useState("");
 
   const selectedProduct = products[selectedIndex];
 
-  // ------------------------
-  // ADD TO CART
-  // ------------------------
-  function addToCart() {
-    if (!selectedProduct) return;
-
-    const remaining = selectedProduct.stock - qty;
-
-    if (remaining < selectedProduct.min) {
-      setStatus(`❌ Must keep at least ${selectedProduct.min} in stock`);
-      return;
-    }
-
+  const addToCart = () => {
     setCart((prev) => {
       const existing = prev.find((i) => i.name === selectedProduct.name);
 
@@ -61,66 +55,75 @@ export default function POSPage() {
       return [...prev, { name: selectedProduct.name, price: selectedProduct.price, qty }];
     });
 
-    // 🔥 RESET INPUT CLEANLY
+    setStatus(`Added ${selectedProduct.name} to cart`);
     setQty(1);
-    setStatus(`✅ Added ${selectedProduct.name} to cart`);
-  }
+  };
 
-  // ------------------------
-  // REMOVE ITEM
-  // ------------------------
-  function removeItem(name: string) {
+  const removeItem = (name: string) => {
     setCart(cart.filter((i) => i.name !== name));
-  }
+  };
 
-  // ------------------------
-  // COMPLETE SALE
-  // ------------------------
-  function completeSale() {
+  const total = cart.reduce((sum, i) => sum + i.qty * i.price, 0);
+
+  const completeSale = () => {
     if (!customerName || !customerPhone) {
-      setStatus("❌ Customer name and phone required");
+      setStatus("❌ Customer name and WhatsApp required");
       return;
     }
 
-    if (cart.length === 0) {
-      setStatus("❌ Cart is empty");
-      return;
+    // CHECK INVENTORY
+    for (let item of cart) {
+      const product = products.find((p) => p.name === item.name);
+      if (!product) continue;
+
+      if (product.stock - item.qty < product.min) {
+        setStatus(`❌ Cannot sell ${item.name} below minimum stock`);
+        return;
+      }
     }
 
+    // UPDATE INVENTORY
     const updatedProducts = products.map((p) => {
-      const cartItem = cart.find((i) => i.name === p.name);
-      if (!cartItem) return p;
+      const item = cart.find((i) => i.name === p.name);
+      if (!item) return p;
 
       return {
         ...p,
-        stock: p.stock - cartItem.qty,
+        stock: p.stock - item.qty,
       };
     });
 
     setProducts(updatedProducts);
+
+    // SAVE SALE (NEW)
+    const newSale: Sale = {
+      customerName,
+      phone: customerPhone,
+      items: cart,
+      total,
+      date: new Date().toLocaleString(),
+    };
+
+    setSales((prev) => [newSale, ...prev]);
+
+    // RESET
     setCart([]);
     setCustomerName("");
     setCustomerPhone("");
-    setStatus("✅ Sale completed successfully");
-  }
+    setQty(1);
 
-  const total = cart.reduce((sum, i) => sum + i.qty * i.price, 0);
+    setStatus("✅ Sale completed and saved");
+  };
 
   return (
     <div>
       <h2>POS</h2>
 
-      {/* ------------------------
-          PRODUCT SELECT
-      ------------------------ */}
       <h3>New Sale</h3>
 
       <select
         value={selectedIndex}
-        onChange={(e) => {
-          setSelectedIndex(Number(e.target.value));
-          setQty(1); // 🔥 reset qty when switching product
-        }}
+        onChange={(e) => setSelectedIndex(Number(e.target.value))}
       >
         {products.map((p, i) => (
           <option key={i} value={i}>
@@ -132,65 +135,49 @@ export default function POSPage() {
       <input
         type="number"
         value={qty}
-        min={1}
         onChange={(e) => setQty(Number(e.target.value))}
       />
 
       <button onClick={addToCart}>Add to Cart</button>
 
-      {/* ------------------------
-          PREVIEW
-      ------------------------ */}
-      <h4>Preview</h4>
-      <p>{selectedProduct.name}</p>
-      <p>Price: ${selectedProduct.price}</p>
-      <p>Qty: {qty}</p>
-      <p>Stock After If Added: {selectedProduct.stock - qty}</p>
-      <p>Protected Minimum: {selectedProduct.min}</p>
-
-      {/* ------------------------
-          CUSTOMER INFO
-      ------------------------ */}
       <h3>Customer Info</h3>
-
       <input
         placeholder="Customer Name"
         value={customerName}
         onChange={(e) => setCustomerName(e.target.value)}
       />
-
       <input
-        placeholder="Phone / WhatsApp"
+        placeholder="WhatsApp Phone"
         value={customerPhone}
         onChange={(e) => setCustomerPhone(e.target.value)}
       />
 
-      {/* ------------------------
-          CART
-      ------------------------ */}
       <h3>Cart</h3>
-
-      {cart.map((item, i) => (
-        <div key={i}>
-          <strong>{item.name}</strong>
-          <p>
-            Qty: {item.qty} × ${item.price}
-          </p>
-          <p>Total: ${(item.qty * item.price).toFixed(2)}</p>
-          <button onClick={() => removeItem(item.name)}>Remove</button>
+      {cart.map((i, idx) => (
+        <div key={idx}>
+          <strong>{i.name}</strong>
+          <p>{i.qty} × ${i.price}</p>
+          <p>Total: ${(i.qty * i.price).toFixed(2)}</p>
+          <button onClick={() => removeItem(i.name)}>Remove</button>
         </div>
       ))}
 
-      <h3>Total: ${total.toFixed(2)}</h3>
+      <h4>Total: ${total.toFixed(2)}</h4>
 
       <button onClick={completeSale}>Complete Sale</button>
-
       <button onClick={() => setCart([])}>Clear Cart</button>
 
-      {/* ------------------------
-          STATUS
-      ------------------------ */}
+      <h3>Status</h3>
       <p>{status}</p>
+
+      <h3>Recent Sales (NEW)</h3>
+      {sales.map((s, i) => (
+        <div key={i}>
+          <strong>{s.customerName}</strong> ({s.phone})
+          <p>${s.total.toFixed(2)}</p>
+          <small>{s.date}</small>
+        </div>
+      ))}
     </div>
   );
 }
