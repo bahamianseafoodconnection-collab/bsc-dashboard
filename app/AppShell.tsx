@@ -1,83 +1,42 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+const navItems = [
+  { label: 'POS', href: '/pos', icon: '🛒' },
+  { label: 'Summary', href: '/', icon: '📊' },
+  { label: 'Inventory', href: '/inventory', icon: '📦' },
+  { label: 'Market', href: '/market', icon: '🏪' },
+  { label: 'Report', href: '/report', icon: '📋' },
+];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  const tabs = [
-    { name: "Dashboard", path: "/" },
-    { name: "Bills", path: "/bills" },
-    { name: "Inventory", path: "/inventory" },
-    { name: "POS", path: "/pos" },
-    { name: "Cash", path: "/cash" },
-  ];
-
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: "100vh",
-        background: "#f8fafc",
-      }}
-    >
-      {/* HEADER */}
-      <div
-        style={{
-          background: "linear-gradient(90deg, #2f86c7, #1b4f72)",
-          color: "white",
-          padding: "18px",
-          fontWeight: "bold",
-          fontSize: "22px",
-          textAlign: "center",
-          letterSpacing: "1px",
-        }}
-      >
-        BSC CONTROL
-      </div>
+    <div className="min-h-screen bg-[#0a1729]">
+      {children}
 
-      {/* MAIN CONTENT */}
-      <div
-        style={{
-          flex: 1,
-          padding: "20px",
-          maxWidth: "900px",
-          width: "100%",
-          margin: "0 auto",
-        }}
-      >
-        {children}
-      </div>
-
-      {/* BOTTOM NAV */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-around",
-          borderTop: "1px solid #ddd",
-          padding: "12px 0",
-          background: "#ffffff",
-          position: "sticky",
-          bottom: 0,
-        }}
-      >
-        {tabs.map((tab) => (
-          <Link key={tab.path} href={tab.path}>
-            <span
-              style={{
-                fontSize: "14px",
-                color: pathname === tab.path ? "#2f86c7" : "#777",
-                fontWeight: pathname === tab.path ? "bold" : "normal",
-                cursor: "pointer",
-              }}
-            >
-              {tab.name}
-            </span>
-          </Link>
-        ))}
-      </div>
+      {/* Bottom Navigation – Mobile-first */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#0a1729] border-t border-white/10 z-50 max-w-md mx-auto">
+        <div className="flex items-center justify-around py-3">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || 
+                           (item.href === '/' && pathname === '/');
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center w-full py-2 transition-all ${isActive ? 'text-amber-400' : 'text-white/60 hover:text-white/80'}`}
+              >
+                <span className="text-2xl mb-1">{item.icon}</span>
+                <span className="text-xs font-medium tracking-widest">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
