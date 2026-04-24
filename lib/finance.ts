@@ -1,32 +1,26 @@
 // File: lib/finance.ts
 
-type Financials = {
-  revenue: number;
-  cogs: number;
-  profit: number;
-  bscShare: number;
-  supplierShare: number;
-};
+let revenue = 0;
+let profit = 0;
+let supplierOwed = 0;
+let transactions = 0;
 
-let financials: Financials = {
-  revenue: 0,
-  cogs: 0,
-  profit: 0,
-  bscShare: 0,
-  supplierShare: 0,
-};
+export function recordSaleFinancials(amount: number) {
+  revenue += amount;
 
-export function recordSaleFinancials(total: number) {
-  const cogs = total * 0.93;
-  const bsc = total * 0.07;
+  const bscShare = amount * 0.07;
+  const supplierShare = amount * 0.93;
 
-  financials.revenue += total;
-  financials.cogs += cogs;
-  financials.profit += total - cogs;
-  financials.bscShare += bsc;
-  financials.supplierShare += cogs;
+  profit += bscShare;
+  supplierOwed += supplierShare;
+  transactions += 1;
 }
 
-export function getFinancials() {
-  return financials;
+export function getFinancialSummary() {
+  return {
+    revenue,
+    profit,
+    supplierOwed,
+    transactions,
+  };
 }
