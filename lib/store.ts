@@ -1,40 +1,40 @@
-export type CartItem = {
+// File: lib/store.ts
+
+export type Product = {
+  id: string;
   name: string;
   price: number;
-  qty: number;
+  stock: number;
+  minStock: number;
 };
 
-export type Sale = {
-  customerName: string;
-  phone: string;
-  items: CartItem[];
-  total: number;
-  date: string;
-};
-
-let sales: Sale[] = [];
-let customers: { name: string; phone: string }[] = [];
-
-export function addSale(sale: Sale) {
-  sales.unshift(sale);
-
-  // Save customer
-  if (!customers.find((c) => c.phone === sale.phone)) {
-    customers.push({
-      name: sale.customerName,
-      phone: sale.phone,
-    });
-  }
-}
-
-export function getSales() {
-  return sales;
-}
-
-export function getCustomers() {
-  return customers;
-}
-
-export function getTodayRevenue() {
-  return sales.reduce((sum, s) => sum + s.total, 0);
-}
+export const products: Product[] = [
+  {
+    id: "salmon-6oz",
+    name: "Salmon 6oz",
+    price: 10.5,
+    stock: 36,
+    minStock: 10,
+  },
+  {
+    id: "grouper",
+    name: "Grouper Fillet",
+    price: 12,
+    stock: 24,
+    minStock: 5,
+  },
+  {
+    id: "snapper-whole",
+    name: "Snapper Whole",
+    price: 9.32,
+    stock: 149,
+    minStock: 20,
+  },
+  {
+    id: "snapper-case",
+    name: "Snapper Fillet Case 10lb",
+    price: 139.5,
+    stock: 8,
+    minStock: 2,
+  },
+];
