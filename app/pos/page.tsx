@@ -15,48 +15,36 @@ export default function POSPage() {
     { id: 1, name: "Salmon 6oz", price: 10.5, stock: 36, min: 10 },
     { id: 2, name: "Grouper Fillet", price: 12, stock: 24, min: 5 },
     { id: 3, name: "Snapper Whole", price: 9.32, stock: 149, min: 20 },
-    { id: 4, name: "Snapper Fillet Case 10lb", price: 139.5, stock: 8, min: 2 },
+    { id: 4, name: "Snapper Case 10lb", price: 139.5, stock: 8, min: 2 },
   ]);
 
-  const [selectedId, setSelectedId] = useState<number>(1);
-  const [quantity, setQuantity] = useState<number>(1);
   const [cart, setCart] = useState<any[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [status, setStatus] = useState("");
 
-  const selectedProduct = products.find(p => p.id === selectedId)!;
+  const addToCart = (product: Product) => {
+    const existing = cart.find(item => item.id === product.id);
 
-  const addToCart = () => {
-    const stockAfter = selectedProduct.stock - quantity;
+    const newQty = existing ? existing.quantity + 1 : 1;
+    const stockAfter = product.stock - newQty;
 
-    if (stockAfter < selectedProduct.min) {
-      setStatus(`❌ Must keep at least ${selectedProduct.min} in stock`);
+    if (stockAfter < product.min) {
+      setStatus(`❌ Must keep at least ${product.min} in stock`);
       return;
     }
 
-    const existing = cart.find(item => item.id === selectedId);
-
     if (existing) {
       setCart(cart.map(item =>
-        item.id === selectedId
-          ? { ...item, quantity: item.quantity + quantity }
+        item.id === product.id
+          ? { ...item, quantity: item.quantity + 1 }
           : item
       ));
     } else {
-      setCart([
-        ...cart,
-        {
-          id: selectedProduct.id,
-          name: selectedProduct.name,
-          price: selectedProduct.price,
-          quantity,
-        },
-      ]);
+      setCart([...cart, { ...product, quantity: 1 }]);
     }
 
-    setQuantity(1);
-    setStatus(`✔ Added ${selectedProduct.name}`);
+    setStatus(`✔ Added ${product.name}`);
   };
 
   const removeItem = (id: number) => {
@@ -65,12 +53,7 @@ export default function POSPage() {
 
   const completeSale = () => {
     if (!customerName || !customerPhone) {
-      setStatus("❌ Customer name and phone required");
-      return;
-    }
-
-    if (cart.length === 0) {
-      setStatus("❌ Cart is empty");
+      setStatus("❌ Customer info required");
       return;
     }
 
@@ -85,12 +68,9 @@ export default function POSPage() {
     });
 
     setProducts(updatedProducts);
-
-    // FULL RESET
     setCart([]);
     setCustomerName("");
     setCustomerPhone("");
-    setQuantity(1);
 
     setStatus("✅ Sale completed and customer saved");
 
@@ -103,38 +83,32 @@ export default function POSPage() {
   );
 
   return (
-    <div>
-      <h2>POS</h2>
+    <div style={{ padding: 16 }}>
 
-      <h3>New Sale</h3>
+      <h2>POS Entry</h2>
 
-      <select
-        value={selectedId}
-        onChange={(e) => setSelectedId(Number(e.target.value))}
-      >
+      {/* 🔥 QUICK ADD GRID */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {products.map(p => (
-          <option key={p.id} value={p.id}>
-            {p.name} (${p.price}) ({p.stock})
-          </option>
+          <div
+            key={p.id}
+            onClick={() => addToCart(p)}
+            style={{
+              border: "1px solid #ccc",
+              padding: 10,
+              borderRadius: 8,
+              cursor: "pointer",
+              background: "#f9f9f9"
+            }}
+          >
+            <strong>{p.name}</strong>
+            <div>${p.price}</div>
+            <div>{p.stock} avail</div>
+          </div>
         ))}
-      </select>
+      </div>
 
-      <input
-        type="number"
-        value={quantity}
-        min={1}
-        onChange={(e) => setQuantity(Number(e.target.value))}
-      />
-
-      <button onClick={addToCart}>Add to Cart</button>
-
-      <h3>Preview</h3>
-      <p>Product: {selectedProduct.name}</p>
-      <p>Price: ${selectedProduct.price}</p>
-      <p>Qty: {quantity}</p>
-      <p>Stock After If Added: {selectedProduct.stock - quantity}</p>
-      <p>Protected Minimum: {selectedProduct.min}</p>
-
+      {/* CUSTOMER INFO */}
       <h3>Customer Info</h3>
 
       <input
@@ -149,6 +123,7 @@ export default function POSPage() {
         onChange={(e) => setCustomerPhone(e.target.value)}
       />
 
+      {/* CART */}
       <h3>Cart</h3>
 
       {cart.map(item => (
@@ -167,6 +142,7 @@ export default function POSPage() {
 
       <h3>Status</h3>
       <p>{status}</p>
+
     </div>
   );
 }
