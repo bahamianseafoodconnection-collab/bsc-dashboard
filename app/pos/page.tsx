@@ -1,219 +1,201 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   products,
-  getCustomerByName,
-  saveCustomer,
   completeSale,
+  saveCustomer,
+  getCustomerByName,
   type Product,
 } from "../../lib/store";
+import { recordSaleFinancials } from "../../lib/finance";
+import { createInvoice } from "../../lib/invoices";
 
-type CartItem = Product & {
-  qty: number;
-};
+type CartItem = Product & { qty: number };
 
 export default function POSPage() {
-  const [selectedProductId, setSelectedProductId] = useState(products[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(products[0]?.id);
   const [qty, setQty] = useState(1);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [status, setStatus] = useState("");
 
-  const selectedProduct = products.find((p) => p.id === selectedProductId) ?? products[0];
+  const selectedProduct = products.find((p) => p.id === selectedId)!;
 
-  const cartTotal = useMemo(() => {
-    return cart.reduce((total, item) => total + item.price * item.qty, 0);
-  }, [cart]);
+  // 🔹 AUTO FILL CUSTOMER
+  function handleCustomerNameChange(name: string) {
+    setCustomerName(name);
 
-  function handleCustomerNameChange(value: string) {
-    setCustomerName(value);
-
-    const savedCustomer = getCustomerByName(value);
-    if (savedCustomer) {
-      setCustomerPhone(savedCustomer.phone);
+    const existing = getCustomerByName(name);
+    if (existing) {
+      setCustomerPhone(existing.phone);
     }
   }
 
+  // 🔹 ADD TO CART
   function addToCart() {
-    if (!selectedProduct) return;
+    const existing = cart.find((c) => c.id === selectedProduct.id);
 
-    const safeQty = Math.max(1, Number(qty) || 1);
-    const existingCartQty =
-      cart.find((item) => item.id === selectedProduct.id)?.qty ?? 0;
-
-    const stockAfterIfAdded =
-      selectedProduct.stock - existingCartQty - safeQty;
-
-    if (stockAfterIfAdded < selectedProduct.minStock) {
-      setStatus(
-        `❌ Cannot add ${safeQty}. Must keep at least ${selectedProduct.minStock} in stock.`
+    if (existing) {
+      setCart(
+        cart.map((c) =>
+          c.id === selectedProduct.id
+            ? { ...c, qty: c.qty + qty }
+            : c
+        )
       );
-      return;
+    } else {
+      setCart([...cart, { ...selectedProduct, qty }]);
     }
 
-    setCart((currentCart) => {
-      const existingItem = currentCart.find((item) => item.id === selectedProduct.id);
-
-      if (existingItem) {
-        return currentCart.map((item) =>
-          item.id === selectedProduct.id
-            ? { ...item, qty: item.qty + safeQty }
-            : item
-        );
-      }
-
-      return [...currentCart, { ...selectedProduct, qty: safeQty }];
-    });
-
     setQty(1);
-    setStatus(`✅ Added ${selectedProduct.name} to cart`);
+    setStatus(`Added ${selectedProduct.name} to cart`);
   }
 
-  function removeFromCart(productId: string) {
-    setCart((currentCart) => currentCart.filter((item) => item.id !== productId));
-    setStatus("Removed item from cart");
+  // 🔹 REMOVE ITEM
+  function removeItem(id: string) {
+    setCart(cart.filter((c) => c.id !== id));
   }
 
-  function clearCart() {
-    setCart([]);
-    setQty(1);
-    setStatus("Cart cleared");
-  }
+  const cartTotal = cart.reduce(
+    (sum, item) => sum + item.price * item.qty,
+    0
+  );
 
+  // 🔹 COMPLETE SALE
   function handleCompleteSale() {
-    if (cart.length === 0) {
-      setStatus("❌ Add at least one product to cart before completing sale.");
-      return;
-    }
-
-    if (!customerName.trim() || !customerPhone.trim()) {
+    if (!customerName || !customerPhone) {
       setStatus("❌ Customer name and phone required");
       return;
     }
 
-    saveCustomer({
-      name: customerName.trim(),
-      phone: customerPhone.trim(),
-    });
+    if (cart.length === 0) {
+      setStatus("❌ Cart is empty");
+      return;
+    }
 
-    const result = completeSale({
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+    const sale = {
+      customerName,
+      customerPhone,
       items: cart.map((item) => ({
         productId: item.id,
         productName: item.name,
         price: item.price,
         qty: item.qty,
-        supplierName: item.supplierName ?? "BSC Marketplace",
+        supplierName: item.supplierName,
       })),
       total: cartTotal,
-    });
+    };
+
+    const result = completeSale(sale);
 
     if (!result.success) {
       setStatus(`❌ ${result.message}`);
       return;
     }
 
+    // ✅ SAVE CUSTOMER
+    saveCustomer({ name: customerName, phone: customerPhone });
+
+    // ✅ RECORD FINANCIALS
+    recordSaleFinancials(cartTotal);
+
+    // ✅ CREATE INVOICE
+    const invoice = createInvoice(sale);
+
+    setStatus(`✅ Sale completed — Invoice: ${invoice.id}`);
+
+    // RESET
     setCart([]);
-    setQty(1);
     setCustomerName("");
     setCustomerPhone("");
-    setStatus("✅ Sale completed and customer saved");
   }
-
-  if (!selectedProduct) {
-    return <main><h1>POS</h1><p>No products found.</p></main>;
-  }
-
-  const existingCartQty =
-    cart.find((item) => item.id === selectedProduct.id)?.qty ?? 0;
-
-  const stockAfterIfAdded =
-    selectedProduct.stock - existingCartQty - Math.max(1, Number(qty) || 1);
 
   return (
-    <main>
+    <div style={{ padding: 20 }}>
       <h1>POS</h1>
 
-      <section>
-        <h2>New Sale</h2>
+      {/* NEW SALE */}
+      <h3>New Sale</h3>
 
-        <select
-          value={selectedProductId}
-          onChange={(event) => {
-            setSelectedProductId(event.target.value);
-            setQty(1);
-            setStatus("");
-          }}
-        >
-          {products.map((product) => (
-            <option key={product.id} value={product.id}>
-              {product.name} (${product.price}) ({product.stock})
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          min="1"
-          value={qty}
-          onChange={(event) => setQty(Math.max(1, Number(event.target.value) || 1))}
-        />
-
-        <button onClick={addToCart}>Add to Cart</button>
-      </section>
-
-      <section>
-        <h2>Preview</h2>
-        <p>Product: {selectedProduct.name}</p>
-        <p>Price: ${selectedProduct.price}</p>
-        <p>Qty: {qty}</p>
-        <p>Stock After If Added: {stockAfterIfAdded}</p>
-        <p>Protected Minimum: {selectedProduct.minStock}</p>
-      </section>
-
-      <section>
-        <h2>Customer Info</h2>
-
-        <input
-          value={customerName}
-          onChange={(event) => handleCustomerNameChange(event.target.value)}
-          placeholder="Customer Name"
-        />
-
-        <input
-          value={customerPhone}
-          onChange={(event) => setCustomerPhone(event.target.value)}
-          placeholder="Customer phone / WhatsApp"
-        />
-      </section>
-
-      <section>
-        <h2>Cart</h2>
-
-        {cart.map((item) => (
-          <div key={item.id}>
-            <h3>{item.name}</h3>
-            <p>
-              Qty: {item.qty} × ${item.price}
-            </p>
-            <p>Total: ${(item.qty * item.price).toFixed(2)}</p>
-            <button onClick={() => removeFromCart(item.id)}>Remove</button>
-          </div>
+      <select
+        value={selectedId}
+        onChange={(e) => setSelectedId(e.target.value)}
+      >
+        {products.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name} (${p.price}) ({p.stock})
+          </option>
         ))}
+      </select>
 
-        <h3>Total: ${cartTotal.toFixed(2)}</h3>
+      <input
+        type="number"
+        value={qty}
+        onChange={(e) => setQty(Number(e.target.value))}
+        style={{ marginLeft: 10 }}
+      />
 
-        <button onClick={handleCompleteSale}>Complete Sale</button>
-        <button onClick={clearCart}>Clear Cart</button>
-      </section>
+      <button onClick={addToCart} style={{ marginLeft: 10 }}>
+        Add to Cart
+      </button>
 
-      <section>
-        <h2>Status</h2>
-        <p>{status}</p>
-      </section>
-    </main>
+      {/* PREVIEW */}
+      <h3>Preview</h3>
+      <p>Product: {selectedProduct.name}</p>
+      <p>Price: ${selectedProduct.price}</p>
+      <p>Qty: {qty}</p>
+      <p>
+        Stock After If Added:{" "}
+        {selectedProduct.stock - qty}
+      </p>
+      <p>Protected Minimum: {selectedProduct.minStock}</p>
+
+      {/* CUSTOMER */}
+      <h3>Customer Info</h3>
+      <input
+        placeholder="Customer Name"
+        value={customerName}
+        onChange={(e) =>
+          handleCustomerNameChange(e.target.value)
+        }
+      />
+      <input
+        placeholder="Customer phone / WhatsApp"
+        value={customerPhone}
+        onChange={(e) => setCustomerPhone(e.target.value)}
+        style={{ marginLeft: 10 }}
+      />
+
+      {/* CART */}
+      <h3>Cart</h3>
+      {cart.map((item) => (
+        <div key={item.id}>
+          <b>{item.name}</b>
+          <p>
+            Qty: {item.qty} × ${item.price}
+          </p>
+          <p>Total: ${item.qty * item.price}</p>
+          <button onClick={() => removeItem(item.id)}>
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <h3>Total: ${cartTotal.toFixed(2)}</h3>
+
+      <button onClick={handleCompleteSale}>
+        Complete Sale
+      </button>
+
+      <button onClick={() => setCart([])} style={{ marginLeft: 10 }}>
+        Clear Cart
+      </button>
+
+      {/* STATUS */}
+      <h3>Status</h3>
+      <p>{status}</p>
+    </div>
   );
 }
