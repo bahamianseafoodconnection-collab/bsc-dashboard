@@ -10,6 +10,7 @@ export type Product = {
   price: number;
   stock: number;
   minStock: number;
+  supplierName: string; // ✅ FIX ADDED
 };
 
 export type Customer = {
@@ -33,7 +34,7 @@ export type Sale = {
 };
 
 // --------------------
-// PRODUCTS (YOUR INVENTORY)
+// PRODUCTS
 // --------------------
 
 export let products: Product[] = [
@@ -43,6 +44,7 @@ export let products: Product[] = [
     price: 10.5,
     stock: 36,
     minStock: 10,
+    supplierName: "Father & Sons Distribution",
   },
   {
     id: "grouper",
@@ -50,6 +52,7 @@ export let products: Product[] = [
     price: 12,
     stock: 24,
     minStock: 5,
+    supplierName: "Father & Sons Distribution",
   },
   {
     id: "snapper-whole",
@@ -57,6 +60,7 @@ export let products: Product[] = [
     price: 9.32,
     stock: 149,
     minStock: 20,
+    supplierName: "Local Fishermen",
   },
   {
     id: "snapper-case",
@@ -64,23 +68,22 @@ export let products: Product[] = [
     price: 139.5,
     stock: 8,
     minStock: 2,
+    supplierName: "Tropic Seafood",
   },
 ];
 
 // --------------------
-// CUSTOMER STORAGE (LOCAL MEMORY)
+// CUSTOMER STORAGE
 // --------------------
 
 let customers: Customer[] = [];
 
-// Find customer by name
 export function getCustomerByName(name: string): Customer | undefined {
   return customers.find(
     (c) => c.name.toLowerCase() === name.toLowerCase()
   );
 }
 
-// Save customer (avoid duplicates)
 export function saveCustomer(customer: Customer) {
   const existing = getCustomerByName(customer.name);
 
@@ -92,7 +95,7 @@ export function saveCustomer(customer: Customer) {
 }
 
 // --------------------
-// SALES + INVENTORY ENGINE
+// SALES ENGINE
 // --------------------
 
 export function completeSale(sale: Sale): { success: boolean; message: string } {
@@ -100,7 +103,10 @@ export function completeSale(sale: Sale): { success: boolean; message: string } 
     const product = products.find((p) => p.id === item.productId);
 
     if (!product) {
-      return { success: false, message: `Product not found: ${item.productName}` };
+      return {
+        success: false,
+        message: `Product not found: ${item.productName}`,
+      };
     }
 
     const newStock = product.stock - item.qty;
@@ -119,5 +125,8 @@ export function completeSale(sale: Sale): { success: boolean; message: string } 
     product.stock -= item.qty;
   }
 
-  return { success: true, message: "Sale completed" };
+  return {
+    success: true,
+    message: "Sale completed",
+  };
 }
