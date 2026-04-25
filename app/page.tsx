@@ -22,14 +22,10 @@ const [finance, setFinance] = useState({ revenue: 0, profit: 0, supplierOwed: 0,
 const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
 const [loading, setLoading] = useState(true);
 const [activeTab, setActiveTab] = useState<'overview' | 'profit' | 'suppliers' | 'ai'>('overview');
-
-// SUPPLIER ADMIN STATE
 const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
 const [allProducts, setAllProducts] = useState<SupplierProduct[]>([]);
 const [supplierTab, setSupplierTab] = useState<'applications' | 'products'>('applications');
 const [supplierLoading, setSupplierLoading] = useState(false);
-
-// AI STATE
 const [aiMessages, setAiMessages] = useState<AIMessage[]>([
 { role: 'ai', text: 'Hi! I am your BSC AI assistant. Ask me anything about your business performance, supplier payments, or how to grow BSC.' }
 ]);
@@ -38,11 +34,21 @@ const [aiLoading, setAiLoading] = useState(false);
 
 useEffect(() => {
 async function load() {
+try {
+const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+await Promise.race([
+(async () => {
 await fetchFinancialsFromDB();
 const summary = getFinancialSummary();
 setFinance(summary);
 const invoices = await fetchInvoicesFromDB();
 setRecentInvoices(invoices.slice(0, 20));
+})(),
+timeout,
+]);
+} catch (e) {
+// Timeout or error — show dashboard with empty data
+}
 setLoading(false);
 }
 load();
@@ -54,10 +60,12 @@ if (activeTab === 'suppliers') loadSupplierData();
 
 async function loadSupplierData() {
 setSupplierLoading(true);
+try {
 const { data: suppliers } = await supabase.from('suppliers').select('*').order('created_at', { ascending: false });
 if (suppliers) setAllSuppliers(suppliers);
 const { data: prods } = await supabase.from('supplier_products').select('*').order('created_at', { ascending: false });
 if (prods) setAllProducts(prods);
+} catch (e) {}
 setSupplierLoading(false);
 }
 
@@ -170,14 +178,6 @@ return (
 <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>{today}</p>
 </div>
 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-{allSuppliers.filter(s => s.status === 'pending').length > 0 && (
-<button
-onClick={() => setActiveTab('suppliers')}
-style={{ backgroundColor: '#1a1400', color: '#f5c518', borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 'bold', border: '1px solid #f5c518', cursor: 'pointer' }}
->
-{allSuppliers.filter(s => s.status === 'pending').length} Pending
-</button>
-)}
 {lowStockItems.length > 0 && (
 <div style={{ backgroundColor: '#3b0000', color: '#f87171', borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 'bold', border: '1px solid #7f1d1d' }}>
 {lowStockItems.length} Low Stock
@@ -215,33 +215,14 @@ LIVE
 <div style={{ display: 'flex', gap: 6, backgroundColor: '#0d1f3c', borderRadius: 14, padding: 6, marginBottom: 16, border: '1px solid #1e3a5f' }}>
 {(['overview', 'profit', 'suppliers', 'ai'] as const).map((tab) => (
 <button key={tab} onClick={() => setActiveTab(tab)} style={tabBtn(activeTab === tab)}>
-{tab === 'overview' ? '📊 Overview' : tab === 'profit' ? '💰 Profit' : tab === 'suppliers' ? '🚢 Suppliers' + (allSuppliers.filter(s => s.status === 'pending').length > 0 ? ' 🔴' : '') : '🤖 AI'}
+{tab === 'overview' ? '📊 Overview' : tab === 'profit' ? '💰 Profit' : tab === 'suppliers' ? '🚢 Suppliers' : '🤖 AI'}
 </button>
 ))}
 </div>
 
-{/* ── OVERVIEW TAB ── */}
+{/* OVERVIEW */}
 {activeTab === 'overview' && (
 <>
-{/* SUPPLIER ALERT CARD */}
-{allSuppliers.filter(s => s.status === 'pending').length > 0 && (
-<div
-onClick={() => setActiveTab('suppliers')}
-style={{ ...card, borderColor: '#f5c518', backgroundColor: '#1a1200', cursor: 'pointer', padding: '14px 16px' }}
->
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-<div>
-<p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>
-🚢 {allSuppliers.filter(s => s.status === 'pending').length} Supplier Application{allSuppliers.filter(s => s.status === 'pending').length > 1 ? 's' : ''} Pending
-</p>
-<p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 12 }}>Tap to review and approve</p>
-</div>
-<span style={{ color: '#f5c518', fontSize: 20 }}>›</span>
-</div>
-</div>
-)}
-
-{/* REVENUE STREAMS */}
 <div style={card}>
 <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Revenue Streams</p>
 {[
@@ -265,12 +246,16 @@ style={{ ...card, borderColor: '#f5c518', backgroundColor: '#1a1200', cursor: 'p
 </div>
 </div>
 
-{/* RECENT ORDERS */}
 <div style={{ marginBottom: 16 }}>
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
 <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Recent Orders</p>
 <Link href="/report" style={{ color: '#60a5fa', fontSize: 12, textDecoration: 'none' }}>View All</Link>
 </div>
+{recentInvoices.length === 0 && (
+<div style={{ ...card, textAlign: 'center', padding: 20 }}>
+<p style={{ color: '#4a5568', margin: 0, fontSize: 13 }}>No sales yet. Start a sale from POS.</p>
+</div>
+)}
 {recentInvoices.slice(0, 5).map((inv) => {
 const isMarket = inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP');
 const nameParts = inv.customerName.split(' | ');
@@ -297,18 +282,12 @@ return (
 })}
 </div>
 
-{/* QUICK ACTIONS */}
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
 <Link href="/pos" style={{ background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', fontSize: 14, padding: '16px 10px', borderRadius: 16, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🛒 Open POS</Link>
 <Link href="/market" style={{ background: 'linear-gradient(135deg, #0d1f3c, #132a4a)', color: '#fff', fontWeight: 'bold', fontSize: 14, padding: '16px 10px', borderRadius: 16, textAlign: 'center', textDecoration: 'none', display: 'block', border: '1px solid #1e3a5f' }}>🏪 Market</Link>
 <Link href="/inventory" style={{ background: 'linear-gradient(135deg, #0d1f3c, #132a4a)', color: '#60a5fa', fontWeight: 'bold', fontSize: 13, padding: '14px 10px', borderRadius: 16, textAlign: 'center', textDecoration: 'none', display: 'block', border: '1px solid #1e3a5f' }}>📦 Inventory</Link>
-<button onClick={() => setActiveTab('suppliers')} style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', color: '#f5c518', fontWeight: 'bold', fontSize: 13, padding: '14px 10px', borderRadius: 16, textAlign: 'center', border: '1px solid #f5c51833', cursor: 'pointer', position: 'relative' as const }}>
+<button onClick={() => setActiveTab('suppliers')} style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', color: '#f5c518', fontWeight: 'bold', fontSize: 13, padding: '14px 10px', borderRadius: 16, textAlign: 'center', border: '1px solid #f5c51833', cursor: 'pointer' }}>
 🚢 Suppliers
-{allSuppliers.filter(s => s.status === 'pending').length > 0 && (
-<span style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f87171', borderRadius: '50%', width: 16, height: 16, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#fff' }}>
-{allSuppliers.filter(s => s.status === 'pending').length}
-</span>
-)}
 </button>
 </div>
 
@@ -326,7 +305,7 @@ return (
 </>
 )}
 
-{/* ── PROFIT TAB ── */}
+{/* PROFIT TAB */}
 {activeTab === 'profit' && (
 <>
 <div style={card}>
@@ -375,12 +354,10 @@ return (
 ))}
 </div>
 
+{supplierPayouts.length > 0 && (
 <div style={card}>
 <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Supplier Payouts</p>
-<p style={{ margin: '0 0 12px', color: '#4a5568', fontSize: 12 }}>93% of each sale goes to supplier</p>
-{supplierPayouts.length === 0 ? (
-<p style={{ color: '#4a5568', fontSize: 13, textAlign: 'center' }}>No supplier data yet</p>
-) : supplierPayouts.map((sup) => (
+{supplierPayouts.map((sup) => (
 <div key={sup.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #1e3a5f' }}>
 <div>
 <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{sup.name}</p>
@@ -390,14 +367,14 @@ return (
 </div>
 ))}
 </div>
+)}
 </>
 )}
 
-{/* ── SUPPLIERS TAB ── */}
+{/* SUPPLIERS TAB */}
 {activeTab === 'suppliers' && (
 <>
-{/* SUPPLIER STATS */}
-<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
 <div style={{ ...card, textAlign: 'center', padding: 14, marginBottom: 0 }}>
 <p style={{ margin: 0, color: '#f5c518', fontSize: 20, fontWeight: 'bold' }}>{allSuppliers.filter(s => s.status === 'pending').length}</p>
 <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 10 }}>PENDING</p>
@@ -412,25 +389,17 @@ return (
 </div>
 </div>
 
-{/* SUPPLIER SUB-TABS */}
 <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-<button
-onClick={() => setSupplierTab('applications')}
-style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: supplierTab === 'applications' ? '#f5c518' : '#0d1f3c', color: supplierTab === 'applications' ? '#000' : '#6b7280', border: '1px solid #1e3a5f', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}
->
+<button onClick={() => setSupplierTab('applications')} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: supplierTab === 'applications' ? '#f5c518' : '#0d1f3c', color: supplierTab === 'applications' ? '#000' : '#6b7280', border: '1px solid #1e3a5f', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}>
 Applications ({allSuppliers.length})
 </button>
-<button
-onClick={() => setSupplierTab('products')}
-style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: supplierTab === 'products' ? '#f5c518' : '#0d1f3c', color: supplierTab === 'products' ? '#000' : '#6b7280', border: '1px solid #1e3a5f', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}
->
+<button onClick={() => setSupplierTab('products')} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: supplierTab === 'products' ? '#f5c518' : '#0d1f3c', color: supplierTab === 'products' ? '#000' : '#6b7280', border: '1px solid #1e3a5f', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}>
 Products ({allProducts.filter(p => p.status === 'pending').length} pending)
 </button>
 </div>
 
-{supplierLoading && <p style={{ color: '#4a5568', textAlign: 'center', padding: 20 }}>Loading...</p>}
+{supplierLoading && <p style={{ color: '#4a5568', textAlign: 'center', padding: 20 }}>Loading suppliers...</p>}
 
-{/* APPLICATIONS LIST */}
 {!supplierLoading && supplierTab === 'applications' && (
 <>
 {allSuppliers.length === 0 && (
@@ -451,9 +420,7 @@ return (
 <span style={statusBadge(sup.status)}>{sup.status.toUpperCase()}</span>
 </div>
 <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
-<span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, backgroundColor: '#060d1f', color: '#a78bfa', border: '1px solid #1e3a5f' }}>
-{sup.category}
-</span>
+<span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, backgroundColor: '#060d1f', color: '#a78bfa', border: '1px solid #1e3a5f' }}>{sup.category}</span>
 {sup.whatsapp && (
 <a href={'https://wa.me/' + sup.whatsapp.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer"
 style={{ padding: '3px 12px', borderRadius: 20, fontSize: 11, backgroundColor: '#0a2010', color: '#4ade80', border: '1px solid #4ade80', textDecoration: 'none', fontWeight: 'bold' }}>
@@ -462,7 +429,6 @@ WhatsApp {sup.whatsapp}
 )}
 </div>
 
-{/* INLINE PRODUCTS */}
 {supProducts.length > 0 && (
 <div style={{ marginBottom: 12 }}>
 <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>SUBMITTED PRODUCTS ({supProducts.length})</p>
@@ -505,12 +471,8 @@ WhatsApp {sup.whatsapp}
 
 {sup.status === 'pending' && (
 <div style={{ display: 'flex', gap: 8 }}>
-<button onClick={() => approveSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>
-Approve Supplier
-</button>
-<button onClick={() => rejectSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>
-Reject
-</button>
+<button onClick={() => approveSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>Approve Supplier</button>
+<button onClick={() => rejectSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>Reject</button>
 </div>
 )}
 </div>
@@ -519,7 +481,6 @@ Reject
 </>
 )}
 
-{/* PRODUCTS LIST */}
 {!supplierLoading && supplierTab === 'products' && (
 <>
 {allProducts.length === 0 && (
@@ -538,8 +499,7 @@ Reject
 </div>
 <p style={{ margin: '2px 0', color: '#4a5568', fontSize: 12 }}>By {prod.supplier_name}</p>
 {prod.supplier_whatsapp && (
-<a href={'https://wa.me/' + prod.supplier_whatsapp.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer"
-style={{ color: '#4ade80', fontSize: 11, textDecoration: 'none' }}>
+<a href={'https://wa.me/' + prod.supplier_whatsapp.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer" style={{ color: '#4ade80', fontSize: 11, textDecoration: 'none' }}>
 WhatsApp {prod.supplier_whatsapp}
 </a>
 )}
@@ -578,7 +538,7 @@ WhatsApp {prod.supplier_whatsapp}
 </>
 )}
 
-{/* ── AI TAB ── */}
+{/* AI TAB */}
 {activeTab === 'ai' && (
 <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
 <div style={{ padding: '14px 16px', borderBottom: '1px solid #1e3a5f', background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
