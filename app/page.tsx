@@ -80,12 +80,11 @@ try {
 const context = `You are BSC AI, the business intelligence assistant for Bahamian Seafood Connection (BSC).
 Current data: Revenue $${finance.revenue.toFixed(2)}, BSC Profit $${totalProfit.toFixed(2)}, Supplier Owed $${finance.supplierOwed.toFixed(2)}, Transactions ${finance.transactions}, Avg Sale $${avgTransaction}, POS Revenue $${posRevenue.toFixed(2)} (7% margin), Marketplace Revenue $${marketRevenue.toFixed(2)} (25% margin), Low Stock: ${lowStockItems.map(p => p.name).join(', ') || 'None'}, Top suppliers: ${supplierPayouts.slice(0, 3).map(s => s.name + ' $' + s.owed.toFixed(2)).join(', ')}.
 Be concise, direct, and actionable. Help Dedrick Storr grow BSC across the Bahamas.`;
-const response = await fetch('https://api.anthropic.com/v1/messages', {
+
+const response = await fetch('/api/ai', {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
-model: 'claude-sonnet-4-20250514',
-max_tokens: 1000,
 system: context,
 messages: [
 ...aiMessages.filter((_, i) => i > 0).map(m => ({
@@ -96,6 +95,7 @@ content: m.text,
 ],
 }),
 });
+
 const data = await response.json();
 const aiReply = data.content?.[0]?.text || 'Sorry, I could not process that.';
 setAiMessages(prev => [...prev, { role: 'ai', text: aiReply }]);
@@ -153,7 +153,6 @@ fontFamily: "'Inter', -apple-system, sans-serif",
 paddingBottom: 80,
 }}>
 
-{/* HEADER */}
 <div style={{
 background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)',
 borderBottom: '1px solid #1e3a5f',
@@ -197,7 +196,6 @@ LIVE
 
 <div style={{ padding: '20px 20px 0', maxWidth: 900, margin: '0 auto' }}>
 
-{/* KPI ROW */}
 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
 <div style={{ ...kpiCard, background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
 <p style={{ margin: 0, color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>REVENUE</p>
@@ -228,7 +226,6 @@ To suppliers
 </div>
 </div>
 
-{/* TABS */}
 <div style={{
 display: 'flex', gap: 6, backgroundColor: '#0d1f3c',
 borderRadius: 14, padding: 6, marginBottom: 20,
@@ -243,7 +240,6 @@ tab === 'suppliers' ? '🚢 Suppliers' : '🤖 AI'}
 ))}
 </div>
 
-{/* OVERVIEW */}
 {activeTab === 'overview' && (
 <>
 <div style={card}>
@@ -370,7 +366,6 @@ Low Stock Alert
 </>
 )}
 
-{/* PROFIT TAB */}
 {activeTab === 'profit' && (
 <>
 <div style={card}>
@@ -398,9 +393,7 @@ BSC margin: {item.rate}
 </div>
 </div>
 <div style={{ textAlign: 'right' }}>
-<p style={{ margin: 0, color: '#fff', fontSize: 13 }}>
-${item.revenue.toFixed(2)}
-</p>
+<p style={{ margin: 0, color: '#fff', fontSize: 13 }}>${item.revenue.toFixed(2)}</p>
 <p style={{ margin: '2px 0 0', color: item.color, fontWeight: 'bold', fontSize: 14 }}>
 ${item.profit.toFixed(2)}
 </p>
@@ -414,9 +407,7 @@ borderRadius: 12, padding: '16px 18px', marginTop: 6,
 border: '1px solid #f5c51833',
 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
 }}>
-<p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 15 }}>
-Total BSC Profit
-</p>
+<p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 15 }}>Total BSC Profit</p>
 <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 22 }}>
 ${totalProfit.toFixed(2)}
 </p>
@@ -439,16 +430,13 @@ display: 'flex', justifyContent: 'space-between',
 paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #1e3a5f',
 }}>
 <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>{row.label}</p>
-<p style={{ margin: 0, color: row.color, fontWeight: 'bold', fontSize: 13 }}>
-{row.value}
-</p>
+<p style={{ margin: 0, color: row.color, fontWeight: 'bold', fontSize: 13 }}>{row.value}</p>
 </div>
 ))}
 </div>
 </>
 )}
 
-{/* SUPPLIERS TAB */}
 {activeTab === 'suppliers' && (
 <>
 <div style={card}>
@@ -506,7 +494,6 @@ background: 'linear-gradient(135deg, #0d1f3c, #132a4a)',
 </>
 )}
 
-{/* AI TAB */}
 {activeTab === 'ai' && (
 <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
 <div style={{
@@ -595,3 +582,4 @@ Send
 </div>
 );
 }
+
