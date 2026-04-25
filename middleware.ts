@@ -1,36 +1,36 @@
 // File: middleware.ts
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PROTECTED = ["/", "/pos", "/inventory", "/report", "/market", "/bills", "/cash"];
+const PUBLIC_PATHS = ["/login", "/reset-password", "/market"];
 
 export async function middleware(request: NextRequest) {
 const { pathname } = request.nextUrl;
 
-const isProtected = PROTECTED.some(
+// Always allow public paths
+const isPublic = PUBLIC_PATHS.some(
 (path) => pathname === path || pathname.startsWith(path + "/")
 );
+if (isPublic) return NextResponse.next();
 
-if (!isProtected) return NextResponse.next();
+// Check all cookies for any supabase auth token
+const cookies = request.cookies.getAll();
+const hasSession = cookies.some(
+(cookie) =>
+cookie.name.includes("supabase") ||
+cookie.name.includes("sb-") ||
+cookie.name === "sb-access-token" ||
+cookie.name === "sb-refresh-token"
+);
 
-// Check for supabase session cookie
-const token =
-request.cookies.get("sb-auqjjrisivhfmpleusyt-auth-token")?.value ||
-request.cookies.get("supabase-auth-token")?.value;
-
-if (!token) {
-const loginUrl = new URL("/login", request.url);
-loginUrl.searchParams.set("from", pathname);
-return NextResponse.redirect(loginUrl);
+if (!hasSession) {
+return NextResponse.redirect(new URL("/login", request.url));
 }
 
 return NextResponse.next();
 }
 
 export const config = {
-matcher: [
-"/((?!login|_next/static|_next/image|favicon.ico|reset-password).*)",
-],
+matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
 };
 
