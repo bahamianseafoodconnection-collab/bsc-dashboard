@@ -23,7 +23,6 @@ const [cart, setCart] = useState<CartItem[]>([]);
 const [customerName, setCustomerName] = useState("");
 const [customerPhone, setCustomerPhone] = useState("");
 const [status, setStatus] = useState("");
-const [loading, setLoading] = useState(false);
 
 const selectedProduct = products.find((p) => p.id === selectedId)!;
 
@@ -36,14 +35,16 @@ if (existing) setCustomerPhone(existing.phone);
 function addToCart() {
 const existing = cart.find((c) => c.id === selectedProduct.id);
 if (existing) {
-setCart(cart.map((c) =>
+setCart(
+cart.map((c) =>
 c.id === selectedProduct.id ? { ...c, qty: c.qty + qty } : c
-));
+)
+);
 } else {
 setCart([...cart, { ...selectedProduct, qty }]);
 }
 setQty(1);
-setStatus(`✅ Added ${selectedProduct.name} to cart`);
+setStatus("Added " + selectedProduct.name);
 }
 
 function removeItem(id: string) {
@@ -54,15 +55,13 @@ const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
 async function handleCompleteSale() {
 if (!customerName || !customerPhone) {
-setStatus("❌ Customer name and phone required");
+setStatus("Customer name and phone required");
 return;
 }
 if (cart.length === 0) {
-setStatus("❌ Cart is empty");
+setStatus("Cart is empty");
 return;
 }
-
-setLoading(true);
 
 const sale = {
 customerName,
@@ -79,44 +78,61 @@ total: cartTotal,
 
 const result = completeSale(sale);
 if (!result.success) {
-setStatus(`❌ ${result.message}`);
-setLoading(false);
+setStatus(result.message);
 return;
 }
 
 saveCustomer({ name: customerName, phone: customerPhone });
-
-try {
 await recordSaleFinancials(cartTotal);
 const invoice = await createInvoice(sale);
-router.push(`/invoice?id=${encodeURIComponent(invoice.id)}`);
-} catch (err) {
-console.error(err);
-setStatus("❌ Error saving sale. Try again.");
-setLoading(false);
+router.push("/invoice?id=" + encodeURIComponent(invoice.id));
 }
-}
+
+const inp: React.CSSProperties = {
+display: "block",
+width: "100%",
+padding: "11px 13px",
+borderRadius: 10,
+backgroundColor: "#111c33",
+color: "#fff",
+border: "1px solid #1e2d4a",
+fontSize: 14,
+marginBottom: 12,
+boxSizing: "border-box",
+};
+
+const lbl: React.CSSProperties = {
+display: "block",
+color: "#6b7280",
+fontSize: 11,
+letterSpacing: 1,
+textTransform: "uppercase",
+marginBottom: 5,
+};
 
 return (
-<div style={{
-padding: 20,
+<div
+style={{
+padding: 18,
 backgroundColor: "#0a0f1e",
 minHeight: "100vh",
-color: "#ffffff",
-fontFamily: "sans-serif"
-}}>
-<h1 style={{ color: "#f5c518", marginBottom: 20 }}>🛒 POS — New Sale</h1>
+color: "#fff",
+fontFamily: "sans-serif",
+paddingBottom: 100,
+maxWidth: 600,
+margin: "0 auto",
+}}
+>
+<h1 style={{ color: "#f5c518", fontSize: 20, marginBottom: 20 }}>
+POS — New Sale
+</h1>
 
-<div style={{ marginBottom: 16 }}>
-<label style={{ color: "#aaa", fontSize: 13 }}>Select Product</label>
+{/* PRODUCT SELECT */}
+<label style={lbl}>Select Product</label>
 <select
 value={selectedId}
 onChange={(e) => setSelectedId(e.target.value)}
-style={{
-display: "block", width: "100%", padding: "10px",
-marginTop: 6, borderRadius: 8, backgroundColor: "#1a2235",
-color: "#fff", border: "1px solid #2a3550", fontSize: 15
-}}
+style={inp}
 >
 {products.map((p) => (
 <option key={p.id} value={p.id}>
@@ -124,94 +140,113 @@ color: "#fff", border: "1px solid #2a3550", fontSize: 15
 </option>
 ))}
 </select>
-</div>
 
-<div style={{
-backgroundColor: "#1a2235", borderRadius: 10,
-padding: 14, marginBottom: 16, border: "1px solid #2a3550"
-}}>
-<p style={{ margin: "4px 0" }}>📦 <b>{selectedProduct.name}</b></p>
-<p style={{ margin: "4px 0", color: "#4ade80" }}>
-Price: ${selectedProduct.price.toFixed(2)}
+{/* PRODUCT PREVIEW */}
+<div
+style={{
+backgroundColor: "#111c33",
+borderRadius: 10,
+padding: "12px 14px",
+marginBottom: 14,
+border: "1px solid #1e2d4a",
+}}
+>
+<p style={{ margin: "2px 0", fontWeight: "bold", fontSize: 14 }}>
+{selectedProduct.name}
 </p>
-<p style={{ margin: "4px 0", color: "#60a5fa" }}>
+<p style={{ margin: "2px 0", color: "#4ade80", fontSize: 13 }}>
+Price: ${selectedProduct.price}
+</p>
+<p style={{ margin: "2px 0", color: "#60a5fa", fontSize: 12 }}>
 Stock: {selectedProduct.stock} | Min: {selectedProduct.minStock}
 </p>
 </div>
 
-<div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+{/* QTY + ADD */}
+<div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
 <input
 type="number"
 value={qty}
 min={1}
 onChange={(e) => setQty(Number(e.target.value))}
-style={{
-flex: 1, padding: "10px", borderRadius: 8,
-backgroundColor: "#1a2235", color: "#fff",
-border: "1px solid #2a3550", fontSize: 15
-}}
+style={{ ...inp, flex: 1, marginBottom: 0 }}
 />
 <button
 onClick={addToCart}
 style={{
-flex: 2, padding: "10px 16px", borderRadius: 8,
-backgroundColor: "#f5c518", color: "#000",
-fontWeight: "bold", border: "none", fontSize: 15, cursor: "pointer"
+flex: 3,
+padding: "11px 16px",
+borderRadius: 10,
+backgroundColor: "#f5c518",
+color: "#000",
+fontWeight: "bold",
+border: "none",
+fontSize: 14,
+cursor: "pointer",
 }}
 >
 + Add to Cart
 </button>
 </div>
 
-<div style={{ marginBottom: 20 }}>
-<label style={{ color: "#aaa", fontSize: 13 }}>Customer Name</label>
+{/* CUSTOMER */}
+<label style={lbl}>Customer Name</label>
 <input
 placeholder="Customer Name"
 value={customerName}
 onChange={(e) => handleCustomerNameChange(e.target.value)}
-style={{
-display: "block", width: "100%", padding: "10px",
-marginTop: 6, marginBottom: 10, borderRadius: 8,
-backgroundColor: "#1a2235", color: "#fff",
-border: "1px solid #2a3550", fontSize: 15, boxSizing: "border-box"
-}}
+style={inp}
 />
-<label style={{ color: "#aaa", fontSize: 13 }}>Phone / WhatsApp</label>
+<label style={lbl}>Phone / WhatsApp</label>
 <input
 placeholder="Phone / WhatsApp"
 value={customerPhone}
 onChange={(e) => setCustomerPhone(e.target.value)}
-style={{
-display: "block", width: "100%", padding: "10px",
-marginTop: 6, borderRadius: 8,
-backgroundColor: "#1a2235", color: "#fff",
-border: "1px solid #2a3550", fontSize: 15, boxSizing: "border-box"
-}}
+style={inp}
 />
-</div>
 
-<h3 style={{ color: "#f5c518" }}>Cart</h3>
+{/* CART */}
+<h3 style={{ color: "#f5c518", marginBottom: 10, fontSize: 15 }}>
+Cart
+</h3>
 {cart.length === 0 && (
-<p style={{ color: "#666" }}>No items added yet</p>
+<p style={{ color: "#4a5568", fontSize: 13 }}>No items added yet</p>
 )}
 {cart.map((item) => (
-<div key={item.id} style={{
-backgroundColor: "#1a2235", borderRadius: 10,
-padding: 12, marginBottom: 10, border: "1px solid #2a3550"
-}}>
-<p style={{ margin: "2px 0", fontWeight: "bold" }}>{item.name}</p>
-<p style={{ margin: "2px 0", color: "#aaa" }}>
-{item.qty} × ${item.price.toFixed(2)} ={" "}
+<div
+key={item.id}
+style={{
+backgroundColor: "#111c33",
+borderRadius: 10,
+padding: "12px 14px",
+marginBottom: 10,
+border: "1px solid #1e2d4a",
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+}}
+>
+<div>
+<p style={{ margin: "0 0 2px", fontWeight: "bold", fontSize: 14 }}>
+{item.name}
+</p>
+<p style={{ margin: 0, color: "#aaa", fontSize: 12 }}>
+{item.qty} x ${item.price} ={" "}
 <span style={{ color: "#4ade80" }}>
 ${(item.qty * item.price).toFixed(2)}
 </span>
 </p>
+</div>
 <button
 onClick={() => removeItem(item.id)}
 style={{
-marginTop: 6, padding: "4px 12px", borderRadius: 6,
-backgroundColor: "#7f1d1d", color: "#fff",
-border: "none", cursor: "pointer", fontSize: 13
+padding: "4px 12px",
+borderRadius: 6,
+backgroundColor: "#3b0000",
+color: "#f87171",
+border: "none",
+cursor: "pointer",
+fontSize: 12,
 }}
 >
 Remove
@@ -219,51 +254,91 @@ Remove
 </div>
 ))}
 
-<div style={{
-backgroundColor: "#0f1f0f", border: "1px solid #4ade80",
-borderRadius: 10, padding: 14, marginBottom: 20
-}}>
-<h3 style={{ margin: 0, color: "#4ade80" }}>
-Total: ${cartTotal.toFixed(2)}
-</h3>
+{/* TOTAL */}
+<div
+style={{
+backgroundColor: "#0a1f0a",
+border: "1px solid #4ade80",
+borderRadius: 10,
+padding: "12px 16px",
+marginBottom: 16,
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+}}
+>
+<p style={{ margin: 0, color: "#4ade80", fontSize: 14 }}>Total</p>
+<p
+style={{
+margin: 0,
+color: "#4ade80",
+fontWeight: "bold",
+fontSize: 18,
+}}
+>
+${cartTotal.toFixed(2)}
+</p>
 </div>
 
+{/* STATUS */}
 {status && (
-<p style={{
-padding: 10, borderRadius: 8,
-backgroundColor: status.includes("❌") ? "#3b0000" : "#0f2a0f",
-color: status.includes("❌") ? "#f87171" : "#4ade80",
-marginBottom: 16
-}}>
+<p
+style={{
+padding: "10px 14px",
+borderRadius: 8,
+backgroundColor: status.includes("required") || status.includes("empty") || status.includes("Cannot")
+? "#2d0000"
+: "#0a1f0a",
+color: status.includes("required") || status.includes("empty") || status.includes("Cannot")
+? "#f87171"
+: "#4ade80",
+marginBottom: 14,
+fontSize: 13,
+}}
+>
 {status}
 </p>
 )}
 
-<div style={{ display: "flex", gap: 10, paddingBottom: 80 }}>
+{/* ACTION BUTTONS */}
 <button
 onClick={handleCompleteSale}
-disabled={loading}
 style={{
-flex: 2, padding: "14px", borderRadius: 10,
-backgroundColor: loading ? "#555" : "#f5c518",
-color: "#000", fontWeight: "bold",
-border: "none", fontSize: 16,
-cursor: loading ? "not-allowed" : "pointer"
+width: "100%",
+padding: "14px",
+borderRadius: 10,
+backgroundColor: "#f5c518",
+color: "#000",
+fontWeight: "bold",
+border: "none",
+fontSize: 15,
+cursor: "pointer",
+marginBottom: 10,
 }}
 >
-{loading ? "⏳ Processing..." : "✅ Complete Sale"}
+Complete Sale
 </button>
 <button
-onClick={() => setCart([])}
+onClick={() => {
+setCart([]);
+setCustomerName("");
+setCustomerPhone("");
+setStatus("");
+}}
 style={{
-flex: 1, padding: "14px", borderRadius: 10,
-backgroundColor: "#1a2235", color: "#aaa",
-border: "1px solid #2a3550", fontSize: 15, cursor: "pointer"
+width: "100%",
+padding: "12px",
+borderRadius: 10,
+backgroundColor: "transparent",
+color: "#6b7280",
+border: "1px solid #1e2d4a",
+fontSize: 14,
+cursor: "pointer",
 }}
 >
 Clear
 </button>
 </div>
-</div>
 );
 }
+
