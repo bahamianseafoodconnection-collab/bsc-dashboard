@@ -1,5 +1,5 @@
 // File: lib/invoices.ts
-
+import { supabase } from "./supabase";
 import { Sale } from "./store";
 
 export type Invoice = {
@@ -16,13 +16,14 @@ export type Invoice = {
   total: number;
 };
 
-let invoices: Invoice[] = [];
+// In-memory cache so invoice page works immediately after redirect
+let invoicesCache: Invoice[] = [];
 
 function generateInvoiceId() {
   return "INV-" + Date.now();
 }
 
-export function createInvoice(sale: Sale): Invoice {
+export async function createInvoice(sale: Sale): Promise<Invoice> {
   const invoice: Invoice = {
     id: generateInvoiceId(),
     date: new Date().toLocaleString(),
@@ -37,11 +38,43 @@ export function createInvoice(sale: Sale): Invoice {
     total: sale.total,
   };
 
-  invoices.push(invoice);
+  // Save to memory cache immediately
+  invoicesCache.push(invoice);
+
+  // Save to Supabase in background
+  await supabase.from("invoices").insert({
+    id: invoice.id,
+    date: invoice.date,
+    customer_name: invoice.customerName,
+    customer_phone: invoice.customerPhone,
+    items: invoice.items,
+    total: invoice.total,
+  });
 
   return invoice;
 }
 
-export function getInvoices() {
+export function getInvoices(): Invoice[] {
+  return invoicesCache;
+}
+
+export async function fetchInvoicesFromDB(): Promise<Invoice[]> {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+
+  const invoices: Invoice[] = data.map((row) => ({
+    id: row.id,
+    date: row.date,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    items: row.items,
+    total: row.total,
+  }));
+
+  invoicesCache = invoices;
   return invoices;
 }
