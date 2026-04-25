@@ -4,9 +4,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
-import { fetchFinancialsFromDB, getFinancialSummary } from '@/lib/finance';
-import { fetchInvoicesFromDB, type Invoice } from '@/lib/invoices';
-import { products } from '@/lib/store';
+import { fetchFinancialsFromDB, getFinancialSummary } from '../lib/finance';
+import { fetchInvoicesFromDB, type Invoice } from '../lib/invoices';
+import { products } from '../lib/store';
 
 const supabase = createClient(
   'https://auqjjrisivhfmpleusyt.supabase.co',
