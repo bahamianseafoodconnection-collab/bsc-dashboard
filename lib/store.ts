@@ -34,6 +34,12 @@ export type Sale = {
   total: number;
 };
 
+export type SaleResult = {
+  success: boolean;
+  error?: string;
+  message?: string;
+};
+
 // ── PRODUCTS ──
 export const products: Product[] = [
   { id: 'p1', name: 'Bahamian Conch', price: 12.99, stock: 100, minStock: 10, category: 'seafood', supplierName: 'Spiny Tails Processing' },
@@ -57,7 +63,7 @@ export const products: Product[] = [
   { id: 'p19', name: 'Breaded Crab Claws', price: 16.99, stock: 25, minStock: 4, category: 'seafood', supplierName: 'Spiny Tails Processing' },
 ];
 
-// ── CUSTOMER STORAGE (localStorage) ──
+// ── CUSTOMER STORAGE ──
 const CUSTOMERS_KEY = 'bsc_customers';
 
 function loadCustomers(): Customer[] {
@@ -70,15 +76,14 @@ function loadCustomers(): Customer[] {
   }
 }
 
-function saveCustomers(customers: Customer[]) {
+function persistCustomers(customers: Customer[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
   } catch {}
 }
 
-// Save or update a customer
-export function saveCustomer(data: { name: string; phone: string; amountSpent?: number }) {
+export function saveCustomer(data: { name: string; phone: string; amountSpent?: number }): void {
   const customers = loadCustomers();
   const normalizedPhone = data.phone.replace(/\D/g, '');
   const normalizedName = data.name.trim().toLowerCase();
@@ -89,21 +94,19 @@ export function saveCustomer(data: { name: string; phone: string; amountSpent?: 
   );
 
   const now = new Date().toLocaleDateString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
   });
 
   if (existingIdx >= 0) {
-    // Update existing
     customers[existingIdx] = {
       ...customers[existingIdx],
-      name: data.name, // update name in case corrected
-      phone: data.phone, // update phone in case corrected
+      name: data.name,
+      phone: data.phone,
       lastVisit: now,
       totalSpent: (customers[existingIdx].totalSpent || 0) + (data.amountSpent || 0),
       visitCount: (customers[existingIdx].visitCount || 0) + 1,
     };
   } else {
-    // New customer
     customers.push({
       id: 'c_' + Date.now(),
       name: data.name,
@@ -114,10 +117,9 @@ export function saveCustomer(data: { name: string; phone: string; amountSpent?: 
     });
   }
 
-  saveCustomers(customers);
+  persistCustomers(customers);
 }
 
-// Search customers by name OR phone
 export function searchCustomers(query: string): Customer[] {
   if (!query || query.length < 2) return [];
   const customers = loadCustomers();
@@ -129,17 +131,15 @@ export function searchCustomers(query: string): Customer[] {
     const phoneMatch = qDigits.length >= 3 &&
       c.phone.replace(/\D/g, '').includes(qDigits);
     return nameMatch || phoneMatch;
-  }).slice(0, 5); // max 5 suggestions
+  }).slice(0, 5);
 }
 
-// Get customer by exact name (legacy)
 export function getCustomerByName(name: string): Customer | null {
   const customers = loadCustomers();
   const q = name.trim().toLowerCase();
   return customers.find(c => c.name.trim().toLowerCase() === q) || null;
 }
 
-// Get customer by phone
 export function getCustomerByPhone(phone: string): Customer | null {
   const customers = loadCustomers();
   const digits = phone.replace(/\D/g, '');
@@ -147,7 +147,6 @@ export function getCustomerByPhone(phone: string): Customer | null {
   return customers.find(c => c.phone.replace(/\D/g, '').includes(digits)) || null;
 }
 
-// Get all customers
 export function getAllCustomers(): Customer[] {
   return loadCustomers().sort((a, b) =>
     (b.visitCount || 0) - (a.visitCount || 0)
@@ -155,19 +154,29 @@ export function getAllCustomers(): Customer[] {
 }
 
 // ── SALE ENGINE ──
-export function completeSale(sale: Sale): { success: boolean; error?: string } {
-  // Verify stock
+export function completeSale(sale: Sale): SaleResult {
   for (const item of sale.items) {
     const product = products.find(p => p.id === item.productId);
-    if (!product) return { success: false, error: `Product not found: ${item.productName}` };
+    if (!product) {
+      return {
+        success: false,
+        error: `Product not found: ${item.productName}`,
+        message: `Product not found: ${item.productName}`,
+      };
+    }
     if (product.stock - product.minStock < item.qty) {
-      return { success: false, error: `Insufficient stock for ${item.productName}` };
+      return {
+        success: false,
+        error: `Insufficient stock for ${item.productName}`,
+        message: `Insufficient stock for ${item.productName}`,
+      };
     }
   }
-  // Deduct stock
+
   for (const item of sale.items) {
     const product = products.find(p => p.id === item.productId);
     if (product) product.stock -= item.qty;
   }
+
   return { success: true };
 }
