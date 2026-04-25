@@ -39,29 +39,29 @@ export default function POSPage() {
     .filter(p => p.stock > p.minStock)
     .filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
-  function addToCart(product: Product) {
+  const addToCart = (product: Product) => {
     setCart(prev => {
       const ex = prev.find(c => c.id === product.id);
       return ex
         ? prev.map(c => c.id === product.id ? { ...c, qty: c.qty + 1 } : c)
         : [...prev, { ...product, qty: 1 }];
     });
-  }
+  };
 
-  function adjustQty(id: string, delta: number) {
+  const adjustQty = (id: string, delta: number) => {
     setCart(prev =>
       prev.map(c => c.id === id ? { ...c, qty: c.qty + delta } : c).filter(c => c.qty > 0)
     );
-  }
+  };
 
-  function handleCustomerSearch(name: string) {
+  const handleCustomerSearch = (name: string) => {
     setCustomerSearch(name);
     setCustomerName(name);
     const existing = getCustomerByName(name);
     if (existing) setCustomerPhone(existing.phone);
-  }
+  };
 
-  async function handleCompleteSale() {
+  const handleCompleteSale = async () => {
     if (!customerName || !customerPhone || cart.length === 0 || !paymentMethod) return;
     setProcessing(true);
     const sale = {
@@ -84,7 +84,89 @@ export default function POSPage() {
     setCompletedInvoice(invoice);
     setProcessing(false);
     setScreen('complete');
-  }
+  };
+
+  const handlePrint = (invoice: any) => {
+    const receiptHTML = `
+      <html>
+      <head>
+        <title>BSC Receipt</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #000;
+            background: #fff;
+            width: 80mm;
+            padding: 8mm;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .large { font-size: 16px; }
+          .divider { border-top: 1px dashed #000; margin: 8px 0; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          .muted { color: #555; font-size: 11px; }
+          .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; padding-top: 6px; }
+          .footer { text-align: center; margin-top: 12px; font-size: 11px; color: #555; }
+        </style>
+      </head>
+      <body>
+        <div class="center bold large">BSC MARKETPLACE</div>
+        <div class="center muted">Bahamian Seafood Connection</div>
+        <div class="center muted">Firetrial Road, Nassau, Bahamas</div>
+        <div class="center muted">bahamianseafoodconnection@gmail.com</div>
+        <div class="divider"></div>
+        <div class="center bold">${invoice.id}</div>
+        <div class="center muted">${invoice.date}</div>
+        <div class="divider"></div>
+        <div class="bold">${customerName}</div>
+        <div class="muted">Tel: ${customerPhone}</div>
+        <div class="divider"></div>
+        ${invoice.items.map((item: any) => `
+          <div class="row">
+            <div>
+              <div class="bold">${item.productName}</div>
+              <div class="muted">${item.qty} x $${item.price.toFixed(2)}</div>
+            </div>
+            <div class="bold">$${item.total.toFixed(2)}</div>
+          </div>
+        `).join('')}
+        <div class="divider"></div>
+        <div class="total-row">
+          <span>TOTAL</span>
+          <span>$${cartTotal.toFixed(2)}</span>
+        </div>
+        ${paymentMethod === 'cash' ? `
+          <div class="row muted" style="margin-top:6px">
+            <span>Cash Given</span><span>$${parseFloat(cashGiven).toFixed(2)}</span>
+          </div>
+          <div class="row bold">
+            <span>Change</span><span>$${change.toFixed(2)}</span>
+          </div>
+        ` : `
+          <div class="row muted" style="margin-top:6px">
+            <span>Payment</span><span>Card</span>
+          </div>
+        `}
+        <div class="footer">
+          <div>Thank you for shopping at BSC Marketplace!</div>
+          <div>Come back soon</div>
+        </div>
+      </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) return;
+    printWindow.document.write(receiptHTML);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300);
+    setInvoiceSent(prev => [...prev, 'print']);
+  };
 
   const inp: React.CSSProperties = {
     display: 'block', width: '100%', padding: '11px 13px',
@@ -116,13 +198,11 @@ export default function POSPage() {
     border: '1px solid #1e3a5f', fontSize: 14, cursor: 'pointer', marginBottom: 10,
   };
 
-  function qtyBtn(bg: string, color = '#fff'): React.CSSProperties {
-    return {
-      width: 34, height: 34, borderRadius: 8, backgroundColor: bg,
-      color, border: 'none', fontSize: 18, cursor: 'pointer', fontWeight: 'bold',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    };
-  }
+  const qtyBtn = (bg: string, color = '#fff'): React.CSSProperties => ({
+    width: 34, height: 34, borderRadius: 8, backgroundColor: bg,
+    color, border: 'none', fontSize: 18, cursor: 'pointer', fontWeight: 'bold',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  });
 
   // ── SHOP ──
   if (screen === 'shop') return (
@@ -177,6 +257,7 @@ export default function POSPage() {
       {filtered.length === 0 && (
         <p style={{ color: '#4a5568', textAlign: 'center', padding: 30 }}>No products found</p>
       )}
+
       {filtered.map(product => {
         const inCart = cart.find(c => c.id === product.id);
         return (
@@ -268,7 +349,10 @@ export default function POSPage() {
         <p style={{ margin: 0, color: '#4ade80', fontSize: 24, fontWeight: 'bold' }}>${cartTotal.toFixed(2)}</p>
       </div>
 
-      <button onClick={() => { if (!customerName || !customerPhone) { alert('Please enter customer name and phone'); return; } setScreen('payment'); }} style={primaryBtn}>
+      <button onClick={() => {
+        if (!customerName || !customerPhone) { alert('Please enter customer name and phone'); return; }
+        setScreen('payment');
+      }} style={primaryBtn}>
         Proceed to Payment →
       </button>
       <button onClick={() => setScreen('shop')} style={secondaryBtn}>← Add More Items</button>
@@ -295,7 +379,7 @@ export default function POSPage() {
           { method: 'cash' as PaymentMethod, icon: '💵', label: 'Cash' },
           { method: 'card' as PaymentMethod, icon: '💳', label: 'Card' },
         ].map(opt => (
-          <button key={opt.method} onClick={() => setPaymentMethod(opt.method)} style={{
+          <button key={opt.label} onClick={() => setPaymentMethod(opt.method)} style={{
             padding: '20px 16px', borderRadius: 14,
             backgroundColor: paymentMethod === opt.method ? '#f5c518' : '#0d1f3c',
             color: paymentMethod === opt.method ? '#000' : '#aaa',
@@ -318,7 +402,7 @@ export default function POSPage() {
               Math.ceil(cartTotal / 5) * 5,
               Math.ceil(cartTotal / 10) * 10,
               Math.ceil(cartTotal / 20) * 20,
-              50, 100
+              50, 100,
             ].filter((v, i, a) => a.indexOf(v) === i && v >= cartTotal).slice(0, 5).map(amt => (
               <button key={amt} onClick={() => setCashGiven(amt.toFixed(2))} style={{
                 padding: '8px 14px', borderRadius: 8,
@@ -330,7 +414,10 @@ export default function POSPage() {
               </button>
             ))}
           </div>
-          <input type="number" placeholder="Enter cash amount..." value={cashGiven}
+          <input
+            type="number"
+            placeholder="Enter cash amount..."
+            value={cashGiven}
             onChange={(e) => setCashGiven(e.target.value)}
             style={{ ...inp, fontSize: 20, fontWeight: 'bold', marginBottom: 0 }}
           />
@@ -365,8 +452,10 @@ export default function POSPage() {
         style={{
           ...primaryBtn, marginTop: 16,
           backgroundColor: processing ? '#555' :
-            (!paymentMethod || (paymentMethod === 'cash' && parseFloat(cashGiven) < cartTotal)) ? '#2a2a2a' : '#f5c518',
-          color: (!paymentMethod || (paymentMethod === 'cash' && parseFloat(cashGiven) < cartTotal)) ? '#555' : '#000',
+            (!paymentMethod || (paymentMethod === 'cash' && parseFloat(cashGiven) < cartTotal))
+              ? '#2a2a2a' : '#f5c518',
+          color: (!paymentMethod || (paymentMethod === 'cash' && parseFloat(cashGiven) < cartTotal))
+            ? '#555' : '#000',
           cursor: processing || !paymentMethod ? 'not-allowed' : 'pointer',
         }}
       >
@@ -376,197 +465,126 @@ export default function POSPage() {
   );
 
   // ── COMPLETE ──
-  if (screen === 'complete' && completedInvoice) {
-    const receiptHTML = `
-      <html>
-      <head>
-        <title>BSC Receipt</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #000;
-            background: #fff;
-            width: 80mm;
-            padding: 8mm;
-          }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .large { font-size: 16px; }
-          .xlarge { font-size: 20px; }
-          .divider { border-top: 1px dashed #000; margin: 8px 0; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-          .muted { color: #555; font-size: 11px; }
-          .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; padding-top: 6px; }
-          .footer { text-align: center; margin-top: 12px; font-size: 11px; color: #555; }
-        </style>
-      </head>
-      <body>
-        <div class="center bold large">BSC MARKETPLACE</div>
-        <div class="center muted">Bahamian Seafood Connection</div>
-        <div class="center muted">Firetrial Road, Nassau, Bahamas</div>
-        <div class="center muted">bahamianseafoodconnection@gmail.com</div>
-        <div class="divider"></div>
-        <div class="center bold">${completedInvoice.id}</div>
-        <div class="center muted">${completedInvoice.date}</div>
-        <div class="divider"></div>
-        <div class="bold">${customerName}</div>
-        <div class="muted">📱 ${customerPhone}</div>
-        <div class="divider"></div>
-        ${completedInvoice.items.map((item: any) => `
-          <div class="row">
+  if (screen === 'complete' && completedInvoice) return (
+    <div style={pg}>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ fontSize: 56, marginBottom: 10 }}>✅</div>
+        <h2 style={{ margin: '0 0 4px', color: '#4ade80', fontSize: 22 }}>Sale Complete!</h2>
+        <p style={{ margin: 0, color: '#4a5568', fontSize: 13 }}>{completedInvoice.id}</p>
+      </div>
+
+      {/* ON-SCREEN RECEIPT */}
+      <div style={{ backgroundColor: '#fff', color: '#111', borderRadius: 14, padding: '20px', marginBottom: 20, fontFamily: 'monospace' }}>
+        <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px dashed #ccc' }}>
+          <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>BSC MARKETPLACE</p>
+          <p style={{ margin: '2px 0', fontSize: 11, color: '#666' }}>Bahamian Seafood Connection</p>
+          <p style={{ margin: '2px 0', fontSize: 11, color: '#666' }}>Firetrial Road, Nassau, Bahamas</p>
+          <p style={{ margin: '2px 0', fontSize: 10, color: '#999' }}>{completedInvoice.date}</p>
+          <p style={{ margin: '2px 0', fontSize: 10, color: '#aaa' }}>{completedInvoice.id}</p>
+        </div>
+        <p style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: 14 }}>{customerName}</p>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#555' }}>📱 {customerPhone}</p>
+        {completedInvoice.items.map((item: any, i: number) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 6, borderBottom: '1px dotted #ddd' }}>
             <div>
-              <div class="bold">${item.productName}</div>
-              <div class="muted">${item.qty} x $${item.price.toFixed(2)}</div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>{item.productName}</p>
+              <p style={{ margin: 0, fontSize: 11, color: '#888' }}>{item.qty} × ${item.price.toFixed(2)}</p>
             </div>
-            <div class="bold">$${item.total.toFixed(2)}</div>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>${item.total.toFixed(2)}</p>
           </div>
-        `).join('')}
-        <div class="divider"></div>
-        <div class="total-row">
-          <span>TOTAL</span>
-          <span>$${cartTotal.toFixed(2)}</span>
+        ))}
+        <div style={{ borderTop: '2px solid #111', marginTop: 10, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+          <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>TOTAL</p>
+          <p style={{ margin: 0, fontWeight: 'bold', fontSize: 18 }}>${cartTotal.toFixed(2)}</p>
         </div>
-        ${paymentMethod === 'cash' ? `
-          <div class="row muted" style="margin-top:6px">
-            <span>Cash Given</span><span>$${parseFloat(cashGiven).toFixed(2)}</span>
-          </div>
-          <div class="row bold">
-            <span>Change</span><span>$${change.toFixed(2)}</span>
-          </div>
-        ` : `
-          <div class="row muted" style="margin-top:6px">
-            <span>Payment</span><span>Card</span>
-          </div>
-        `}
-        <div class="footer">
-          <div>Thank you for shopping at BSC Marketplace!</div>
-          <div>Come back soon 🐟</div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    function handlePrint() {
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      if (!printWindow) return;
-      printWindow.document.write(receiptHTML);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 300);
-      setInvoiceSent(prev => [...prev, 'print']);
-    }
-
-    return (
-      <div style={pg}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 56, marginBottom: 10 }}>✅</div>
-          <h2 style={{ margin: '0 0 4px', color: '#4ade80', fontSize: 22 }}>Sale Complete!</h2>
-          <p style={{ margin: 0, color: '#4a5568', fontSize: 13 }}>{completedInvoice.id}</p>
-        </div>
-
-        {/* ON-SCREEN RECEIPT */}
-        <div style={{ backgroundColor: '#fff', color: '#111', borderRadius: 14, padding: '20px', marginBottom: 20, fontFamily: 'monospace' }}>
-          <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px dashed #ccc' }}>
-            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>BSC MARKETPLACE</p>
-            <p style={{ margin: '2px 0', fontSize: 11, color: '#666' }}>Bahamian Seafood Connection</p>
-            <p style={{ margin: '2px 0', fontSize: 11, color: '#666' }}>Firetrial Road, Nassau, Bahamas</p>
-            <p style={{ margin: '2px 0', fontSize: 10, color: '#999' }}>{completedInvoice.date}</p>
-            <p style={{ margin: '2px 0', fontSize: 10, color: '#aaa' }}>{completedInvoice.id}</p>
-          </div>
-          <p style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: 14 }}>{customerName}</p>
-          <p style={{ margin: '0 0 12px', fontSize: 12, color: '#555' }}>📱 {customerPhone}</p>
-          {completedInvoice.items.map((item: any, i: number) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 6, borderBottom: '1px dotted #ddd' }}>
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>{item.productName}</p>
-                <p style={{ margin: 0, fontSize: 11, color: '#888' }}>{item.qty} × ${item.price.toFixed(2)}</p>
-              </div>
-              <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>${item.total.toFixed(2)}</p>
+        {paymentMethod === 'cash' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <p style={{ margin: 0, color: '#555', fontSize: 12 }}>Cash Given</p>
+              <p style={{ margin: 0, fontSize: 12 }}>${parseFloat(cashGiven).toFixed(2)}</p>
             </div>
-          ))}
-          <div style={{ borderTop: '2px solid #111', marginTop: 10, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
-            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>TOTAL</p>
-            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 18 }}>${cartTotal.toFixed(2)}</p>
-          </div>
-          {paymentMethod === 'cash' && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <p style={{ margin: 0, color: '#555', fontSize: 12 }}>Cash Given</p>
-                <p style={{ margin: 0, fontSize: 12 }}>${parseFloat(cashGiven).toFixed(2)}</p>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <p style={{ margin: 0, color: '#555', fontSize: 12 }}>Change</p>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 'bold', color: '#000' }}>${change.toFixed(2)}</p>
-              </div>
-            </>
-          )}
-          <p style={{ margin: '14px 0 0', color: '#999', fontSize: 10, textAlign: 'center' as const }}>Thank you for shopping at BSC Marketplace 🐟</p>
-        </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <p style={{ margin: 0, color: '#555', fontSize: 12 }}>Change</p>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 'bold' }}>${change.toFixed(2)}</p>
+            </div>
+          </>
+        )}
+        <p style={{ margin: '14px 0 0', color: '#999', fontSize: 10, textAlign: 'center' as const }}>
+          Thank you for shopping at BSC Marketplace 🐟
+        </p>
+      </div>
 
-        {/* DELIVERY BUTTONS */}
-        <p style={{ color: '#6b7280', fontSize: 11, letterSpacing: 1, margin: '0 0 10px' }}>SEND INVOICE TO CUSTOMER</p>
+      <p style={{ color: '#6b7280', fontSize: 11, letterSpacing: 1, margin: '0 0 10px' }}>SEND INVOICE TO CUSTOMER</p>
 
-        <button onClick={handlePrint} style={{
+      <button
+        onClick={() => handlePrint(completedInvoice)}
+        style={{
           ...primaryBtn,
           backgroundColor: invoiceSent.includes('print') ? '#0a1f0a' : '#f5c518',
           color: invoiceSent.includes('print') ? '#4ade80' : '#000',
           border: invoiceSent.includes('print') ? '1px solid #4ade80' : 'none',
-        }}>
-          {invoiceSent.includes('print') ? '✅ Printed' : '🖨️ Print Receipt'}
-        </button>
+        }}
+      >
+        {invoiceSent.includes('print') ? '✅ Printed' : '🖨️ Print Receipt'}
+      </button>
 
-        <button onClick={() => {
+      <button
+        onClick={() => {
           const msg = encodeURIComponent(
             `*BSC MARKETPLACE*\nFiretrial Road, Nassau\n\n*Invoice: ${completedInvoice.id}*\nDate: ${completedInvoice.date}\n\nCustomer: ${customerName}\n\n*Items:*\n${completedInvoice.items.map((i: any) => `${i.productName} x${i.qty} = $${i.total.toFixed(2)}`).join('\n')}\n\n*TOTAL: $${cartTotal.toFixed(2)}*\n\nThank you for shopping at BSC Marketplace!`
           );
           const phone = customerPhone.replace(/\D/g, '');
           window.open(`https://wa.me/${phone.startsWith('1') ? phone : '1242' + phone}?text=${msg}`, '_blank');
           setInvoiceSent(prev => [...prev, 'whatsapp']);
-        }} style={{
+        }}
+        style={{
           ...primaryBtn,
           backgroundColor: invoiceSent.includes('whatsapp') ? '#0a2010' : '#25d366',
           color: invoiceSent.includes('whatsapp') ? '#4ade80' : '#fff',
           border: invoiceSent.includes('whatsapp') ? '1px solid #4ade80' : 'none',
-        }}>
-          {invoiceSent.includes('whatsapp') ? '✅ Sent via WhatsApp' : '💬 Send via WhatsApp'}
-        </button>
+        }}
+      >
+        {invoiceSent.includes('whatsapp') ? '✅ Sent via WhatsApp' : '💬 Send via WhatsApp'}
+      </button>
 
-        <button onClick={() => {
+      <button
+        onClick={() => {
           const subject = encodeURIComponent(`BSC Marketplace Invoice ${completedInvoice.id}`);
           const body = encodeURIComponent(
             `BSC MARKETPLACE\nFiretrial Road, Nassau, Bahamas\n\nInvoice: ${completedInvoice.id}\nDate: ${completedInvoice.date}\nCustomer: ${customerName}\n\nItems:\n${completedInvoice.items.map((i: any) => `${i.productName} x${i.qty} = $${i.total.toFixed(2)}`).join('\n')}\n\nTOTAL: $${cartTotal.toFixed(2)}\n\nThank you!\nbahamianseafoodconnection@gmail.com`
           );
           window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
           setInvoiceSent(prev => [...prev, 'email']);
-        }} style={{
+        }}
+        style={{
           ...primaryBtn,
           backgroundColor: invoiceSent.includes('email') ? '#001a2a' : '#60a5fa',
           color: invoiceSent.includes('email') ? '#60a5fa' : '#000',
           border: invoiceSent.includes('email') ? '1px solid #60a5fa' : 'none',
-        }}>
-          {invoiceSent.includes('email') ? '✅ Email Opened' : '📧 Send via Email'}
-        </button>
+        }}
+      >
+        {invoiceSent.includes('email') ? '✅ Email Opened' : '📧 Send via Email'}
+      </button>
 
-        <button onClick={() => router.push('/invoice?id=' + encodeURIComponent(completedInvoice.id))}
-          style={{ ...primaryBtn, backgroundColor: 'transparent', color: '#f5c518', border: '1px solid #f5c518' }}>
-          📄 View Full Invoice
-        </button>
+      <button
+        onClick={() => router.push('/invoice?id=' + encodeURIComponent(completedInvoice.id))}
+        style={{ ...primaryBtn, backgroundColor: 'transparent', color: '#f5c518', border: '1px solid #f5c518' }}
+      >
+        📄 View Full Invoice
+      </button>
 
-        <button onClick={() => {
+      <button
+        onClick={() => {
           setCart([]); setCustomerName(''); setCustomerPhone('');
           setCustomerSearch(''); setPaymentMethod(null); setCashGiven('');
           setCompletedInvoice(null); setInvoiceSent([]); setScreen('shop');
-        }} style={secondaryBtn}>
-          ＋ New Sale
-        </button>
-      </div>
-    );
-  }
+        }}
+        style={secondaryBtn}
+      >
+        ＋ New Sale
+      </button>
+    </div>
+  );
 
   return null;
 }
