@@ -2,7 +2,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -11,7 +10,6 @@ const supabase = createClient(
 );
 
 export default function LoginPage() {
-const router = useRouter();
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [showPassword, setShowPassword] = useState(false);
@@ -27,26 +25,30 @@ setError("Email and password required");
 return;
 }
 setLoading(true);
+
 const { data, error: err } = await supabase.auth.signInWithPassword({
 email,
 password,
 });
+
 if (err) {
 setError(err.message);
 setLoading(false);
 return;
 }
+
 const { data: profile } = await supabase
 .from("profiles")
 .select("role")
 .eq("id", data.user.id)
 .single();
-setLoading(false);
-if (profile?.role === "cashier") {
-router.push("/pos");
-} else {
-router.push("/");
-}
+
+const destination = profile?.role === "cashier" ? "/pos" : "/";
+
+// Wait for session to be stored then hard navigate
+setTimeout(() => {
+window.location.replace(destination);
+}, 500);
 }
 
 async function handleReset() {
@@ -57,7 +59,7 @@ return;
 }
 setLoading(true);
 const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-redirectTo: "https://bsc-dashboard.vercel.app/reset-password",
+redirectTo: "https://project-1fnu0.vercel.app/reset-password",
 });
 if (err) {
 setError(err.message);
@@ -114,8 +116,7 @@ cursor: "pointer",
 };
 
 return (
-<div
-style={{
+<div style={{
 minHeight: "100vh",
 backgroundColor: "#060b18",
 display: "flex",
@@ -123,18 +124,15 @@ alignItems: "center",
 justifyContent: "center",
 fontFamily: "sans-serif",
 padding: 20,
-}}
->
-<div
-style={{
+}}>
+<div style={{
 width: "100%",
 maxWidth: 380,
 backgroundColor: "#0d1528",
 borderRadius: 20,
 padding: 32,
 border: "1px solid #1e2d4a",
-}}
->
+}}>
 <div style={{ textAlign: "center", marginBottom: 28 }}>
 <div style={{ fontSize: 40, marginBottom: 8 }}>🐟</div>
 <h1 style={{ margin: 0, color: "#f5c518", fontSize: 20, letterSpacing: 1 }}>
@@ -146,19 +144,15 @@ BAHAMIAN SEAFOOD CONNECTION
 </div>
 
 {resetSent ? (
-<div
-style={{
+<div style={{
 backgroundColor: "#0a1f0a",
 border: "1px solid #4ade80",
 borderRadius: 12,
 padding: 20,
 textAlign: "center",
-}}
->
+}}>
 <p style={{ color: "#4ade80", fontSize: 14, margin: "0 0 12px" }}>
-Reset link sent to
-<br />
-<b>{email}</b>
+Reset link sent to<br /><b>{email}</b>
 </p>
 <p style={{ color: "#4a5568", fontSize: 12, margin: "0 0 16px" }}>
 Check your email inbox
@@ -242,19 +236,18 @@ lineHeight: 1,
 </div>
 
 {error && (
-<p
-style={{
+<p style={{
 color: "#f87171",
 fontSize: 13,
 backgroundColor: "#2d0000",
 padding: "10px 12px",
 borderRadius: 8,
 marginBottom: 14,
-}}
->
+}}>
 {error}
 </p>
 )}
+
 <button
 onClick={handleLogin}
 disabled={loading}
@@ -266,6 +259,7 @@ cursor: loading ? "not-allowed" : "pointer",
 >
 {loading ? "Signing in..." : "Sign In"}
 </button>
+
 <button
 onClick={() => setResetMode(true)}
 style={{
