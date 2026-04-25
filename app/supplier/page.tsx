@@ -85,9 +85,9 @@ const [supplier, setSupplier] = useState<Supplier | null>(null);
 const [loading, setLoading] = useState(false);
 const [success, setSuccess] = useState("");
 const [error, setError] = useState("");
+const [checkingSession, setCheckingSession] = useState(true);
 
 // ADMIN STATE
-const [isAdmin, setIsAdmin] = useState(false);
 const [pendingSuppliers, setPendingSuppliers] = useState<Supplier[]>([]);
 const [pendingProducts, setPendingProducts] = useState<SupplierProduct[]>([]);
 const [adminTab, setAdminTab] = useState<"suppliers" | "products">("suppliers");
@@ -123,23 +123,41 @@ const [prodPhoto, setProdPhoto] = useState<File | null>(null);
 const [prodPhotoPreview, setProdPhotoPreview] = useState("");
 const [prodWhatsApp, setProdWhatsApp] = useState("");
 
-// Check if current user is admin (Dedrick)
 useEffect(() => {
-async function checkAdmin() {
+async function checkSession() {
+try {
 const { data: { user } } = await supabase.auth.getUser();
-if (!user) return;
+if (user) {
 const { data: profile } = await supabase
 .from("profiles")
 .select("role")
 .eq("id", user.id)
 .single();
-if (profile?.role === "control_admin") {
-setIsAdmin(true);
+if (profile?.role === "control_admin" || profile?.role === "basic_admin" || profile?.role === "manager") {
+await loadAdminData();
 setView("admin");
-loadAdminData();
+setCheckingSession(false);
+return;
+}
+// Check if supplier
+const { data: sup } = await supabase
+.from("suppliers")
+.select("*")
+.eq("email", user.email)
+.single();
+if (sup && sup.status === "approved") {
+setSupplier(sup);
+setProdWhatsApp(sup.whatsapp || "");
+await loadMyProducts(sup.id);
+setView("portal");
 }
 }
-checkAdmin();
+} catch (e) {
+// No session
+}
+setCheckingSession(false);
+}
+checkSession();
 }, []);
 
 async function loadAdminData() {
@@ -167,30 +185,22 @@ if (data) setMyProducts(data);
 
 async function handleApproveSupplier(id: string) {
 await supabase.from("suppliers").update({ status: "approved" }).eq("id", id);
-setPendingSuppliers(prev =>
-prev.map(s => s.id === id ? { ...s, status: "approved" } : s)
-);
+setPendingSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: "approved" } : s));
 }
 
 async function handleRejectSupplier(id: string) {
 await supabase.from("suppliers").update({ status: "rejected" }).eq("id", id);
-setPendingSuppliers(prev =>
-prev.map(s => s.id === id ? { ...s, status: "rejected" } : s)
-);
+setPendingSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: "rejected" } : s));
 }
 
 async function handleApproveProduct(id: string) {
 await supabase.from("supplier_products").update({ status: "approved" }).eq("id", id);
-setPendingProducts(prev =>
-prev.map(p => p.id === id ? { ...p, status: "approved" } : p)
-);
+setPendingProducts(prev => prev.map(p => p.id === id ? { ...p, status: "approved" } : p));
 }
 
 async function handleRejectProduct(id: string) {
 await supabase.from("supplier_products").update({ status: "rejected" }).eq("id", id);
-setPendingProducts(prev =>
-prev.map(p => p.id === id ? { ...p, status: "rejected" } : p)
-);
+setPendingProducts(prev => prev.map(p => p.id === id ? { ...p, status: "rejected" } : p));
 }
 
 async function handleApply() {
@@ -233,18 +243,16 @@ setLoading(false);
 return;
 }
 
-// Check if admin
 const { data: profile } = await supabase
 .from("profiles")
 .select("role")
 .eq("id", data.user.id)
 .single();
 
-if (profile?.role === "control_admin") {
-setIsAdmin(true);
+if (profile?.role === "control_admin" || profile?.role === "basic_admin" || profile?.role === "manager") {
+await loadAdminData();
 setLoading(false);
 setView("admin");
-loadAdminData();
 return;
 }
 
@@ -255,12 +263,12 @@ const { data: sup } = await supabase
 .single();
 
 setLoading(false);
-if (!sup) { setError("No supplier account found"); return; }
-if (sup.status === "pending") { setError("Your application is still pending approval"); return; }
+if (!sup) { setError("No supplier account found. Apply first."); return; }
+if (sup.status === "pending") { setError("Your application is still pending approval."); return; }
 if (sup.status === "rejected") { setError("Your application was not approved. Contact BSC."); return; }
 
 setSupplier(sup);
-setProdWhatsApp(sup.whatsapp);
+setProdWhatsApp(sup.whatsapp || "");
 await loadMyProducts(sup.id);
 setView("portal");
 }
@@ -418,23 +426,28 @@ status === "rejected" ? "#f87171" : "#f5c518"
 ),
 });
 
+if (checkingSession) return (
+<div style={{ ...pg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+<p style={{ color: "#4a5568" }}>Loading...</p>
+</div>
+);
+
 // ADMIN VIEW
 if (view === "admin") return (
 <div style={pg}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
 <div>
 <h2 style={{ margin: 0, color: "#f5c518", fontSize: 20 }}>Supplier Admin</h2>
-<p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>Dedrick Storr · Control Admin</p>
+<p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>BSC Control · Admin View</p>
 </div>
 <button
-onClick={() => supabase.auth.signOut().then(() => { setIsAdmin(false); setView("home"); })}
-style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer" }}
+onClick={() => loadAdminData()}
+style={{ background: "none", border: "1px solid #1e2d4a", color: "#6b7280", fontSize: 12, cursor: "pointer", padding: "6px 12px", borderRadius: 8 }}
 >
-Sign Out
+Refresh
 </button>
 </div>
 
-{/* STATS ROW */}
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
 <div style={{ ...card, textAlign: "center", padding: 14 }}>
 <p style={{ margin: 0, color: "#f5c518", fontSize: 22, fontWeight: "bold" }}>
@@ -450,13 +463,12 @@ Sign Out
 </div>
 <div style={{ ...card, textAlign: "center", padding: 14 }}>
 <p style={{ margin: 0, color: "#60a5fa", fontSize: 22, fontWeight: "bold" }}>
-{pendingProducts.filter(p => p.status === "approved").length}
+{pendingProducts.filter(p => p.status === "pending").length}
 </p>
 <p style={{ margin: "4px 0 0", color: "#4a5568", fontSize: 10 }}>PRODUCTS</p>
 </div>
 </div>
 
-{/* TABS */}
 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
 <button
 onClick={() => setAdminTab("suppliers")}
@@ -482,7 +494,6 @@ Products ({pendingProducts.filter(p => p.status === "pending").length} pending)
 </button>
 </div>
 
-{/* SUPPLIERS LIST */}
 {adminTab === "suppliers" && (
 <>
 {pendingSuppliers.length === 0 && (
@@ -500,14 +511,14 @@ Products ({pendingProducts.filter(p => p.status === "pending").length} pending)
 </div>
 <span style={statusBadge(sup.status)}>{sup.status.toUpperCase()}</span>
 </div>
-
-<div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+<div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
 <span style={{
 padding: "3px 10px", borderRadius: 20, fontSize: 11,
 backgroundColor: "#111c33", color: "#a78bfa", border: "1px solid #1e2d4a",
 }}>
 {sup.category}
 </span>
+{sup.whatsapp && (
 <a
 href={"https://wa.me/" + sup.whatsapp.replace(/\D/g, "")}
 target="_blank"
@@ -520,8 +531,8 @@ border: "1px solid #4ade80", textDecoration: "none", fontWeight: "bold",
 >
 WhatsApp {sup.whatsapp}
 </a>
+)}
 </div>
-
 {sup.status === "pending" && (
 <div style={{ display: "flex", gap: 8 }}>
 <button
@@ -551,7 +562,6 @@ Reject
 </>
 )}
 
-{/* PRODUCTS LIST */}
 {adminTab === "products" && (
 <>
 {pendingProducts.length === 0 && (
@@ -563,20 +573,15 @@ Reject
 <div key={prod.id} style={card}>
 <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
 {prod.photo_url && (
-<img
-src={prod.photo_url}
-alt={prod.name}
-style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }}
-/>
+<img src={prod.photo_url} alt={prod.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: "cover" }} />
 )}
 <div style={{ flex: 1 }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
 <p style={{ margin: 0, fontWeight: "bold", fontSize: 15 }}>{prod.name}</p>
 <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
 </div>
-<p style={{ margin: "2px 0", color: "#4a5568", fontSize: 12 }}>
-By {prod.supplier_name}
-</p>
+<p style={{ margin: "2px 0", color: "#4a5568", fontSize: 12 }}>By {prod.supplier_name}</p>
+{prod.supplier_whatsapp && (
 <a
 href={"https://wa.me/" + prod.supplier_whatsapp.replace(/\D/g, "")}
 target="_blank"
@@ -585,20 +590,20 @@ style={{ color: "#4ade80", fontSize: 11, textDecoration: "none" }}
 >
 WhatsApp {prod.supplier_whatsapp}
 </a>
+)}
 </div>
 </div>
-
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
 <div style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
 <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>RETAIL</p>
 <p style={{ margin: "2px 0 0", color: "#4ade80", fontWeight: "bold", fontSize: 14 }}>
-${prod.retail_price?.toFixed(2)}
+${prod.retail_price?.toFixed(2) || "0.00"}
 </p>
 </div>
 <div style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
 <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>WHOLESALE</p>
 <p style={{ margin: "2px 0 0", color: "#f5c518", fontWeight: "bold", fontSize: 14 }}>
-${prod.wholesale_price?.toFixed(2)}
+${prod.wholesale_price?.toFixed(2) || "0.00"}
 </p>
 </div>
 <div style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
@@ -608,11 +613,6 @@ ${prod.wholesale_price?.toFixed(2)}
 </p>
 </div>
 </div>
-
-{prod.sku && (
-<p style={{ margin: "0 0 8px", color: "#4a5568", fontSize: 11 }}>SKU: {prod.sku}</p>
-)}
-
 {prod.status === "pending" && (
 <div style={{ display: "flex", gap: 8 }}>
 <button
@@ -650,10 +650,9 @@ if (view === "home") return (
 <div style={{ textAlign: "center", marginBottom: 32, paddingTop: 20 }}>
 <div style={{ fontSize: 48, marginBottom: 10 }}>🚢</div>
 <h1 style={{ margin: 0, color: "#f5c518", fontSize: 22 }}>BSC Supplier Portal</h1>
-<p style={{ margin: "6px 0 0", color: "#4a5568", fontSize: 13 }}>
-Bahamian Seafood Connection
-</p>
+<p style={{ margin: "6px 0 0", color: "#4a5568", fontSize: 13 }}>Bahamian Seafood Connection</p>
 </div>
+
 <div style={{ ...card, marginBottom: 16 }}>
 <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15 }}>New Supplier?</p>
 <p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>
@@ -661,12 +660,23 @@ Apply to become a BSC supplier. Dedrick will review and contact you on WhatsApp.
 </p>
 <button onClick={() => setView("apply")} style={primaryBtn}>Apply Now</button>
 </div>
-<div style={card}>
+
+<div style={{ ...card, marginBottom: 16 }}>
 <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15 }}>Already Approved?</p>
 <p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>
 Login to upload and manage your products.
 </p>
 <button onClick={() => setView("login")} style={secondaryBtn}>Supplier Login</button>
+</div>
+
+<div style={{ ...card, borderColor: "#f5c518" }}>
+<p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15, color: "#f5c518" }}>BSC Admin</p>
+<p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>
+Dedrick Storr — review and approve supplier applications.
+</p>
+<button onClick={() => setView("login")} style={{ ...secondaryBtn, borderColor: "#f5c518", color: "#f5c518" }}>
+Admin Login
+</button>
 </div>
 </div>
 );
@@ -684,7 +694,6 @@ Back
 <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 20 }}>
 Dedrick will review and contact you on WhatsApp within 24 hours.
 </p>
-
 {success ? (
 <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 12, padding: 20, textAlign: "center" }}>
 <p style={{ color: "#4ade80", fontSize: 15, margin: "0 0 16px" }}>{success}</p>
@@ -732,9 +741,9 @@ style={{ background: "none", border: "none", color: "#f5c518", fontSize: 14, cur
 >
 Back
 </button>
-<h2 style={{ color: "#f5c518", marginTop: 0, marginBottom: 4 }}>Supplier Login</h2>
+<h2 style={{ color: "#f5c518", marginTop: 0, marginBottom: 4 }}>Login</h2>
 <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 20 }}>
-Login with your approved supplier credentials
+Staff and approved suppliers login here
 </p>
 <label style={lbl}>Email</label>
 <input
@@ -803,9 +812,7 @@ Sign Out
 
 {myProducts.length === 0 ? (
 <div style={{ ...card, textAlign: "center", padding: 30 }}>
-<p style={{ margin: 0, color: "#4a5568", fontSize: 13 }}>
-No products yet. Upload your first product above.
-</p>
+<p style={{ margin: 0, color: "#4a5568", fontSize: 13 }}>No products yet. Upload your first product above.</p>
 </div>
 ) : myProducts.map((prod) => (
 <div key={prod.id} style={card}>
@@ -818,12 +825,8 @@ No products yet. Upload your first product above.
 <p style={{ margin: 0, fontWeight: "bold", fontSize: 14 }}>{prod.name}</p>
 <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
 </div>
-<p style={{ margin: "4px 0 2px", color: "#4ade80", fontSize: 13 }}>
-Retail: ${prod.retail_price?.toFixed(2)}
-</p>
-<p style={{ margin: 0, color: "#f5c518", fontSize: 12 }}>
-Wholesale: ${prod.wholesale_price?.toFixed(2)}
-</p>
+<p style={{ margin: "4px 0 2px", color: "#4ade80", fontSize: 13 }}>Retail: ${prod.retail_price?.toFixed(2)}</p>
+<p style={{ margin: 0, color: "#f5c518", fontSize: 12 }}>Wholesale: ${prod.wholesale_price?.toFixed(2)}</p>
 {prod.sku && <p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>SKU: {prod.sku}</p>}
 </div>
 </div>
@@ -886,17 +889,14 @@ if (file) { setProdPhoto(file); setProdPhotoPreview(URL.createObjectURL(file)); 
 
 <label style={lbl}>Product Name</label>
 <input placeholder="e.g. Grouper Fillet" value={prodName} onChange={(e) => setProdName(e.target.value)} style={inp} />
-
 <label style={lbl}>Category</label>
 <select value={prodCategory} onChange={(e) => setProdCategory(e.target.value)} style={inp}>
 {CATEGORIES.map((c) => (
 <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
 ))}
 </select>
-
 <label style={lbl}>SKU / Product Code</label>
 <input placeholder="Unique product code" value={prodSku} onChange={(e) => setProdSku(e.target.value)} style={inp} />
-
 <label style={lbl}>WhatsApp Contact</label>
 <input placeholder="242-xxx-xxxx" value={prodWhatsApp} onChange={(e) => setProdWhatsApp(e.target.value)} style={inp} />
 
@@ -915,7 +915,6 @@ if (file) { setProdPhoto(file); setProdPhotoPreview(URL.createObjectURL(file)); 
 <label style={lbl}>Country of Origin</label>
 <input placeholder="e.g. USA, Canada" value={prodOrigin} onChange={(e) => setProdOrigin(e.target.value)} style={inp} />
 </div>
-
 {prodCaseCost && prodPieces && (
 <div style={{ backgroundColor: "#0f1f0f", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
 <p style={{ margin: "0 0 8px", color: "#4ade80", fontSize: 12, fontWeight: "bold" }}>ESTIMATED PRICING</p>
