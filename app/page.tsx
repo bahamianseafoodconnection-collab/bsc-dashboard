@@ -1,1028 +1,672 @@
-// File: app/page.tsx
+// File: app/pos/page.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
-import { fetchFinancialsFromDB, getFinancialSummary } from '../lib/finance';
-import { fetchInvoicesFromDB, type Invoice } from '../lib/invoices';
-import { products } from '../lib/store';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  products,
+  completeSale,
+  saveCustomer,
+  searchCustomers,
+  type Product,
+  type Customer,
+} from '../../lib/store';
+import { recordSaleFinancials } from '../../lib/finance';
+import { createInvoice } from '../../lib/invoices';
 
-const supabase = createClient(
-  'https://auqjjrisivhfmpleusyt.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg'
+type CartItem = Product & { qty: number };
+type PaymentMethod = 'cash' | 'card' | null;
+type Screen = 'shop' | 'cart' | 'payment' | 'complete';
+
+const pg: React.CSSProperties = {
+  padding: 16, backgroundColor: '#060d1f', minHeight: '100vh',
+  color: '#fff', fontFamily: 'sans-serif', paddingBottom: 90,
+  maxWidth: 560, margin: '0 auto',
+};
+const card: React.CSSProperties = {
+  backgroundColor: '#0d1f3c', borderRadius: 14, padding: '14px 16px',
+  border: '1px solid #1e3a5f', marginBottom: 12,
+};
+const inp: React.CSSProperties = {
+  display: 'block', width: '100%', padding: '12px 13px',
+  borderRadius: 10, backgroundColor: '#111c33', color: '#fff',
+  border: '1px solid #1e2d4a', fontSize: 16, marginBottom: 10,
+  boxSizing: 'border-box' as const, outline: 'none',
+  WebkitAppearance: 'none' as const,
+};
+const primaryBtn: React.CSSProperties = {
+  width: '100%', padding: '14px', borderRadius: 12,
+  backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold',
+  border: 'none', fontSize: 15, cursor: 'pointer', marginBottom: 10,
+};
+const secondaryBtn: React.CSSProperties = {
+  width: '100%', padding: '12px', borderRadius: 12,
+  backgroundColor: 'transparent', color: '#6b7280',
+  border: '1px solid #1e3a5f', fontSize: 14, cursor: 'pointer', marginBottom: 10,
+};
+const qtyBtnStyle = (bg: string, color = '#fff'): React.CSSProperties => ({
+  width: 36, height: 36, borderRadius: 8, backgroundColor: bg,
+  color, border: 'none', fontSize: 20, cursor: 'pointer', fontWeight: 'bold',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+});
+
+const WhatsAppBanner = () => (
+  <div style={{
+    backgroundColor: '#0a2010', border: '1px solid #25d366',
+    borderRadius: 12, padding: '10px 14px', marginBottom: 14,
+    display: 'flex', alignItems: 'center', gap: 12,
+  }}>
+    <div style={{ fontSize: 28, flexShrink: 0 }}>💬</div>
+    <div style={{ flex: 1 }}>
+      <p style={{ margin: 0, color: '#25d366', fontWeight: 'bold', fontSize: 13 }}>BSC WhatsApp — +1 (242) 359-0285</p>
+      <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>Customers can WhatsApp orders directly to BSC</p>
+    </div>
+    <a
+      href="https://api.whatsapp.com/send?phone=12423590285"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        backgroundColor: '#25d366', color: '#000', fontWeight: 'bold',
+        fontSize: 11, padding: '7px 12px', borderRadius: 8, textDecoration: 'none', flexShrink: 0,
+      }}
+    >
+      Open
+    </a>
+  </div>
 );
 
-type AIMessage = { role: 'user' | 'ai'; text: string };
-type Supplier = { id: string; full_name: string; company_name: string; email: string; whatsapp: string; category: string; status: string; };
-type SupplierProduct = { id: string; name: string; category: string; sku: string; retail_price: number; wholesale_price: number; unit_cost: number; duty_rate: number; supplier_id: string; supplier_name: string; supplier_whatsapp: string; photo_url: string; status: string; case_cost: number; pieces_per_case: number; };
-type Section = 'overview' | 'pos' | 'profit' | 'suppliers' | 'inventory' | 'market' | 'report' | 'ai' | 'yield' | 'freezer' | 'purchase';
-
-const SPINY_TAILS_INVENTORY = [
-  { name: 'Bahamian Conch', lbs: 5000, category: 'seafood', icon: '🐚' },
-  { name: 'Nassau Grouper (Whole)', lbs: 300, category: 'seafood', icon: '🐟' },
-  { name: 'Lane Snapper', lbs: 740, category: 'seafood', icon: '🐠' },
-  { name: 'Salmon 6oz', lbs: 680, category: 'seafood', icon: '🐟' },
-  { name: 'Salmon 8oz', lbs: 170, category: 'seafood', icon: '🐟' },
-  { name: 'Salmon 4oz', lbs: 130, category: 'seafood', icon: '🐟' },
-  { name: 'Yellowfin Tuna', lbs: 300, category: 'seafood', icon: '🐟' },
-  { name: 'Snow Crab (4x1.5lb packs)', lbs: 90, category: 'seafood', icon: '🦀' },
-  { name: 'Grouper Fillet 6/8oz', lbs: 160, category: 'seafood', icon: '🐟' },
-  { name: 'Chicken Leg Quarters (12cs/33lb)', lbs: 396, category: 'poultry', icon: '🍗' },
-  { name: 'Chicken Wings (14cs/33lb)', lbs: 462, category: 'poultry', icon: '🍗' },
-  { name: 'Snapper Fillet 6/8oz (6x10lb)', lbs: 60, category: 'seafood', icon: '🐠' },
-  { name: 'Snapper Fingers (10cs/5x2lb)', lbs: 100, category: 'seafood', icon: '🐠' },
-  { name: 'Whole Chicken Grillers (8cs/22lb)', lbs: 176, category: 'poultry', icon: '🍗' },
-  { name: 'Pork Spareribs (9cs/39.6lb)', lbs: 356, category: 'meat', icon: '🥩' },
-  { name: 'Ribeye Steak (2cs/10lb)', lbs: 20, category: 'meat', icon: '🥩' },
-  { name: 'Breaded Crab Claws (10cs)', lbs: 0, category: 'seafood', icon: '🦀' },
-  { name: 'Black Mussel (7cs/10lb)', lbs: 70, category: 'seafood', icon: '🐚' },
-  { name: 'Swai Fillet (6cs/10lb)', lbs: 60, category: 'seafood', icon: '🐟' },
-];
-
-const TOTAL_LBS = SPINY_TAILS_INVENTORY.reduce((sum, item) => sum + item.lbs, 0);
-const FREEZER_CAPACITY = 30000;
-
-const YIELD_PRESETS = {
-  Conch: { yield: 0.35, label: 'Conch Meat Yield', icon: '🐚' },
-  Fish: { yield: 0.48, label: 'Fish Fillet Yield', icon: '🐟' },
-  Shrimp: { yield: 0.65, label: 'Shrimp Yield', icon: '🦐' },
-  Lobster: { yield: 0.40, label: 'Lobster Tail Yield', icon: '🦞' },
-  Grouper: { yield: 0.45, label: 'Grouper Fillet Yield', icon: '🐠' },
-  Meats: { yield: 0.70, label: 'Usable Meat Yield', icon: '🥩' },
+// Customer lookup dropdown
+const CustomerDropdown = ({
+  suggestions,
+  onSelect,
+}: {
+  suggestions: Customer[];
+  onSelect: (c: Customer) => void;
+}) => {
+  if (suggestions.length === 0) return null;
+  return (
+    <div style={{
+      backgroundColor: '#0d1f3c', border: '1px solid #f5c518',
+      borderRadius: 10, overflow: 'hidden', marginTop: -8, marginBottom: 10,
+    }}>
+      {suggestions.map(c => (
+        <button
+          key={c.id}
+          onClick={() => onSelect(c)}
+          style={{
+            width: '100%', textAlign: 'left', padding: '10px 14px',
+            backgroundColor: 'transparent', border: 'none',
+            borderBottom: '1px solid #1e3a5f', cursor: 'pointer', color: '#fff',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{c.name}</p>
+              <p style={{ margin: '2px 0 0', color: '#60a5fa', fontSize: 12 }}>📱 {c.phone}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{c.visitCount} visits</p>
+              <p style={{ margin: '2px 0 0', color: '#f5c518', fontSize: 11 }}>${(c.totalSpent || 0).toFixed(2)} spent</p>
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
 };
 
-export default function Dashboard() {
-  const [finance, setFinance] = useState({ revenue: 0, profit: 0, supplierOwed: 0, transactions: 0 });
-  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [section, setSection] = useState<Section>('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
-  const [allProducts, setAllProducts] = useState<SupplierProduct[]>([]);
-  const [supplierTab, setSupplierTab] = useState<'applications' | 'products'>('applications');
-  const [supplierLoading, setSupplierLoading] = useState(false);
-  const [aiMessages, setAiMessages] = useState<AIMessage[]>([
-    { role: 'ai', text: 'Hi Dedrick! I am your BSC AI assistant. I know your live business data including Spiny Tails Processing Plant. Ask me anything about profits, inventory, scaling, or suppliers.' }
-  ]);
-  const [aiInput, setAiInput] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [yieldType, setYieldType] = useState('Conch');
-  const [yieldWeight, setYieldWeight] = useState(100);
+export default function POSPage() {
+  const router = useRouter();
+  const [screen, setScreen] = useState<Screen>('shop');
+  const [search, setSearch] = useState('');
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<Customer[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
+  const [cashGiven, setCashGiven] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [completedInvoice, setCompletedInvoice] = useState<any>(null);
+  const [invoiceSent, setInvoiceSent] = useState<string[]>([]);
 
-  useEffect(() => {
-    function checkMobile() { setIsMobile(window.innerWidth < 1024); }
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
+  const cashNum = parseFloat(cashGiven) || 0;
+  const change = cashNum - cartTotal;
 
-  useEffect(() => {
-    async function load() {
-      try {
-        await Promise.race([
-          (async () => {
-            await fetchFinancialsFromDB();
-            setFinance(getFinancialSummary());
-            const invoices = await fetchInvoicesFromDB();
-            setRecentInvoices(invoices.slice(0, 20));
-          })(),
-          new Promise((_, reject) => setTimeout(reject, 6000)),
-        ]);
-      } catch (e) {}
-      setLoading(false);
-    }
-    load();
-  }, []);
+  const filtered = products
+    .filter(p => p.stock > p.minStock)
+    .filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
-  useEffect(() => {
-    if (section === 'suppliers') loadSupplierData();
-  }, [section]);
-
-  async function loadSupplierData() {
-    setSupplierLoading(true);
-    try {
-      const { data: s } = await supabase.from('suppliers').select('*').order('created_at', { ascending: false });
-      if (s) setAllSuppliers(s);
-      const { data: p } = await supabase.from('supplier_products').select('*').order('created_at', { ascending: false });
-      if (p) setAllProducts(p);
-    } catch (e) {}
-    setSupplierLoading(false);
-  }
-
-  async function approveSupplier(id: string) {
-    await supabase.from('suppliers').update({ status: 'approved' }).eq('id', id);
-    setAllSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s));
-  }
-  async function rejectSupplier(id: string) {
-    await supabase.from('suppliers').update({ status: 'rejected' }).eq('id', id);
-    setAllSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: 'rejected' } : s));
-  }
-  async function approveProduct(id: string) {
-    await supabase.from('supplier_products').update({ status: 'approved' }).eq('id', id);
-    setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'approved' } : p));
-  }
-  async function rejectProduct(id: string) {
-    await supabase.from('supplier_products').update({ status: 'rejected' }).eq('id', id);
-    setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'rejected' } : p));
-  }
-
-  const lowStockItems = products.filter(p => p.stock <= p.minStock + 2);
-  const avgTransaction = finance.transactions > 0 ? (finance.revenue / finance.transactions).toFixed(2) : '0.00';
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const posInvoices = recentInvoices.filter(inv => !inv.customerName.includes('DELIVERY') && !inv.customerName.includes('PICKUP'));
-  const marketInvoices = recentInvoices.filter(inv => inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP'));
-  const posRevenue = posInvoices.reduce((s, i) => s + i.total, 0);
-  const marketRevenue = marketInvoices.reduce((s, i) => s + i.total, 0);
-  const totalProfit = posRevenue * 0.07 + marketRevenue * 0.25;
-  const pendingCount = allSuppliers.filter(s => s.status === 'pending').length;
-
-  type SupplierPayout = { name: string; owed: number; invoiceCount: number };
-  const supplierMap: Record<string, SupplierPayout> = {};
-  recentInvoices.forEach(inv => {
-    inv.items.forEach((item: any) => {
-      const sup = item.supplierName || 'Unknown';
-      const t = item.total || item.qty * item.price;
-      if (!supplierMap[sup]) supplierMap[sup] = { name: sup, owed: 0, invoiceCount: 0 };
-      supplierMap[sup].owed += t * 0.93;
-      supplierMap[sup].invoiceCount += 1;
+  const addToCart = useCallback((product: Product) => {
+    setCart(prev => {
+      const ex = prev.find(c => c.id === product.id);
+      return ex
+        ? prev.map(c => c.id === product.id ? { ...c, qty: c.qty + 1 } : c)
+        : [...prev, { ...product, qty: 1 }];
     });
-  });
-  const supplierPayouts = Object.values(supplierMap).sort((a, b) => b.owed - a.owed);
+  }, []);
 
-  const currentYield = YIELD_PRESETS[yieldType as keyof typeof YIELD_PRESETS];
-  const usableWeight = (yieldWeight * currentYield.yield).toFixed(1);
-  const retailPortions = Math.round(parseFloat(usableWeight) / 0.75);
+  const adjustQty = useCallback((id: string, delta: number) => {
+    setCart(prev =>
+      prev.map(c => c.id === id ? { ...c, qty: c.qty + delta } : c).filter(c => c.qty > 0)
+    );
+  }, []);
 
-  async function handleAiSend() {
-    if (!aiInput.trim()) return;
-    const userMsg = aiInput.trim();
-    setAiInput('');
-    setAiMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setAiLoading(true);
-    try {
-      const ctx = `You are BSC AI for Bahamian Seafood Connection owned by Dedrick Storr.
-Business overview:
-- BSC Marketplace: physical store + online marketplace at Firetrial Road, Nassau, Bahamas
-- Spiny Tails Processing Plant: Firetrial Road Nassau, 2 freezers (blast + holding), 30,000lb capacity
-- Current freezer stock: ${TOTAL_LBS.toLocaleString()} lbs total including Bahamian Conch 5000lbs, Nassau Grouper 300lbs, Lane Snapper 740lbs, Salmon 680lbs, Yellowfin Tuna 300lbs, Chicken 858lbs, Pork Spareribs 356lbs, and more
-- Revenue: $${finance.revenue.toFixed(2)}, Profit: $${totalProfit.toFixed(2)}, Orders: ${finance.transactions}
-- Suppliers: ${allSuppliers.length} total, ${pendingCount} pending approval
-- Supplier portal URL: https://project-1fnu0.vercel.app/supplier
-Be concise, direct, and actionable. Help Dedrick scale BSC across the Bahamas and into the US market.`;
-      const res = await fetch('/api/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system: ctx,
-          messages: [
-            ...aiMessages.filter((_, i) => i > 0).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text })),
-            { role: 'user', content: userMsg },
-          ],
-        }),
-      });
-      const data = await res.json();
-      setAiMessages(prev => [...prev, { role: 'ai', text: data.content?.[0]?.text || 'Could not process.' }]);
-    } catch {
-      setAiMessages(prev => [...prev, { role: 'ai', text: 'Connection error.' }]);
+  const handleCustomerQuery = useCallback((val: string) => {
+    setCustomerQuery(val);
+    // If looks like a phone number, set phone; otherwise set name
+    const isPhone = /^[\d\s\-\+\(\)]+$/.test(val) && val.replace(/\D/g, '').length >= 3;
+    if (isPhone) {
+      setCustomerPhone(val);
+    } else {
+      setCustomerName(val);
     }
-    setAiLoading(false);
-  }
+    // Search for matching customers
+    const results = searchCustomers(val);
+    setSuggestions(results);
+  }, []);
 
-  function navTo(s: Section) { setSection(s); setSidebarOpen(false); }
+  const selectCustomer = useCallback((c: Customer) => {
+    setCustomerName(c.name);
+    setCustomerPhone(c.phone);
+    setCustomerQuery(c.name);
+    setSuggestions([]);
+  }, []);
 
-  const card: React.CSSProperties = { backgroundColor: '#0d1f3c', borderRadius: 16, padding: 18, border: '1px solid #1e3a5f', marginBottom: 14 };
-  const statusBadge = (status: string): React.CSSProperties => ({
-    padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 'bold',
-    backgroundColor: status === 'approved' ? '#0a1f0a' : status === 'rejected' ? '#2d0000' : '#1a1400',
-    color: status === 'approved' ? '#4ade80' : status === 'rejected' ? '#f87171' : '#f5c518',
-    border: '1px solid ' + (status === 'approved' ? '#4ade80' : status === 'rejected' ? '#f87171' : '#f5c518'),
-  });
+  const handleCompleteSale = async () => {
+    if (!customerName || !customerPhone || cart.length === 0 || !paymentMethod) return;
+    setProcessing(true);
+    const sale = {
+      customerName,
+      customerPhone,
+      items: cart.map(item => ({
+        productId: item.id,
+        productName: item.name,
+        price: item.price,
+        qty: item.qty,
+        supplierName: item.supplierName,
+      })),
+      total: cartTotal,
+    };
+    const result = completeSale(sale);
+    if (!result.success) { setProcessing(false); return; }
+    // Save customer with amount spent
+    saveCustomer({ name: customerName, phone: customerPhone, amountSpent: cartTotal });
+    await recordSaleFinancials(cartTotal);
+    const invoice = await createInvoice(sale);
+    setCompletedInvoice(invoice);
+    setProcessing(false);
+    setScreen('complete');
+  };
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🐟</div>
-        <p style={{ color: '#4a5568', fontSize: 14 }}>Loading BSC Control...</p>
-      </div>
-    </div>
-  );
+  const handlePrint = useCallback((invoice: any) => {
+    const receiptHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <title>BSC Receipt</title>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @media print { @page { margin: 4mm; size: auto; } html, body { width: 100%; } }
+    body { font-family: 'Courier New', monospace; background:#fff; color:#000; display:flex; justify-content:center; padding:10px; }
+    .receipt { width:100%; max-width:380px; }
+    .logo { text-align:center; padding-bottom:8px; margin-bottom:8px; border-bottom:1px dashed #000; }
+    .biz { font-size:1.3em; font-weight:bold; letter-spacing:1px; }
+    .sub { font-size:0.72em; color:#444; margin-top:2px; }
+    .meta { display:flex; justify-content:space-between; font-size:0.75em; color:#444; margin-bottom:8px; }
+    .section { padding:6px 0; border-bottom:1px dashed #bbb; margin-bottom:8px; }
+    .item-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px dotted #ccc; }
+    .item-name { font-weight:bold; font-size:0.9em; }
+    .item-meta { font-size:0.72em; color:#666; }
+    .item-total { font-weight:bold; font-size:0.95em; padding-left:8px; white-space:nowrap; }
+    .totals { margin-top:8px; border-top:2px solid #000; padding-top:8px; }
+    .total-row { display:flex; justify-content:space-between; margin-bottom:4px; }
+    .grand { font-size:1.4em; font-weight:bold; }
+    .sm { font-size:0.8em; color:#333; }
+    .footer { margin-top:14px; padding-top:8px; border-top:1px dashed #bbb; text-align:center; font-size:0.7em; color:#666; line-height:1.7; }
+    .bars { text-align:center; font-size:2em; letter-spacing:4px; margin:10px 0 2px; }
+  </style>
+</head>
+<body>
+<div class="receipt">
+  <div class="logo">
+    <div class="biz">BSC MARKETPLACE</div>
+    <div class="sub">Bahamian Seafood Connection</div>
+    <div class="sub">Firetrial Road, Nassau, Bahamas</div>
+    <div class="sub">bahamianseafoodconnection@gmail.com</div>
+  </div>
+  <div class="meta"><span><strong>Invoice:</strong> ${invoice.id}</span><span>${invoice.date}</span></div>
+  <div class="section">
+    <div style="font-weight:bold;font-size:1em">${customerName}</div>
+    <div style="font-size:0.78em;color:#555">Tel: ${customerPhone}</div>
+  </div>
+  <div class="section">
+    ${invoice.items.map((item: any) => `
+      <div class="item-row">
+        <div style="flex:1"><div class="item-name">${item.productName}</div><div class="item-meta">${item.qty} x $${Number(item.price).toFixed(2)}</div></div>
+        <div class="item-total">$${Number(item.total).toFixed(2)}</div>
+      </div>`).join('')}
+  </div>
+  <div class="totals">
+    <div class="total-row"><span style="font-size:1.1em;font-weight:bold">TOTAL</span><span class="grand">$${cartTotal.toFixed(2)}</span></div>
+    ${paymentMethod === 'cash'
+      ? `<div class="total-row sm"><span>Cash Given</span><span>$${cashNum.toFixed(2)}</span></div>
+         <div class="total-row sm" style="font-weight:bold"><span>Change Due</span><span>$${change.toFixed(2)}</span></div>`
+      : `<div class="total-row sm"><span>Payment</span><span>Card / Terminal</span></div>`}
+  </div>
+  <div class="bars">|||||||||||||||</div>
+  <div style="text-align:center;font-size:0.65em;color:#888;margin-bottom:4px">${invoice.id}</div>
+  <div class="footer">
+    <div>Thank you for shopping at BSC Marketplace!</div>
+    <div>Fresh · Local · Bahamian 🐟</div>
+    <div style="margin-top:4px">WhatsApp: +1 (242) 359-0285</div>
+  </div>
+</div></body></html>`;
+    const w = window.open('', '_blank', 'width=500,height=700');
+    if (!w) return;
+    w.document.write(receiptHTML);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 400);
+    setInvoiceSent(prev => [...prev, 'print']);
+  }, [cartTotal, cashNum, change, customerName, customerPhone, paymentMethod]);
 
-  const NAV_GROUPS = [
-    {
-      label: 'BUSINESS OVERVIEW',
-      items: [
-        { section: 'overview' as Section, label: 'Full Picture', icon: '📊' },
-        { section: 'freezer' as Section, label: 'Freezer Inventory', icon: '🧊' },
-        { section: 'purchase' as Section, label: 'Purchase Orders', icon: '📦' },
-      ]
-    },
-    {
-      label: 'OPERATIONS',
-      items: [
-        { section: 'pos' as Section, label: 'Walking POS', icon: '🛒', badge: 'LIVE' },
-        { section: 'report' as Section, label: 'Daily Report', icon: '📄' },
-        { section: 'yield' as Section, label: 'Yield Calculator', icon: '🧮' },
-      ]
-    },
-    {
-      label: 'SALES & MONEY',
-      items: [
-        { section: 'profit' as Section, label: 'Profit Report', icon: '📈' },
-        { section: 'suppliers' as Section, label: 'Supplier Admin', icon: '🚢' },
-      ]
-    },
-    {
-      label: 'MARKETPLACE',
-      items: [
-        { section: 'market' as Section, label: 'Online Market', icon: '🏪' },
-        { section: 'inventory' as Section, label: 'Stock Alerts', icon: '⚠️' },
-      ]
-    },
-    {
-      label: 'TOOLS',
-      items: [
-        { section: 'ai' as Section, label: 'BSC AI Assistant', icon: '🤖' },
-      ]
-    },
-  ];
+  const sendWhatsApp = useCallback((invoice: any) => {
+    let raw = customerPhone.replace(/\D/g, '');
+    if (raw.startsWith('1242') && raw.length === 11) {
+      // already correct format
+    } else if (raw.startsWith('242') && raw.length === 10) {
+      raw = '1' + raw;
+    } else if (raw.length === 7) {
+      raw = '1242' + raw;
+    } else if (!raw.startsWith('1')) {
+      raw = '1242' + raw;
+    }
 
-  const SidebarContent = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #1a2a3a', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #f5c518, #e6a800)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🦀</div>
+    const text =
+      `*BSC MARKETPLACE*\n` +
+      `Firetrial Road, Nassau, Bahamas\n\n` +
+      `*Invoice: ${invoice.id}*\n` +
+      `Date: ${invoice.date}\n\n` +
+      `Customer: ${customerName}\n` +
+      `Tel: ${customerPhone}\n\n` +
+      `*Items:*\n` +
+      invoice.items.map((i: any) => `• ${i.productName}  x${i.qty}  =  $${Number(i.total).toFixed(2)}`).join('\n') +
+      `\n\n*TOTAL: $${cartTotal.toFixed(2)}*\n` +
+      (paymentMethod === 'cash' ? `Cash: $${cashNum.toFixed(2)}  |  Change: $${change.toFixed(2)}\n` : '') +
+      `\nThank you for shopping at BSC! 🐟`;
+
+    window.open(`https://api.whatsapp.com/send?phone=${raw}&text=${encodeURIComponent(text)}`, '_blank');
+    setInvoiceSent(prev => [...prev, 'whatsapp']);
+  }, [cartTotal, cashNum, change, customerName, customerPhone, paymentMethod]);
+
+  const resetSale = useCallback(() => {
+    setCart([]); setCustomerName(''); setCustomerPhone('');
+    setCustomerQuery(''); setSuggestions([]);
+    setPaymentMethod(null); setCashGiven('');
+    setCompletedInvoice(null); setInvoiceSent([]); setSearch('');
+    setScreen('shop');
+  }, []);
+
+  const CustomerInput = () => (
+    <div style={card}>
+      <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>CUSTOMER — search by name or phone number</p>
+      <input
+        placeholder="Type name or phone number..."
+        value={customerQuery}
+        onChange={(e) => handleCustomerQuery(e.target.value)}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        style={{ ...inp, marginBottom: suggestions.length > 0 ? 2 : 10 }}
+      />
+      <CustomerDropdown suggestions={suggestions} onSelect={selectCustomer} />
+
+      {customerName && customerPhone ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0a1f0a', borderRadius: 10, padding: '10px 12px', border: '1px solid #4ade80' }}>
           <div>
-            <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 15 }}>BSC Marketplace</p>
-            <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>Firetrial Rd · Nassau</p>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14, color: '#fff' }}>{customerName}</p>
+            <p style={{ margin: '2px 0 0', color: '#4ade80', fontSize: 13 }}>📱 {customerPhone}</p>
           </div>
+          <button onClick={() => { setCustomerName(''); setCustomerPhone(''); setCustomerQuery(''); setSuggestions([]); }}
+            style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 12 }}>
+            Change
+          </button>
         </div>
-      </div>
-      <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
-        {NAV_GROUPS.map(group => (
-          <div key={group.label} style={{ marginBottom: 20 }}>
-            <p style={{ margin: '0 0 4px', padding: '0 20px', color: '#2a3a5a', fontSize: 9, letterSpacing: 2, fontWeight: 'bold' }}>{group.label}</p>
-            {group.items.map((item, idx) => {
-              const isActive = section === item.section;
-              return (
-                <button key={idx} onClick={() => navTo(item.section)} style={{
-                  width: '100%', textAlign: 'left', padding: '10px 20px',
-                  backgroundColor: isActive ? 'rgba(245,197,24,0.12)' : 'transparent',
-                  color: isActive ? '#f5c518' : '#9ca3af',
-                  border: 'none', cursor: 'pointer', fontSize: 13,
-                  borderLeft: isActive ? '3px solid #f5c518' : '3px solid transparent',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}>
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                  {'badge' in item && item.badge && (
-                    <span style={{ backgroundColor: '#4ade80', color: '#000', borderRadius: 6, padding: '1px 6px', fontSize: 8, fontWeight: 'bold' }}>{item.badge}</span>
-                  )}
-                  {item.section === 'suppliers' && pendingCount > 0 && (
-                    <span style={{ backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', flexShrink: 0 }}>{pendingCount}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div style={{ padding: '12px 16px', borderTop: '1px solid #1a2a3a', flexShrink: 0 }}>
-        <div style={{ backgroundColor: 'rgba(30,58,120,0.3)', border: '1px solid #1e3a7f', borderRadius: 12, padding: '10px 14px', marginBottom: 10 }}>
-          <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, fontWeight: 'bold' }}>SUPPLIER PORTAL URL</p>
-          <p style={{ margin: '4px 0 0', color: '#fff', fontSize: 11, wordBreak: 'break-all' as const }}>project-1fnu0.vercel.app/supplier</p>
-        </div>
-        <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}
-          style={{ width: '100%', padding: '9px', borderRadius: 10, backgroundColor: 'transparent', color: '#4a5568', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}>
-          Sign Out
-        </button>
-      </div>
+      ) : (
+        <>
+          {customerName && !customerPhone && (
+            <input
+              placeholder="Phone / WhatsApp number *"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              type="tel"
+              autoComplete="off"
+              style={{ ...inp, marginBottom: 0 }}
+            />
+          )}
+          {customerPhone && !customerName && (
+            <input
+              placeholder="Customer name *"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              autoComplete="off"
+              style={{ ...inp, marginBottom: 0 }}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 
-  const MainContent = () => (
-    <>
-      {/* ── OVERVIEW ── */}
-      {section === 'overview' && (
-        <>
-          {pendingCount > 0 && (
-            <div onClick={() => setSection('suppliers')} style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', border: '1px solid #f5c518', borderRadius: 16, padding: '14px 18px', marginBottom: 20, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>🚢 {pendingCount} Supplier Application{pendingCount > 1 ? 's' : ''} Pending</p>
-                <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 12 }}>Tap to review and approve</p>
-              </div>
-              <span style={{ color: '#f5c518', fontSize: 22 }}>›</span>
-            </div>
-          )}
-
-          {/* SPINY TAILS CARD */}
-          <div style={{ background: 'linear-gradient(135deg, #001a3a, #002a5a, #001a2a)', border: '1px solid #1e5a9f', borderRadius: 20, padding: 24, marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontSize: 48 }}>🦞</span>
-                <div>
-                  <p style={{ margin: 0, color: '#60a5fa', fontSize: 11, letterSpacing: 1, fontWeight: 'bold' }}>PROCESSING PLANT & SUPPLIER</p>
-                  <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Spiny Tails Processing</p>
-                  <p style={{ margin: 0, color: '#6b7280', fontSize: 12 }}>Firetrial Road, Nassau · Blast Freezer + Holding Freezer</p>
-                </div>
-              </div>
-              <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '4px 14px', fontSize: 11, fontWeight: 'bold', flexShrink: 0 }}>ACTIVE</span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              {[
-                { label: 'Freezer Capacity', value: '30,000 lbs', color: '#60a5fa', icon: '🧊' },
-                { label: 'Current Stock', value: TOTAL_LBS.toLocaleString() + ' lbs', color: '#4ade80', icon: '📦' },
-                { label: 'Capacity Used', value: ((TOTAL_LBS / FREEZER_CAPACITY) * 100).toFixed(1) + '%', color: '#f5c518', icon: '📊' },
-                { label: 'Products Stored', value: SPINY_TAILS_INVENTORY.length + ' types', color: '#a78bfa', icon: '🐟' },
-              ].map(stat => (
-                <div key={stat.label} style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <p style={{ margin: 0, fontSize: 18 }}>{stat.icon}</p>
-                  <p style={{ margin: '6px 0 2px', color: stat.color, fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>{stat.value}</p>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>{stat.label}</p>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' as const }}>
-              <button onClick={() => setSection('freezer')} style={{ backgroundColor: '#1e3a7f', color: '#60a5fa', border: '1px solid #1e5a9f', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>
-                🧊 View Full Inventory
-              </button>
-              <button onClick={() => setSection('purchase')} style={{ backgroundColor: '#0a2010', color: '#4ade80', border: '1px solid #1e5a2f', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>
-                📦 Purchase Orders
-              </button>
-              <button onClick={() => setSection('yield')} style={{ backgroundColor: '#1a1200', color: '#f5c518', border: '1px solid #3a2e00', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>
-                🧮 Yield Calculator
-              </button>
-            </div>
-          </div>
-
-          {/* KPI CARDS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
-            {[
-              { label: 'TOTAL REVENUE', value: '$' + finance.revenue.toFixed(2), sub: finance.transactions + ' sales', color: '#4ade80', bg: 'linear-gradient(135deg, #0a1f0a, #0d2b14)' },
-              { label: 'BSC PROFIT', value: '$' + totalProfit.toFixed(2), sub: 'Avg $' + avgTransaction, color: '#f5c518', bg: 'linear-gradient(135deg, #1a1200, #2a1e00)' },
-              { label: 'SUPPLIER OWED', value: '$' + finance.supplierOwed.toFixed(2), sub: '93% of sales', color: '#60a5fa', bg: 'linear-gradient(135deg, #001a2a, #002a3a)' },
-            ].map(kpi => (
-              <div key={kpi.label} style={{ background: kpi.bg, borderRadius: 16, padding: 18, border: '1px solid #1e3a5f' }}>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 2 }}>{kpi.label}</p>
-                <p style={{ margin: '6px 0 4px', color: kpi.color, fontWeight: 'bold', fontSize: isMobile ? 16 : 22 }}>{kpi.value}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{kpi.sub}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* QUICK TOOLS */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
-            <div onClick={() => setSection('pos')} style={{ background: 'linear-gradient(135deg, #1a0a00, #2a1200)', border: '1px solid rgba(245,197,24,0.4)', borderRadius: 16, padding: 20, cursor: 'pointer' }}>
-              <p style={{ margin: '0 0 8px', fontSize: 32 }}>🛒</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 15 }}>Walking POS</p>
-              <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 12 }}>Any device · Walk & sell · Print/WhatsApp invoice</p>
-            </div>
-            <div onClick={() => setSection('purchase')} style={{ background: 'linear-gradient(135deg, #0a1f0a, #0d2b14)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 16, padding: 20, cursor: 'pointer' }}>
-              <p style={{ margin: '0 0 8px', fontSize: 32 }}>📸</p>
-              <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 15 }}>Purchase Orders</p>
-              <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 12 }}>Snap invoice · AI reads · Allocate to retail/wholesale</p>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, #001a2a, #002a3a)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 16, padding: 20 }}>
-              <p style={{ margin: '0 0 8px', fontSize: 32 }}>🇺🇸</p>
-              <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 15 }}>US Supplier Portal</p>
-              <p style={{ margin: '4px 0 8px', color: '#4a5568', fontSize: 12 }}>Florida & Miami suppliers upload products to BSC</p>
-              <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, fontFamily: 'monospace' }}>project-1fnu0.vercel.app/supplier</p>
-            </div>
-          </div>
-
-          {/* REVENUE STREAMS */}
-          <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Revenue Streams</p>
-            {[
-              { label: 'POS / Physical Store', revenue: posRevenue, profit: posRevenue * 0.07, margin: '7%', color: '#4ade80', count: posInvoices.length, icon: '🛒' },
-              { label: 'Online Marketplace', revenue: marketRevenue, profit: marketRevenue * 0.25, margin: '25%', color: '#60a5fa', count: marketInvoices.length, icon: '🏪' },
-              { label: 'Wholesale / Bulk', revenue: 0, profit: 0, margin: '12%', color: '#f5c518', count: 0, icon: '📦' },
-              { label: 'Utility Bill Payments', revenue: 0, profit: 0, margin: '$5+5%', color: '#a78bfa', count: 0, icon: '⚡' },
-              { label: 'US Supplier Sales', revenue: 0, profit: 0, margin: 'TBD', color: '#60a5fa', count: 0, icon: '🇺🇸' },
-            ].map(stream => (
-              <div key={stream.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e3a5f' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 18 }}>{stream.icon}</span>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{stream.label}</p>
-                    <p style={{ margin: '2px 0 0', color: '#6b7280', fontSize: 11 }}>{stream.count} orders · {stream.margin} BSC margin</p>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 14 }}>${stream.revenue.toFixed(2)}</p>
-                  <p style={{ margin: '2px 0 0', color: stream.color, fontSize: 11, fontWeight: 'bold' }}>+${stream.profit.toFixed(2)}</p>
-                </div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12 }}>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Total BSC Profit</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 18 }}>${totalProfit.toFixed(2)}</p>
-            </div>
-          </div>
-
-          {/* RECENT ORDERS */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Recent Orders</p>
-              <button onClick={() => setSection('report')} style={{ background: 'none', border: 'none', color: '#60a5fa', fontSize: 12, cursor: 'pointer' }}>View All →</button>
-            </div>
-            {recentInvoices.length === 0 && (
-              <div style={{ ...card, textAlign: 'center', padding: 24 }}>
-                <p style={{ color: '#4a5568', margin: 0 }}>No sales yet.</p>
-              </div>
-            )}
-            {recentInvoices.slice(0, 5).map(inv => {
-              const isMarket = inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP');
-              const parts = inv.customerName.split(' | ');
-              return (
-                <Link key={inv.id} href={'/invoice?id=' + inv.id} style={{ textDecoration: 'none' }}>
-                  <div style={{ ...card, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, cursor: 'pointer' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>{isMarket ? '🏪' : '🛒'}</span>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{parts[0]}</p>
-                      </div>
-                      {parts[1] && <p style={{ margin: '2px 0 0', color: '#f5c518', fontSize: 10 }}>{parts[1]}</p>}
-                      <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>{inv.date}</p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 15 }}>${inv.total.toFixed(2)}</p>
-                      <p style={{ margin: 0, color: isMarket ? '#60a5fa' : '#4ade80', fontSize: 10 }}>+${(inv.total * (isMarket ? 0.25 : 0.07)).toFixed(2)}</p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Link href="/pos" style={{ background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', fontSize: 14, padding: '16px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🛒 Open POS</Link>
-            <Link href="/market" style={{ ...card, color: '#fff', fontWeight: 'bold', fontSize: 14, padding: '16px', textAlign: 'center', textDecoration: 'none', display: 'block', marginBottom: 0 }}>🏪 Marketplace</Link>
-            <Link href="/inventory" style={{ ...card, color: '#60a5fa', fontWeight: 'bold', fontSize: 13, padding: '14px', textAlign: 'center', textDecoration: 'none', display: 'block', marginBottom: 0 }}>📦 Inventory</Link>
-            <button onClick={() => setSection('suppliers')} style={{ ...card, color: '#f5c518', fontWeight: 'bold', fontSize: 13, padding: '14px', textAlign: 'center', border: '1px solid rgba(245,197,24,0.3)', cursor: 'pointer', marginBottom: 0, position: 'relative' as const }}>
-              🚢 Suppliers {pendingCount > 0 && <span style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pendingCount}</span>}
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── FREEZER INVENTORY ── */}
-      {section === 'freezer' && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 20 }}>🧊 Freezer Inventory</p>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 16 }}>{TOTAL_LBS.toLocaleString()} lbs</p>
-              <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>of {FREEZER_CAPACITY.toLocaleString()} lb capacity</p>
-            </div>
-          </div>
-
-          {/* CAPACITY BAR */}
-          <div style={card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>Spiny Tails · Firetrial Road · Nassau</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>{((TOTAL_LBS / FREEZER_CAPACITY) * 100).toFixed(1)}% full</p>
-            </div>
-            <div style={{ backgroundColor: '#060d1f', borderRadius: 8, height: 12, overflow: 'hidden' }}>
-              <div style={{ width: ((TOTAL_LBS / FREEZER_CAPACITY) * 100) + '%', height: '100%', background: 'linear-gradient(90deg, #4ade80, #60a5fa)', borderRadius: 8, transition: 'width 0.5s' }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-              <p style={{ margin: 0, color: '#4ade80', fontSize: 11 }}>● Blast Freezer · ● Holding Freezer</p>
-              <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{(FREEZER_CAPACITY - TOTAL_LBS).toLocaleString()} lbs available</p>
-            </div>
-          </div>
-
-          {/* INVENTORY BY CATEGORY */}
-          {['seafood', 'poultry', 'meat'].map(cat => {
-            const items = SPINY_TAILS_INVENTORY.filter(i => i.category === cat && i.lbs > 0);
-            if (items.length === 0) return null;
-            const catLabel = cat === 'seafood' ? '🐟 Seafood' : cat === 'poultry' ? '🍗 Poultry' : '🥩 Meats';
-            const catTotal = items.reduce((s, i) => s + i.lbs, 0);
-            return (
-              <div key={cat} style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>{catLabel}</p>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 12 }}>{catTotal.toLocaleString()} lbs total</p>
-                </div>
-                {items.map(item => (
-                  <div key={item.name} style={{ ...card, padding: '12px 16px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 20 }}>{item.icon}</span>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>{item.name}</p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 14 }}>{item.lbs.toLocaleString()} lbs</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </>
-      )}
-
-      {/* ── PURCHASE ORDERS ── */}
-      {section === 'purchase' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 6 }}>📦 Purchase Orders</p>
-          <p style={{ color: '#4a5568', fontSize: 13, marginBottom: 20 }}>Snap a supplier invoice → AI reads it → Allocate cases to retail/wholesale</p>
-
-          <div style={{ ...card, background: 'linear-gradient(135deg, #0a1220, #0d1a2e)' }}>
-            <p style={{ margin: '0 0 16px', color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>📸 Upload New Invoice</p>
-            <div
-              onClick={() => document.getElementById('poPhoto')?.click()}
-              style={{ width: '100%', height: 120, borderRadius: 12, border: '2px dashed #1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: '#060d1f', marginBottom: 14 }}
-            >
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ margin: 0, fontSize: 32 }}>📷</p>
-                <p style={{ margin: '6px 0 0', color: '#4a5568', fontSize: 12 }}>Tap to photograph or upload invoice</p>
-              </div>
-            </div>
-            <input id="poPhoto" type="file" accept="image/*" capture="environment" style={{ display: 'none' }} />
-
-            <div style={{ backgroundColor: '#060d1f', borderRadius: 12, padding: 16, border: '1px solid #1e3a5f', marginBottom: 14 }}>
-              <p style={{ margin: '0 0 12px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Allocate Cases</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[
-                  { label: 'Retail — Physical Store', icon: '🏬', color: '#4ade80' },
-                  { label: 'Retail — Online Market', icon: '🌐', color: '#60a5fa' },
-                  { label: 'Wholesale — Physical', icon: '📦', color: '#f5c518' },
-                  { label: 'Wholesale — Online', icon: '🇺🇸', color: '#a78bfa' },
-                ].map(channel => (
-                  <div key={channel.label} style={{ backgroundColor: '#0d1f3c', borderRadius: 10, padding: 12, border: '1px solid #1e3a5f' }}>
-                    <p style={{ margin: '0 0 6px', color: channel.color, fontSize: 11, fontWeight: 'bold' }}>{channel.icon} {channel.label}</p>
-                    <input
-                      type="number"
-                      placeholder="0 cases"
-                      defaultValue={0}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, fontWeight: 'bold', boxSizing: 'border-box' as const, outline: 'none' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button style={{ width: '100%', padding: '14px', borderRadius: 12, backgroundColor: '#4ade80', color: '#000', fontWeight: 'bold', border: 'none', fontSize: 15, cursor: 'pointer' }}>
-              Process to Inventory
-            </button>
-          </div>
-
-          <div style={{ ...card, textAlign: 'center', padding: 24 }}>
-            <p style={{ color: '#4a5568', margin: 0, fontSize: 13 }}>Previous purchase orders will appear here</p>
-            <p style={{ color: '#2a3a5a', margin: '8px 0 0', fontSize: 11 }}>AI invoice reading with full Supabase integration coming next phase</p>
-          </div>
-        </>
-      )}
-
-      {/* ── POS REDIRECT ── */}
-      {section === 'pos' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>🛒</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>Walking POS</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 8 }}>Works on any camera-powered device</p>
-          <p style={{ color: '#4a5568', fontSize: 13, marginBottom: 32 }}>Cart · Customer info · Print / Email / WhatsApp invoice</p>
-          <Link href="/pos" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>
-            Open Walking POS →
-          </Link>
+  // ── SHOP ──
+  if (screen === 'shop') return (
+    <div style={pg}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div>
+          <h1 style={{ margin: 0, color: '#f5c518', fontSize: 20, fontWeight: 'bold' }}>🛒 Walking POS</h1>
+          <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>BSC Marketplace · Firetrial Rd</p>
         </div>
-      )}
-
-      {/* ── YIELD CALCULATOR ── */}
-      {section === 'yield' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 20 }}>🧮 Yield Conversion Calculator</p>
-          <div style={card}>
-            <p style={{ margin: '0 0 20px', color: '#aaa', fontSize: 14 }}>Enter whole weight to calculate usable product after processing.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 20 }}>
-              <div>
-                <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 11, letterSpacing: 1 }}>PRODUCT TYPE</p>
-                <select value={yieldType} onChange={(e) => setYieldType(e.target.value)}
-                  style={{ width: '100%', padding: '14px 16px', borderRadius: 12, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 15, outline: 'none' }}>
-                  {Object.entries(YIELD_PRESETS).map(([key, val]) => (
-                    <option key={key} value={key}>{val.icon} {key} — {(val.yield * 100).toFixed(0)}% yield</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 11, letterSpacing: 1 }}>WHOLE WEIGHT (lbs)</p>
-                <input type="number" value={yieldWeight} onChange={(e) => setYieldWeight(parseFloat(e.target.value) || 0)}
-                  style={{ width: '100%', padding: '14px 16px', borderRadius: 12, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 22, fontWeight: 'bold', outline: 'none', boxSizing: 'border-box' as const }} />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[
-                { label: 'YIELD RATE', value: (currentYield.yield * 100).toFixed(0) + '%', color: '#4ade80', bg: 'linear-gradient(135deg, #0a1f0a, #0d2b14)', border: '#1e5a2f' },
-                { label: 'USABLE WEIGHT', value: usableWeight + ' lbs', color: '#60a5fa', bg: 'linear-gradient(135deg, #001a2a, #002a3a)', border: '#1e3a5f' },
-                { label: 'RETAIL PORTIONS', value: '~' + retailPortions, color: '#f5c518', bg: 'linear-gradient(135deg, #1a1200, #2a1e00)', border: '#3a2e00' },
-              ].map(x => (
-                <div key={x.label} style={{ background: x.bg, borderRadius: 14, padding: 18, textAlign: 'center', border: '1px solid ' + x.border }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 10, letterSpacing: 1 }}>{x.label}</p>
-                  <p style={{ margin: '8px 0 4px', color: x.color, fontWeight: 'bold', fontSize: 24 }}>{x.value}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 16, backgroundColor: '#060d1f', borderRadius: 12, padding: 16, border: '1px solid #1e3a5f' }}>
-              <p style={{ margin: '0 0 8px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Summary</p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Starting: <b style={{ color: '#fff' }}>{yieldWeight} lbs</b> whole {yieldType}</p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Waste/trim: <b style={{ color: '#f87171' }}>{(yieldWeight * (1 - currentYield.yield)).toFixed(1)} lbs</b></p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Usable: <b style={{ color: '#4ade80' }}>{usableWeight} lbs</b></p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Retail packs: <b style={{ color: '#f5c518' }}>~{retailPortions} units</b> at ¾ lb each</p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── PROFIT ── */}
-      {section === 'profit' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 20 }}>💰 Sales & Money</p>
-          <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Profit by Channel</p>
-            {[
-              { label: 'POS / Physical Store', revenue: posRevenue, profit: posRevenue * 0.07, rate: '7%', icon: '🛒', color: '#4ade80' },
-              { label: 'Online Marketplace', revenue: marketRevenue, profit: marketRevenue * 0.25, rate: '25%', icon: '🏪', color: '#60a5fa' },
-              { label: 'Wholesale', revenue: 0, profit: 0, rate: '12%', icon: '📦', color: '#f5c518' },
-              { label: 'US Supplier Sales', revenue: 0, profit: 0, rate: 'TBD', icon: '🇺🇸', color: '#60a5fa' },
-              { label: 'Utility Bills', revenue: 0, profit: 0, rate: '$5+5%', icon: '⚡', color: '#a78bfa' },
-            ].map(item => (
-              <div key={item.label} style={{ backgroundColor: '#060d1f', borderRadius: 12, padding: '12px 14px', marginBottom: 10, border: '1px solid #1e3a5f' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20 }}>{item.icon}</span>
-                    <div>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{item.label}</p>
-                      <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>BSC: {item.rate}</p>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, color: '#fff', fontSize: 13 }}>${item.revenue.toFixed(2)}</p>
-                    <p style={{ margin: 0, color: item.color, fontWeight: 'bold', fontSize: 13 }}>${item.profit.toFixed(2)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', borderRadius: 12, padding: '14px 16px', border: '1px solid #f5c51833', display: 'flex', justifyContent: 'space-between' }}>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Total BSC Profit</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 20 }}>${totalProfit.toFixed(2)}</p>
-            </div>
-          </div>
-          <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Daily Summary</p>
-            {[
-              { label: 'Total Revenue', value: '$' + finance.revenue.toFixed(2), color: '#fff' },
-              { label: 'BSC Profit', value: '$' + totalProfit.toFixed(2), color: '#f5c518' },
-              { label: 'Supplier Owed', value: '$' + finance.supplierOwed.toFixed(2), color: '#60a5fa' },
-              { label: 'Total Orders', value: String(finance.transactions), color: '#4ade80' },
-              { label: 'Avg Order Value', value: '$' + avgTransaction, color: '#aaa' },
-            ].map(row => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #1e3a5f' }}>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>{row.label}</p>
-                <p style={{ margin: 0, color: row.color, fontWeight: 'bold', fontSize: 13 }}>{row.value}</p>
-              </div>
-            ))}
-          </div>
-          {supplierPayouts.length > 0 && (
-            <div style={card}>
-              <p style={{ margin: '0 0 6px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Supplier Payouts</p>
-              <p style={{ margin: '0 0 14px', color: '#4a5568', fontSize: 12 }}>93% per sale</p>
-              {supplierPayouts.map(sup => (
-                <div key={sup.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #1e3a5f' }}>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{sup.name}</p>
-                    <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{sup.invoiceCount} items</p>
-                  </div>
-                  <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 15 }}>${sup.owed.toFixed(2)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── INVENTORY ── */}
-      {section === 'inventory' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 20 }}>⚠️ Stock Alerts</p>
-          {lowStockItems.length === 0 && <div style={{ ...card, textAlign: 'center', padding: 28 }}><p style={{ color: '#4ade80', margin: 0 }}>✅ All stock levels healthy</p></div>}
-          {lowStockItems.length > 0 && (
-            <div style={{ ...card, borderColor: '#7f1d1d', backgroundColor: '#1a0808' }}>
-              <p style={{ margin: '0 0 12px', color: '#f87171', fontWeight: 'bold', fontSize: 14 }}>Low Stock</p>
-              {lowStockItems.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>{p.name}</p>
-                  <p style={{ margin: 0, color: '#f87171', fontWeight: 'bold', fontSize: 13 }}>{p.stock} left</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <Link href="/inventory" style={{ display: 'block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '14px', borderRadius: 12, textDecoration: 'none', fontSize: 15, textAlign: 'center' }}>
-            Open Full Inventory →
-          </Link>
-        </>
-      )}
-
-      {/* ── MARKET ── */}
-      {section === 'market' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>🏪</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>BSC Online Marketplace</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 32 }}>Local + US supplier products · Delivery all Bahamas islands</p>
-          <Link href="/market" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>
-            Open Marketplace →
-          </Link>
-        </div>
-      )}
-
-      {/* ── REPORT ── */}
-      {section === 'report' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>📋</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>Daily Reports</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 32 }}>All sales, invoices, and transactions</p>
-          <Link href="/report" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>
-            Open Reports →
-          </Link>
-        </div>
-      )}
-
-      {/* ── SUPPLIERS ── */}
-      {section === 'suppliers' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 6 }}>🚢 Supplier Admin</p>
-          <div style={{ backgroundColor: '#0a1220', border: '1px solid #1e3a5f', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
-            <p style={{ margin: 0, color: '#60a5fa', fontSize: 11, fontWeight: 'bold' }}>SUPPLIER PORTAL URL — share with new suppliers</p>
-            <p style={{ margin: '4px 0 0', color: '#fff', fontSize: 13, fontFamily: 'monospace' }}>https://project-1fnu0.vercel.app/supplier</p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-            {[
-              { label: 'PENDING', value: allSuppliers.filter(s => s.status === 'pending').length, color: '#f5c518' },
-              { label: 'APPROVED', value: allSuppliers.filter(s => s.status === 'approved').length, color: '#4ade80' },
-              { label: 'PRODUCTS', value: allProducts.filter(p => p.status === 'pending').length, color: '#60a5fa' },
-            ].map(stat => (
-              <div key={stat.label} style={{ ...card, textAlign: 'center', padding: 14, marginBottom: 0 }}>
-                <p style={{ margin: 0, color: stat.color, fontSize: 22, fontWeight: 'bold' }}>{stat.value}</p>
-                <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 10 }}>{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            {(['applications', 'products'] as const).map(tab => (
-              <button key={tab} onClick={() => setSupplierTab(tab)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: supplierTab === tab ? '#f5c518' : '#0d1f3c', color: supplierTab === tab ? '#000' : '#6b7280', border: '1px solid #1e3a5f', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}>
-                {tab === 'applications' ? 'Applications (' + allSuppliers.length + ')' : 'Products (' + allProducts.filter(p => p.status === 'pending').length + ' pending)'}
-              </button>
-            ))}
-          </div>
-
-          {supplierLoading && <p style={{ color: '#4a5568', textAlign: 'center', padding: 20 }}>Loading...</p>}
-
-          {!supplierLoading && supplierTab === 'applications' && (
-            <>
-              {allSuppliers.length === 0 && <div style={{ ...card, textAlign: 'center', padding: 30 }}><p style={{ color: '#4a5568', margin: 0 }}>No applications yet</p></div>}
-              {allSuppliers.map(sup => {
-                const supProds = allProducts.filter(p => p.supplier_id === sup.id);
-                return (
-                  <div key={sup.id} style={{ ...card, borderColor: sup.status === 'pending' ? '#f5c518' : '#1e3a5f' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>{sup.full_name}</p>
-                        <p style={{ margin: '2px 0', color: '#aaa', fontSize: 13 }}>{sup.company_name}</p>
-                        <p style={{ margin: '2px 0', color: '#60a5fa', fontSize: 12 }}>{sup.email}</p>
-                      </div>
-                      <span style={statusBadge(sup.status)}>{sup.status.toUpperCase()}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
-                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, backgroundColor: '#060d1f', color: '#a78bfa', border: '1px solid #1e3a5f' }}>{sup.category}</span>
-                      {sup.whatsapp && (
-                        <a href={'https://wa.me/' + sup.whatsapp.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer"
-                          style={{ padding: '3px 12px', borderRadius: 20, fontSize: 11, backgroundColor: '#0a2010', color: '#4ade80', border: '1px solid #4ade80', textDecoration: 'none', fontWeight: 'bold' }}>
-                          💬 WhatsApp {sup.whatsapp}
-                        </a>
-                      )}
-                    </div>
-
-                    {supProds.length > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>PRODUCTS ({supProds.length})</p>
-                        {supProds.map(prod => (
-                          <div key={prod.id} style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '10px 12px', marginBottom: 6, border: '1px solid #1e3a5f' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                {prod.photo_url && <img src={prod.photo_url} alt={prod.name} style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }} />}
-                                <div>
-                                  <p style={{ margin: 0, fontWeight: 'bold', fontSize: 12 }}>{prod.name}</p>
-                                  <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>SKU: {prod.sku || 'N/A'} · Cost: ${prod.case_cost?.toFixed(2) || '0.00'}/case</p>
-                                </div>
-                              </div>
-                              <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: prod.status === 'pending' ? 8 : 0 }}>
-                              {[
-                                { l: 'RETAIL', v: '$' + (prod.retail_price?.toFixed(2) || '0.00'), c: '#4ade80' },
-                                { l: 'WHOLESALE', v: '$' + (prod.wholesale_price?.toFixed(2) || '0.00'), c: '#f5c518' },
-                                { l: 'DUTY', v: ((prod.duty_rate || 0) * 100).toFixed(0) + '%', c: '#60a5fa' },
-                              ].map(x => (
-                                <div key={x.l} style={{ backgroundColor: '#0d1f3c', borderRadius: 6, padding: '5px 8px' }}>
-                                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>{x.l}</p>
-                                  <p style={{ margin: 0, color: x.c, fontWeight: 'bold', fontSize: 11 }}>{x.v}</p>
-                                </div>
-                              ))}
-                            </div>
-                            {prod.status === 'pending' && (
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => approveProduct(prod.id)} style={{ flex: 1, padding: '7px', borderRadius: 8, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 11 }}>Approve</button>
-                                <button onClick={() => rejectProduct(prod.id)} style={{ flex: 1, padding: '7px', borderRadius: 8, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 11 }}>Reject</button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {sup.status === 'pending' && (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => approveSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>Approve Supplier</button>
-                        <button onClick={() => rejectSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>Reject</button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          {!supplierLoading && supplierTab === 'products' && (
-            <>
-              {allProducts.length === 0 && <div style={{ ...card, textAlign: 'center', padding: 30 }}><p style={{ color: '#4a5568', margin: 0 }}>No products yet</p></div>}
-              {allProducts.map(prod => (
-                <div key={prod.id} style={card}>
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                    {prod.photo_url && <img src={prod.photo_url} alt={prod.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }} />}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{prod.name}</p>
-                        <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
-                      </div>
-                      <p style={{ margin: '2px 0', color: '#4a5568', fontSize: 12 }}>By {prod.supplier_name}</p>
-                      <p style={{ margin: '2px 0', color: '#6b7280', fontSize: 11 }}>SKU: {prod.sku || 'N/A'} · Cost: ${prod.case_cost?.toFixed(2) || '0.00'}/case · {prod.pieces_per_case || 0} pcs/case</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: prod.status === 'pending' ? 10 : 0 }}>
-                    {[
-                      { l: 'RETAIL', v: '$' + (prod.retail_price?.toFixed(2) || '0.00'), c: '#4ade80' },
-                      { l: 'WHOLESALE', v: '$' + (prod.wholesale_price?.toFixed(2) || '0.00'), c: '#f5c518' },
-                      { l: 'UNIT COST', v: '$' + (prod.unit_cost?.toFixed(2) || '0.00'), c: '#60a5fa' },
-                    ].map(x => (
-                      <div key={x.l} style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '8px 10px' }}>
-                        <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>{x.l}</p>
-                        <p style={{ margin: '2px 0 0', color: x.c, fontWeight: 'bold', fontSize: 13 }}>{x.v}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {prod.status === 'pending' && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => approveProduct(prod.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>Approve & Go Live</button>
-                      <button onClick={() => rejectProduct(prod.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>Reject</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </>
-          )}
-
-          <Link href="/supplier" style={{ textDecoration: 'none' }}>
-            <div style={{ ...card, textAlign: 'center', background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
-              <p style={{ margin: 0, color: '#a78bfa', fontWeight: 'bold', fontSize: 14 }}>🚢 Open Full Supplier Portal</p>
-            </div>
-          </Link>
-        </>
-      )}
-
-      {/* ── AI ── */}
-      {section === 'ai' && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e3a5f', background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
-            <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>🤖 BSC AI Assistant</p>
-            <p style={{ margin: '3px 0 0', color: '#4a5568', fontSize: 12 }}>Knows Spiny Tails inventory · Live sales data · Scaling strategy</p>
-          </div>
-          <div style={{ height: 420, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {aiMessages.map((msg, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{
-                  maxWidth: '80%', padding: '12px 16px', fontSize: 14, lineHeight: 1.6,
-                  borderRadius: msg.role === 'user' ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
-                  backgroundColor: msg.role === 'user' ? '#f5c518' : '#0d1f3c',
-                  color: msg.role === 'user' ? '#000' : '#fff',
-                  border: msg.role === 'ai' ? '1px solid #1e3a5f' : 'none',
-                }}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-            {aiLoading && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{ padding: '12px 16px', borderRadius: '16px 16px 16px 2px', backgroundColor: '#0d1f3c', border: '1px solid #1e3a5f', color: '#4a5568', fontSize: 14 }}>Thinking...</div>
-              </div>
-            )}
-          </div>
-          <div style={{ padding: '14px 18px', borderTop: '1px solid #1e3a5f', display: 'flex', gap: 10 }}>
-            <input
-              placeholder="Ask about Spiny Tails, scaling, profits, US market..."
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
-              style={{ flex: 1, padding: '12px 16px', borderRadius: 12, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 14, outline: 'none' }}
-            />
-            <button onClick={handleAiSend} disabled={aiLoading}
-              style={{ padding: '12px 20px', borderRadius: 12, backgroundColor: aiLoading ? '#555' : '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: 14 }}>
-              Send
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#060d1f', color: '#fff', fontFamily: "'Inter', -apple-system, sans-serif" }}>
-
-      {!isMobile && (
-        <div style={{ width: 260, backgroundColor: '#070e1d', borderRight: '1px solid #1a2a3a', position: 'sticky' as const, top: 0, height: '100vh', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-          <SidebarContent />
-        </div>
-      )}
-
-      {sidebarOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex' }}>
-          <div onClick={() => setSidebarOpen(false)} style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)' }} />
-          <div style={{ position: 'relative', zIndex: 1, width: 280, backgroundColor: '#070e1d', display: 'flex', flexDirection: 'column', height: '100vh', borderRight: '1px solid #1a2a3a' }}>
-            <SidebarContent />
-          </div>
-        </div>
-      )}
-
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ background: 'linear-gradient(135deg, #070e1d, #0d1f3c)', borderBottom: '1px solid #1a2a3a', padding: '14px 20px', position: 'sticky' as const, top: 0, zIndex: 50 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: 'none', border: 'none', color: '#f5c518', fontSize: 22, cursor: 'pointer', padding: 0 }}>☰</button>
-              <div>
-                <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 18 }}>BSC Control</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>{today}</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: isMobile ? 12 : 24, alignItems: 'center' }}>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${finance.revenue.toFixed(2)}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>REVENUE</p>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${totalProfit.toFixed(2)}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>PROFIT</p>
-              </div>
-              {!isMobile && (
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 18 }}>{finance.transactions}</p>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>SALES</p>
-                </div>
-              )}
-              <div style={{ backgroundColor: '#0a2010', color: '#4ade80', borderRadius: 20, padding: '5px 14px', fontSize: 11, fontWeight: 'bold', border: '1px solid #4ade80' }}>LIVE</div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ flex: 1, padding: '24px 20px', overflowY: 'auto', paddingBottom: isMobile ? 90 : 40, maxWidth: 1200, margin: '0 auto', width: '100%', boxSizing: 'border-box' as const }}>
-          <MainContent />
-        </div>
-
-        {isMobile && (
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: '#070e1d', borderTop: '1px solid #1a2a3a', display: 'flex', justifyContent: 'space-around', padding: '8px 0 10px', zIndex: 100 }}>
-            {[
-              { s: 'overview' as Section, icon: '📊', label: 'Overview' },
-              { s: 'freezer' as Section, icon: '🧊', label: 'Freezer' },
-              { s: 'pos' as Section, icon: '🛒', label: 'POS' },
-              { s: 'suppliers' as Section, icon: '🚢', label: 'Suppliers' },
-              { s: 'ai' as Section, icon: '🤖', label: 'AI' },
-            ].map(item => (
-              <button key={item.s} onClick={() => setSection(item.s)} style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-                color: section === item.s ? '#f5c518' : '#4a5568',
-                position: 'relative' as const,
-              }}>
-                <span style={{ fontSize: 22 }}>{item.icon}</span>
-                <span style={{ fontSize: 9, letterSpacing: 0.5, fontWeight: section === item.s ? 'bold' : 'normal' }}>{item.label}</span>
-                {item.s === 'suppliers' && pendingCount > 0 && (
-                  <span style={{ position: 'absolute', top: 0, right: 4, backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pendingCount}</span>
-                )}
-              </button>
-            ))}
-          </div>
+        {cartCount > 0 && (
+          <button onClick={() => setScreen('cart')} style={{
+            backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold',
+            border: 'none', borderRadius: 12, padding: '10px 16px', fontSize: 13, cursor: 'pointer',
+          }}>
+            🛒 {cartCount} · ${cartTotal.toFixed(2)}
+          </button>
         )}
       </div>
+
+      <WhatsAppBanner />
+      <CustomerInput />
+
+      <input
+        placeholder="🔍 Search products..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        autoComplete="off"
+        style={{ ...inp, marginBottom: 14 }}
+      />
+
+      {filtered.length === 0 && (
+        <p style={{ color: '#4a5568', textAlign: 'center', padding: 30 }}>No products found</p>
+      )}
+
+      {filtered.map(product => {
+        const inCart = cart.find(c => c.id === product.id);
+        return (
+          <div key={product.id} style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{product.name}</p>
+                <p style={{ margin: '4px 0 2px', color: '#4ade80', fontSize: 18, fontWeight: 'bold' }}>${product.price.toFixed(2)}</p>
+                <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{product.stock - product.minStock} available</p>
+              </div>
+              {inCart ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <button onClick={() => adjustQty(product.id, -1)} style={qtyBtnStyle('#1e3a5f')}>−</button>
+                  <span style={{ fontWeight: 'bold', fontSize: 16, minWidth: 22, textAlign: 'center' as const }}>{inCart.qty}</span>
+                  <button onClick={() => adjustQty(product.id, 1)} style={qtyBtnStyle('#f5c518', '#000')}>+</button>
+                </div>
+              ) : (
+                <button onClick={() => addToCart(product)} style={{
+                  padding: '10px 18px', borderRadius: 10, backgroundColor: '#f5c518',
+                  color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 14, flexShrink: 0,
+                }}>
+                  Add
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {cartCount > 0 && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px', backgroundColor: '#070e1d', borderTop: '1px solid #1e3a5f', zIndex: 100 }}>
+          <button onClick={() => setScreen('cart')} style={primaryBtn}>
+            View Cart ({cartCount} items) · ${cartTotal.toFixed(2)} →
+          </button>
+        </div>
+      )}
     </div>
   );
+
+  // ── CART ──
+  if (screen === 'cart') return (
+    <div style={pg}>
+      <button onClick={() => setScreen('shop')} style={{ background: 'none', border: 'none', color: '#f5c518', fontSize: 14, cursor: 'pointer', marginBottom: 14, padding: 0 }}>
+        ← Back to Products
+      </button>
+      <h2 style={{ margin: '0 0 16px', color: '#f5c518', fontSize: 20 }}>🛒 Cart Review</h2>
+
+      <CustomerInput />
+
+      {cart.map(item => (
+        <div key={item.id} style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{item.name}</p>
+              <p style={{ margin: '3px 0 0', color: '#aaa', fontSize: 13 }}>
+                {item.qty} × ${item.price.toFixed(2)} = <span style={{ color: '#4ade80', fontWeight: 'bold' }}>${(item.qty * item.price).toFixed(2)}</span>
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <button onClick={() => adjustQty(item.id, -1)} style={qtyBtnStyle('#1e3a5f')}>−</button>
+              <span style={{ fontWeight: 'bold', fontSize: 15, minWidth: 22, textAlign: 'center' as const }}>{item.qty}</span>
+              <button onClick={() => adjustQty(item.id, 1)} style={qtyBtnStyle('#f5c518', '#000')}>+</button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ ...card, backgroundColor: '#0a1f0a', borderColor: '#4ade80', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <p style={{ margin: 0, color: '#4ade80', fontSize: 16, fontWeight: 'bold' }}>Total</p>
+        <p style={{ margin: 0, color: '#4ade80', fontSize: 24, fontWeight: 'bold' }}>${cartTotal.toFixed(2)}</p>
+      </div>
+
+      <button onClick={() => {
+        if (!customerName || !customerPhone) { alert('Please enter customer name and phone number'); return; }
+        setScreen('payment');
+      }} style={primaryBtn}>
+        Proceed to Payment →
+      </button>
+      <button onClick={() => setScreen('shop')} style={secondaryBtn}>← Add More Items</button>
+    </div>
+  );
+
+  // ── PAYMENT ──
+  if (screen === 'payment') return (
+    <div style={pg}>
+      <button onClick={() => setScreen('cart')} style={{ background: 'none', border: 'none', color: '#f5c518', fontSize: 14, cursor: 'pointer', marginBottom: 14, padding: 0 }}>
+        ← Back to Cart
+      </button>
+      <h2 style={{ margin: '0 0 6px', color: '#f5c518', fontSize: 20 }}>💳 Payment</h2>
+      <p style={{ margin: '0 0 20px', color: '#4a5568', fontSize: 13 }}>{customerName} · {customerPhone}</p>
+
+      <div style={{ ...card, backgroundColor: '#0a1f0a', borderColor: '#4ade80', textAlign: 'center', padding: 20, marginBottom: 20 }}>
+        <p style={{ margin: '0 0 4px', color: '#4a5568', fontSize: 12, letterSpacing: 1 }}>AMOUNT DUE</p>
+        <p style={{ margin: 0, color: '#4ade80', fontSize: 36, fontWeight: 'bold' }}>${cartTotal.toFixed(2)}</p>
+      </div>
+
+      <p style={{ color: '#6b7280', fontSize: 11, letterSpacing: 1, marginBottom: 10 }}>SELECT PAYMENT METHOD</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+        {([
+          { method: 'cash' as PaymentMethod, icon: '💵', label: 'Cash' },
+          { method: 'card' as PaymentMethod, icon: '💳', label: 'Card' },
+        ]).map(opt => (
+          <button key={opt.label} onClick={() => setPaymentMethod(opt.method)} style={{
+            padding: '20px 16px', borderRadius: 14,
+            backgroundColor: paymentMethod === opt.method ? '#f5c518' : '#0d1f3c',
+            color: paymentMethod === opt.method ? '#000' : '#aaa',
+            border: paymentMethod === opt.method ? 'none' : '1px solid #1e3a5f',
+            fontWeight: 'bold', fontSize: 16, cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ fontSize: 28 }}>{opt.icon}</span>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {paymentMethod === 'cash' && (
+        <div style={card}>
+          <p style={{ margin: '0 0 10px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Cash Given</p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
+            {[cartTotal, Math.ceil(cartTotal / 5) * 5, Math.ceil(cartTotal / 10) * 10, Math.ceil(cartTotal / 20) * 20, 50, 100]
+              .filter((v, i, a) => a.indexOf(v) === i && v >= cartTotal).slice(0, 5).map(amt => (
+              <button key={amt} onClick={() => setCashGiven(amt.toFixed(2))} style={{
+                padding: '8px 14px', borderRadius: 8,
+                backgroundColor: cashNum === amt ? '#f5c518' : '#1e3a5f',
+                color: cashNum === amt ? '#000' : '#fff',
+                border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: 13,
+              }}>
+                ${amt.toFixed(0)}
+              </button>
+            ))}
+          </div>
+          <input
+            type="number"
+            placeholder="Or enter amount..."
+            value={cashGiven}
+            onChange={(e) => setCashGiven(e.target.value)}
+            style={{ ...inp, fontSize: 22, fontWeight: 'bold', marginBottom: 0 }}
+          />
+          {cashNum >= cartTotal && cartTotal > 0 && (
+            <div style={{ marginTop: 12, backgroundColor: '#0a1f0a', borderRadius: 10, padding: '14px', border: '1px solid #4ade80' }}>
+              <p style={{ margin: 0, color: '#4a5568', fontSize: 12 }}>Change Due</p>
+              <p style={{ margin: '4px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 28 }}>${change.toFixed(2)}</p>
+            </div>
+          )}
+          {cashNum > 0 && cashNum < cartTotal && (
+            <div style={{ marginTop: 12, backgroundColor: '#2d0000', borderRadius: 10, padding: '12px 14px', border: '1px solid #f87171' }}>
+              <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>⚠️ Short by ${(cartTotal - cashNum).toFixed(2)}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {paymentMethod === 'card' && (
+        <div style={{ ...card, textAlign: 'center', padding: 24 }}>
+          <p style={{ margin: '0 0 8px', fontSize: 36 }}>💳</p>
+          <p style={{ margin: 0, color: '#aaa', fontSize: 15 }}>Process card on terminal</p>
+          <p style={{ margin: '6px 0 0', color: '#4a5568', fontSize: 12 }}>Tap Complete Sale when confirmed</p>
+        </div>
+      )}
+
+      <button
+        onClick={handleCompleteSale}
+        disabled={processing || !paymentMethod || (paymentMethod === 'cash' && cashNum < cartTotal)}
+        style={{
+          ...primaryBtn, marginTop: 16,
+          backgroundColor: processing ? '#555' :
+            (!paymentMethod || (paymentMethod === 'cash' && cashNum < cartTotal)) ? '#2a2a2a' : '#f5c518',
+          color: (!paymentMethod || (paymentMethod === 'cash' && cashNum < cartTotal)) ? '#555' : '#000',
+          cursor: (processing || !paymentMethod) ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {processing ? '⏳ Processing...' : '✅ Complete Sale'}
+      </button>
+    </div>
+  );
+
+  // ── COMPLETE ──
+  if (screen === 'complete' && completedInvoice) return (
+    <div style={pg}>
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div style={{ fontSize: 56, marginBottom: 10 }}>✅</div>
+        <h2 style={{ margin: '0 0 4px', color: '#4ade80', fontSize: 22 }}>Sale Complete!</h2>
+        <p style={{ margin: 0, color: '#4a5568', fontSize: 13 }}>{completedInvoice.id}</p>
+      </div>
+
+      <div style={{ backgroundColor: '#fff', color: '#111', borderRadius: 14, padding: 20, marginBottom: 20, fontFamily: 'monospace' }}>
+        <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px dashed #ccc' }}>
+          <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>BSC MARKETPLACE</p>
+          <p style={{ margin: '2px 0', fontSize: 11, color: '#666' }}>Bahamian Seafood Connection</p>
+          <p style={{ margin: '2px 0', fontSize: 11, color: '#666' }}>Firetrial Road, Nassau, Bahamas</p>
+          <p style={{ margin: '4px 0 0', fontSize: 10, color: '#999' }}>{completedInvoice.date} · {completedInvoice.id}</p>
+        </div>
+        <p style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: 14 }}>{customerName}</p>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#555' }}>📱 {customerPhone}</p>
+        {completedInvoice.items.map((item: any, i: number) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 6, borderBottom: '1px dotted #ddd' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>{item.productName}</p>
+              <p style={{ margin: 0, fontSize: 11, color: '#888' }}>{item.qty} × ${Number(item.price).toFixed(2)}</p>
+            </div>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>${Number(item.total).toFixed(2)}</p>
+          </div>
+        ))}
+        <div style={{ borderTop: '2px solid #111', marginTop: 10, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+          <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>TOTAL</p>
+          <p style={{ margin: 0, fontWeight: 'bold', fontSize: 18 }}>${cartTotal.toFixed(2)}</p>
+        </div>
+        {paymentMethod === 'cash' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <p style={{ margin: 0, color: '#555', fontSize: 12 }}>Cash Given</p>
+              <p style={{ margin: 0, fontSize: 12 }}>${cashNum.toFixed(2)}</p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <p style={{ margin: 0, color: '#555', fontSize: 12 }}>Change</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>${change.toFixed(2)}</p>
+            </div>
+          </>
+        )}
+        <p style={{ margin: '12px 0 0', color: '#999', fontSize: 10, textAlign: 'center' as const }}>
+          Thank you for shopping at BSC Marketplace 🐟
+        </p>
+      </div>
+
+      <p style={{ color: '#6b7280', fontSize: 11, letterSpacing: 1, margin: '0 0 10px' }}>SEND INVOICE TO CUSTOMER</p>
+
+      <button onClick={() => handlePrint(completedInvoice)} style={{
+        ...primaryBtn,
+        backgroundColor: invoiceSent.includes('print') ? '#0a1f0a' : '#f5c518',
+        color: invoiceSent.includes('print') ? '#4ade80' : '#000',
+        border: invoiceSent.includes('print') ? '1px solid #4ade80' : 'none',
+      }}>
+        {invoiceSent.includes('print') ? '✅ Printed' : '🖨️ Print Receipt'}
+      </button>
+
+      <button onClick={() => sendWhatsApp(completedInvoice)} style={{
+        ...primaryBtn,
+        backgroundColor: invoiceSent.includes('whatsapp') ? '#0a2010' : '#25d366',
+        color: invoiceSent.includes('whatsapp') ? '#4ade80' : '#fff',
+        border: invoiceSent.includes('whatsapp') ? '1px solid #4ade80' : 'none',
+      }}>
+        {invoiceSent.includes('whatsapp') ? '✅ Sent via WhatsApp' : '💬 Send via WhatsApp'}
+      </button>
+
+      <button onClick={() => {
+        const subject = encodeURIComponent(`BSC Marketplace Invoice ${completedInvoice.id}`);
+        const body = encodeURIComponent(
+          `BSC MARKETPLACE\nFiretrial Road, Nassau, Bahamas\n\n` +
+          `Invoice: ${completedInvoice.id}\nDate: ${completedInvoice.date}\n` +
+          `Customer: ${customerName}\n\n` +
+          `Items:\n${completedInvoice.items.map((i: any) => `${i.productName} x${i.qty} = $${Number(i.total).toFixed(2)}`).join('\n')}\n\n` +
+          `TOTAL: $${cartTotal.toFixed(2)}\n\nThank you!\nbahamianseafoodconnection@gmail.com`
+        );
+        window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+        setInvoiceSent(prev => [...prev, 'email']);
+      }} style={{
+        ...primaryBtn,
+        backgroundColor: invoiceSent.includes('email') ? '#001a2a' : '#60a5fa',
+        color: invoiceSent.includes('email') ? '#60a5fa' : '#000',
+        border: invoiceSent.includes('email') ? '1px solid #60a5fa' : 'none',
+      }}>
+        {invoiceSent.includes('email') ? '✅ Email Opened' : '📧 Send via Email'}
+      </button>
+
+      <button onClick={() => router.push('/invoice?id=' + encodeURIComponent(completedInvoice.id))}
+        style={{ ...primaryBtn, backgroundColor: 'transparent', color: '#f5c518', border: '1px solid #f5c518' }}>
+        📄 View Full Invoice
+      </button>
+
+      <button onClick={resetSale} style={secondaryBtn}>＋ New Sale</button>
+    </div>
+  );
+
+  return null;
 }
