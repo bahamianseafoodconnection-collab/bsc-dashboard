@@ -14,6 +14,7 @@ export default function LoginPage() {
 const router = useRouter();
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
+const [showPassword, setShowPassword] = useState(false);
 const [error, setError] = useState("");
 const [loading, setLoading] = useState(false);
 const [resetMode, setResetMode] = useState(false);
@@ -76,7 +77,6 @@ backgroundColor: "#060b18",
 color: "#fff",
 border: "1px solid #1e2d4a",
 fontSize: 15,
-marginBottom: 16,
 boxSizing: "border-box",
 };
 
@@ -137,24 +137,10 @@ border: "1px solid #1e2d4a",
 >
 <div style={{ textAlign: "center", marginBottom: 28 }}>
 <div style={{ fontSize: 40, marginBottom: 8 }}>🐟</div>
-<h1
-style={{
-margin: 0,
-color: "#f5c518",
-fontSize: 20,
-letterSpacing: 1,
-}}
->
+<h1 style={{ margin: 0, color: "#f5c518", fontSize: 20, letterSpacing: 1 }}>
 BSC CONTROL
 </h1>
-<p
-style={{
-margin: "4px 0 0",
-color: "#4a5568",
-fontSize: 11,
-letterSpacing: 2,
-}}
->
+<p style={{ margin: "4px 0 0", color: "#4a5568", fontSize: 11, letterSpacing: 2 }}>
 BAHAMIAN SEAFOOD CONNECTION
 </p>
 </div>
@@ -174,16 +160,11 @@ Reset link sent to
 <br />
 <b>{email}</b>
 </p>
-<p
-style={{ color: "#4a5568", fontSize: 12, margin: "0 0 16px" }}
->
+<p style={{ color: "#4a5568", fontSize: 12, margin: "0 0 16px" }}>
 Check your email inbox
 </p>
 <button
-onClick={() => {
-setResetMode(false);
-setResetSent(false);
-}}
+onClick={() => { setResetMode(false); setResetSent(false); }}
 style={secondaryBtn}
 >
 Back to Login
@@ -191,18 +172,10 @@ Back to Login
 </div>
 ) : resetMode ? (
 <>
-<h2
-style={{ color: "#fff", fontSize: 17, margin: "0 0 6px" }}
->
+<h2 style={{ color: "#fff", fontSize: 17, margin: "0 0 6px" }}>
 Reset Password
 </h2>
-<p
-style={{
-color: "#4a5568",
-fontSize: 13,
-margin: "0 0 20px",
-}}
->
+<p style={{ color: "#4a5568", fontSize: 13, margin: "0 0 20px" }}>
 Enter your email to receive a reset link
 </p>
 <label style={lbl}>Email Address</label>
@@ -211,24 +184,14 @@ type="email"
 placeholder="your@email.com"
 value={email}
 onChange={(e) => setEmail(e.target.value)}
-style={inp}
+style={{ ...inp, marginBottom: 16 }}
 />
 {error && (
-<p
-style={{
-color: "#f87171",
-fontSize: 13,
-marginBottom: 12,
-}}
->
+<p style={{ color: "#f87171", fontSize: 13, marginBottom: 12 }}>
 {error}
 </p>
 )}
-<button
-onClick={handleReset}
-disabled={loading}
-style={primaryBtn}
->
+<button onClick={handleReset} disabled={loading} style={primaryBtn}>
 {loading ? "Sending..." : "Send Reset Link"}
 </button>
 <button onClick={() => setResetMode(false)} style={secondaryBtn}>
@@ -237,9 +200,7 @@ Back
 </>
 ) : (
 <>
-<h2
-style={{ color: "#fff", fontSize: 17, margin: "0 0 20px" }}
->
+<h2 style={{ color: "#fff", fontSize: 17, margin: "0 0 20px" }}>
 Staff Login
 </h2>
 <label style={lbl}>Email</label>
@@ -248,17 +209,38 @@ type="email"
 placeholder="your@email.com"
 value={email}
 onChange={(e) => setEmail(e.target.value)}
-style={inp}
+style={{ ...inp, marginBottom: 16 }}
 />
 <label style={lbl}>Password</label>
+<div style={{ position: "relative", marginBottom: 16 }}>
 <input
-type="password"
+type={showPassword ? "text" : "password"}
 placeholder="Password"
 value={password}
 onChange={(e) => setPassword(e.target.value)}
 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-style={inp}
+style={{ ...inp, paddingRight: 46 }}
 />
+<button
+onClick={() => setShowPassword(!showPassword)}
+style={{
+position: "absolute",
+right: 12,
+top: "50%",
+transform: "translateY(-50%)",
+background: "none",
+border: "none",
+cursor: "pointer",
+fontSize: 18,
+color: "#6b7280",
+padding: 0,
+lineHeight: 1,
+}}
+>
+{showPassword ? "🙈" : "👁"}
+</button>
+</div>
+
 {error && (
 <p
 style={{
@@ -276,7 +258,11 @@ marginBottom: 14,
 <button
 onClick={handleLogin}
 disabled={loading}
-style={primaryBtn}
+style={{
+...primaryBtn,
+backgroundColor: loading ? "#555" : "#f5c518",
+cursor: loading ? "not-allowed" : "pointer",
+}}
 >
 {loading ? "Signing in..." : "Sign In"}
 </button>
@@ -300,3 +286,4 @@ Forgot password?
 </div>
 );
 }
+
