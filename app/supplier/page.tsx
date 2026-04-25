@@ -72,6 +72,7 @@ shipping_cost: number;
 case_cost: number;
 pieces_per_case: number;
 case_weight_lbs: number;
+supplier_id: string;
 supplier_name: string;
 supplier_whatsapp: string;
 photo_url: string;
@@ -87,27 +88,21 @@ const [success, setSuccess] = useState("");
 const [error, setError] = useState("");
 const [checkingSession, setCheckingSession] = useState(true);
 
-// ADMIN STATE
-const [pendingSuppliers, setPendingSuppliers] = useState<Supplier[]>([]);
-const [pendingProducts, setPendingProducts] = useState<SupplierProduct[]>([]);
+const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
+const [allProducts, setAllProducts] = useState<SupplierProduct[]>([]);
 const [adminTab, setAdminTab] = useState<"suppliers" | "products">("suppliers");
-
-// SUPPLIER PRODUCTS
 const [myProducts, setMyProducts] = useState<SupplierProduct[]>([]);
 
-// APPLICATION
 const [appName, setAppName] = useState("");
 const [appCompany, setAppCompany] = useState("");
 const [appEmail, setAppEmail] = useState("");
 const [appWhatsApp, setAppWhatsApp] = useState("");
 const [appCategory, setAppCategory] = useState("seafood");
 
-// LOGIN
 const [loginEmail, setLoginEmail] = useState("");
 const [showLoginPw, setShowLoginPw] = useState(false);
 const [loginPassword, setLoginPassword] = useState("");
 
-// PRODUCT UPLOAD
 const [prodName, setProdName] = useState("");
 const [prodCategory, setProdCategory] = useState("seafood");
 const [prodSku, setProdSku] = useState("");
@@ -133,13 +128,16 @@ const { data: profile } = await supabase
 .select("role")
 .eq("id", user.id)
 .single();
-if (profile?.role === "control_admin" || profile?.role === "basic_admin" || profile?.role === "manager") {
+if (
+profile?.role === "control_admin" ||
+profile?.role === "basic_admin" ||
+profile?.role === "manager"
+) {
 await loadAdminData();
 setView("admin");
 setCheckingSession(false);
 return;
 }
-// Check if supplier
 const { data: sup } = await supabase
 .from("suppliers")
 .select("*")
@@ -152,9 +150,7 @@ await loadMyProducts(sup.id);
 setView("portal");
 }
 }
-} catch (e) {
-// No session
-}
+} catch (e) {}
 setCheckingSession(false);
 }
 checkSession();
@@ -165,13 +161,13 @@ const { data: suppliers } = await supabase
 .from("suppliers")
 .select("*")
 .order("created_at", { ascending: false });
-if (suppliers) setPendingSuppliers(suppliers);
+if (suppliers) setAllSuppliers(suppliers);
 
 const { data: products } = await supabase
 .from("supplier_products")
 .select("*")
 .order("created_at", { ascending: false });
-if (products) setPendingProducts(products);
+if (products) setAllProducts(products);
 }
 
 async function loadMyProducts(supplierId: string) {
@@ -185,22 +181,22 @@ if (data) setMyProducts(data);
 
 async function handleApproveSupplier(id: string) {
 await supabase.from("suppliers").update({ status: "approved" }).eq("id", id);
-setPendingSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: "approved" } : s));
+setAllSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: "approved" } : s));
 }
 
 async function handleRejectSupplier(id: string) {
 await supabase.from("suppliers").update({ status: "rejected" }).eq("id", id);
-setPendingSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: "rejected" } : s));
+setAllSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: "rejected" } : s));
 }
 
 async function handleApproveProduct(id: string) {
 await supabase.from("supplier_products").update({ status: "approved" }).eq("id", id);
-setPendingProducts(prev => prev.map(p => p.id === id ? { ...p, status: "approved" } : p));
+setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: "approved" } : p));
 }
 
 async function handleRejectProduct(id: string) {
 await supabase.from("supplier_products").update({ status: "rejected" }).eq("id", id);
-setPendingProducts(prev => prev.map(p => p.id === id ? { ...p, status: "rejected" } : p));
+setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: "rejected" } : p));
 }
 
 async function handleApply() {
@@ -223,7 +219,7 @@ if (err) {
 setError(err.message.includes("unique") ? "Email already registered" : err.message);
 return;
 }
-setSuccess("Application submitted! Dedrick will review and contact you on WhatsApp within 24 hours.");
+setSuccess("Application submitted! BSC Management will review and contact you on WhatsApp within 24 hours.");
 }
 
 async function handleLogin() {
@@ -249,7 +245,11 @@ const { data: profile } = await supabase
 .eq("id", data.user.id)
 .single();
 
-if (profile?.role === "control_admin" || profile?.role === "basic_admin" || profile?.role === "manager") {
+if (
+profile?.role === "control_admin" ||
+profile?.role === "basic_admin" ||
+profile?.role === "manager"
+) {
 await loadAdminData();
 setLoading(false);
 setView("admin");
@@ -432,13 +432,13 @@ if (checkingSession) return (
 </div>
 );
 
-// ADMIN VIEW
+// ─── ADMIN VIEW ───
 if (view === "admin") return (
 <div style={pg}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
 <div>
 <h2 style={{ margin: 0, color: "#f5c518", fontSize: 20 }}>Supplier Admin</h2>
-<p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>BSC Control · Admin View</p>
+<p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>BSC Management · Admin View</p>
 </div>
 <button
 onClick={() => loadAdminData()}
@@ -451,19 +451,19 @@ Refresh
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
 <div style={{ ...card, textAlign: "center", padding: 14 }}>
 <p style={{ margin: 0, color: "#f5c518", fontSize: 22, fontWeight: "bold" }}>
-{pendingSuppliers.filter(s => s.status === "pending").length}
+{allSuppliers.filter(s => s.status === "pending").length}
 </p>
 <p style={{ margin: "4px 0 0", color: "#4a5568", fontSize: 10 }}>PENDING</p>
 </div>
 <div style={{ ...card, textAlign: "center", padding: 14 }}>
 <p style={{ margin: 0, color: "#4ade80", fontSize: 22, fontWeight: "bold" }}>
-{pendingSuppliers.filter(s => s.status === "approved").length}
+{allSuppliers.filter(s => s.status === "approved").length}
 </p>
 <p style={{ margin: "4px 0 0", color: "#4a5568", fontSize: 10 }}>APPROVED</p>
 </div>
 <div style={{ ...card, textAlign: "center", padding: 14 }}>
 <p style={{ margin: 0, color: "#60a5fa", fontSize: 22, fontWeight: "bold" }}>
-{pendingProducts.filter(p => p.status === "pending").length}
+{allProducts.filter(p => p.status === "pending").length}
 </p>
 <p style={{ margin: "4px 0 0", color: "#4a5568", fontSize: 10 }}>PRODUCTS</p>
 </div>
@@ -479,7 +479,7 @@ color: adminTab === "suppliers" ? "#000" : "#6b7280",
 border: "1px solid #1e2d4a", fontWeight: "bold", cursor: "pointer", fontSize: 13,
 }}
 >
-Suppliers ({pendingSuppliers.length})
+Suppliers ({allSuppliers.length})
 </button>
 <button
 onClick={() => setAdminTab("products")}
@@ -490,28 +490,32 @@ color: adminTab === "products" ? "#000" : "#6b7280",
 border: "1px solid #1e2d4a", fontWeight: "bold", cursor: "pointer", fontSize: 13,
 }}
 >
-Products ({pendingProducts.filter(p => p.status === "pending").length} pending)
+Products ({allProducts.filter(p => p.status === "pending").length} pending)
 </button>
 </div>
 
+{/* SUPPLIERS TAB */}
 {adminTab === "suppliers" && (
 <>
-{pendingSuppliers.length === 0 && (
+{allSuppliers.length === 0 && (
 <div style={{ ...card, textAlign: "center", padding: 30 }}>
 <p style={{ color: "#4a5568", margin: 0 }}>No supplier applications yet</p>
 </div>
 )}
-{pendingSuppliers.map((sup) => (
-<div key={sup.id} style={card}>
+{allSuppliers.map((sup) => {
+const supplierProducts = allProducts.filter(p => p.supplier_id === sup.id);
+return (
+<div key={sup.id} style={{ ...card, borderColor: sup.status === "pending" ? "#f5c518" : "#1e2d4a" }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
 <div>
 <p style={{ margin: 0, fontWeight: "bold", fontSize: 15 }}>{sup.full_name}</p>
-<p style={{ margin: "2px 0", color: "#4a5568", fontSize: 12 }}>{sup.company_name}</p>
+<p style={{ margin: "2px 0", color: "#aaa", fontSize: 13 }}>{sup.company_name}</p>
 <p style={{ margin: "2px 0", color: "#60a5fa", fontSize: 12 }}>{sup.email}</p>
 </div>
 <span style={statusBadge(sup.status)}>{sup.status.toUpperCase()}</span>
 </div>
-<div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+
+<div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" as const }}>
 <span style={{
 padding: "3px 10px", borderRadius: 20, fontSize: 11,
 backgroundColor: "#111c33", color: "#a78bfa", border: "1px solid #1e2d4a",
@@ -533,25 +537,55 @@ WhatsApp {sup.whatsapp}
 </a>
 )}
 </div>
-{sup.status === "pending" && (
-<div style={{ display: "flex", gap: 8 }}>
+
+{/* SUPPLIER PRODUCTS INLINE */}
+{supplierProducts.length > 0 && (
+<div style={{ marginBottom: 12 }}>
+<p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 11, letterSpacing: 1 }}>
+SUBMITTED PRODUCTS ({supplierProducts.length})
+</p>
+{supplierProducts.map((prod) => (
+<div key={prod.id} style={{
+backgroundColor: "#060d1f", borderRadius: 10,
+padding: "10px 12px", marginBottom: 8, border: "1px solid #1e2d4a",
+}}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+<div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+{prod.photo_url && (
+<img src={prod.photo_url} alt={prod.name} style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover" }} />
+)}
+<div>
+<p style={{ margin: 0, fontWeight: "bold", fontSize: 13 }}>{prod.name}</p>
+<p style={{ margin: 0, color: "#4a5568", fontSize: 11 }}>{prod.category} · SKU: {prod.sku || "N/A"}</p>
+</div>
+</div>
+<span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
+</div>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
+<div style={{ backgroundColor: "#0d1f3c", borderRadius: 6, padding: "6px 8px" }}>
+<p style={{ margin: 0, color: "#4a5568", fontSize: 9 }}>RETAIL</p>
+<p style={{ margin: 0, color: "#4ade80", fontWeight: "bold", fontSize: 12 }}>${prod.retail_price?.toFixed(2) || "0.00"}</p>
+</div>
+<div style={{ backgroundColor: "#0d1f3c", borderRadius: 6, padding: "6px 8px" }}>
+<p style={{ margin: 0, color: "#4a5568", fontSize: 9 }}>WHOLESALE</p>
+<p style={{ margin: 0, color: "#f5c518", fontWeight: "bold", fontSize: 12 }}>${prod.wholesale_price?.toFixed(2) || "0.00"}</p>
+</div>
+<div style={{ backgroundColor: "#0d1f3c", borderRadius: 6, padding: "6px 8px" }}>
+<p style={{ margin: 0, color: "#4a5568", fontSize: 9 }}>DUTY</p>
+<p style={{ margin: 0, color: "#60a5fa", fontWeight: "bold", fontSize: 12 }}>{((prod.duty_rate || 0) * 100).toFixed(0)}%</p>
+</div>
+</div>
+{prod.status === "pending" && (
+<div style={{ display: "flex", gap: 6 }}>
 <button
-onClick={() => handleApproveSupplier(sup.id)}
-style={{
-flex: 1, padding: "10px", borderRadius: 10,
-backgroundColor: "#f5c518", color: "#000",
-fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13,
-}}
+onClick={() => handleApproveProduct(prod.id)}
+style={{ flex: 1, padding: "8px", borderRadius: 8, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 12 }}
 >
-Approve
+Approve Product
 </button>
 <button
-onClick={() => handleRejectSupplier(sup.id)}
-style={{
-flex: 1, padding: "10px", borderRadius: 10,
-backgroundColor: "#3b0000", color: "#f87171",
-border: "1px solid #7f1d1d", cursor: "pointer", fontSize: 13,
-}}
+onClick={() => handleRejectProduct(prod.id)}
+style={{ flex: 1, padding: "8px", borderRadius: 8, backgroundColor: "#3b0000", color: "#f87171", border: "1px solid #7f1d1d", cursor: "pointer", fontSize: 12 }}
 >
 Reject
 </button>
@@ -559,17 +593,40 @@ Reject
 )}
 </div>
 ))}
+</div>
+)}
+
+{sup.status === "pending" && (
+<div style={{ display: "flex", gap: 8 }}>
+<button
+onClick={() => handleApproveSupplier(sup.id)}
+style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}
+>
+Approve Supplier
+</button>
+<button
+onClick={() => handleRejectSupplier(sup.id)}
+style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: "#3b0000", color: "#f87171", border: "1px solid #7f1d1d", cursor: "pointer", fontSize: 13 }}
+>
+Reject
+</button>
+</div>
+)}
+</div>
+);
+})}
 </>
 )}
 
+{/* PRODUCTS TAB */}
 {adminTab === "products" && (
 <>
-{pendingProducts.length === 0 && (
+{allProducts.length === 0 && (
 <div style={{ ...card, textAlign: "center", padding: 30 }}>
 <p style={{ color: "#4a5568", margin: 0 }}>No products submitted yet</p>
 </div>
 )}
-{pendingProducts.map((prod) => (
+{allProducts.map((prod) => (
 <div key={prod.id} style={card}>
 <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
 {prod.photo_url && (
@@ -596,42 +653,28 @@ WhatsApp {prod.supplier_whatsapp}
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
 <div style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
 <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>RETAIL</p>
-<p style={{ margin: "2px 0 0", color: "#4ade80", fontWeight: "bold", fontSize: 14 }}>
-${prod.retail_price?.toFixed(2) || "0.00"}
-</p>
+<p style={{ margin: "2px 0 0", color: "#4ade80", fontWeight: "bold", fontSize: 14 }}>${prod.retail_price?.toFixed(2) || "0.00"}</p>
 </div>
 <div style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
 <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>WHOLESALE</p>
-<p style={{ margin: "2px 0 0", color: "#f5c518", fontWeight: "bold", fontSize: 14 }}>
-${prod.wholesale_price?.toFixed(2) || "0.00"}
-</p>
+<p style={{ margin: "2px 0 0", color: "#f5c518", fontWeight: "bold", fontSize: 14 }}>${prod.wholesale_price?.toFixed(2) || "0.00"}</p>
 </div>
 <div style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
 <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>DUTY</p>
-<p style={{ margin: "2px 0 0", color: "#60a5fa", fontWeight: "bold", fontSize: 14 }}>
-{((prod.duty_rate || 0) * 100).toFixed(0)}%
-</p>
+<p style={{ margin: "2px 0 0", color: "#60a5fa", fontWeight: "bold", fontSize: 14 }}>{((prod.duty_rate || 0) * 100).toFixed(0)}%</p>
 </div>
 </div>
 {prod.status === "pending" && (
 <div style={{ display: "flex", gap: 8 }}>
 <button
 onClick={() => handleApproveProduct(prod.id)}
-style={{
-flex: 1, padding: "10px", borderRadius: 10,
-backgroundColor: "#f5c518", color: "#000",
-fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13,
-}}
+style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}
 >
 Approve & Go Live
 </button>
 <button
 onClick={() => handleRejectProduct(prod.id)}
-style={{
-flex: 1, padding: "10px", borderRadius: 10,
-backgroundColor: "#3b0000", color: "#f87171",
-border: "1px solid #7f1d1d", cursor: "pointer", fontSize: 13,
-}}
+style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: "#3b0000", color: "#f87171", border: "1px solid #7f1d1d", cursor: "pointer", fontSize: 13 }}
 >
 Reject
 </button>
@@ -644,7 +687,7 @@ Reject
 </div>
 );
 
-// HOME
+// ─── HOME ───
 if (view === "home") return (
 <div style={pg}>
 <div style={{ textAlign: "center", marginBottom: 32, paddingTop: 20 }}>
@@ -652,15 +695,13 @@ if (view === "home") return (
 <h1 style={{ margin: 0, color: "#f5c518", fontSize: 22 }}>BSC Supplier Portal</h1>
 <p style={{ margin: "6px 0 0", color: "#4a5568", fontSize: 13 }}>Bahamian Seafood Connection</p>
 </div>
-
 <div style={{ ...card, marginBottom: 16 }}>
 <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15 }}>New Supplier?</p>
 <p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>
-Apply to become a BSC supplier. Dedrick will review and contact you on WhatsApp.
+Apply to become a BSC supplier. Management will review and contact you on WhatsApp.
 </p>
 <button onClick={() => setView("apply")} style={primaryBtn}>Apply Now</button>
 </div>
-
 <div style={{ ...card, marginBottom: 16 }}>
 <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15 }}>Already Approved?</p>
 <p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>
@@ -668,11 +709,10 @@ Login to upload and manage your products.
 </p>
 <button onClick={() => setView("login")} style={secondaryBtn}>Supplier Login</button>
 </div>
-
 <div style={{ ...card, borderColor: "#f5c518" }}>
-<p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15, color: "#f5c518" }}>BSC Admin</p>
+<p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 15, color: "#f5c518" }}>BSC Management</p>
 <p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>
-Dedrick Storr — review and approve supplier applications.
+Review and approve supplier applications and products.
 </p>
 <button onClick={() => setView("login")} style={{ ...secondaryBtn, borderColor: "#f5c518", color: "#f5c518" }}>
 Admin Login
@@ -681,7 +721,7 @@ Admin Login
 </div>
 );
 
-// APPLY
+// ─── APPLY ───
 if (view === "apply") return (
 <div style={pg}>
 <button
@@ -692,7 +732,7 @@ Back
 </button>
 <h2 style={{ color: "#f5c518", marginTop: 0, marginBottom: 4 }}>Supplier Application</h2>
 <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 20 }}>
-Dedrick will review and contact you on WhatsApp within 24 hours.
+BSC Management will review and contact you on WhatsApp within 24 hours.
 </p>
 {success ? (
 <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 12, padding: 20, textAlign: "center" }}>
@@ -732,7 +772,7 @@ style={{ ...primaryBtn, backgroundColor: loading ? "#555" : "#f5c518", cursor: l
 </div>
 );
 
-// LOGIN
+// ─── LOGIN ───
 if (view === "login") return (
 <div style={pg}>
 <button
@@ -784,7 +824,7 @@ style={{ ...primaryBtn, backgroundColor: loading ? "#555" : "#f5c518", cursor: l
 </div>
 );
 
-// PORTAL
+// ─── PORTAL ───
 if (view === "portal") return (
 <div style={pg}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -799,17 +839,14 @@ style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cur
 Sign Out
 </button>
 </div>
-
 {success && (
 <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
 <p style={{ margin: 0, color: "#4ade80", fontSize: 13 }}>{success}</p>
 </div>
 )}
-
 <button onClick={() => { setView("upload"); setSuccess(""); setError(""); }} style={primaryBtn}>
 + Upload New Product
 </button>
-
 {myProducts.length === 0 ? (
 <div style={{ ...card, textAlign: "center", padding: 30 }}>
 <p style={{ margin: 0, color: "#4a5568", fontSize: 13 }}>No products yet. Upload your first product above.</p>
@@ -835,7 +872,7 @@ Sign Out
 </div>
 );
 
-// UPLOAD
+// ─── UPLOAD ───
 if (view === "upload") return (
 <div style={pg}>
 <button
@@ -848,7 +885,6 @@ Back
 <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 20 }}>
 BSC will auto-calculate retail and wholesale prices.
 </p>
-
 {success && (
 <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
 <p style={{ margin: 0, color: "#4ade80", fontSize: 14, fontWeight: "bold" }}>{success}</p>
