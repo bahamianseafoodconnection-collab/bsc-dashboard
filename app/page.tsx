@@ -17,7 +17,7 @@ const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
 const [loading, setLoading] = useState(true);
 const [activeTab, setActiveTab] = useState<'overview' | 'profit' | 'suppliers' | 'ai'>('overview');
 const [aiMessages, setAiMessages] = useState<AIMessage[]>([
-{ role: 'ai', text: 'Hi Dedrick! I\'m your BSC AI assistant. Ask me anything about your business performance, supplier payments, or how to grow BSC.' }
+{ role: 'ai', text: 'Hi Dedrick! I am your BSC AI assistant. Ask me anything about your business performance, supplier payments, or how to grow BSC.' }
 ]);
 const [aiInput, setAiInput] = useState('');
 const [aiLoading, setAiLoading] = useState(false);
@@ -42,7 +42,6 @@ const today = new Date().toLocaleDateString('en-US', {
 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
 });
 
-// Revenue stream breakdown
 const posInvoices = recentInvoices.filter(inv =>
 !inv.customerName.includes('DELIVERY') && !inv.customerName.includes('PICKUP')
 );
@@ -55,7 +54,6 @@ const posProfit = posRevenue * 0.07;
 const marketProfit = marketRevenue * 0.25;
 const totalProfit = posProfit + marketProfit;
 
-// Supplier breakdown per invoice
 type SupplierPayout = { name: string; owed: number; invoiceCount: number };
 const supplierMap: Record<string, SupplierPayout> = {};
 recentInvoices.forEach(inv => {
@@ -78,24 +76,10 @@ const userMsg = aiInput.trim();
 setAiInput('');
 setAiMessages(prev => [...prev, { role: 'user', text: userMsg }]);
 setAiLoading(true);
-
 try {
-const context = `
-You are BSC AI, the business intelligence assistant for Bahamian Seafood Connection (BSC), a Bahamian seafood marketplace.
-Current business data:
-- Total Revenue: $${finance.revenue.toFixed(2)}
-- BSC Profit: $${totalProfit.toFixed(2)}
-- Supplier Owed: $${finance.supplierOwed.toFixed(2)}
-- Total Transactions: ${finance.transactions}
-- Average Sale: $${avgTransaction}
-- POS Revenue: $${posRevenue.toFixed(2)} (7% BSC margin)
-- Marketplace Revenue: $${marketRevenue.toFixed(2)} (25% BSC margin)
-- Low Stock Items: ${lowStockItems.map(p => p.name).join(', ') || 'None'}
-- Recent invoices: ${recentInvoices.length} orders
-- Top suppliers owed: ${supplierPayouts.slice(0, 3).map(s => s.name + ' $' + s.owed.toFixed(2)).join(', ')}
-You help Dedrick Storr (owner) understand profits, manage suppliers, fix business problems, and scale the business across the Bahamas.
-Be concise, direct, and actionable. Use dollar amounts and percentages from the data above.
-`;
+const context = `You are BSC AI, the business intelligence assistant for Bahamian Seafood Connection (BSC).
+Current data: Revenue $${finance.revenue.toFixed(2)}, BSC Profit $${totalProfit.toFixed(2)}, Supplier Owed $${finance.supplierOwed.toFixed(2)}, Transactions ${finance.transactions}, Avg Sale $${avgTransaction}, POS Revenue $${posRevenue.toFixed(2)} (7% margin), Marketplace Revenue $${marketRevenue.toFixed(2)} (25% margin), Low Stock: ${lowStockItems.map(p => p.name).join(', ') || 'None'}, Top suppliers: ${supplierPayouts.slice(0, 3).map(s => s.name + ' $' + s.owed.toFixed(2)).join(', ')}.
+Be concise, direct, and actionable. Help Dedrick Storr grow BSC across the Bahamas.`;
 const response = await fetch('https://api.anthropic.com/v1/messages', {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
@@ -104,7 +88,7 @@ model: 'claude-sonnet-4-20250514',
 max_tokens: 1000,
 system: context,
 messages: [
-...aiMessages.filter(m => m.role !== 'ai' || aiMessages.indexOf(m) > 0).map(m => ({
+...aiMessages.filter((_, i) => i > 0).map(m => ({
 role: m.role === 'ai' ? 'assistant' : 'user',
 content: m.text,
 })),
@@ -121,35 +105,21 @@ setAiMessages(prev => [...prev, { role: 'ai', text: 'Connection error. Please tr
 setAiLoading(false);
 }
 
-const s = {
-page: {
-minHeight: '100vh',
-backgroundColor: '#060d1f',
-color: '#ffffff',
-fontFamily: "'Inter', -apple-system, sans-serif",
-paddingBottom: 80,
-} as React.CSSProperties,
-header: {
-background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)',
-borderBottom: '1px solid #1e3a5f',
-padding: '20px 24px 16px',
-position: 'sticky' as const,
-top: 0,
-zIndex: 50,
-},
-card: {
+const card: React.CSSProperties = {
 backgroundColor: '#0d1f3c',
 borderRadius: 16,
 padding: 20,
 border: '1px solid #1e3a5f',
 marginBottom: 14,
-} as React.CSSProperties,
-kpiCard: {
+};
+
+const kpiCard: React.CSSProperties = {
 borderRadius: 16,
 padding: 20,
 border: '1px solid #1e3a5f',
-} as React.CSSProperties,
-tab: (active: boolean): React.CSSProperties => ({
+};
+
+const tabBtn = (active: boolean): React.CSSProperties => ({
 flex: 1,
 padding: '10px 6px',
 borderRadius: 10,
@@ -160,11 +130,13 @@ fontWeight: active ? 'bold' : 'normal',
 fontSize: 11,
 cursor: 'pointer',
 letterSpacing: 0.5,
-}),
-};
+});
 
 if (loading) return (
-<div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+<div style={{
+minHeight: '100vh', backgroundColor: '#060d1f',
+display: 'flex', alignItems: 'center', justifyContent: 'center',
+}}>
 <div style={{ textAlign: 'center' }}>
 <div style={{ fontSize: 48, marginBottom: 16 }}>🐟</div>
 <p style={{ color: '#4a5568', fontSize: 14 }}>Loading BSC Control...</p>
@@ -173,26 +145,43 @@ if (loading) return (
 );
 
 return (
-<div style={s.page}>
+<div style={{
+minHeight: '100vh',
+backgroundColor: '#060d1f',
+color: '#ffffff',
+fontFamily: "'Inter', -apple-system, sans-serif",
+paddingBottom: 80,
+}}>
+
 {/* HEADER */}
-<div style={s.header}>
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: 900, margin: '0 auto' }}>
+<div style={{
+background: 'linear-gradient(135deg, #0a1628 0%, #0d1f3c 100%)',
+borderBottom: '1px solid #1e3a5f',
+padding: '20px 24px 16px',
+position: 'sticky',
+top: 0,
+zIndex: 50,
+}}>
+<div style={{
+display: 'flex', justifyContent: 'space-between',
+alignItems: 'center', maxWidth: 900, margin: '0 auto',
+}}>
 <div>
-<h1 style={{ margin: 0, color: '#f5c518', fontSize: 24, fontWeight: '800', letterSpacing: -0.5 }}>
+<h1 style={{ margin: 0, color: '#f5c518', fontSize: 24, fontWeight: 'bold' }}>
 BSC Control
 </h1>
-<p style={{ margin: '3px 0 0', color: '#4a5568', fontSize: 11, letterSpacing: 1 }}>
+<p style={{ margin: '3px 0 0', color: '#4a5568', fontSize: 11 }}>
 {today}
 </p>
 </div>
-<div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
 {lowStockItems.length > 0 && (
 <div style={{
 backgroundColor: '#3b0000', color: '#f87171',
 borderRadius: 20, padding: '4px 12px',
 fontSize: 11, fontWeight: 'bold', border: '1px solid #7f1d1d',
 }}>
-⚠ {lowStockItems.length} Low Stock
+{lowStockItems.length} Low Stock
 </div>
 )}
 <div style={{
@@ -200,7 +189,7 @@ backgroundColor: '#0a2010', color: '#4ade80',
 borderRadius: 20, padding: '4px 12px',
 fontSize: 11, fontWeight: 'bold', border: '1px solid #4ade80',
 }}>
-● LIVE
+LIVE
 </div>
 </div>
 </div>
@@ -208,31 +197,29 @@ fontSize: 11, fontWeight: 'bold', border: '1px solid #4ade80',
 
 <div style={{ padding: '20px 20px 0', maxWidth: 900, margin: '0 auto' }}>
 
-{/* TOP KPI ROW */}
+{/* KPI ROW */}
 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-<div style={{ ...s.kpiCard, background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
+<div style={{ ...kpiCard, background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
 <p style={{ margin: 0, color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>REVENUE</p>
-<h2 style={{ margin: '6px 0 0', color: '#fff', fontSize: 20, fontWeight: '800' }}>
+<h2 style={{ margin: '6px 0 0', color: '#fff', fontSize: 20, fontWeight: 'bold' }}>
 ${finance.revenue.toFixed(2)}
 </h2>
 <p style={{ margin: '4px 0 0', color: '#4ade80', fontSize: 10 }}>
 {finance.transactions} sales
 </p>
 </div>
-
-<div style={{ ...s.kpiCard, background: 'linear-gradient(135deg, #1a1200, #2a1e00)' }}>
+<div style={{ ...kpiCard, background: 'linear-gradient(135deg, #1a1200, #2a1e00)' }}>
 <p style={{ margin: 0, color: '#f5c518aa', fontSize: 10, letterSpacing: 1 }}>BSC PROFIT</p>
-<h2 style={{ margin: '6px 0 0', color: '#f5c518', fontSize: 20, fontWeight: '800' }}>
+<h2 style={{ margin: '6px 0 0', color: '#f5c518', fontSize: 20, fontWeight: 'bold' }}>
 ${totalProfit.toFixed(2)}
 </h2>
 <p style={{ margin: '4px 0 0', color: '#f5c518aa', fontSize: 10 }}>
 Avg ${avgTransaction}/sale
 </p>
 </div>
-
-<div style={{ ...s.kpiCard, background: 'linear-gradient(135deg, #001a2a, #002a3a)' }}>
+<div style={{ ...kpiCard, background: 'linear-gradient(135deg, #001a2a, #002a3a)' }}>
 <p style={{ margin: 0, color: '#60a5faaa', fontSize: 10, letterSpacing: 1 }}>OWED</p>
-<h2 style={{ margin: '6px 0 0', color: '#60a5fa', fontSize: 20, fontWeight: '800' }}>
+<h2 style={{ margin: '6px 0 0', color: '#60a5fa', fontSize: 20, fontWeight: 'bold' }}>
 ${finance.supplierOwed.toFixed(2)}
 </h2>
 <p style={{ margin: '4px 0 0', color: '#60a5faaa', fontSize: 10 }}>
@@ -248,7 +235,7 @@ borderRadius: 14, padding: 6, marginBottom: 20,
 border: '1px solid #1e3a5f',
 }}>
 {(['overview', 'profit', 'suppliers', 'ai'] as const).map((tab) => (
-<button key={tab} onClick={() => setActiveTab(tab)} style={s.tab(activeTab === tab)}>
+<button key={tab} onClick={() => setActiveTab(tab)} style={tabBtn(activeTab === tab)}>
 {tab === 'overview' ? '📊 Overview' :
 tab === 'profit' ? '💰 Profit' :
 tab === 'suppliers' ? '🚢 Suppliers' : '🤖 AI'}
@@ -256,11 +243,10 @@ tab === 'suppliers' ? '🚢 Suppliers' : '🤖 AI'}
 ))}
 </div>
 
-{/* OVERVIEW TAB */}
+{/* OVERVIEW */}
 {activeTab === 'overview' && (
 <>
-{/* REVENUE STREAMS */}
-<div style={s.card}>
+<div style={card}>
 <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>
 Revenue Streams
 </p>
@@ -296,12 +282,11 @@ ${totalProfit.toFixed(2)}
 </div>
 </div>
 
-{/* RECENT ORDERS */}
 <div style={{ marginBottom: 20 }}>
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
 <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Recent Orders</p>
 <Link href="/report" style={{ color: '#60a5fa', fontSize: 12, textDecoration: 'none' }}>
-View All →
+View All
 </Link>
 </div>
 {recentInvoices.slice(0, 5).map((inv) => {
@@ -310,11 +295,11 @@ const nameParts = inv.customerName.split(' | ');
 const customerName = nameParts[0];
 const deliveryNote = nameParts[1] || null;
 return (
-<Link key={inv.id} href={`/invoice?id=${inv.id}`} style={{ textDecoration: 'none' }}>
+<Link key={inv.id} href={"/invoice?id=" + inv.id} style={{ textDecoration: 'none' }}>
 <div style={{
-...s.card, marginBottom: 10, padding: '14px 16px',
+...card, marginBottom: 10, padding: '14px 16px',
 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-cursor: 'pointer', transition: 'border-color 0.2s',
+cursor: 'pointer',
 }}>
 <div style={{ flex: 1 }}>
 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -340,7 +325,6 @@ ${inv.total.toFixed(2)}
 })}
 </div>
 
-{/* QUICK ACTIONS */}
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
 <Link href="/pos" style={{
 background: 'linear-gradient(135deg, #f5c518, #e6b800)',
@@ -368,11 +352,10 @@ textDecoration: 'none', display: 'block', border: '1px solid #1e3a5f',
 }}>🚢 Suppliers</Link>
 </div>
 
-{/* LOW STOCK */}
 {lowStockItems.length > 0 && (
-<div style={{ ...s.card, borderColor: '#7f1d1d', backgroundColor: '#1a0808' }}>
+<div style={{ ...card, borderColor: '#7f1d1d', backgroundColor: '#1a0808' }}>
 <p style={{ margin: '0 0 10px', color: '#f87171', fontWeight: 'bold', fontSize: 14 }}>
-⚠️ Low Stock Alert
+Low Stock Alert
 </p>
 {lowStockItems.map((p) => (
 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -390,11 +373,10 @@ textDecoration: 'none', display: 'block', border: '1px solid #1e3a5f',
 {/* PROFIT TAB */}
 {activeTab === 'profit' && (
 <>
-<div style={s.card}>
+<div style={card}>
 <p style={{ margin: '0 0 16px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>
-Profit Breakdown
+Profit by Stream
 </p>
-
 {[
 { label: 'POS Sales', revenue: posRevenue, profit: posProfit, rate: '7%', icon: '🛒', color: '#4ade80' },
 { label: 'Marketplace', revenue: marketRevenue, profit: marketProfit, rate: '25%', icon: '🏪', color: '#60a5fa' },
@@ -426,7 +408,6 @@ ${item.profit.toFixed(2)}
 </div>
 </div>
 ))}
-
 <div style={{
 background: 'linear-gradient(135deg, #1a1200, #2a1e00)',
 borderRadius: 12, padding: '16px 18px', marginTop: 6,
@@ -442,7 +423,7 @@ ${totalProfit.toFixed(2)}
 </div>
 </div>
 
-<div style={s.card}>
+<div style={card}>
 <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>
 Daily Summary
 </p>
@@ -450,7 +431,7 @@ Daily Summary
 { label: 'Total Revenue', value: '$' + finance.revenue.toFixed(2), color: '#fff' },
 { label: 'BSC Profit', value: '$' + totalProfit.toFixed(2), color: '#f5c518' },
 { label: 'Supplier Owed', value: '$' + finance.supplierOwed.toFixed(2), color: '#60a5fa' },
-{ label: 'Total Orders', value: finance.transactions.toString(), color: '#4ade80' },
+{ label: 'Total Orders', value: String(finance.transactions), color: '#4ade80' },
 { label: 'Avg Order Value', value: '$' + avgTransaction, color: '#aaa' },
 ].map((row) => (
 <div key={row.label} style={{
@@ -470,14 +451,13 @@ paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #1e3a5f',
 {/* SUPPLIERS TAB */}
 {activeTab === 'suppliers' && (
 <>
-<div style={s.card}>
+<div style={card}>
 <p style={{ margin: '0 0 4px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>
 Supplier Payouts
 </p>
 <p style={{ margin: '0 0 16px', color: '#4a5568', fontSize: 12 }}>
 93% of each sale goes to the supplier
 </p>
-
 {supplierPayouts.length === 0 ? (
 <p style={{ color: '#4a5568', fontSize: 13, textAlign: 'center', padding: 20 }}>
 No supplier data yet
@@ -498,34 +478,28 @@ padding: '14px 16px', marginBottom: 10, border: '1px solid #1e3a5f',
 <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 16 }}>
 ${sup.owed.toFixed(2)}
 </p>
-<p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>
-OWED
-</p>
+<p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>OWED</p>
 </div>
 </div>
 </div>
 ))}
-
 <div style={{
 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
 paddingTop: 14, borderTop: '1px solid #1e3a5f',
 }}>
-<p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>
-Total Owed
-</p>
+<p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>Total Owed</p>
 <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 20 }}>
 ${finance.supplierOwed.toFixed(2)}
 </p>
 </div>
 </div>
-
 <Link href="/supplier" style={{ textDecoration: 'none' }}>
 <div style={{
-...s.card, textAlign: 'center', cursor: 'pointer',
+...card, textAlign: 'center', cursor: 'pointer',
 background: 'linear-gradient(135deg, #0d1f3c, #132a4a)',
 }}>
 <p style={{ margin: 0, color: '#a78bfa', fontWeight: 'bold', fontSize: 15 }}>
-🚢 Manage Supplier Portal →
+🚢 Manage Supplier Portal
 </p>
 </div>
 </Link>
@@ -534,7 +508,7 @@ background: 'linear-gradient(135deg, #0d1f3c, #132a4a)',
 
 {/* AI TAB */}
 {activeTab === 'ai' && (
-<div style={{ ...s.card, padding: 0, overflow: 'hidden' }}>
+<div style={{ ...card, padding: 0, overflow: 'hidden' }}>
 <div style={{
 padding: '14px 16px', borderBottom: '1px solid #1e3a5f',
 background: 'linear-gradient(135deg, #0d1f3c, #132a4a)',
@@ -557,14 +531,14 @@ display: 'flex',
 justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
 }}>
 <div style={{
-maxWidth: '85%', padding: '10px 14px', borderRadius: 14,
+maxWidth: '85%',
+padding: '10px 14px',
+borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
 backgroundColor: msg.role === 'user' ? '#f5c518' : '#0d1f3c',
 color: msg.role === 'user' ? '#000' : '#fff',
-fontSize: 13, lineHeight: 1.5,
+fontSize: 13,
+lineHeight: 1.5,
 border: msg.role === 'ai' ? '1px solid #1e3a5f' : 'none',
-borderRadius: msg.role === 'user'
-? '14px 14px 2px 14px'
-: '14px 14px 14px 2px',
 }}>
 {msg.text}
 </div>
@@ -573,9 +547,12 @@ borderRadius: msg.role === 'user'
 {aiLoading && (
 <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
 <div style={{
-padding: '10px 14px', borderRadius: '14px 14px 14px 2px',
-backgroundColor: '#0d1f3c', border: '1px solid #1e3a5f',
-color: '#4a5568', fontSize: 13,
+padding: '10px 14px',
+borderRadius: '14px 14px 14px 2px',
+backgroundColor: '#0d1f3c',
+border: '1px solid #1e3a5f',
+color: '#4a5568',
+fontSize: 13,
 }}>
 Thinking...
 </div>
@@ -595,8 +572,7 @@ onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
 style={{
 flex: 1, padding: '10px 14px', borderRadius: 10,
 backgroundColor: '#060d1f', color: '#fff',
-border: '1px solid #1e3a5f', fontSize: 13,
-outline: 'none',
+border: '1px solid #1e3a5f', fontSize: 13, outline: 'none',
 }}
 />
 <button
