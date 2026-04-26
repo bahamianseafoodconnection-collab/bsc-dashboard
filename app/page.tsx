@@ -13,6 +13,11 @@ const supabase = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg'
 );
 
+const NASSAU_MARGIN = 0.38;
+const ANDROS_MARGIN = 0.43;
+const MARKET_MARGIN = 0.25;
+const WHOLESALE_MARGIN = 0.12;
+
 type AIMessage = { role: 'user' | 'ai'; text: string };
 type Supplier = { id: string; full_name: string; company_name: string; email: string; whatsapp: string; category: string; status: string; };
 type SupplierProduct = { id: string; name: string; category: string; sku: string; retail_price: number; wholesale_price: number; unit_cost: number; duty_rate: number; supplier_id: string; supplier_name: string; supplier_whatsapp: string; photo_url: string; status: string; case_cost: number; pieces_per_case: number; };
@@ -64,7 +69,7 @@ export default function Dashboard() {
   const [supplierTab, setSupplierTab] = useState<'applications' | 'products'>('applications');
   const [supplierLoading, setSupplierLoading] = useState(false);
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
-    { role: 'ai', text: 'Hi Dedrick! I am your BSC AI assistant. I know your live business data including Spiny Tails Processing Plant. Ask me anything about profits, inventory, scaling, or suppliers.' }
+    { role: 'ai', text: 'Hi Dedrick! I am your BSC AI assistant. I know your live business data including Spiny Tails Processing Plant, BSC Marketplace Nassau, and Ceta\'s Variety Store in Andros. Ask me anything about profits, inventory, scaling, or suppliers.' }
   ]);
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -131,11 +136,28 @@ export default function Dashboard() {
   const lowStockItems = products.filter(p => p.stock <= p.minStock + 2);
   const avgTransaction = finance.transactions > 0 ? (finance.revenue / finance.transactions).toFixed(2) : '0.00';
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const posInvoices = recentInvoices.filter(inv => !inv.customerName.includes('DELIVERY') && !inv.customerName.includes('PICKUP'));
-  const marketInvoices = recentInvoices.filter(inv => inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP'));
-  const posRevenue = posInvoices.reduce((s, i) => s + i.total, 0);
+
+  // Split invoices by location
+  const nassauPosInvoices = recentInvoices.filter(inv =>
+    !inv.customerName.includes('DELIVERY') &&
+    !inv.customerName.includes('PICKUP') &&
+    !inv.customerName.includes('ANDROS')
+  );
+  const androsPosInvoices = recentInvoices.filter(inv => inv.customerName.includes('ANDROS'));
+  const marketInvoices = recentInvoices.filter(inv =>
+    inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP')
+  );
+
+  const nassauRevenue = nassauPosInvoices.reduce((s, i) => s + i.total, 0);
+  const androsRevenue = androsPosInvoices.reduce((s, i) => s + i.total, 0);
   const marketRevenue = marketInvoices.reduce((s, i) => s + i.total, 0);
-  const totalProfit = posRevenue * 0.07 + marketRevenue * 0.25;
+
+  const nassauProfit = nassauRevenue * NASSAU_MARGIN;
+  const androsProfit = androsRevenue * ANDROS_MARGIN;
+  const marketProfit = marketRevenue * MARKET_MARGIN;
+  const totalProfit = nassauProfit + androsProfit + marketProfit;
+  const totalRevenue = nassauRevenue + androsRevenue + marketRevenue;
+
   const pendingCount = allSuppliers.filter(s => s.status === 'pending').length;
 
   type SupplierPayout = { name: string; owed: number; invoiceCount: number };
@@ -163,11 +185,14 @@ export default function Dashboard() {
     setAiLoading(true);
     try {
       const ctx = `You are BSC AI for Bahamian Seafood Connection owned by Dedrick Storr.
-Business: BSC Marketplace + Spiny Tails Processing Plant, Firetrial Road, Nassau, Bahamas.
+Locations:
+1. BSC Marketplace — Firetrial Road, Nassau, Bahamas (38% POS margin)
+2. Ceta's Variety Store — Mastic Point, North Andros, Bahamas (43% POS margin)
+3. Spiny Tails Processing Plant — Firetrial Road, Nassau (central inventory for both stores)
 Freezer stock: ${TOTAL_LBS.toLocaleString()} lbs total, 30,000lb capacity.
-Revenue: $${finance.revenue.toFixed(2)}, Profit: $${totalProfit.toFixed(2)}, Orders: ${finance.transactions}.
+Revenue: Nassau POS $${nassauRevenue.toFixed(2)} | Andros POS $${androsRevenue.toFixed(2)} | Online $${marketRevenue.toFixed(2)}
+Total Profit: $${totalProfit.toFixed(2)}, Orders: ${finance.transactions}.
 Suppliers: ${allSuppliers.length} total, ${pendingCount} pending.
-Supplier portal: https://project-1fnu0.vercel.app/supplier
 Be concise, direct, and actionable.`;
       const res = await fetch('/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -218,7 +243,7 @@ Be concise, direct, and actionable.`;
     {
       label: 'OPERATIONS',
       items: [
-        { section: 'pos' as Section, label: 'Walking POS', icon: '🛒', badge: 'LIVE' },
+        { section: 'pos' as Section, label: 'POS Locations', icon: '🛒', badge: 'LIVE' },
         { section: 'report' as Section, label: 'Daily Report', icon: '📄' },
         { section: 'yield' as Section, label: 'Yield Calculator', icon: '🧮' },
       ]
@@ -251,8 +276,8 @@ Be concise, direct, and actionable.`;
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #f5c518, #e6a800)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🦀</div>
           <div>
-            <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 15 }}>BSC Marketplace</p>
-            <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>Firetrial Rd · Nassau</p>
+            <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 15 }}>BSC Control</p>
+            <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>Nassau + Andros</p>
           </div>
         </div>
       </div>
@@ -312,14 +337,68 @@ Be concise, direct, and actionable.`;
             </div>
           )}
 
+          {/* TWO LOCATIONS CARD */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            {/* NASSAU */}
+            <div style={{ background: 'linear-gradient(135deg, #001a3a, #002a5a)', border: '1px solid #1e5a9f', borderRadius: 18, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, letterSpacing: 1, fontWeight: 'bold' }}>NASSAU · 38% MARGIN</p>
+                  <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>BSC Marketplace</p>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: 11 }}>Firetrial Road, Nassau</p>
+                </div>
+                <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '3px 10px', fontSize: 10, fontWeight: 'bold' }}>ACTIVE</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
+                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>REVENUE</p>
+                  <p style={{ margin: '4px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>${nassauRevenue.toFixed(2)}</p>
+                </div>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
+                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>PROFIT</p>
+                  <p style={{ margin: '4px 0 0', color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>${nassauProfit.toFixed(2)}</p>
+                </div>
+              </div>
+              <Link href="/pos" style={{ display: 'block', marginTop: 12, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>
+                🛒 Nassau POS
+              </Link>
+            </div>
+
+            {/* ANDROS */}
+            <div style={{ background: 'linear-gradient(135deg, #1a0a2a, #2a1040)', border: '1px solid #7c3aed', borderRadius: 18, padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <p style={{ margin: 0, color: '#a78bfa', fontSize: 10, letterSpacing: 1, fontWeight: 'bold' }}>ANDROS · 43% MARGIN</p>
+                  <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Ceta's Variety Store</p>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: 11 }}>Mastic Point, North Andros</p>
+                </div>
+                <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '3px 10px', fontSize: 10, fontWeight: 'bold' }}>ACTIVE</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
+                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>REVENUE</p>
+                  <p style={{ margin: '4px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>${androsRevenue.toFixed(2)}</p>
+                </div>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
+                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>PROFIT</p>
+                  <p style={{ margin: '4px 0 0', color: '#a78bfa', fontWeight: 'bold', fontSize: 16 }}>${androsProfit.toFixed(2)}</p>
+                </div>
+              </div>
+              <Link href="/pos-andros" style={{ display: 'block', marginTop: 12, padding: '10px', borderRadius: 10, backgroundColor: '#7c3aed', color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>
+                🛒 Andros POS
+              </Link>
+            </div>
+          </div>
+
+          {/* SPINY TAILS */}
           <div style={{ background: 'linear-gradient(135deg, #001a3a, #002a5a, #001a2a)', border: '1px solid #1e5a9f', borderRadius: 20, padding: 24, marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <span style={{ fontSize: 48 }}>🦞</span>
                 <div>
-                  <p style={{ margin: 0, color: '#60a5fa', fontSize: 11, letterSpacing: 1, fontWeight: 'bold' }}>PROCESSING PLANT & SUPPLIER</p>
+                  <p style={{ margin: 0, color: '#60a5fa', fontSize: 11, letterSpacing: 1, fontWeight: 'bold' }}>CENTRAL PROCESSING PLANT</p>
                   <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Spiny Tails Processing</p>
-                  <p style={{ margin: 0, color: '#6b7280', fontSize: 12 }}>Firetrial Road, Nassau · Blast Freezer + Holding Freezer</p>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: 12 }}>Firetrial Road, Nassau · Supplies Nassau + Andros</p>
                 </div>
               </div>
               <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '4px 14px', fontSize: 11, fontWeight: 'bold', flexShrink: 0 }}>ACTIVE</span>
@@ -345,10 +424,11 @@ Be concise, direct, and actionable.`;
             </div>
           </div>
 
+          {/* KPI STRIP */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
             {[
-              { label: 'TOTAL REVENUE', value: '$' + finance.revenue.toFixed(2), sub: finance.transactions + ' sales', color: '#4ade80', bg: 'linear-gradient(135deg, #0a1f0a, #0d2b14)' },
-              { label: 'BSC PROFIT', value: '$' + totalProfit.toFixed(2), sub: 'Avg $' + avgTransaction, color: '#f5c518', bg: 'linear-gradient(135deg, #1a1200, #2a1e00)' },
+              { label: 'TOTAL REVENUE', value: '$' + totalRevenue.toFixed(2), sub: finance.transactions + ' sales', color: '#4ade80', bg: 'linear-gradient(135deg, #0a1f0a, #0d2b14)' },
+              { label: 'BSC PROFIT', value: '$' + totalProfit.toFixed(2), sub: 'All locations', color: '#f5c518', bg: 'linear-gradient(135deg, #1a1200, #2a1e00)' },
               { label: 'SUPPLIER OWED', value: '$' + finance.supplierOwed.toFixed(2), sub: '93% of sales', color: '#60a5fa', bg: 'linear-gradient(135deg, #001a2a, #002a3a)' },
             ].map(kpi => (
               <div key={kpi.label} style={{ background: kpi.bg, borderRadius: 16, padding: 18, border: '1px solid #1e3a5f' }}>
@@ -359,40 +439,23 @@ Be concise, direct, and actionable.`;
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
-            <div onClick={() => setSection('pos')} style={{ background: 'linear-gradient(135deg, #1a0a00, #2a1200)', border: '1px solid rgba(245,197,24,0.4)', borderRadius: 16, padding: 20, cursor: 'pointer' }}>
-              <p style={{ margin: '0 0 8px', fontSize: 32 }}>🛒</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 15 }}>Walking POS</p>
-              <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 12 }}>Any device · Walk & sell · Print/WhatsApp invoice</p>
-            </div>
-            <div onClick={() => setSection('purchase')} style={{ background: 'linear-gradient(135deg, #0a1f0a, #0d2b14)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 16, padding: 20, cursor: 'pointer' }}>
-              <p style={{ margin: '0 0 8px', fontSize: 32 }}>📸</p>
-              <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 15 }}>Purchase Orders</p>
-              <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 12 }}>Snap invoice · AI reads · Allocate to retail/wholesale</p>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, #001a2a, #002a3a)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 16, padding: 20 }}>
-              <p style={{ margin: '0 0 8px', fontSize: 32 }}>🇺🇸</p>
-              <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 15 }}>US Supplier Portal</p>
-              <p style={{ margin: '4px 0 8px', color: '#4a5568', fontSize: 12 }}>Florida & Miami suppliers upload products to BSC</p>
-              <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, fontFamily: 'monospace' }}>project-1fnu0.vercel.app/supplier</p>
-            </div>
-          </div>
-
+          {/* REVENUE STREAMS */}
           <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Revenue Streams</p>
+            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Revenue Streams — All Locations</p>
             {[
-              { label: 'POS / Physical Store', revenue: posRevenue, profit: posRevenue * 0.07, margin: '7%', color: '#4ade80', count: posInvoices.length, icon: '🛒' },
-              { label: 'Online Marketplace', revenue: marketRevenue, profit: marketRevenue * 0.25, margin: '25%', color: '#60a5fa', count: marketInvoices.length, icon: '🏪' },
-              { label: 'Wholesale / Bulk', revenue: 0, profit: 0, margin: '12%', color: '#f5c518', count: 0, icon: '📦' },
-              { label: 'Utility Bill Payments', revenue: 0, profit: 0, margin: '$5+5%', color: '#a78bfa', count: 0, icon: '⚡' },
-              { label: 'US Supplier Sales', revenue: 0, profit: 0, margin: 'TBD', color: '#60a5fa', count: 0, icon: '🇺🇸' },
+              { label: 'BSC Marketplace Nassau', revenue: nassauRevenue, profit: nassauProfit, margin: '38%', color: '#4ade80', count: nassauPosInvoices.length, icon: '🛒', location: 'Firetrial Rd, Nassau' },
+              { label: "Ceta's Variety Store Andros", revenue: androsRevenue, profit: androsProfit, margin: '43%', color: '#a78bfa', count: androsPosInvoices.length, icon: '🏝️', location: 'Mastic Point, North Andros' },
+              { label: 'Online Marketplace', revenue: marketRevenue, profit: marketProfit, margin: '25%', color: '#60a5fa', count: marketInvoices.length, icon: '🏪', location: 'Delivery + Pickup' },
+              { label: 'Wholesale / Bulk', revenue: 0, profit: 0, margin: '12%', color: '#f5c518', count: 0, icon: '📦', location: 'Business orders 10lb+' },
+              { label: 'Utility Bill Payments', revenue: 0, profit: 0, margin: '$5+5%', color: '#a78bfa', count: 0, icon: '⚡', location: 'BEC, Water, Cable, Aliv' },
+              { label: 'US Supplier Sales', revenue: 0, profit: 0, margin: 'TBD', color: '#60a5fa', count: 0, icon: '🇺🇸', location: 'Florida & Miami imports' },
             ].map(stream => (
               <div key={stream.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e3a5f' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 18 }}>{stream.icon}</span>
                   <div>
                     <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{stream.label}</p>
-                    <p style={{ margin: '2px 0 0', color: '#6b7280', fontSize: 11 }}>{stream.count} orders · {stream.margin} BSC margin</p>
+                    <p style={{ margin: '2px 0 0', color: '#6b7280', fontSize: 10 }}>{stream.location} · {stream.margin} margin · {stream.count} orders</p>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -407,6 +470,7 @@ Be concise, direct, and actionable.`;
             </div>
           </div>
 
+          {/* RECENT ORDERS */}
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
               <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Recent Orders</p>
@@ -419,21 +483,27 @@ Be concise, direct, and actionable.`;
             )}
             {recentInvoices.slice(0, 5).map(inv => {
               const isMarket = inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP');
+              const isAndros = inv.customerName.includes('ANDROS');
               const parts = inv.customerName.split(' | ');
+              const margin = isMarket ? MARKET_MARGIN : isAndros ? ANDROS_MARGIN : NASSAU_MARGIN;
               return (
                 <Link key={inv.id} href={'/invoice?id=' + inv.id} style={{ textDecoration: 'none' }}>
                   <div style={{ ...card, padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, cursor: 'pointer' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>{isMarket ? '🏪' : '🛒'}</span>
+                        <span>{isMarket ? '🏪' : isAndros ? '🏝️' : '🛒'}</span>
                         <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{parts[0]}</p>
                       </div>
                       {parts[1] && <p style={{ margin: '2px 0 0', color: '#f5c518', fontSize: 10 }}>{parts[1]}</p>}
-                      <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>{inv.date}</p>
+                      <p style={{ margin: '2px 0 0', color: isAndros ? '#a78bfa' : '#4a5568', fontSize: 10 }}>
+                        {isAndros ? "Ceta's Variety · Andros" : inv.date}
+                      </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 15 }}>${inv.total.toFixed(2)}</p>
-                      <p style={{ margin: 0, color: isMarket ? '#60a5fa' : '#4ade80', fontSize: 10 }}>+${(inv.total * (isMarket ? 0.25 : 0.07)).toFixed(2)}</p>
+                      <p style={{ margin: 0, color: isAndros ? '#a78bfa' : isMarket ? '#60a5fa' : '#4ade80', fontSize: 10 }}>
+                        +${(inv.total * margin).toFixed(2)}
+                      </p>
                     </div>
                   </div>
                 </Link>
@@ -441,10 +511,11 @@ Be concise, direct, and actionable.`;
             })}
           </div>
 
+          {/* QUICK ACTIONS */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Link href="/pos" style={{ background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', fontSize: 14, padding: '16px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🛒 Open POS</Link>
-            <Link href="/market" style={{ ...card, color: '#fff', fontWeight: 'bold', fontSize: 14, padding: '16px', textAlign: 'center', textDecoration: 'none', display: 'block', marginBottom: 0 }}>🏪 Marketplace</Link>
-            <Link href="/inventory" style={{ ...card, color: '#60a5fa', fontWeight: 'bold', fontSize: 13, padding: '14px', textAlign: 'center', textDecoration: 'none', display: 'block', marginBottom: 0 }}>📦 Inventory</Link>
+            <Link href="/pos" style={{ background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🛒 Nassau POS</Link>
+            <Link href="/pos-andros" style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: '#fff', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🏝️ Andros POS</Link>
+            <Link href="/market" style={{ ...card, color: '#fff', fontWeight: 'bold', fontSize: 13, padding: '14px', textAlign: 'center', textDecoration: 'none', display: 'block', marginBottom: 0 }}>🏪 Marketplace</Link>
             <button onClick={() => setSection('suppliers')} style={{ ...card, color: '#f5c518', fontWeight: 'bold', fontSize: 13, padding: '14px', textAlign: 'center', border: '1px solid rgba(245,197,24,0.3)', cursor: 'pointer', marginBottom: 0, position: 'relative' as const }}>
               🚢 Suppliers
               {pendingCount > 0 && <span style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pendingCount}</span>}
@@ -464,7 +535,7 @@ Be concise, direct, and actionable.`;
           </div>
           <div style={card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>Spiny Tails · Firetrial Road · Nassau</p>
+              <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>Spiny Tails · Firetrial Road · Nassau · Supplies Nassau + Andros</p>
               <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>{((TOTAL_LBS / FREEZER_CAPACITY) * 100).toFixed(1)}% full</p>
             </div>
             <div style={{ backgroundColor: '#060d1f', borderRadius: 8, height: 12, overflow: 'hidden' }}>
@@ -521,14 +592,29 @@ Be concise, direct, and actionable.`;
       )}
 
       {section === 'pos' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>🛒</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>Walking POS</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 8 }}>Works on any camera-powered device</p>
-          <p style={{ color: '#4a5568', fontSize: 13, marginBottom: 32 }}>Cart · Customer lookup · Print / Email / WhatsApp invoice</p>
-          <Link href="/pos" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>
-            Open Walking POS →
-          </Link>
+        <div style={{ paddingTop: 20 }}>
+          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 6 }}>🛒 POS Locations</p>
+          <p style={{ color: '#4a5568', fontSize: 13, marginBottom: 20 }}>Select a location to open the point of sale</p>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+            <div style={{ background: 'linear-gradient(135deg, #1a0a00, #2a1200)', border: '1px solid rgba(245,197,24,0.4)', borderRadius: 18, padding: 24 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 36 }}>🛒</p>
+              <p style={{ margin: '0 0 4px', color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>BSC Marketplace</p>
+              <p style={{ margin: '0 0 4px', color: '#aaa', fontSize: 12 }}>Firetrial Road, Nassau</p>
+              <p style={{ margin: '0 0 16px', color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>38% BSC Margin</p>
+              <Link href="/pos" style={{ display: 'block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '13px', borderRadius: 12, textDecoration: 'none', fontSize: 15, textAlign: 'center' }}>
+                Open Nassau POS →
+              </Link>
+            </div>
+            <div style={{ background: 'linear-gradient(135deg, #1a0a2a, #2a1040)', border: '1px solid rgba(124,58,237,0.5)', borderRadius: 18, padding: 24 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 36 }}>🏝️</p>
+              <p style={{ margin: '0 0 4px', color: '#a78bfa', fontWeight: 'bold', fontSize: 16 }}>Ceta's Variety Store</p>
+              <p style={{ margin: '0 0 4px', color: '#aaa', fontSize: 12 }}>Mastic Point, North Andros</p>
+              <p style={{ margin: '0 0 16px', color: '#a78bfa', fontSize: 12, fontWeight: 'bold' }}>43% BSC Margin · PIN Required</p>
+              <Link href="/pos-andros" style={{ display: 'block', background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: '#fff', fontWeight: 'bold', padding: '13px', borderRadius: 12, textDecoration: 'none', fontSize: 15, textAlign: 'center' }}>
+                Open Andros POS →
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 
@@ -582,8 +668,9 @@ Be concise, direct, and actionable.`;
           <div style={card}>
             <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Profit by Channel</p>
             {[
-              { label: 'POS / Physical Store', revenue: posRevenue, profit: posRevenue * 0.07, rate: '7%', icon: '🛒', color: '#4ade80' },
-              { label: 'Online Marketplace', revenue: marketRevenue, profit: marketRevenue * 0.25, rate: '25%', icon: '🏪', color: '#60a5fa' },
+              { label: 'BSC Marketplace Nassau', revenue: nassauRevenue, profit: nassauProfit, rate: '38%', icon: '🛒', color: '#4ade80' },
+              { label: "Ceta's Variety Andros", revenue: androsRevenue, profit: androsProfit, rate: '43%', icon: '🏝️', color: '#a78bfa' },
+              { label: 'Online Marketplace', revenue: marketRevenue, profit: marketProfit, rate: '25%', icon: '🏪', color: '#60a5fa' },
               { label: 'Wholesale', revenue: 0, profit: 0, rate: '12%', icon: '📦', color: '#f5c518' },
               { label: 'US Supplier Sales', revenue: 0, profit: 0, rate: 'TBD', icon: '🇺🇸', color: '#60a5fa' },
               { label: 'Utility Bills', revenue: 0, profit: 0, rate: '$5+5%', icon: '⚡', color: '#a78bfa' },
@@ -610,10 +697,13 @@ Be concise, direct, and actionable.`;
             </div>
           </div>
           <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Daily Summary</p>
+            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Summary</p>
             {[
-              { label: 'Total Revenue', value: '$' + finance.revenue.toFixed(2), color: '#fff' },
-              { label: 'BSC Profit', value: '$' + totalProfit.toFixed(2), color: '#f5c518' },
+              { label: 'Total Revenue', value: '$' + totalRevenue.toFixed(2), color: '#fff' },
+              { label: 'Nassau Revenue', value: '$' + nassauRevenue.toFixed(2), color: '#4ade80' },
+              { label: 'Andros Revenue', value: '$' + androsRevenue.toFixed(2), color: '#a78bfa' },
+              { label: 'Online Revenue', value: '$' + marketRevenue.toFixed(2), color: '#60a5fa' },
+              { label: 'Total BSC Profit', value: '$' + totalProfit.toFixed(2), color: '#f5c518' },
               { label: 'Supplier Owed', value: '$' + finance.supplierOwed.toFixed(2), color: '#60a5fa' },
               { label: 'Total Orders', value: String(finance.transactions), color: '#4ade80' },
               { label: 'Avg Order Value', value: '$' + avgTransaction, color: '#aaa' },
@@ -834,7 +924,7 @@ Be concise, direct, and actionable.`;
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e3a5f', background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
             <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>🤖 BSC AI Assistant</p>
-            <p style={{ margin: '3px 0 0', color: '#4a5568', fontSize: 12 }}>Knows Spiny Tails inventory · Live sales data · Scaling strategy</p>
+            <p style={{ margin: '3px 0 0', color: '#4a5568', fontSize: 12 }}>Nassau + Andros · Live data · Scaling strategy</p>
           </div>
           <div style={{ height: 420, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {aiMessages.map((msg, i) => (
@@ -858,7 +948,7 @@ Be concise, direct, and actionable.`;
           </div>
           <div style={{ padding: '14px 18px', borderTop: '1px solid #1e3a5f', display: 'flex', gap: 10 }}>
             <input
-              placeholder="Ask about Spiny Tails, scaling, profits..."
+              placeholder="Ask about Nassau, Andros, profits, inventory..."
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
@@ -901,7 +991,7 @@ Be concise, direct, and actionable.`;
             </div>
             <div style={{ display: 'flex', gap: isMobile ? 12 : 24, alignItems: 'center' }}>
               <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${finance.revenue.toFixed(2)}</p>
+                <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${totalRevenue.toFixed(2)}</p>
                 <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>REVENUE</p>
               </div>
               <div style={{ textAlign: 'right' }}>
