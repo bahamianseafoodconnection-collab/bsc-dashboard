@@ -40,7 +40,6 @@ type PurchaseOrder = {
   status: string;
   allocated_by: string;
   created_at: string;
-  // Processing fields
   weight_in_lbs: number;
   weight_out_lbs: number;
   yield_pct: number;
@@ -75,7 +74,6 @@ export default function PurchaseOrdersPage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  // New PO state
   const [supplierName, setSupplierName] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
@@ -91,7 +89,6 @@ export default function PurchaseOrdersPage() {
   });
   const [allocatedBy, setAllocatedBy] = useState('Dedrick Storr');
 
-  // Processing/yield state
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [weightIn, setWeightIn] = useState('');
   const [weightOut, setWeightOut] = useState('');
@@ -116,7 +113,6 @@ export default function PurchaseOrdersPage() {
 
   async function loadSpinyProducts() {
     try {
-      // Load Spiny Tails supplier products for linking
       const { data: spinySupplier } = await supabase
         .from('suppliers')
         .select('id')
@@ -133,7 +129,6 @@ export default function PurchaseOrdersPage() {
     } catch (e) {}
   }
 
-  // Yield calculations (live, derived from inputs)
   const weightInNum  = parseFloat(weightIn)  || 0;
   const weightOutNum = parseFloat(weightOut) || 0;
   const yieldPct     = weightInNum > 0 && weightOutNum > 0
@@ -143,7 +138,6 @@ export default function PurchaseOrdersPage() {
     ? parseFloat((selectedOrder.total_cost / weightOutNum).toFixed(4))
     : 0;
 
-  // Pricing preview from true cost
   const processingPricing = trueCostPerLb > 0 ? {
     nassauPrice:    parseFloat((trueCostPerLb * NASSAU_MARGIN).toFixed(2)),
     androsPrice:    parseFloat((trueCostPerLb * ANDROS_MARGIN).toFixed(2)),
@@ -179,10 +173,10 @@ export default function PurchaseOrdersPage() {
           if (parsed.items?.length > 0) {
             const totalCases = parsed.items.reduce((s: number, i: POItem) => s + i.cases, 0);
             setAllocation({
-              retail_physical:   Math.round(totalCases * 0.4),
-              retail_online:     Math.round(totalCases * 0.2),
+              retail_physical:    Math.round(totalCases * 0.4),
+              retail_online:      Math.round(totalCases * 0.2),
               wholesale_physical: Math.round(totalCases * 0.3),
-              wholesale_online:  Math.round(totalCases * 0.1),
+              wholesale_online:   Math.round(totalCases * 0.1),
             });
           }
         } catch {
@@ -256,7 +250,7 @@ export default function PurchaseOrdersPage() {
     setTimeout(() => {
       setSuccess(''); setScreen('list');
       setPhoto(null); setPhotoPreview('');
-      setAiSummary(''); setAiItems(''); setSupplierName(''); setUseManual(false);
+      setAiSummary(''); setAiItems([]); setSupplierName(''); setUseManual(false);
       setManualItems([{ name: '', cases: 0, unitDescription: '', totalLbs: 0, costPerCase: 0, totalCost: 0 }]);
       setAllocation({ retail_physical: 0, retail_online: 0, wholesale_physical: 0, wholesale_online: 0 });
     }, 2000);
@@ -279,23 +273,20 @@ export default function PurchaseOrdersPage() {
     if (weightOutNum > weightInNum) { setError('Finished weight cannot exceed starting weight'); return; }
     setSavingProcessing(true); setError('');
 
-    // 1. Update the purchase order with yield data
     const { error: poErr } = await supabase.from('purchase_orders').update({
-      weight_in_lbs:    weightInNum,
-      weight_out_lbs:   weightOutNum,
-      yield_pct:        yieldPct,
-      true_cost_per_lb: trueCostPerLb,
+      weight_in_lbs:     weightInNum,
+      weight_out_lbs:    weightOutNum,
+      yield_pct:         yieldPct,
+      true_cost_per_lb:  trueCostPerLb,
       processing_status: 'processed',
       linked_product_id: linkedProductId || null,
-      status:           'processed',
+      status:            'processed',
     }).eq('id', selectedOrder.id);
 
     if (poErr) { setError(poErr.message); setSavingProcessing(false); return; }
 
-    // 2. If linked to a Spiny Tails product, create a PENDING price update for Dedrick to review
     if (linkedProductId && processingPricing) {
       const { error: prodErr } = await supabase.from('supplier_products').update({
-        // Set to pending so Dedrick reviews before going live
         status:          'pending',
         unit_cost:       parseFloat(trueCostPerLb.toFixed(4)),
         case_cost:       parseFloat(trueCostPerLb.toFixed(4)),
@@ -326,7 +317,6 @@ export default function PurchaseOrdersPage() {
     }, 3000);
   }
 
-  // ── STYLES ──
   const pg: React.CSSProperties = {
     padding: 18, backgroundColor: '#060d1f', minHeight: '100vh',
     color: '#fff', fontFamily: 'sans-serif', paddingBottom: 80,
@@ -388,13 +378,12 @@ export default function PurchaseOrdersPage() {
         </button>
       </div>
 
-      {/* KPI STRIP */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
         {[
-          { label: 'TOTAL',      value: orders.length,                                                       color: '#fff'    },
+          { label: 'TOTAL',      value: orders.length,                                                            color: '#fff'    },
           { label: 'PROCESSING', value: orders.filter(o => o.processing_status === 'awaiting_processing').length, color: '#f5c518' },
-          { label: 'PROCESSED',  value: orders.filter(o => o.processing_status === 'processed').length,      color: '#4ade80' },
-          { label: 'SPENT',      value: '$' + orders.reduce((s, o) => s + (o.total_cost || 0), 0).toFixed(0), color: '#60a5fa' },
+          { label: 'PROCESSED',  value: orders.filter(o => o.processing_status === 'processed').length,           color: '#4ade80' },
+          { label: 'SPENT',      value: '$' + orders.reduce((s, o) => s + (o.total_cost || 0), 0).toFixed(0),    color: '#60a5fa' },
         ].map(stat => (
           <div key={stat.label} style={{ ...card, textAlign: 'center', padding: 12, marginBottom: 0 }}>
             <p style={{ margin: 0, color: stat.color, fontSize: 18, fontWeight: 'bold' }}>{stat.value}</p>
@@ -433,13 +422,12 @@ export default function PurchaseOrdersPage() {
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 10 }}>
                 <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>${order.total_cost?.toFixed(2) || '0.00'}</p>
-                <p style={{ margin: '4px 0 0', color: processingStatusColor(order.processing_status), fontSize: 10, fontWeight: 'bold' }}>
+                <p style={{ margin: '4px 0 0', color: processingStatusColor(order.processing_status || 'awaiting_processing'), fontSize: 10, fontWeight: 'bold' }}>
                   {processingStatusLabel(order.processing_status || 'awaiting_processing')}
                 </p>
               </div>
             </div>
 
-            {/* ITEMS */}
             {items.length > 0 && (
               <div style={{ marginBottom: 12 }}>
                 {items.map((item, i) => (
@@ -456,18 +444,17 @@ export default function PurchaseOrdersPage() {
               </div>
             )}
 
-            {/* YIELD SUMMARY if processed */}
             {isProcessed && order.weight_in_lbs > 0 && (
               <div style={{ backgroundColor: '#0a1f0a', border: '1px solid #4ade80', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
                 <p style={{ margin: '0 0 8px', color: '#4ade80', fontWeight: 'bold', fontSize: 12 }}>🦞 PROCESSING RESULTS</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   {[
-                    { label: 'LBS IN',       value: order.weight_in_lbs + ' lbs',        color: '#aaa'     },
-                    { label: 'LBS OUT',      value: order.weight_out_lbs + ' lbs',       color: '#4ade80'  },
-                    { label: 'YIELD',        value: order.yield_pct + '%',               color: '#f5c518'  },
-                    { label: 'TRUE COST/LB', value: '$' + (order.true_cost_per_lb || 0).toFixed(4), color: '#60a5fa'  },
-                    { label: 'ONLINE PRICE', value: '$' + ((order.true_cost_per_lb || 0) * ONLINE_MARGIN).toFixed(2), color: '#4ade80' },
-                    { label: 'NASSAU PRICE', value: '$' + ((order.true_cost_per_lb || 0) * NASSAU_MARGIN).toFixed(2), color: '#60a5fa' },
+                    { label: 'LBS IN',       value: order.weight_in_lbs + ' lbs',                                          color: '#aaa'    },
+                    { label: 'LBS OUT',      value: order.weight_out_lbs + ' lbs',                                         color: '#4ade80' },
+                    { label: 'YIELD',        value: order.yield_pct + '%',                                                  color: '#f5c518' },
+                    { label: 'TRUE COST/LB', value: '$' + (order.true_cost_per_lb || 0).toFixed(4),                        color: '#60a5fa' },
+                    { label: 'ONLINE PRICE', value: '$' + ((order.true_cost_per_lb || 0) * ONLINE_MARGIN).toFixed(2),     color: '#4ade80' },
+                    { label: 'NASSAU PRICE', value: '$' + ((order.true_cost_per_lb || 0) * NASSAU_MARGIN).toFixed(2),     color: '#60a5fa' },
                   ].map(x => (
                     <div key={x.label} style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '6px 8px' }}>
                       <p style={{ margin: 0, color: '#4a5568', fontSize: 8, letterSpacing: 1 }}>{x.label}</p>
@@ -478,7 +465,6 @@ export default function PurchaseOrdersPage() {
               </div>
             )}
 
-            {/* PROCESSING BUTTON */}
             {needsProcess ? (
               <button onClick={() => openProcessing(order)} style={{ ...primaryBtn, marginBottom: 0 }}>
                 🦞 Record Processing & Yield
@@ -494,7 +480,7 @@ export default function PurchaseOrdersPage() {
     </div>
   );
 
-  // ── PROCESSING / YIELD SCREEN ──
+  // ── PROCESSING SCREEN ──
   if (screen === 'processing' && selectedOrder) {
     let items: POItem[] = [];
     try { items = typeof selectedOrder.items === 'string' ? JSON.parse(selectedOrder.items) : selectedOrder.items; } catch {}
@@ -514,7 +500,6 @@ export default function PurchaseOrdersPage() {
           </div>
         )}
 
-        {/* PO SUMMARY */}
         <div style={{ ...card, borderColor: '#f5c518' }}>
           <p style={{ margin: '0 0 10px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>📦 Purchase Order</p>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontSize: 15 }}>{selectedOrder.supplier_name}</p>
@@ -538,10 +523,8 @@ export default function PurchaseOrdersPage() {
           </div>
         </div>
 
-        {/* WEIGHT INPUTS */}
         <div style={card}>
           <p style={{ margin: '0 0 14px', color: '#60a5fa', fontWeight: 'bold', fontSize: 13 }}>⚖️ WEIGHT RECORDING</p>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div>
               <label style={{ ...lbl, color: '#aaa' }}>Starting Weight (lbs in)</label>
@@ -569,8 +552,7 @@ export default function PurchaseOrdersPage() {
             </div>
           </div>
 
-          {/* LIVE YIELD CALCULATION */}
-          {weightInNum > 0 && weightOutNum > 0 && (
+          {weightInNum > 0 && weightOutNum > 0 && weightOutNum <= weightInNum && (
             <div style={{ backgroundColor: '#060d1f', borderRadius: 12, padding: '14px 16px', border: '1px solid #4ade8044' }}>
               <p style={{ margin: '0 0 12px', color: '#4ade80', fontWeight: 'bold', fontSize: 13 }}>📊 LIVE YIELD CALCULATION</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
@@ -578,7 +560,7 @@ export default function PurchaseOrdersPage() {
                   <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>YIELD %</p>
                   <p style={{ margin: '6px 0 0', color: yieldPct >= 50 ? '#4ade80' : '#f5c518', fontWeight: 'bold', fontSize: 28 }}>{yieldPct}%</p>
                   <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 10 }}>
-                    {weightInNum - weightOutNum > 0 ? `${(weightInNum - weightOutNum).toFixed(1)} lbs lost in processing` : ''}
+                    {(weightInNum - weightOutNum).toFixed(1)} lbs lost in processing
                   </p>
                 </div>
                 <div style={{ backgroundColor: '#001a2a', borderRadius: 10, padding: '12px 14px', textAlign: 'center' as const }}>
@@ -590,7 +572,6 @@ export default function PurchaseOrdersPage() {
                 </div>
               </div>
 
-              {/* MARGIN PREVIEW */}
               {processingPricing && (
                 <>
                   <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>MARKETPLACE PRICES FROM YIELD COST</p>
@@ -619,18 +600,13 @@ export default function PurchaseOrdersPage() {
           )}
         </div>
 
-        {/* LINK TO SPINY TAILS PRODUCT */}
         <div style={card}>
           <p style={{ margin: '0 0 4px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>🔗 Link to Marketplace Product</p>
           <p style={{ margin: '0 0 12px', color: '#4a5568', fontSize: 12 }}>
             Link this batch to a Spiny Tails product so the yield-based cost updates the marketplace price for Dedrick to review.
           </p>
           <label style={lbl}>Spiny Tails Product (optional)</label>
-          <select
-            value={linkedProductId}
-            onChange={(e) => setLinkedProductId(e.target.value)}
-            style={inp}
-          >
+          <select value={linkedProductId} onChange={(e) => setLinkedProductId(e.target.value)} style={inp}>
             <option value="">— No link / record yield only —</option>
             {spinyProducts.map(p => (
               <option key={p.id} value={p.id}>
@@ -792,7 +768,11 @@ export default function PurchaseOrdersPage() {
                   <input type="number" placeholder="0" value={item.totalLbs || ''} onChange={(e) => updateManualItem(i, 'totalLbs', parseFloat(e.target.value) || 0)} style={{ ...inp, marginBottom: 0 }} />
                 </div>
               </div>
-              {item.costPerCase > 0 && <p style={{ margin: '8px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 13 }}>Total: ${(item.cases > 0 ? item.cases * item.costPerCase : item.costPerCase).toFixed(2)}</p>}
+              {item.costPerCase > 0 && (
+                <p style={{ margin: '8px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 13 }}>
+                  Total: ${(item.cases > 0 ? item.cases * item.costPerCase : item.costPerCase).toFixed(2)}
+                </p>
+              )}
             </div>
           ))}
           <button onClick={addManualItem} style={{ ...secondaryBtn, borderColor: '#f5c518', color: '#f5c518' }}>+ Add Another Item</button>
