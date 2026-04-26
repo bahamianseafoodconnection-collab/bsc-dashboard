@@ -1,7 +1,7 @@
 // File: app/market/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -63,7 +63,31 @@ const MAILBOATS: Record<string, string[]> = {
   "Grand Bahama (Freeport)": ["Grand Bahama IV"],
 };
 
-type CartItem = { product: Product; qty: number };
+type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  qty: number;
+  supplierName: string;
+  photo_url?: string;
+  isSupplierProduct?: boolean;
+};
+
+type SupplierProduct = {
+  id: string;
+  name: string;
+  category: string;
+  sku: string;
+  retail_price: number;
+  wholesale_price: number;
+  unit_cost: number;
+  supplier_id: string;
+  supplier_name: string;
+  supplier_whatsapp: string;
+  photo_url: string;
+  status: string;
+};
+
 type View =
   | "home"
   | "utility"
@@ -120,6 +144,8 @@ export default function MarketPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
+  const [supplierProductsLoading, setSupplierProductsLoading] = useState(false);
 
   const [user, setUser] = useState<{
     name: string;
@@ -140,12 +166,26 @@ export default function MarketPage() {
   const [pickupDate, setPickupDate] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
 
+  // Load approved supplier products on mount
+  useEffect(() => {
+    async function loadSupplierProducts() {
+      setSupplierProductsLoading(true);
+      try {
+        const { data } = await supabase
+          .from("supplier_products")
+          .select("*")
+          .eq("status", "approved")
+          .order("created_at", { ascending: false });
+        if (data) setSupplierProducts(data as SupplierProduct[]);
+      } catch (e) {}
+      setSupplierProductsLoading(false);
+    }
+    loadSupplierProducts();
+  }, []);
+
   const markup = cartType === "retail" ? RETAIL_MARKUP : WHOLESALE_MARKUP;
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
-  const cartSubtotal = cart.reduce(
-    (sum, c) => sum + c.product.price * markup * c.qty,
-    0
-  );
+  const cartSubtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
   const deliveryCharge = fulfillment === "delivery" ? DELIVERY_FEE : 0;
   const cartTotal = cartSubtotal + deliveryCharge;
 
@@ -154,33 +194,69 @@ export default function MarketPage() {
     island !== "Grand Bahama (Freeport)";
   const availableMailboats = MAILBOATS[island] || [];
 
-  const filtered = products
+  // Combine store products + approved supplier products for display
+  const storeProductsFormatted = products
     .filter((p) => p.stock > p.minStock)
-    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      displayPrice: cartType === "retail" ? p.price * RETAIL_MARKUP : p.price * WHOLESALE_MARKUP,
+      stock: p.stock - p.minStock,
+      supplierName: p.supplierName,
+      photo_url: "",
+      isSupplierProduct: false,
+    }));
 
-  function addToCart(product: Product) {
+  const supplierProductsFormatted = supplierProducts
+    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      displayPrice: cartType === "retail" ? p.retail_price : p.wholesale_price,
+      stock: 999, // supplier manages their own stock
+      supplierName: p.supplier_name,
+      photo_url: p.photo_url,
+      isSupplierProduct: true,
+      sku: p.sku,
+    }));
+
+  const allProducts = [...storeProductsFormatted, ...supplierProductsFormatted];
+
+  function addToCart(item: {
+    id: string;
+    name: string;
+    displayPrice: number;
+    supplierName: string;
+    photo_url: string;
+    isSupplierProduct: boolean;
+  }) {
     setCart((prev) => {
-      const ex = prev.find((c) => c.product.id === product.id);
+      const ex = prev.find((c) => c.id === item.id);
       return ex
-        ? prev.map((c) =>
-            c.product.id === product.id ? { ...c, qty: c.qty + 1 } : c
-          )
-        : [...prev, { product, qty: 1 }];
+        ? prev.map((c) => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
+        : [...prev, {
+            id: item.id,
+            name: item.name,
+            price: item.displayPrice,
+            qty: 1,
+            supplierName: item.supplierName,
+            photo_url: item.photo_url,
+            isSupplierProduct: item.isSupplierProduct,
+          }];
     });
   }
 
   function adjustQty(id: string, delta: number) {
     setCart((prev) =>
       prev
-        .map((c) =>
-          c.product.id === id ? { ...c, qty: c.qty + delta } : c
-        )
+        .map((c) => c.id === id ? { ...c, qty: c.qty + delta } : c)
         .filter((c) => c.qty > 0)
     );
   }
 
   function removeFromCart(id: string) {
-    setCart((prev) => prev.filter((c) => c.product.id !== id));
+    setCart((prev) => prev.filter((c) => c.id !== id));
   }
 
   async function handleRegister() {
@@ -249,32 +325,41 @@ export default function MarketPage() {
 
     const deliveryNote =
       fulfillment === "delivery"
-        ? "DELIVERY — " +
-          address +
-          ", " +
-          island +
-          (mailboat ? " via " + mailboat : "")
+        ? "DELIVERY — " + address + ", " + island + (mailboat ? " via " + mailboat : "")
         : "PICKUP — " + pickupDate;
 
     const saleItems = cart.map((c) => ({
-      productId: c.product.id,
-      productName: c.product.name,
-      price: parseFloat((c.product.price * markup).toFixed(2)),
+      productId: c.id,
+      productName: c.name,
+      price: c.price,
       qty: c.qty,
-      supplierName: c.product.supplierName,
+      supplierName: c.supplierName,
     }));
 
-    const result = completeSale({
-      customerName: user!.name,
-      customerPhone: user!.phone,
-      items: saleItems,
-      total: cartTotal,
-    });
-
-    if (!result.success) {
-      setCheckoutError(result.error ?? result.message ?? "Checkout failed. Please try again.");
-      setLoading(false);
-      return;
+    // For store products use completeSale, for supplier products just record financials
+    const storeItems = cart.filter((c) => !c.isSupplierProduct);
+    if (storeItems.length > 0) {
+      const storeItemsMapped = storeItems.map((c) => {
+        const orig = products.find((p) => p.id === c.id);
+        return {
+          productId: c.id,
+          productName: c.name,
+          price: orig ? orig.price : c.price,
+          qty: c.qty,
+          supplierName: c.supplierName,
+        };
+      });
+      const result = completeSale({
+        customerName: user!.name,
+        customerPhone: user!.phone,
+        items: storeItemsMapped,
+        total: storeItems.reduce((s, c) => s + c.price * c.qty, 0),
+      });
+      if (!result.success) {
+        setCheckoutError(result.error ?? result.message ?? "Checkout failed. Please try again.");
+        setLoading(false);
+        return;
+      }
     }
 
     saveCustomer({ name: user!.name, phone: user!.phone });
@@ -383,71 +468,31 @@ export default function MarketPage() {
   if (view === "home") {
     return (
       <div style={pg}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 20,
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <h1 style={{ margin: 0, color: "#f5c518", fontSize: 20 }}>
-              BSC Market
-            </h1>
-            <p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>
-              Fresh · Direct · Bahamian
-            </p>
+            <h1 style={{ margin: 0, color: "#f5c518", fontSize: 20 }}>BSC Market</h1>
+            <p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}>Fresh · Direct · Bahamian</p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             {cartCount > 0 && (
               <button
                 onClick={() => setView("cart")}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 10,
-                  backgroundColor: "#f5c518",
-                  color: "#000",
-                  fontWeight: "bold",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 13,
-                }}
+                style={{ padding: "8px 14px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}
               >
                 Cart {cartCount}
               </button>
             )}
             {user ? (
               <button
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  setUser(null);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  backgroundColor: "#111c33",
-                  color: "#aaa",
-                  border: "1px solid #1e2d4a",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
+                onClick={async () => { await supabase.auth.signOut(); setUser(null); }}
+                style={{ padding: "8px 12px", borderRadius: 10, backgroundColor: "#111c33", color: "#aaa", border: "1px solid #1e2d4a", cursor: "pointer", fontSize: 12 }}
               >
                 {user.name.split(" ")[0]}
               </button>
             ) : (
               <button
                 onClick={() => setView("login")}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 10,
-                  backgroundColor: "#111c33",
-                  color: "#f5c518",
-                  border: "1px solid #f5c518",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: "bold",
-                }}
+                style={{ padding: "8px 14px", borderRadius: 10, backgroundColor: "#111c33", color: "#f5c518", border: "1px solid #f5c518", cursor: "pointer", fontSize: 12, fontWeight: "bold" }}
               >
                 Login
               </button>
@@ -456,802 +501,12 @@ export default function MarketPage() {
         </div>
 
         {user && (
-          <div
-            style={{
-              backgroundColor: "#0a1f0a",
-              border: "1px solid #4ade80",
-              borderRadius: 10,
-              padding: "10px 14px",
-              marginBottom: 16,
-            }}
-          >
-            <p style={{ margin: 0, color: "#4ade80", fontSize: 13 }}>
-              Welcome back, <b>{user.name}</b>
-            </p>
+          <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
+            <p style={{ margin: 0, color: "#4ade80", fontSize: 13 }}>Welcome back, <b>{user.name}</b></p>
           </div>
         )}
 
-        {CATEGORIES.map((cat) => (
-          <div
-            key={cat.id}
-            onClick={() => {
-              if (cat.id === "retail") setCartType("retail");
-              if (cat.id === "wholesale") setCartType("wholesale");
-              setView(cat.id as View);
-            }}
-            style={{
-              backgroundColor: "#111c33",
-              borderRadius: 12,
-              padding: "16px 18px",
-              marginBottom: 10,
-              border: "1px solid #1e2d4a",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-            }}
-          >
-            <span style={{ fontSize: 26 }}>{cat.icon}</span>
-            <div style={{ flex: 1 }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontWeight: "bold",
-                  fontSize: 15,
-                  color: cat.color,
-                }}
-              >
-                {cat.label}
-              </p>
-              <p
-                style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 11 }}
-              >
-                {cat.desc}
-              </p>
-            </div>
-            <span style={{ color: "#2a3550", fontSize: 18 }}>›</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // LOGIN
-  if (view === "login") {
-    return (
-      <div style={{ ...pg, maxWidth: 420, margin: "0 auto" }}>
-        <button onClick={() => setView("home")} style={backBtn}>
-          Back
-        </button>
-        <h2 style={{ color: "#f5c518", marginBottom: 4, marginTop: 0 }}>
-          {authMode === "login" ? "Customer Login" : "Create Account"}
-        </h2>
-        <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 18 }}>
-          {authMode === "login"
-            ? "Sign in to shop and track orders"
-            : "Join BSC Marketplace"}
-        </p>
-
-        {authMode === "register" && (
-          <>
-            <label style={lbl}>Username</label>
-            <input
-              placeholder="Choose a username"
-              value={authUsername}
-              onChange={(e) => setAuthUsername(e.target.value)}
-              style={inp}
-            />
-            <label style={lbl}>Phone / WhatsApp</label>
-            <input
-              placeholder="242-xxx-xxxx"
-              value={authPhone}
-              onChange={(e) => setAuthPhone(e.target.value)}
-              style={inp}
-            />
-          </>
-        )}
-
-        <label style={lbl}>Email</label>
-        <input
-          type="email"
-          placeholder="your@email.com"
-          value={authEmail}
-          onChange={(e) => setAuthEmail(e.target.value)}
-          style={inp}
-        />
-        <label style={lbl}>Password</label>
-        <input
-          type="password"
-          placeholder="Password"
-          value={authPassword}
-          onChange={(e) => setAuthPassword(e.target.value)}
-          style={inp}
-        />
-
-        {authError && (
-          <p
-            style={{
-              color: "#f87171",
-              fontSize: 13,
-              backgroundColor: "#2d0000",
-              padding: "10px 12px",
-              borderRadius: 8,
-              marginBottom: 12,
-            }}
-          >
-            {authError}
-          </p>
-        )}
-
-        <button
-          onClick={authMode === "login" ? handleLogin : handleRegister}
-          disabled={loading}
-          style={{
-            ...primaryBtn,
-            backgroundColor: loading ? "#555" : "#f5c518",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {loading
-            ? "Please wait..."
-            : authMode === "login"
-            ? "Sign In"
-            : "Create Account"}
-        </button>
-        <button
-          onClick={() =>
-            setAuthMode(authMode === "login" ? "register" : "login")
-          }
-          style={secondaryBtn}
-        >
-          {authMode === "login"
-            ? "New customer? Register here"
-            : "Already have account? Login"}
-        </button>
-      </div>
-    );
-  }
-
-  // UTILITY
-  if (view === "utility") {
-    return (
-      <div style={pg}>
-        <button onClick={() => setView("home")} style={backBtn}>
-          Back
-        </button>
-        <h2 style={{ color: "#60a5fa", marginTop: 0, marginBottom: 4 }}>
-          Pay Utility Bill
-        </h2>
-        <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 18 }}>
-          Select a provider
-        </p>
-        {[
-          { name: "BEC — Bahamas Power & Light", icon: "💡" },
-          { name: "Water & Sewage Corporation", icon: "💧" },
-          { name: "Cable Bahamas", icon: "📺" },
-          { name: "Flow Internet", icon: "🌐" },
-          { name: "Aliv Mobile", icon: "📱" },
-          { name: "BTC Phone & Internet", icon: "☎️" },
-        ].map((u) => (
-          <div
-            key={u.name}
-            style={{
-              ...card,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <span style={{ fontSize: 22 }}>{u.icon}</span>
-            <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: "bold" }}>
-                {u.name}
-              </p>
-              <p style={{ margin: 0, color: "#4a5568", fontSize: 11 }}>
-                Coming Soon
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // USA / AUTO
-  if (view === "usa" || view === "auto") {
-    return (
-      <div style={pg}>
-        <button onClick={() => setView("home")} style={backBtn}>
-          Back
-        </button>
-        <div
-          style={{
-            ...card,
-            textAlign: "center",
-            padding: 40,
-          }}
-        >
-          <p style={{ fontSize: 48, margin: "0 0 12px" }}>
-            {view === "usa" ? "🚢" : "🔧"}
-          </p>
-          <p style={{ margin: 0, fontWeight: "bold", fontSize: 16 }}>
-            {view === "usa" ? "USA Bulk Import" : "Auto & Car Parts"}
-          </p>
-          <p style={{ margin: "8px 0 0", color: "#4a5568", fontSize: 13 }}>
-            Coming soon — next phase
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // SHOP — RETAIL / WHOLESALE
-  if (view === "retail" || view === "wholesale") {
-    const isWholesale = view === "wholesale";
-    const color = isWholesale ? "#f5c518" : "#4ade80";
-
-    return (
-      <div style={pg}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 14,
-          }}
-        >
-          <button onClick={() => setView("home")} style={backBtn}>
-            Back
-          </button>
-          <button
-            onClick={() => setView("cart")}
-            style={{
-              padding: "7px 14px",
-              borderRadius: 10,
-              backgroundColor: cartCount > 0 ? "#f5c518" : "#111c33",
-              color: cartCount > 0 ? "#000" : "#aaa",
-              border: "1px solid #1e2d4a",
-              fontWeight: "bold",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            Cart {cartCount > 0 ? cartCount : ""}
-          </button>
-        </div>
-
-        <h2 style={{ color, marginTop: 0, marginBottom: 2 }}>
-          {isWholesale ? "Wholesale & Bulk" : "Local Retail"}
-        </h2>
-        <p style={{ color: "#4a5568", fontSize: 12, marginBottom: 14 }}>
-          {isWholesale
-            ? "12% BSC margin on bulk orders"
-            : "25% BSC margin on retail"}
-        </p>
-
-        <input
-          placeholder="Search products..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ ...inp, marginBottom: 14 }}
-        />
-
-        {filtered.length === 0 && (
-          <p style={{ color: "#4a5568", textAlign: "center", marginTop: 40 }}>
-            No products found
-          </p>
-        )}
-
-        {filtered.map((product) => {
-          const inCart = cart.find((c) => c.product.id === product.id);
-          const displayPrice = product.price * markup;
-          return (
-            <div key={product.id} style={card}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontWeight: "bold",
-                      fontSize: 15,
-                    }}
-                  >
-                    {product.name}
-                  </p>
-                  <p
-                    style={{
-                      margin: "4px 0 2px",
-                      color: "#4ade80",
-                      fontSize: 18,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    ${displayPrice.toFixed(2)}
-                  </p>
-                  <p style={{ margin: 0, color: "#4a5568", fontSize: 11 }}>
-                    {product.stock - product.minStock} available
-                  </p>
-                </div>
-                {inCart ? (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <button
-                      onClick={() => adjustQty(product.id, -1)}
-                      style={qtyBtn("#1e2d4a")}
-                    >
-                      -
-                    </button>
-                    <span style={{ fontWeight: "bold", fontSize: 16 }}>
-                      {inCart.qty}
-                    </span>
-                    <button
-                      onClick={() => adjustQty(product.id, 1)}
-                      style={qtyBtn("#f5c518", "#000")}
-                    >
-                      +
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => addToCart(product)}
-                    style={{
-                      padding: "9px 16px",
-                      borderRadius: 10,
-                      backgroundColor: "#f5c518",
-                      color: "#000",
-                      fontWeight: "bold",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: 14,
-                    }}
-                  >
-                    Add
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // CART
-  if (view === "cart") {
-    return (
-      <div style={pg}>
-        <button onClick={() => setView("home")} style={backBtn}>
-          Back
-        </button>
-        <h2 style={{ color: "#f5c518", marginTop: 0, marginBottom: 14 }}>
-          Your Cart
-        </h2>
-
-        {!user && (
-          <div
-            style={{
-              backgroundColor: "#1a1400",
-              border: "1px solid #f5c518",
-              borderRadius: 10,
-              padding: "10px 14px",
-              marginBottom: 14,
-            }}
-          >
-            <p style={{ margin: 0, color: "#f5c518", fontSize: 13 }}>
-              Login required to place order.{" "}
-              <span
-                onClick={() => setView("login")}
-                style={{ textDecoration: "underline", cursor: "pointer" }}
-              >
-                Login here
-              </span>
-            </p>
-          </div>
-        )}
-
-        {cart.length === 0 && (
-          <p style={{ color: "#4a5568" }}>Your cart is empty</p>
-        )}
-
-        {cart.map((c) => (
-          <div key={c.product.id} style={card}>
-            <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: 14 }}>
-              {c.product.name}
-            </p>
-            <p style={{ margin: "2px 0", color: "#aaa", fontSize: 13 }}>
-              {c.qty} x ${(c.product.price * markup).toFixed(2)} ={" "}
-              <span style={{ color: "#4ade80", fontWeight: "bold" }}>
-                ${(c.qty * c.product.price * markup).toFixed(2)}
-              </span>
-            </p>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginTop: 8,
-              }}
-            >
-              <button
-                onClick={() => adjustQty(c.product.id, -1)}
-                style={qtyBtn("#1e2d4a")}
-              >
-                -
-              </button>
-              <span style={{ fontWeight: "bold" }}>{c.qty}</span>
-              <button
-                onClick={() => adjustQty(c.product.id, 1)}
-                style={qtyBtn("#f5c518", "#000")}
-              >
-                +
-              </button>
-              <button
-                onClick={() => removeFromCart(c.product.id)}
-                style={{
-                  marginLeft: "auto",
-                  padding: "4px 12px",
-                  borderRadius: 6,
-                  backgroundColor: "#3b0000",
-                  color: "#f87171",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {cart.length > 0 && (
-          <>
-            <div style={{ ...card, marginTop: 4 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: 6,
-                }}
-              >
-                <p style={{ margin: 0, color: "#aaa", fontSize: 13 }}>
-                  Subtotal
-                </p>
-                <p style={{ margin: 0, fontSize: 13 }}>
-                  ${cartSubtotal.toFixed(2)}
-                </p>
-              </div>
-              <div
-                style={{ display: "flex", justifyContent: "space-between" }}
-              >
-                <p style={{ margin: 0, color: "#aaa", fontSize: 13 }}>
-                  Delivery
-                </p>
-                <p style={{ margin: 0, color: "#f5c518", fontSize: 13 }}>
-                  +$15.00
-                </p>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: 10,
-                  paddingTop: 10,
-                  borderTop: "1px solid #1e2d4a",
-                }}
-              >
-                <p style={{ margin: 0, fontWeight: "bold", fontSize: 15 }}>
-                  Total
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontWeight: "bold",
-                    fontSize: 16,
-                    color: "#4ade80",
-                  }}
-                >
-                  ${(cartSubtotal + DELIVERY_FEE).toFixed(2)}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                if (!user) {
-                  setView("login");
-                } else {
-                  setView("checkout");
-                }
-              }}
-              style={primaryBtn}
-            >
-              {user ? "Proceed to Checkout" : "Login to Order"}
-            </button>
-          </>
-        )}
-
-        <button onClick={() => setView("home")} style={secondaryBtn}>
-          Continue Shopping
-        </button>
-      </div>
-    );
-  }
-
-  // CHECKOUT
-  if (view === "checkout") {
-    return (
-      <div style={pg}>
-        <button onClick={() => setView("cart")} style={backBtn}>
-          Back to Cart
-        </button>
-        <h2 style={{ color: "#f5c518", marginTop: 0, marginBottom: 4 }}>
-          Checkout
-        </h2>
-        <p style={{ color: "#4a5568", fontSize: 13, marginBottom: 18 }}>
-          Choose delivery or pickup
-        </p>
-
-        <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-          <button
-            onClick={() => setFulfillment("delivery")}
-            style={{
-              flex: 1,
-              padding: "11px",
-              borderRadius: 10,
-              backgroundColor:
-                fulfillment === "delivery" ? "#f5c518" : "#111c33",
-              color: fulfillment === "delivery" ? "#000" : "#aaa",
-              border:
-                fulfillment === "delivery" ? "none" : "1px solid #1e2d4a",
-              fontWeight: "bold",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Delivery +$15
-          </button>
-          <button
-            onClick={() => setFulfillment("pickup")}
-            style={{
-              flex: 1,
-              padding: "11px",
-              borderRadius: 10,
-              backgroundColor:
-                fulfillment === "pickup" ? "#f5c518" : "#111c33",
-              color: fulfillment === "pickup" ? "#000" : "#aaa",
-              border:
-                fulfillment === "pickup" ? "none" : "1px solid #1e2d4a",
-              fontWeight: "bold",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
-            Pickup FREE
-          </button>
-        </div>
-
-        {fulfillment === "delivery" && (
-          <>
-            <label style={lbl}>Delivery Address</label>
-            <input
-              placeholder="Street address, area..."
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              style={inp}
-            />
-            <label style={lbl}>Island</label>
-            <select
-              value={island}
-              onChange={(e) => {
-                setIsland(e.target.value);
-                setMailboat("");
-              }}
-              style={inp}
-            >
-              {BAHAMAS_ISLANDS.map((isl) => (
-                <option key={isl} value={isl}>
-                  {isl}
-                </option>
-              ))}
-            </select>
-
-            {isOutIsland && availableMailboats.length > 0 && (
-              <>
-                <label style={lbl}>Select Mailboat</label>
-                <select
-                  value={mailboat}
-                  onChange={(e) => setMailboat(e.target.value)}
-                  style={inp}
-                >
-                  <option value="">-- Select mailboat --</option>
-                  {availableMailboats.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-                <div
-                  style={{
-                    backgroundColor: "#1a1400",
-                    border: "1px solid #f5c518",
-                    borderRadius: 10,
-                    padding: "10px 14px",
-                    marginBottom: 14,
-                  }}
-                >
-                  <p style={{ margin: 0, color: "#f5c518", fontSize: 12 }}>
-                    Orders must be placed 48 hours before mailboat departure
-                  </p>
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {fulfillment === "pickup" && (
-          <>
-            <label style={lbl}>Pickup Date (Next Day Minimum)</label>
-            <input
-              type="date"
-              value={pickupDate}
-              onChange={(e) => setPickupDate(e.target.value)}
-              min={
-                new Date(Date.now() + 86400000).toISOString().split("T")[0]
-              }
-              style={inp}
-            />
-            <div
-              style={{
-                backgroundColor: "#0a1f0a",
-                border: "1px solid #4ade80",
-                borderRadius: 10,
-                padding: "10px 14px",
-                marginBottom: 14,
-              }}
-            >
-              <p style={{ margin: 0, color: "#4ade80", fontSize: 12 }}>
-                Pickup is FREE at BSC Nassau location
-              </p>
-            </div>
-          </>
-        )}
-
-        <div style={{ ...card, marginBottom: 14 }}>
-          <p
-            style={{
-              margin: "0 0 10px",
-              color: "#f5c518",
-              fontWeight: "bold",
-              fontSize: 13,
-            }}
-          >
-            Order Summary
-          </p>
-          {cart.map((c) => (
-            <div
-              key={c.product.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 5,
-              }}
-            >
-              <p style={{ margin: 0, color: "#aaa", fontSize: 13 }}>
-                {c.product.name} x{c.qty}
-              </p>
-              <p style={{ margin: 0, fontSize: 13 }}>
-                ${(c.product.price * markup * c.qty).toFixed(2)}
-              </p>
-            </div>
-          ))}
-          <div
-            style={{
-              borderTop: "1px solid #1e2d4a",
-              marginTop: 10,
-              paddingTop: 10,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 4,
-              }}
-            >
-              <p style={{ margin: 0, color: "#aaa", fontSize: 13 }}>
-                Subtotal
-              </p>
-              <p style={{ margin: 0, fontSize: 13 }}>
-                ${cartSubtotal.toFixed(2)}
-              </p>
-            </div>
-            <div
-              style={{ display: "flex", justifyContent: "space-between" }}
-            >
-              <p style={{ margin: 0, color: "#aaa", fontSize: 13 }}>
-                {fulfillment === "delivery" ? "Delivery" : "Pickup"}
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  color:
-                    fulfillment === "delivery" ? "#f5c518" : "#4ade80",
-                  fontSize: 13,
-                }}
-              >
-                {fulfillment === "delivery" ? "+$15.00" : "FREE"}
-              </p>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginTop: 10,
-                paddingTop: 10,
-                borderTop: "1px solid #1e2d4a",
-              }}
-            >
-              <p style={{ margin: 0, fontWeight: "bold", fontSize: 15 }}>
-                Total
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  color: "#4ade80",
-                }}
-              >
-                ${cartTotal.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {checkoutError && (
-          <p
-            style={{
-              color: "#f87171",
-              fontSize: 13,
-              backgroundColor: "#2d0000",
-              padding: "10px 12px",
-              borderRadius: 8,
-              marginBottom: 12,
-            }}
-          >
-            {checkoutError}
-          </p>
-        )}
-
-        <button
-          onClick={handlePlaceOrder}
-          disabled={loading}
-          style={{
-            ...primaryBtn,
-            backgroundColor: loading ? "#555" : "#f5c518",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {loading ? "Processing..." : "Confirm Order"}
-        </button>
-        <button onClick={() => setView("cart")} style={secondaryBtn}>
-          Back to Cart
-        </button>
-      </div>
-    );
-  }
-
-  return null;
-}
+        {/* SUPPLIER PRODUCTS BANNER */}
+        {supplierProducts.length > 0 && (
+          <div style={{ backgroundColor: "#0a1220", border: "1px solid #60a5fa", borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
+            <p style={{ margin: 0, color: "#60a5fa", fontWeight: "bold", fontSize: 13 }}>
