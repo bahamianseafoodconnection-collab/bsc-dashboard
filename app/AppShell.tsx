@@ -5,17 +5,19 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
-  { label: 'POS', href: '/pos', icon: '🛒' },
-  { label: 'Summary', href: '/', icon: '📊' },
-  { label: 'Market', href: '/market', icon: '🏪' },
+  { label: 'POS',       href: '/pos',       icon: '🛒' },
+  { label: 'Summary',   href: '/',          icon: '📊' },
+  { label: 'Market',    href: '/market',    icon: '🏪' },
   { label: 'Customers', href: '/customers', icon: '👥' },
-  { label: 'Report', href: '/report', icon: '📋' },
+  { label: 'Report',    href: '/report',    icon: '📋' },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
+  // Dashboard (/) has its own nav — hide AppShell nav there
   const hideNav =
+    pathname === '/' ||
     pathname === '/login' ||
     pathname === '/reset-password' ||
     pathname.startsWith('/supplier') ||
@@ -23,24 +25,50 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/pos-andros');
 
   return (
-    <div className="min-h-screen bg-[#0a1729] flex flex-col">
-      <main className="flex-1 pb-20">
+    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column' }}>
+      <main style={{ flex: 1, paddingBottom: hideNav ? 0 : 80 }}>
         {children}
       </main>
 
       {!hideNav && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-[#0a1729]/95 backdrop-blur-lg border-t border-white/10 z-50 max-w-md mx-auto w-full">
-          <div className="flex items-center justify-around py-2">
+        <nav style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+          background: 'rgba(7,14,29,0.97)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(245,197,24,0.15)',
+          padding: '6px 8px 10px',
+        }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-around', alignItems: 'stretch',
+            maxWidth: 560, margin: '0 auto', gap: 6,
+          }}>
             {navItems.map((item) => {
               const isActive = pathname === item.href || (item.href === '/' && pathname === '/');
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex flex-col items-center py-2 flex-1 transition-all ${isActive ? 'text-amber-400 scale-110' : 'text-white/60 hover:text-white/90'}`}
+                  style={{
+                    flex: 1,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: 4, padding: '8px 4px', borderRadius: 12, textDecoration: 'none',
+                    transition: 'all 0.2s ease',
+                    background: isActive
+                      ? 'linear-gradient(135deg, rgba(245,197,24,0.18), rgba(245,197,24,0.08))'
+                      : 'transparent',
+                    border: isActive ? '1px solid rgba(245,197,24,0.35)' : '1px solid transparent',
+                    boxShadow: isActive ? '0 0 12px rgba(245,197,24,0.15)' : 'none',
+                  }}
                 >
-                  <span className="text-3xl mb-0.5">{item.icon}</span>
-                  <span className="text-[10px] font-medium tracking-widest">{item.label}</span>
+                  <span style={{ fontSize: 20 }}>{item.icon}</span>
+                  <span style={{
+                    fontSize: 9, letterSpacing: 0.8, fontWeight: isActive ? 'bold' : '500',
+                    color: isActive ? '#f5c518' : 'rgba(255,255,255,0.45)',
+                    fontFamily: "'Inter', -apple-system, sans-serif",
+                  }}>
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
