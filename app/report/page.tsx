@@ -2,8 +2,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { fetchInvoicesFromDB, type Invoice } from "../../lib/invoices";
 import Link from "next/link";
+
+const supabase = createClient(
+  'https://auqjjrisivhfmpleusyt.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg'
+);
 
 const POS_MARGIN = 0.38;
 const MARKET_MARGIN = 0.25;
@@ -25,8 +32,8 @@ function getMargin(type: 'pos' | 'delivery' | 'pickup' | 'wholesale'): number {
 
 function getTypeLabel(type: 'pos' | 'delivery' | 'pickup' | 'wholesale') {
   if (type === 'delivery') return { label: 'Online Delivery', color: '#60a5fa', icon: '🚚' };
-  if (type === 'pickup') return { label: 'Online Pickup', color: '#a78bfa', icon: '📦' };
-  if (type === 'wholesale') return { label: 'Wholesale', color: '#f5c518', icon: '📦' };
+  if (type === 'pickup')   return { label: 'Online Pickup',  color: '#a78bfa', icon: '📦' };
+  if (type === 'wholesale') return { label: 'Wholesale',     color: '#f5c518', icon: '📦' };
   return { label: 'POS Store', color: '#4ade80', icon: '🛒' };
 }
 
@@ -56,11 +63,13 @@ function isThisMonth(dateStr: string): boolean {
 }
 
 export default function ReportPage() {
+  const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>('summary');
   const [period, setPeriod] = useState<Period>('today');
+  const [isControlAdmin, setIsControlAdmin] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -69,12 +78,17 @@ export default function ReportPage() {
       setLoading(false);
     }
     load();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from('profiles').select('role').eq('id', user.id).single().then(({ data }) => {
+        if (data?.role === 'control_admin') setIsControlAdmin(true);
+      });
+    });
   }, []);
 
-  // Filter by period
   const periodFiltered = invoices.filter(inv => {
     if (period === 'today') return isToday(inv.date);
-    if (period === 'week') return isThisWeek(inv.date);
+    if (period === 'week')  return isThisWeek(inv.date);
     if (period === 'month') return isThisMonth(inv.date);
     return true;
   });
@@ -84,48 +98,37 @@ export default function ReportPage() {
     inv.id.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Profit calculations
-  const posInvoices = periodFiltered.filter(inv => getInvoiceType(inv) === 'pos');
+  const posInvoices      = periodFiltered.filter(inv => getInvoiceType(inv) === 'pos');
   const deliveryInvoices = periodFiltered.filter(inv => getInvoiceType(inv) === 'delivery');
-  const pickupInvoices = periodFiltered.filter(inv => getInvoiceType(inv) === 'pickup');
+  const pickupInvoices   = periodFiltered.filter(inv => getInvoiceType(inv) === 'pickup');
   const wholesaleInvoices = periodFiltered.filter(inv => getInvoiceType(inv) === 'wholesale');
 
-  const posRevenue = posInvoices.reduce((s, i) => s + i.total, 0);
+  const posRevenue      = posInvoices.reduce((s, i) => s + i.total, 0);
   const deliveryRevenue = deliveryInvoices.reduce((s, i) => s + i.total, 0);
-  const pickupRevenue = pickupInvoices.reduce((s, i) => s + i.total, 0);
+  const pickupRevenue   = pickupInvoices.reduce((s, i) => s + i.total, 0);
   const wholesaleRevenue = wholesaleInvoices.reduce((s, i) => s + i.total, 0);
 
-  const posProfit = posRevenue * POS_MARGIN;
+  const posProfit      = posRevenue * POS_MARGIN;
   const deliveryProfit = deliveryRevenue * MARKET_MARGIN;
-  const pickupProfit = pickupRevenue * MARKET_MARGIN;
+  const pickupProfit   = pickupRevenue * MARKET_MARGIN;
   const wholesaleProfit = wholesaleRevenue * WHOLESALE_MARGIN;
 
   const totalRevenue = posRevenue + deliveryRevenue + pickupRevenue + wholesaleRevenue;
-  const totalProfit = posProfit + deliveryProfit + pickupProfit + wholesaleProfit;
-  const totalOrders = periodFiltered.length;
-  const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const totalProfit  = posProfit + deliveryProfit + pickupProfit + wholesaleProfit;
+  const totalOrders  = periodFiltered.length;
+  const avgOrder     = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // All-time for comparison
   const allTimeRevenue = invoices.reduce((s, i) => s + i.total, 0);
-  const allTimeProfit = invoices.reduce((s, i) => s + i.total * getMargin(getInvoiceType(i)), 0);
+  const allTimeProfit  = invoices.reduce((s, i) => s + i.total * getMargin(getInvoiceType(i)), 0);
 
   const pg: React.CSSProperties = {
-    padding: 16,
-    backgroundColor: '#060d1f',
-    minHeight: '100vh',
-    color: '#fff',
-    fontFamily: 'sans-serif',
-    paddingBottom: 100,
-    maxWidth: 700,
-    margin: '0 auto',
+    padding: 16, backgroundColor: '#060d1f', minHeight: '100vh',
+    color: '#fff', fontFamily: 'sans-serif', paddingBottom: 100,
+    maxWidth: 700, margin: '0 auto',
   };
-
   const card: React.CSSProperties = {
-    backgroundColor: '#0d1f3c',
-    borderRadius: 14,
-    padding: '14px 16px',
-    border: '1px solid #1e3a5f',
-    marginBottom: 12,
+    backgroundColor: '#0d1f3c', borderRadius: 14, padding: '14px 16px',
+    border: '1px solid #1e3a5f', marginBottom: 12,
   };
 
   if (loading) return (
@@ -142,6 +145,11 @@ export default function ReportPage() {
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
+          {isControlAdmin && (
+            <button onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #1a1200, #2a1e00)', border: '1px solid #f5c518', borderRadius: 10, color: '#f5c518', fontWeight: 'bold', fontSize: 12, cursor: 'pointer', padding: '7px 14px', marginBottom: 10 }}>
+              ← BSC Control
+            </button>
+          )}
           <h1 style={{ margin: 0, color: '#f5c518', fontSize: 20, fontWeight: 'bold' }}>📊 Profit Tracker</h1>
           <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>BSC Marketplace · All channels</p>
         </div>
@@ -154,11 +162,7 @@ export default function ReportPage() {
       {/* PERIOD SELECTOR */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
         {(['today', 'week', 'month', 'all'] as Period[]).map(p => (
-          <button key={p} onClick={() => setPeriod(p)} style={{
-            flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold',
-            backgroundColor: period === p ? '#f5c518' : '#0d1f3c',
-            color: period === p ? '#000' : '#6b7280',
-          }}>
+          <button key={p} onClick={() => setPeriod(p)} style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold', backgroundColor: period === p ? '#f5c518' : '#0d1f3c', color: period === p ? '#000' : '#6b7280' }}>
             {p === 'today' ? 'Today' : p === 'week' ? '7 Days' : p === 'month' ? 'Month' : 'All Time'}
           </button>
         ))}
@@ -167,12 +171,12 @@ export default function ReportPage() {
       {/* KPI STRIP */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
         {[
-          { label: 'REVENUE', value: '$' + totalRevenue.toFixed(2), color: '#4ade80' },
-          { label: 'PROFIT', value: '$' + totalProfit.toFixed(2), color: '#f5c518' },
-          { label: 'ORDERS', value: String(totalOrders), color: '#60a5fa' },
-          { label: 'AVG ORDER', value: '$' + avgOrder.toFixed(2), color: '#a78bfa' },
+          { label: 'REVENUE',   value: '$' + totalRevenue.toFixed(2), color: '#4ade80' },
+          { label: 'PROFIT',    value: '$' + totalProfit.toFixed(2),  color: '#f5c518' },
+          { label: 'ORDERS',    value: String(totalOrders),           color: '#60a5fa' },
+          { label: 'AVG ORDER', value: '$' + avgOrder.toFixed(2),     color: '#a78bfa' },
         ].map(kpi => (
-          <div key={kpi.label} style={{ backgroundColor: '#0d1f3c', borderRadius: 12, padding: '10px 8px', border: '1px solid #1e3a5f', textAlign: 'center' }}>
+          <div key={kpi.label} style={{ backgroundColor: '#0d1f3c', borderRadius: 12, padding: '10px 8px', border: '1px solid #1e3a5f', textAlign: 'center' as const }}>
             <p style={{ margin: 0, color: '#4a5568', fontSize: 8, letterSpacing: 1 }}>{kpi.label}</p>
             <p style={{ margin: '5px 0 0', color: kpi.color, fontWeight: 'bold', fontSize: 13 }}>{kpi.value}</p>
           </div>
@@ -182,21 +186,17 @@ export default function ReportPage() {
       {/* TABS */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
         {([
-          { key: 'summary', label: '📈 Summary' },
+          { key: 'summary',   label: '📈 Summary'  },
           { key: 'breakdown', label: '🏪 Channels' },
-          { key: 'invoices', label: '🧾 Invoices' },
+          { key: 'invoices',  label: '🧾 Invoices' },
         ] as { key: Tab; label: string }[]).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 'bold',
-            backgroundColor: tab === t.key ? '#f5c518' : '#0d1f3c',
-            color: tab === t.key ? '#000' : '#6b7280',
-          }}>
+          <button key={t.key} onClick={() => setTab(t.key)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 'bold', backgroundColor: tab === t.key ? '#f5c518' : '#0d1f3c', color: tab === t.key ? '#000' : '#6b7280' }}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── SUMMARY TAB ── */}
+      {/* SUMMARY TAB */}
       {tab === 'summary' && (
         <>
           {totalOrders === 0 ? (
@@ -207,14 +207,13 @@ export default function ReportPage() {
             </div>
           ) : (
             <>
-              {/* PROFIT BREAKDOWN */}
               <div style={card}>
                 <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Profit by Channel</p>
                 {[
-                  { label: 'POS / Physical Store', revenue: posRevenue, profit: posProfit, margin: '38%', count: posInvoices.length, icon: '🛒', color: '#4ade80' },
-                  { label: 'Online Delivery', revenue: deliveryRevenue, profit: deliveryProfit, margin: '25%', count: deliveryInvoices.length, icon: '🚚', color: '#60a5fa' },
-                  { label: 'Online Pickup', revenue: pickupRevenue, profit: pickupProfit, margin: '25%', count: pickupInvoices.length, icon: '📦', color: '#a78bfa' },
-                  { label: 'Wholesale', revenue: wholesaleRevenue, profit: wholesaleProfit, margin: '12%', count: wholesaleInvoices.length, icon: '📦', color: '#f5c518' },
+                  { label: 'POS / Physical Store', revenue: posRevenue,      profit: posProfit,      margin: '38%', count: posInvoices.length,      icon: '🛒', color: '#4ade80' },
+                  { label: 'Online Delivery',       revenue: deliveryRevenue, profit: deliveryProfit, margin: '25%', count: deliveryInvoices.length,  icon: '🚚', color: '#60a5fa' },
+                  { label: 'Online Pickup',         revenue: pickupRevenue,   profit: pickupProfit,   margin: '25%', count: pickupInvoices.length,    icon: '📦', color: '#a78bfa' },
+                  { label: 'Wholesale',             revenue: wholesaleRevenue,profit: wholesaleProfit,margin: '12%', count: wholesaleInvoices.length, icon: '📦', color: '#f5c518' },
                 ].map(channel => (
                   <div key={channel.label} style={{ backgroundColor: '#060d1f', borderRadius: 12, padding: '12px 14px', marginBottom: 8, border: '1px solid #1e3a5f' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -240,15 +239,13 @@ export default function ReportPage() {
                   <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 24 }}>${totalProfit.toFixed(2)}</p>
                 </div>
               </div>
-
-              {/* MARGIN REFERENCE */}
               <div style={card}>
                 <p style={{ margin: '0 0 12px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>BSC Margin Reference</p>
                 {[
-                  { channel: 'POS Physical Store', margin: '38%', note: 'Walk-in customers', color: '#4ade80' },
-                  { channel: 'Online Marketplace', margin: '25%', note: 'Delivery + Pickup', color: '#60a5fa' },
-                  { channel: 'Wholesale / Bulk', margin: '12%', note: 'Business orders 10lb+', color: '#f5c518' },
-                  { channel: 'Utility Bills', margin: '$5 + 5%', note: 'Service fee', color: '#a78bfa' },
+                  { channel: 'POS Physical Store',  margin: '38%',    note: 'Walk-in customers',    color: '#4ade80' },
+                  { channel: 'Online Marketplace',   margin: '25%',    note: 'Delivery + Pickup',    color: '#60a5fa' },
+                  { channel: 'Wholesale / Bulk',     margin: '12%',    note: 'Business orders 10lb+',color: '#f5c518' },
+                  { channel: 'Utility Bills',        margin: '$5 + 5%',note: 'Service fee',          color: '#a78bfa' },
                 ].map(r => (
                   <div key={r.channel} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e3a5f' }}>
                     <div>
@@ -264,16 +261,16 @@ export default function ReportPage() {
         </>
       )}
 
-      {/* ── BREAKDOWN TAB ── */}
+      {/* BREAKDOWN TAB */}
       {tab === 'breakdown' && (
         <>
           <div style={card}>
             <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Revenue by Channel</p>
             {[
-              { label: 'POS Store', revenue: posRevenue, profit: posProfit, count: posInvoices.length, pct: totalRevenue > 0 ? (posRevenue / totalRevenue * 100) : 0, color: '#4ade80' },
-              { label: 'Online Delivery', revenue: deliveryRevenue, profit: deliveryProfit, count: deliveryInvoices.length, pct: totalRevenue > 0 ? (deliveryRevenue / totalRevenue * 100) : 0, color: '#60a5fa' },
-              { label: 'Online Pickup', revenue: pickupRevenue, profit: pickupProfit, count: pickupInvoices.length, pct: totalRevenue > 0 ? (pickupRevenue / totalRevenue * 100) : 0, color: '#a78bfa' },
-              { label: 'Wholesale', revenue: wholesaleRevenue, profit: wholesaleProfit, count: wholesaleInvoices.length, pct: totalRevenue > 0 ? (wholesaleRevenue / totalRevenue * 100) : 0, color: '#f5c518' },
+              { label: 'POS Store',      revenue: posRevenue,       profit: posProfit,       count: posInvoices.length,       pct: totalRevenue > 0 ? posRevenue / totalRevenue * 100 : 0,       color: '#4ade80' },
+              { label: 'Online Delivery',revenue: deliveryRevenue,  profit: deliveryProfit,  count: deliveryInvoices.length,  pct: totalRevenue > 0 ? deliveryRevenue / totalRevenue * 100 : 0,  color: '#60a5fa' },
+              { label: 'Online Pickup',  revenue: pickupRevenue,    profit: pickupProfit,    count: pickupInvoices.length,    pct: totalRevenue > 0 ? pickupRevenue / totalRevenue * 100 : 0,    color: '#a78bfa' },
+              { label: 'Wholesale',      revenue: wholesaleRevenue, profit: wholesaleProfit, count: wholesaleInvoices.length, pct: totalRevenue > 0 ? wholesaleRevenue / totalRevenue * 100 : 0, color: '#f5c518' },
             ].map(ch => (
               <div key={ch.label} style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -293,16 +290,14 @@ export default function ReportPage() {
               </div>
             ))}
           </div>
-
-          {/* DAILY STATS SUMMARY */}
           <div style={card}>
             <p style={{ margin: '0 0 12px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Period Summary</p>
             {[
-              { label: 'Total Revenue', value: '$' + totalRevenue.toFixed(2), color: '#fff' },
-              { label: 'Total BSC Profit', value: '$' + totalProfit.toFixed(2), color: '#f5c518' },
-              { label: 'Total Orders', value: String(totalOrders), color: '#4ade80' },
-              { label: 'Avg Order Value', value: '$' + avgOrder.toFixed(2), color: '#60a5fa' },
-              { label: 'Profit Margin', value: totalRevenue > 0 ? (totalProfit / totalRevenue * 100).toFixed(1) + '%' : '0%', color: '#a78bfa' },
+              { label: 'Total Revenue',    value: '$' + totalRevenue.toFixed(2), color: '#fff'     },
+              { label: 'Total BSC Profit', value: '$' + totalProfit.toFixed(2),  color: '#f5c518'  },
+              { label: 'Total Orders',     value: String(totalOrders),           color: '#4ade80'  },
+              { label: 'Avg Order Value',  value: '$' + avgOrder.toFixed(2),     color: '#60a5fa'  },
+              { label: 'Profit Margin',    value: totalRevenue > 0 ? (totalProfit / totalRevenue * 100).toFixed(1) + '%' : '0%', color: '#a78bfa' },
             ].map(row => (
               <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 8, borderBottom: '1px solid #1e3a5f' }}>
                 <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>{row.label}</p>
@@ -313,28 +308,16 @@ export default function ReportPage() {
         </>
       )}
 
-      {/* ── INVOICES TAB ── */}
+      {/* INVOICES TAB */}
       {tab === 'invoices' && (
         <>
-          <input
-            placeholder="🔍 Search by customer or invoice ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ display: 'block', width: '100%', padding: '11px 13px', borderRadius: 10, backgroundColor: '#111c33', color: '#fff', border: '1px solid #1e2d4a', fontSize: 14, marginBottom: 14, boxSizing: 'border-box' as const, outline: 'none' }}
-          />
-
-          {searchFiltered.length === 0 && (
-            <div style={{ ...card, textAlign: 'center', padding: 30 }}>
-              <p style={{ color: '#4a5568', margin: 0 }}>No invoices found</p>
-            </div>
-          )}
-
+          <input placeholder="🔍 Search by customer or invoice ID..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ display: 'block', width: '100%', padding: '11px 13px', borderRadius: 10, backgroundColor: '#111c33', color: '#fff', border: '1px solid #1e2d4a', fontSize: 14, marginBottom: 14, boxSizing: 'border-box' as const, outline: 'none' }} />
+          {searchFiltered.length === 0 && <div style={{ ...card, textAlign: 'center', padding: 30 }}><p style={{ color: '#4a5568', margin: 0 }}>No invoices found</p></div>}
           {searchFiltered.map(inv => {
             const type = getInvoiceType(inv);
             const typeInfo = getTypeLabel(type);
             const profit = inv.total * getMargin(type);
             const parts = inv.customerName.split(' | ');
-
             return (
               <div key={inv.id} style={card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -354,14 +337,12 @@ export default function ReportPage() {
                     <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>{inv.items.length} item{inv.items.length !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
-
                 {inv.items.map((item, i) => (
                   <div key={i} style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '7px 12px', marginBottom: 5, border: '1px solid #1e3a5f', display: 'flex', justifyContent: 'space-between' }}>
                     <p style={{ margin: 0, fontSize: 13 }}>{item.productName} <span style={{ color: '#4a5568' }}>× {item.qty}</span></p>
                     <p style={{ margin: 0, color: '#4ade80', fontSize: 13 }}>${item.total.toFixed(2)}</p>
                   </div>
                 ))}
-
                 <Link href={`/invoice?id=${encodeURIComponent(inv.id)}`} style={{ display: 'block', marginTop: 10, padding: '8px', borderRadius: 8, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>
                   🖨️ View / Print Invoice
                 </Link>
