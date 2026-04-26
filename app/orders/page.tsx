@@ -150,13 +150,13 @@ setUploadingPhoto(false);
 
 const filtered = orders.filter(o => {
 const matchStatus = activeStatus === 'all' || o.status === activeStatus;
-const matchSearch = o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+const matchSearch =
+o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
 o.order_number?.toLowerCase().includes(search.toLowerCase()) ||
 o.customer_phone?.includes(search);
 return matchStatus && matchSearch;
 });
 
-// Stats
 const stats = {
 total: orders.length,
 pending: orders.filter(o => o.status === 'pending').length,
@@ -179,6 +179,21 @@ display: 'block', width: '100%', padding: '11px 13px', borderRadius: 10,
 backgroundColor: '#111c33', color: '#fff', border: '1px solid #1e2d4a',
 fontSize: 14, marginBottom: 10, boxSizing: 'border-box' as const, outline: 'none',
 };
+
+function actionBtnStyle(action: { color: string }, isUpdating: boolean): React.CSSProperties {
+const isCancelAction = action.color === '#f87171';
+return {
+flex: 1,
+padding: '10px',
+borderRadius: 10,
+border: '1px solid ' + action.color,
+cursor: isUpdating ? 'not-allowed' : 'pointer',
+backgroundColor: isUpdating ? '#555' : isCancelAction ? '#3b0000' : '#0a1f0a',
+color: isUpdating ? '#aaa' : action.color,
+fontWeight: 'bold' as const,
+fontSize: 13,
+};
+}
 
 return (
 <div style={pg}>
@@ -265,11 +280,9 @@ const isUpdating = updatingId === order.id;
 
 return (
 <div key={order.id} style={{ ...card, borderColor: order.status === 'pending' ? '#f5c51844' : '#1e3a5f' }}>
+
 {/* ORDER HEADER */}
-<div
-onClick={() => setExpandedId(isExpanded ? null : order.id)}
-style={{ cursor: 'pointer' }}
->
+<div onClick={() => setExpandedId(isExpanded ? null : order.id)} style={{ cursor: 'pointer' }}>
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
 <div>
 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -300,7 +313,11 @@ style={{ cursor: 'pointer' }}
 <div style={{
 height: '100%', borderRadius: 4,
 backgroundColor: order.status === 'cancelled' ? '#f87171' : '#4ade80',
-width: order.status === 'pending' ? '10%' : order.status === 'confirmed' ? '30%' : order.status === 'packing' ? '55%' : order.status === 'out_for_delivery' || order.status === 'ready_pickup' ? '80%' : order.status === 'delivered' ? '100%' : '0%',
+width: order.status === 'pending' ? '10%'
+: order.status === 'confirmed' ? '30%'
+: order.status === 'packing' ? '55%'
+: order.status === 'out_for_delivery' || order.status === 'ready_pickup' ? '80%'
+: order.status === 'delivered' ? '100%' : '0%',
 }} />
 </div>
 </div>
@@ -357,8 +374,11 @@ width: order.status === 'pending' ? '10%' : order.status === 'confirmed' ? '30%'
 <div style={{ display: 'flex', gap: 8 }}>
 {['unpaid', 'paid', 'refunded'].map(ps => (
 <button key={ps} onClick={() => updatePaymentStatus(order.id, ps)} disabled={isUpdating} style={{
-flex: 1, padding: '8px', borderRadius: 8, border: 'none', cursor: isUpdating ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: 12,
-backgroundColor: order.payment_status === ps ? (ps === 'paid' ? '#4ade80' : ps === 'refunded' ? '#f87171' : '#f5c518') : '#0d1f3c',
+flex: 1, padding: '8px', borderRadius: 8, border: 'none',
+cursor: isUpdating ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: 12,
+backgroundColor: order.payment_status === ps
+? (ps === 'paid' ? '#4ade80' : ps === 'refunded' ? '#f87171' : '#f5c518')
+: '#0d1f3c',
 color: order.payment_status === ps ? '#000' : '#6b7280',
 }}>
 {ps === 'unpaid' ? '⏳ Unpaid' : ps === 'paid' ? '✅ Paid' : '↩️ Refunded'}
@@ -367,18 +387,18 @@ color: order.payment_status === ps ? '#000' : '#6b7280',
 </div>
 </div>
 
-{/* STATUS ACTIONS */}
+{/* STATUS ACTIONS — fixed: no duplicate border property */}
 {nextActions.length > 0 && (
 <div style={{ marginBottom: 12 }}>
 <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>UPDATE ORDER STATUS</p>
 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
 {nextActions.map(action => (
-<button key={action.next} onClick={() => updateStatus(order.id, action.next)} disabled={isUpdating} style={{
-flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: isUpdating ? 'not-allowed' : 'pointer',
-backgroundColor: isUpdating ? '#555' : action.color === '#f87171' ? '#3b0000' : '#0a1f0a',
-color: action.color, fontWeight: 'bold', fontSize: 13,
-border: '1px solid ' + action.color,
-}}>
+<button
+key={action.next}
+onClick={() => updateStatus(order.id, action.next)}
+disabled={isUpdating}
+style={actionBtnStyle(action, isUpdating)}
+>
 {isUpdating ? '...' : action.label}
 </button>
 ))}
@@ -388,7 +408,7 @@ border: '1px solid ' + action.color,
 
 {/* DELIVERY PHOTO UPLOAD */}
 {(order.status === 'out_for_delivery' || order.status === 'ready_pickup') && (
-<div style={{ backgroundColor: '#0a1f0a', border: '1px solid #4ade80', borderRadius: 12, padding: '12px 14px' }}>
+<div style={{ backgroundColor: '#0a1f0a', border: '1px solid #4ade80', borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
 <p style={{ margin: '0 0 8px', color: '#4ade80', fontWeight: 'bold', fontSize: 13 }}>📸 Upload Delivery Photo</p>
 <p style={{ margin: '0 0 10px', color: '#4a5568', fontSize: 12 }}>Take a photo of the delivered order to confirm delivery to customer.</p>
 <input
@@ -409,7 +429,16 @@ style={{ color: '#aaa', fontSize: 13, marginBottom: 10, display: 'block' }}
 {/* WHATSAPP CUSTOMER */}
 {order.customer_phone && (
 <a
-href={'https://api.whatsapp.com/send?phone=' + order.customer_phone.replace(/\D/g, '').replace(/^242/, '1242') + '&text=' + encodeURIComponent('Hi ' + order.customer_name + '! Your BSC order ' + order.order_number + ' is now ' + (STATUS_INFO[order.status]?.label || order.status) + '. Thank you for shopping with us! 🐟')}
+href={
+'https://api.whatsapp.com/send?phone=' +
+order.customer_phone.replace(/\D/g, '').replace(/^242/, '1242') +
+'&text=' +
+encodeURIComponent(
+'Hi ' + order.customer_name + '! Your BSC order ' + order.order_number +
+' is now ' + (STATUS_INFO[order.status]?.label || order.status) +
+'. Thank you for shopping with us! 🐟'
+)
+}
 target="_blank"
 rel="noopener noreferrer"
 style={{ display: 'block', marginTop: 10, padding: '10px', borderRadius: 10, backgroundColor: '#0a2010', color: '#4ade80', border: '1px solid #4ade80', textDecoration: 'none', fontWeight: 'bold', fontSize: 13, textAlign: 'center' as const }}
