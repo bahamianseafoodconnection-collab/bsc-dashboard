@@ -18,6 +18,9 @@ type CartItem = Product & { qty: number };
 type PaymentMethod = 'cash' | 'card' | null;
 type Screen = 'shop' | 'cart' | 'payment' | 'complete';
 
+const BSC_WHATSAPP = '12423613474';
+const BSC_WHATSAPP_DISPLAY = '+1 (242) 361-3474';
+
 const pg: React.CSSProperties = {
   padding: 16, backgroundColor: '#060d1f', minHeight: '100vh',
   color: '#fff', fontFamily: 'sans-serif', paddingBottom: 90,
@@ -50,24 +53,18 @@ const qtyBtnStyle = (bg: string, color = '#fff'): React.CSSProperties => ({
   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 });
 
-const BSC_WHATSAPP = '12423613474';
-const BSC_WHATSAPP_DISPLAY = '+1 (242) 361-3474';
-
-// ── WHATSAPP PANEL ──
-const WhatsAppPanel = ({ side }: { side: 'top' | 'right' }) => {
+// ── WHATSAPP PANEL — defined outside main component ──
+function WhatsAppPanel({ side }: { side: 'top' | 'right' }) {
   const [waTab, setWaTab] = useState<'web' | 'qr'>('web');
   const isRight = side === 'right';
 
   return (
     <div style={{
-      backgroundColor: '#070e1d',
-      border: '1px solid #25d366',
-      borderRadius: isRight ? 16 : 12,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
+      backgroundColor: '#070e1d', border: '1px solid #25d366',
+      borderRadius: isRight ? 16 : 12, overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
       height: isRight ? '100vh' : 'auto',
-      position: isRight ? 'sticky' as const : 'relative' as const,
+      position: isRight ? 'sticky' : 'relative',
       top: isRight ? 0 : undefined,
     }}>
       <div style={{ backgroundColor: '#075e54', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
@@ -86,40 +83,26 @@ const WhatsAppPanel = ({ side }: { side: 'top' | 'right' }) => {
 
       {waTab === 'web' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: isRight ? 0 : 400 }}>
-          <iframe
-            src="https://web.whatsapp.com"
-            style={{ flex: 1, border: 'none', width: '100%', minHeight: isRight ? 0 : 400, backgroundColor: '#fff' }}
-            allow="camera; microphone"
-            title="WhatsApp Web"
-          />
+          <iframe src="https://web.whatsapp.com" style={{ flex: 1, border: 'none', width: '100%', minHeight: isRight ? 0 : 400, backgroundColor: '#fff' }} allow="camera; microphone" title="WhatsApp Web" />
         </div>
       )}
 
       {waTab === 'qr' && (
         <div style={{ padding: 20, textAlign: 'center', flex: 1 }}>
           <p style={{ margin: '0 0 16px', color: '#aaa', fontSize: 13 }}>Scan to open BSC WhatsApp on your phone</p>
-          <img
-            src={`https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=https%3A%2F%2Fapi.whatsapp.com%2Fsend%3Fphone%3D${BSC_WHATSAPP}&choe=UTF-8`}
-            alt="BSC WhatsApp QR"
-            style={{ width: 200, height: 200, borderRadius: 12, backgroundColor: '#fff', padding: 8 }}
-          />
+          <img src={`https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=https%3A%2F%2Fapi.whatsapp.com%2Fsend%3Fphone%3D${BSC_WHATSAPP}&choe=UTF-8`} alt="BSC WhatsApp QR" style={{ width: 200, height: 200, borderRadius: 12, backgroundColor: '#fff', padding: 8 }} />
           <p style={{ margin: '16px 0 8px', color: '#25d366', fontWeight: 'bold', fontSize: 14 }}>{BSC_WHATSAPP_DISPLAY}</p>
           <p style={{ margin: '0 0 16px', color: '#4a5568', fontSize: 12 }}>Customers scan to WhatsApp BSC directly</p>
-          <a href={`https://api.whatsapp.com/send?phone=${BSC_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
-            style={{ display: 'block', backgroundColor: '#25d366', color: '#000', fontWeight: 'bold', fontSize: 14, padding: '12px', borderRadius: 12, textDecoration: 'none', marginBottom: 10 }}>
-            💬 Open WhatsApp Chat
-          </a>
-          <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer"
-            style={{ display: 'block', backgroundColor: '#075e54', color: '#fff', fontWeight: 'bold', fontSize: 14, padding: '12px', borderRadius: 12, textDecoration: 'none' }}>
-            🖥️ Open WhatsApp Web
-          </a>
+          <a href={`https://api.whatsapp.com/send?phone=${BSC_WHATSAPP}`} target="_blank" rel="noopener noreferrer" style={{ display: 'block', backgroundColor: '#25d366', color: '#000', fontWeight: 'bold', fontSize: 14, padding: '12px', borderRadius: 12, textDecoration: 'none', marginBottom: 10 }}>💬 Open WhatsApp Chat</a>
+          <a href="https://web.whatsapp.com" target="_blank" rel="noopener noreferrer" style={{ display: 'block', backgroundColor: '#075e54', color: '#fff', fontWeight: 'bold', fontSize: 14, padding: '12px', borderRadius: 12, textDecoration: 'none' }}>🖥️ Open WhatsApp Web</a>
         </div>
       )}
     </div>
   );
-};
+}
 
-const CustomerDropdown = ({ suggestions, onSelect }: { suggestions: Customer[]; onSelect: (c: Customer) => void }) => {
+// ── CUSTOMER DROPDOWN — defined outside main component ──
+function CustomerDropdown({ suggestions, onSelect }: { suggestions: Customer[]; onSelect: (c: Customer) => void }) {
   if (suggestions.length === 0) return null;
   return (
     <div style={{ backgroundColor: '#0d1f3c', border: '1px solid #f5c518', borderRadius: 10, overflow: 'hidden', marginTop: -8, marginBottom: 10 }}>
@@ -139,8 +122,60 @@ const CustomerDropdown = ({ suggestions, onSelect }: { suggestions: Customer[]; 
       ))}
     </div>
   );
-};
+}
 
+// ── POS LAYOUT — defined outside main component ──
+function POSLayout({ children, showWaPanel, setShowWaPanel }: {
+  children: React.ReactNode;
+  showWaPanel: boolean;
+  setShowWaPanel: (v: boolean) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#060d1f' }}>
+      <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', paddingBottom: 80 }}>
+        {children}
+      </div>
+
+      {/* Desktop WhatsApp panel */}
+      <div className="wa-panel-desktop" style={{ width: 380, flexShrink: 0, backgroundColor: '#070e1d', borderLeft: '1px solid #25d36633', display: 'none' }}>
+        <WhatsAppPanel side="right" />
+      </div>
+
+      {/* Mobile floating button */}
+      <button onClick={() => setShowWaPanel(!showWaPanel)} className="wa-toggle-mobile" style={{ position: 'fixed', bottom: 80, right: 16, width: 52, height: 52, borderRadius: '50%', backgroundColor: '#25d366', color: '#000', border: 'none', fontSize: 26, cursor: 'pointer', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(37,211,102,0.4)' }}>
+        💬
+      </button>
+
+      {/* Mobile drawer */}
+      {showWaPanel && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', flexDirection: 'column' }}>
+          <div onClick={() => setShowWaPanel(false)} style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)' }} />
+          <div style={{ position: 'relative', zIndex: 1, margin: 'auto 0 0', height: '80vh', backgroundColor: '#070e1d', borderRadius: '20px 20px 0 0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #1e3a5f' }}>
+              <p style={{ margin: 0, color: '#25d366', fontWeight: 'bold', fontSize: 15 }}>💬 BSC WhatsApp</p>
+              <button onClick={() => setShowWaPanel(false)} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <WhatsAppPanel side="top" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @media (min-width: 900px) {
+          .wa-panel-desktop { display: block !important; }
+          .wa-toggle-mobile { display: none !important; }
+        }
+        @media (max-width: 899px) {
+          .wa-panel-desktop { display: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ── MAIN POS PAGE ──
 export default function POSPage() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>('shop');
@@ -250,108 +285,4 @@ export default function POSPage() {
   </div>
   <div class="meta"><span><strong>Invoice:</strong> ${invoice.id}</span><span>${invoice.date}</span></div>
   <div class="section">
-    <div style="font-weight:bold">${customerName}</div>
-    <div style="font-size:0.78em;color:#555">Tel: ${customerPhone}</div>
-  </div>
-  <div class="section">
-    ${invoice.items.map((item: any) => `
-      <div class="item-row">
-        <div style="flex:1"><div class="item-name">${item.productName}</div><div class="item-meta">${item.qty} x $${Number(item.price).toFixed(2)}</div></div>
-        <div class="item-total">$${Number(item.total).toFixed(2)}</div>
-      </div>`).join('')}
-  </div>
-  <div class="totals">
-    <div class="total-row"><span style="font-size:1.1em;font-weight:bold">TOTAL</span><span class="grand">$${cartTotal.toFixed(2)}</span></div>
-    ${paymentMethod === 'cash'
-      ? `<div class="total-row sm"><span>Cash Given</span><span>$${cashNum.toFixed(2)}</span></div>
-         <div class="total-row sm" style="font-weight:bold"><span>Change Due</span><span>$${change.toFixed(2)}</span></div>`
-      : `<div class="total-row sm"><span>Payment</span><span>Card / Terminal</span></div>`}
-  </div>
-  <div class="bars">|||||||||||||||</div>
-  <div style="text-align:center;font-size:0.65em;color:#888;margin-bottom:4px">${invoice.id}</div>
-  <div class="footer">
-    <div>Thank you for shopping at BSC Marketplace!</div>
-    <div>Fresh · Local · Bahamian 🐟</div>
-    <div style="margin-top:4px">WhatsApp: ${BSC_WHATSAPP_DISPLAY}</div>
-  </div>
-</div></body></html>`;
-    const w = window.open('', '_blank', 'width=500,height=700');
-    if (!w) return;
-    w.document.write(receiptHTML);
-    w.document.close();
-    w.focus();
-    setTimeout(() => { w.print(); w.close(); }, 400);
-    setInvoiceSent(prev => [...prev, 'print']);
-  }, [cartTotal, cashNum, change, customerName, customerPhone, paymentMethod]);
-
-  const sendWhatsApp = useCallback((invoice: any) => {
-    let raw = customerPhone.replace(/\D/g, '');
-    if (raw.startsWith('1242') && raw.length === 11) { /* good */ }
-    else if (raw.startsWith('242') && raw.length === 10) raw = '1' + raw;
-    else if (raw.length === 7) raw = '1242' + raw;
-    else if (!raw.startsWith('1')) raw = '1242' + raw;
-
-    const text =
-      `*BSC MARKETPLACE*\nFiretrial Road, Nassau\n\n` +
-      `*Invoice: ${invoice.id}*\nDate: ${invoice.date}\n\n` +
-      `Customer: ${customerName}\nTel: ${customerPhone}\n\n` +
-      `*Items:*\n` +
-      invoice.items.map((i: any) => `• ${i.productName}  x${i.qty}  =  $${Number(i.total).toFixed(2)}`).join('\n') +
-      `\n\n*TOTAL: $${cartTotal.toFixed(2)}*\n` +
-      (paymentMethod === 'cash' ? `Cash: $${cashNum.toFixed(2)}  |  Change: $${change.toFixed(2)}\n` : '') +
-      `\nThank you for shopping at BSC! 🐟`;
-
-    window.open(`https://api.whatsapp.com/send?phone=${raw}&text=${encodeURIComponent(text)}`, '_blank');
-    setInvoiceSent(prev => [...prev, 'whatsapp']);
-  }, [cartTotal, cashNum, change, customerName, customerPhone, paymentMethod]);
-
-  const resetSale = useCallback(() => {
-    setCart([]); setCustomerName(''); setCustomerPhone('');
-    setCustomerQuery(''); setSuggestions([]);
-    setPaymentMethod(null); setCashGiven('');
-    setCompletedInvoice(null); setInvoiceSent([]); setSearch('');
-    setScreen('shop');
-  }, []);
-
-  const CustomerInput = () => (
-    <div style={card}>
-      <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>CUSTOMER — search by name or phone</p>
-      <input
-        placeholder="Type name or phone number..."
-        value={customerQuery}
-        onChange={(e) => handleCustomerQuery(e.target.value)}
-        autoComplete="off" autoCorrect="off" spellCheck={false}
-        style={{ ...inp, marginBottom: suggestions.length > 0 ? 2 : 8 }}
-      />
-      <CustomerDropdown suggestions={suggestions} onSelect={selectCustomer} />
-      {customerName && customerPhone ? (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0a1f0a', borderRadius: 10, padding: '10px 12px', border: '1px solid #4ade80' }}>
-          <div>
-            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{customerName}</p>
-            <p style={{ margin: '2px 0 0', color: '#4ade80', fontSize: 13 }}>📱 {customerPhone}</p>
-          </div>
-          <button onClick={() => { setCustomerName(''); setCustomerPhone(''); setCustomerQuery(''); setSuggestions([]); }}
-            style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 12 }}>
-            Change
-          </button>
-        </div>
-      ) : (
-        <>
-          {customerName && !customerPhone && (
-            <input placeholder="Phone / WhatsApp *" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} type="tel" autoComplete="off" style={{ ...inp, marginBottom: 0 }} />
-          )}
-          {customerPhone && !customerName && (
-            <input placeholder="Customer name *" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="off" style={{ ...inp, marginBottom: 0 }} />
-          )}
-        </>
-      )}
-    </div>
-  );
-
-  const POSLayout = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#060d1f', gap: 0 }}>
-      <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', paddingBottom: 80 }}>
-        {children}
-      </div>
-      <div className="wa-panel-desktop" style={{ width: 380, flexShrink: 0, backgroundColor: '#070e1d', borderLeft: '1px solid #25d36633', display: 'none' }}>
-        <WhatsAppPanel side="right​​​​​​​​​​​​​​​​
+    <div style="font-weight​​​​​​​​​​​​​​​​
