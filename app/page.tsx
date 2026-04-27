@@ -1,1161 +1,628 @@
 // File: app/page.tsx
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
-import { fetchFinancialsFromDB, getFinancialSummary } from '../lib/finance';
-import { fetchInvoicesFromDB, type Invoice } from '../lib/invoices';
-import { products } from '../lib/store';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import { products, type Product } from "../lib/store";
+import { recordSaleFinancials } from "../lib/finance";
 
 const supabase = createClient(
-  'https://auqjjrisivhfmpleusyt.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg'
+  "https://auqjjrisivhfmpleusyt.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg"
 );
 
-const NASSAU_MARGIN    = 0.38;
-const ANDROS_MARGIN    = 0.43;
-const MARKET_MARGIN    = 0.25;
-const WHOLESALE_MARGIN = 0.12;
-const CAR_SALE_MARKUP  = 650;
-const RENTAL_DAY_MARKUP = 10;
-const PARTS_MARKUP_RATE = 0.10;
+const DELIVERY_FEE     = 15;
+const RETAIL_MARKUP    = 1.25;
 
-type AIMessage      = { role: 'user' | 'ai'; text: string };
-type Supplier       = { id: string; full_name: string; company_name: string; email: string; whatsapp: string; category: string; status: string; };
-type SupplierProduct = { id: string; name: string; category: string; sku: string; retail_price: number; wholesale_price: number; unit_cost: number; duty_rate: number; supplier_id: string; supplier_name: string; supplier_whatsapp: string; photo_url: string; status: string; case_cost: number; pieces_per_case: number; stock_qty: number; };
-type SupplierPayout = { supplier_id: string; supplier_name: string; cogs_total: number; paid: boolean; };
-type Section        = 'overview' | 'pos' | 'profit' | 'suppliers' | 'inventory' | 'market' | 'report' | 'ai' | 'yield' | 'freezer' | 'purchase' | 'orders';
-
-const SPINY_TAILS_INVENTORY = [
-  { name: 'Bahamian Conch',                   lbs: 5000, category: 'seafood', icon: '🐚' },
-  { name: 'Nassau Grouper (Whole)',            lbs: 300,  category: 'seafood', icon: '🐟' },
-  { name: 'Lane Snapper',                      lbs: 740,  category: 'seafood', icon: '🐠' },
-  { name: 'Salmon 6oz',                        lbs: 680,  category: 'seafood', icon: '🐟' },
-  { name: 'Salmon 8oz',                        lbs: 170,  category: 'seafood', icon: '🐟' },
-  { name: 'Salmon 4oz',                        lbs: 130,  category: 'seafood', icon: '🐟' },
-  { name: 'Yellowfin Tuna',                    lbs: 300,  category: 'seafood', icon: '🐟' },
-  { name: 'Snow Crab (4x1.5lb packs)',         lbs: 90,   category: 'seafood', icon: '🦀' },
-  { name: 'Grouper Fillet 6/8oz',             lbs: 160,  category: 'seafood', icon: '🐟' },
-  { name: 'Chicken Leg Quarters (12cs/33lb)', lbs: 396,  category: 'poultry', icon: '🍗' },
-  { name: 'Chicken Wings (14cs/33lb)',         lbs: 462,  category: 'poultry', icon: '🍗' },
-  { name: 'Snapper Fillet 6/8oz (6x10lb)',    lbs: 60,   category: 'seafood', icon: '🐠' },
-  { name: 'Snapper Fingers (10cs/5x2lb)',      lbs: 100,  category: 'seafood', icon: '🐠' },
-  { name: 'Whole Chicken Grillers (8cs/22lb)',lbs: 176,  category: 'poultry', icon: '🍗' },
-  { name: 'Pork Spareribs (9cs/39.6lb)',       lbs: 356,  category: 'meat',    icon: '🥩' },
-  { name: 'Ribeye Steak (2cs/10lb)',           lbs: 20,   category: 'meat',    icon: '🥩' },
-  { name: 'Breaded Crab Claws (10cs)',         lbs: 0,    category: 'seafood', icon: '🦀' },
-  { name: 'Black Mussel (7cs/10lb)',           lbs: 70,   category: 'seafood', icon: '🐚' },
-  { name: 'Swai Fillet (6cs/10lb)',            lbs: 60,   category: 'seafood', icon: '🐟' },
+const BAHAMAS_ISLANDS = [
+  "New Providence (Nassau)", "Grand Bahama (Freeport)", "Abaco", "Eleuthera",
+  "Exuma", "Andros", "Long Island", "Cat Island", "San Salvador", "Bimini",
+  "Berry Islands", "Harbour Island", "Spanish Wells", "Acklins", "Crooked Island",
+  "Mayaguana", "Inagua", "Ragged Island",
 ];
 
-const TOTAL_LBS        = SPINY_TAILS_INVENTORY.reduce((sum, item) => sum + item.lbs, 0);
-const FREEZER_CAPACITY = 30000;
-
-const YIELD_PRESETS = {
-  Conch:   { yield: 0.35, label: 'Conch Meat Yield',    icon: '🐚' },
-  Fish:    { yield: 0.48, label: 'Fish Fillet Yield',   icon: '🐟' },
-  Shrimp:  { yield: 0.65, label: 'Shrimp Yield',        icon: '🦐' },
-  Lobster: { yield: 0.40, label: 'Lobster Tail Yield',  icon: '🦞' },
-  Grouper: { yield: 0.45, label: 'Grouper Fillet Yield',icon: '🐠' },
-  Meats:   { yield: 0.70, label: 'Usable Meat Yield',   icon: '🥩' },
+const MAILBOATS: Record<string, string[]> = {
+  "Abaco":                   ["Marsh Harbour Express", "Legacy"],
+  "Eleuthera":               ["Current Pride", "Bahamas Daybreak III"],
+  "Exuma":                   ["Grand Master", "Exuma Express"],
+  "Andros":                  ["Lady Rosalind", "Lester Rolle"],
+  "Long Island":             ["Sherice M", "Long Island Express"],
+  "Cat Island":              ["Sea Hauler", "New Island Trader"],
+  "San Salvador":            ["Lady Frances"],
+  "Bimini":                  ["Bimini Express"],
+  "Berry Islands":           ["Champion II"],
+  "Harbour Island":          ["Current Pride"],
+  "Spanish Wells":           ["Current Pride"],
+  "Acklins":                 ["Lady Muriel"],
+  "Crooked Island":          ["Lady Muriel"],
+  "Mayaguana":               ["Lady Muriel"],
+  "Inagua":                  ["Lady Mathew"],
+  "Ragged Island":           ["Lady Muriel"],
+  "Grand Bahama (Freeport)": ["Grand Bahama IV"],
 };
 
-const BOTTOM_NAV = [
-  { s: 'overview'  as Section, icon: '📊', label: 'Overview'  },
-  { s: 'pos'       as Section, icon: '🛒', label: 'POS'       },
-  { s: 'purchase'  as Section, icon: '📦', label: 'Orders'    },
-  { s: 'suppliers' as Section, icon: '🚢', label: 'Suppliers' },
-  { s: 'profit'    as Section, icon: '💰', label: 'Profit'    },
-  { s: 'ai'        as Section, icon: '🤖', label: 'AI'        },
+const STAFF_ROUTES: Record<string, string> = {
+  control_admin: "/dashboard",
+  manager:       "/ashley",
+  basic_admin:   "/jaquel",
+  bill:          "/bill",
+  automotive:    "/johnette",
+  jorge:         "/jorge",
+  processor:     "/yield",
+  cashier:       "/pos",
+  andros_staff:  "/pos-andros",
+};
+
+type CartItem = { product: Product; qty: number };
+type View     = "home" | "shop" | "cart" | "login" | "register" | "checkout" | "orders" | "profile";
+type AuthUser = { id: string; name: string; phone: string; email: string };
+type Order    = {
+  id: string; order_number: string; status: string; payment_status: string;
+  subtotal: number; delivery_fee: number; total: number;
+  delivery_type: string; delivery_address: string;
+  delivery_notes: string; created_at: string;
+  customer_name: string; customer_phone: string;
+};
+
+const STATUS_INFO: Record<string, { label: string; color: string; icon: string; bg: string }> = {
+  pending:          { label: "Order Received",    color: "#f5c518", icon: "⏳", bg: "#1a1400" },
+  confirmed:        { label: "Payment Confirmed", color: "#60a5fa", icon: "✅", bg: "#001a2a" },
+  packing:          { label: "Packing Your Order",color: "#a78bfa", icon: "📦", bg: "#1a0a2a" },
+  out_for_delivery: { label: "Out for Delivery",  color: "#4ade80", icon: "🚚", bg: "#0a1f0a" },
+  delivered:        { label: "Delivered",         color: "#4ade80", icon: "✅", bg: "#0a1f0a" },
+  ready_pickup:     { label: "Ready for Pickup",  color: "#4ade80", icon: "🏪", bg: "#0a1f0a" },
+  cancelled:        { label: "Cancelled",         color: "#f87171", icon: "❌", bg: "#2d0000" },
+};
+
+const CATEGORIES = [
+  { id: "all",     label: "All Products", icon: "🛍️" },
+  { id: "seafood", label: "Seafood",      icon: "🐟" },
+  { id: "poultry", label: "Poultry",      icon: "🍗" },
+  { id: "meat",    label: "Meats",        icon: "🥩" },
 ];
 
-export default function Dashboard() {
-  const [finance, setFinance]             = useState({ revenue: 0, profit: 0, supplierOwed: 0, transactions: 0 });
-  const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [section, setSection]             = useState<Section>('overview');
-  const [sidebarOpen, setSidebarOpen]     = useState(false);
-  const [isMobile, setIsMobile]           = useState(false);
-  const [allSuppliers, setAllSuppliers]   = useState<Supplier[]>([]);
-  const [allProducts, setAllProducts]     = useState<SupplierProduct[]>([]);
-  const [supplierTab, setSupplierTab]     = useState<'applications' | 'products'>('applications');
-  const [supplierLoading, setSupplierLoading] = useState(false);
+export default function MarketPage() {
+  const router = useRouter();
+  const [view, setView]                 = useState<View>("home");
+  const [cart, setCart]                 = useState<CartItem[]>([]);
+  const [search, setSearch]             = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [loading, setLoading]           = useState(false);
+  const [user, setUser]                 = useState<AuthUser | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isStaff, setIsStaff]           = useState(false);
+  const [staffRole, setStaffRole]       = useState("");
+  const [supplierProducts, setSupplierProducts] = useState<any[]>([]);
+  const [myOrders, setMyOrders]         = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
-  // Vehicle & utility income
-  const [vehicleSalesCount, setVehicleSalesCount] = useState(0);
-  const [vehicleRentalDays, setVehicleRentalDays] = useState(0);
-  const [autoPartsRevenue, setAutoPartsRevenue]   = useState(0);
-  const [autoPartsProfit, setAutoPartsProfit]     = useState(0);
-  const [utilityPayments, setUtilityPayments]     = useState({ count: 0, fees: 0 });
+  const [authName, setAuthName]         = useState("");
+  const [authPhone, setAuthPhone]       = useState("");
+  const [authEmail, setAuthEmail]       = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [showPw, setShowPw]             = useState(false);
+  const [authError, setAuthError]       = useState("");
 
-  // REAL COGS-based supplier data
-  const [supplierPayoutMap, setSupplierPayoutMap] = useState<Record<string, { name: string; owed: number; paid: number; }>>({});
-  const [totalCOGS, setTotalCOGS]                 = useState(0);
-  const [totalSupplierOwed, setTotalSupplierOwed] = useState(0);
-  const [lowStockProducts, setLowStockProducts]   = useState<SupplierProduct[]>([]);
+  const [fulfillment, setFulfillment]   = useState<"delivery" | "pickup">("delivery");
+  const [address, setAddress]           = useState("");
+  const [island, setIsland]             = useState("New Providence (Nassau)");
+  const [mailboat, setMailboat]         = useState("");
+  const [pickupDate, setPickupDate]     = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [checkoutError, setCheckoutError] = useState("");
 
-  const [aiMessages, setAiMessages] = useState<AIMessage[]>([
-    { role: 'ai', text: "Hi Dedrick! I'm your BSC AI assistant. I track real COGS from every paid order — supplier cost, stock levels, and true profit per sale. Ask me anything." }
-  ]);
-  const [aiInput, setAiInput]     = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [yieldType, setYieldType]   = useState('Conch');
-  const [yieldWeight, setYieldWeight] = useState(100);
+  const [editName, setEditName]         = useState("");
+  const [editPhone, setEditPhone]       = useState("");
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  const markup           = RETAIL_MARKUP;
+  const cartCount        = cart.reduce((s, c) => s + c.qty, 0);
+  const cartSubtotal     = cart.reduce((s, c) => s + c.product.price * markup * c.qty, 0);
+  const deliveryCharge   = fulfillment === "delivery" ? DELIVERY_FEE : 0;
+  const cartTotal        = cartSubtotal + deliveryCharge;
+  const isOutIsland      = island !== "New Providence (Nassau)" && island !== "Grand Bahama (Freeport)";
+  const availableMailboats = MAILBOATS[island] || [];
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    checkSession();
+    loadSupplierProducts();
   }, []);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        await Promise.race([
-          (async () => {
-            await fetchFinancialsFromDB();
-            setFinance(getFinancialSummary());
-            const invoices = await fetchInvoicesFromDB();
-            setRecentInvoices(invoices.slice(0, 20));
-          })(),
-          new Promise((_, reject) => setTimeout(reject, 6000)),
-        ]);
-      } catch (e) {}
-      setLoading(false);
+  async function checkSession() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user;
+      if (u) {
+        const { data: profile } = await supabase.from("profiles").select("role").eq("id", u.id).single();
+        const role = profile?.role;
+        if (role && STAFF_ROUTES[role]) {
+          setIsStaff(true);
+          setStaffRole(role);
+          setCheckingAuth(false);
+          return;
+        }
+        const meta = u.user_metadata;
+        setUser({ id: u.id, name: meta?.name || u.email || "", phone: meta?.phone || "", email: u.email || "" });
+        setEditName(meta?.name || "");
+        setEditPhone(meta?.phone || "");
+      }
+    } catch (e) {}
+    setCheckingAuth(false);
+  }
+
+  async function loadSupplierProducts() {
+    try {
+      const { data } = await supabase.from("supplier_products").select("*").eq("status", "approved");
+      if (data) setSupplierProducts(data);
+    } catch (e) {}
+  }
+
+  async function loadMyOrders() {
+    if (!user) return;
+    setOrdersLoading(true);
+    try {
+      const { data } = await supabase.from("orders").select("*").eq("customer_id", user.id).order("created_at", { ascending: false });
+      if (data) setMyOrders(data);
+    } catch (e) {}
+    setOrdersLoading(false);
+  }
+
+  async function handleRegister() {
+    setAuthError("");
+    if (!authName || !authPhone || !authEmail || !authPassword) { setAuthError("All fields required"); return; }
+    if (authPassword.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword, options: { data: { name: authName, phone: authPhone } } });
+    if (error) { setAuthError(error.message); setLoading(false); return; }
+    if (data.user) { setUser({ id: data.user.id, name: authName, phone: authPhone, email: authEmail }); setEditName(authName); setEditPhone(authPhone); }
+    setLoading(false);
+    setView("home");
+  }
+
+  async function handleLogin() {
+    setAuthError("");
+    if (!authEmail || !authPassword) { setAuthError("Email and password required"); return; }
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    if (error) { setAuthError("Invalid email or password"); setLoading(false); return; }
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).single();
+    const role = profile?.role;
+    if (role && STAFF_ROUTES[role]) {
+      router.push(STAFF_ROUTES[role]);
+      return;
     }
-    load();
-    loadVehicleIncome();
-    loadUtilityIncome();
-    loadCOGSData();
-  }, []);
-
-  useEffect(() => {
-    if (section === 'suppliers') loadSupplierData();
-  }, [section]);
-
-  // ── LOAD REAL COGS FROM supplier_payouts LEDGER ──
-  async function loadCOGSData() {
-    try {
-      const { data: payouts } = await supabase
-        .from('supplier_payouts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (payouts) {
-        const map: Record<string, { name: string; owed: number; paid: number }> = {};
-        let totalOwed = 0;
-        let totalPaid = 0;
-
-        payouts.forEach((p: any) => {
-          if (!map[p.supplier_id]) {
-            map[p.supplier_id] = { name: p.supplier_name, owed: 0, paid: 0 };
-          }
-          if (p.paid) {
-            map[p.supplier_id].paid += parseFloat(p.cogs_total) || 0;
-            totalPaid += parseFloat(p.cogs_total) || 0;
-          } else {
-            map[p.supplier_id].owed += parseFloat(p.cogs_total) || 0;
-            totalOwed += parseFloat(p.cogs_total) || 0;
-          }
-        });
-
-        const totalCogsAll = payouts.reduce((s: number, p: any) => s + (parseFloat(p.cogs_total) || 0), 0);
-        setSupplierPayoutMap(map);
-        setTotalCOGS(parseFloat(totalCogsAll.toFixed(2)));
-        setTotalSupplierOwed(parseFloat(totalOwed.toFixed(2)));
-      }
-
-      // Load low stock products (stock_qty <= 5)
-      const { data: stockData } = await supabase
-        .from('supplier_products')
-        .select('*')
-        .eq('status', 'approved')
-        .lte('stock_qty', 5)
-        .gt('stock_qty', 0)
-        .order('stock_qty', { ascending: true });
-
-      if (stockData) setLowStockProducts(stockData);
-
-    } catch (e) {}
+    const meta = data.user.user_metadata;
+    setUser({ id: data.user.id, name: meta?.name || authEmail, phone: meta?.phone || "", email: authEmail });
+    setEditName(meta?.name || ""); setEditPhone(meta?.phone || "");
+    setLoading(false);
+    setView("home");
   }
 
-  async function markSupplierPaid(supplierId: string) {
-    try {
-      await supabase
-        .from('supplier_payouts')
-        .update({ paid: true })
-        .eq('supplier_id', supplierId)
-        .eq('paid', false);
-      await loadCOGSData();
-    } catch (e) {}
+  async function handlePlaceOrder() {
+    setCheckoutError("");
+    if (fulfillment === "delivery" && !address.trim()) { setCheckoutError("Enter your delivery address"); return; }
+    if (fulfillment === "delivery" && isOutIsland && !mailboat) { setCheckoutError("Select your mailboat"); return; }
+    if (fulfillment === "pickup" && !pickupDate) { setCheckoutError("Select a pickup date"); return; }
+    setLoading(true);
+    const orderItems = cart.map(c => ({
+      productId: c.product.id, productName: c.product.name,
+      price: parseFloat((c.product.price * markup).toFixed(2)), qty: c.qty,
+      total: parseFloat((c.product.price * markup * c.qty).toFixed(2)),
+      supplierName: (c.product as any).supplierName, image: c.product.image,
+    }));
+    const orderNumber = "BSC-" + Date.now().toString().slice(-6);
+    const { error } = await supabase.from("orders").insert({
+      order_number: orderNumber, customer_id: user!.id, customer_name: user!.name,
+      customer_phone: user!.phone, status: "pending", payment_status: "unpaid",
+      payment_method: "online", subtotal: parseFloat(cartSubtotal.toFixed(2)),
+      tax: 0, delivery_fee: deliveryCharge, total: parseFloat(cartTotal.toFixed(2)),
+      delivery_type: fulfillment,
+      delivery_address: fulfillment === "delivery"
+        ? address + ", " + island + (mailboat ? " via " + mailboat : "")
+        : "Pickup: " + pickupDate,
+      delivery_notes: deliveryNotes, can_fulfill: true, items: orderItems,
+    });
+    if (error) { setCheckoutError("Order failed: " + error.message); setLoading(false); return; }
+    await recordSaleFinancials(cartTotal);
+    setCart([]);
+    setLoading(false);
+    setView("orders");
+    await loadMyOrders();
   }
 
-  async function loadVehicleIncome() {
-    try {
-      const { data: sold } = await supabase.from('vehicles').select('id, bsc_markup').eq('listing_type', 'sale').eq('status', 'inactive');
-      if (sold) setVehicleSalesCount(sold.length);
-      const { data: partsSold } = await supabase.from('auto_parts').select('price, bsc_markup, supplier_cost').eq('status', 'inactive');
-      if (partsSold) {
-        setAutoPartsRevenue(partsSold.reduce((s, p) => s + (p.price || 0), 0));
-        setAutoPartsProfit(partsSold.reduce((s, p) => s + (p.bsc_markup || 0), 0));
-      }
-    } catch (e) {}
+  async function handleProfileSave() {
+    if (!user) return;
+    setLoading(true);
+    await supabase.auth.updateUser({ data: { name: editName, phone: editPhone } });
+    setUser(prev => prev ? { ...prev, name: editName, phone: editPhone } : prev);
+    setProfileSaved(true);
+    setLoading(false);
+    setTimeout(() => setProfileSaved(false), 2000);
   }
 
-  async function loadUtilityIncome() {
-    try {
-      const { data } = await supabase.from('utility_payments').select('service_fee, total_charged').eq('payment_status', 'completed');
-      if (data) {
-        const fees = data.reduce((s, p) => s + (p.service_fee || 0), 0);
-        setUtilityPayments({ count: data.length, fees: parseFloat(fees.toFixed(2)) });
-      }
-    } catch (e) {}
+  function addToCart(product: Product) {
+    setCart(prev => {
+      const ex = prev.find(c => c.product.id === product.id);
+      return ex ? prev.map(c => c.product.id === product.id ? { ...c, qty: c.qty + 1 } : c) : [...prev, { product, qty: 1 }];
+    });
   }
 
-  async function loadSupplierData() {
-    setSupplierLoading(true);
-    try {
-      const { data: s } = await supabase.from('suppliers').select('*').order('created_at', { ascending: false });
-      if (s) setAllSuppliers(s);
-      const { data: p } = await supabase.from('supplier_products').select('*').order('created_at', { ascending: false });
-      if (p) setAllProducts(p);
-    } catch (e) {}
-    setSupplierLoading(false);
+  function adjustQty(id: string, delta: number) {
+    setCart(prev => prev.map(c => c.product.id === id ? { ...c, qty: c.qty + delta } : c).filter(c => c.qty > 0));
   }
 
-  const approveSupplier = async (id: string) => {
-    await supabase.from('suppliers').update({ status: 'approved' }).eq('id', id);
-    setAllSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s));
-  };
-  const rejectSupplier = async (id: string) => {
-    await supabase.from('suppliers').update({ status: 'rejected' }).eq('id', id);
-    setAllSuppliers(prev => prev.map(s => s.id === id ? { ...s, status: 'rejected' } : s));
-  };
-  const approveProduct = async (id: string) => {
-    await supabase.from('supplier_products').update({ status: 'approved' }).eq('id', id);
-    setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'approved' } : p));
-  };
-  const rejectProduct = async (id: string) => {
-    await supabase.from('supplier_products').update({ status: 'rejected' }).eq('id', id);
-    setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'rejected' } : p));
-  };
-
-  const lowStockItems  = products.filter(p => p.stock <= p.minStock + 2);
-  const avgTransaction = finance.transactions > 0 ? (finance.revenue / finance.transactions).toFixed(2) : '0.00';
-  const today          = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-  const nassauPosInvoices = recentInvoices.filter(inv =>
-    !inv.customerName.includes('DELIVERY') && !inv.customerName.includes('PICKUP') && !inv.customerName.includes('ANDROS')
+  const allProducts = [
+    ...products.filter(p => p.stock > p.minStock),
+    ...supplierProducts.map(sp => ({
+      id: sp.id, name: sp.name, price: sp.retail_price / markup,
+      stock: 999, minStock: 0, category: sp.category,
+      supplierName: sp.supplier_name,
+      image: sp.photo_url || "https://images.unsplash.com/photo-1534482421-64566f976cfa?w=400&q=80",
+      description: sp.name + " from " + sp.supplier_name,
+    }))
+  ].filter(p =>
+    (activeCategory === "all" || p.category === activeCategory) &&
+    p.name.toLowerCase().includes(search.toLowerCase())
   );
-  const androsPosInvoices = recentInvoices.filter(inv => inv.customerName.includes('ANDROS'));
-  const marketInvoices    = recentInvoices.filter(inv => inv.customerName.includes('DELIVERY') || inv.customerName.includes('PICKUP'));
 
-  const nassauRevenue = nassauPosInvoices.reduce((s, i) => s + i.total, 0);
-  const androsRevenue = androsPosInvoices.reduce((s, i) => s + i.total, 0);
-  const marketRevenue = marketInvoices.reduce((s, i) => s + i.total, 0);
-  const nassauProfit  = nassauRevenue * NASSAU_MARGIN;
-  const androsProfit  = androsRevenue * ANDROS_MARGIN;
-  const marketProfit  = marketRevenue * MARKET_MARGIN;
+  const pg: React.CSSProperties          = { backgroundColor: "#060d1f", minHeight: "100vh", color: "#fff", fontFamily: "'Inter', sans-serif", paddingBottom: 100 };
+  const inp: React.CSSProperties         = { display: "block", width: "100%", padding: "13px 14px", borderRadius: 12, backgroundColor: "#0d1f3c", color: "#fff", border: "1px solid #1e3a5f", fontSize: 15, marginBottom: 12, boxSizing: "border-box" as const, outline: "none" };
+  const lbl: React.CSSProperties         = { display: "block", color: "#6b7280", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 6 };
+  const primaryBtn: React.CSSProperties  = { width: "100%", padding: "14px", borderRadius: 12, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", fontSize: 15, cursor: "pointer", marginBottom: 10 };
+  const ghostBtn: React.CSSProperties    = { width: "100%", padding: "12px", borderRadius: 12, backgroundColor: "transparent", color: "#6b7280", border: "1px solid #1e3a5f", fontSize: 14, cursor: "pointer", marginBottom: 10 };
 
-  const carSalesProfit = vehicleSalesCount * CAR_SALE_MARKUP;
-  const rentalProfit   = vehicleRentalDays * RENTAL_DAY_MARKUP;
-  const utilityProfit  = utilityPayments.fees;
-
-  const totalProfit  = nassauProfit + androsProfit + marketProfit + carSalesProfit + rentalProfit + autoPartsProfit + utilityProfit;
-  const totalRevenue = nassauRevenue + androsRevenue + marketRevenue + autoPartsRevenue;
-  const pendingCount = allSuppliers.filter(s => s.status === 'pending').length;
-
-  const currentYield   = YIELD_PRESETS[yieldType as keyof typeof YIELD_PRESETS];
-  const usableWeight   = (yieldWeight * currentYield.yield).toFixed(1);
-  const retailPortions = Math.round(parseFloat(usableWeight) / 0.75);
-
-  const handleAiSend = async () => {
-    if (!aiInput.trim()) return;
-    const userMsg = aiInput.trim();
-    setAiInput('');
-    setAiMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setAiLoading(true);
-    try {
-      const ctx = `You are BSC AI for Bahamian Seafood Connection owned by Dedrick Storr.
-Locations: BSC Marketplace Nassau (38%), Ceta's Variety Store Andros (43%), Spiny Tails Processing Plant Nassau.
-Freezer: ${TOTAL_LBS.toLocaleString()} lbs / 30,000lb capacity.
-Revenue: Nassau $${nassauRevenue.toFixed(2)} | Andros $${androsRevenue.toFixed(2)} | Online $${marketRevenue.toFixed(2)} | Auto Parts $${autoPartsRevenue.toFixed(2)}
-Total Profit: $${totalProfit.toFixed(2)} | Car Sales: ${vehicleSalesCount} sold ($650 each) | Auto Parts Profit: $${autoPartsProfit.toFixed(2)} | Utility Fees: $${utilityProfit.toFixed(2)}
-COGS System: Total COGS recorded $${totalCOGS.toFixed(2)} | Supplier owed (unpaid) $${totalSupplierOwed.toFixed(2)}
-Low stock products: ${lowStockProducts.length} items need reordering.
-Orders: ${finance.transactions} | Suppliers: ${allSuppliers.length} total, ${pendingCount} pending.
-Be concise and actionable. Focus on cash flow and what to reorder.`;
-      const res  = await fetch('/api/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system: ctx,
-          messages: [
-            ...aiMessages.filter((_, i) => i > 0).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text })),
-            { role: 'user', content: userMsg },
-          ],
-        }),
-      });
-      const data = await res.json();
-      setAiMessages(prev => [...prev, { role: 'ai', text: data.content?.[0]?.text || 'Could not process.' }]);
-    } catch {
-      setAiMessages(prev => [...prev, { role: 'ai', text: 'Connection error.' }]);
-    }
-    setAiLoading(false);
-  };
-
-  const navTo = (s: Section) => { setSection(s); setSidebarOpen(false); };
-
-  const card: React.CSSProperties = { backgroundColor: '#0d1f3c', borderRadius: 16, padding: 18, border: '1px solid #1e3a5f', marginBottom: 14 };
-  const statusBadge = (status: string): React.CSSProperties => ({
-    padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 'bold',
-    backgroundColor: status === 'approved' ? '#0a1f0a' : status === 'rejected' ? '#2d0000' : '#1a1400',
-    color:           status === 'approved' ? '#4ade80' : status === 'rejected' ? '#f87171' : '#f5c518',
-    border: '1px solid ' + (status === 'approved' ? '#4ade80' : status === 'rejected' ? '#f87171' : '#f5c518'),
-  });
-
-  if (loading) return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🐟</div>
-        <p style={{ color: '#4a5568', fontSize: 14 }}>Loading BSC Control...</p>
+  if (checkingAuth) return (
+    <div style={{ ...pg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🐟</div>
+        <p style={{ color: "#4a5568" }}>Loading BSC Market...</p>
       </div>
     </div>
   );
 
-  const ALL_STREAMS = [
-    { label: 'BSC Marketplace Nassau',      revenue: nassauRevenue,  profit: nassauProfit,  margin: '38%',      color: '#4ade80', count: nassauPosInvoices.length, icon: '🛒',  location: 'Firetrial Rd, Nassau',        tag: '' },
-    { label: "Ceta's Variety Store Andros", revenue: androsRevenue,  profit: androsProfit,  margin: '43%',      color: '#a78bfa', count: androsPosInvoices.length, icon: '🏝️', location: 'Mastic Point, North Andros',  tag: '' },
-    { label: 'Online Marketplace',          revenue: marketRevenue,  profit: marketProfit,  margin: '25%',      color: '#60a5fa', count: marketInvoices.length,    icon: '🏪',  location: 'Delivery + Pickup',           tag: '' },
-    { label: 'Wholesale / Bulk',            revenue: 0,              profit: 0,             margin: '12%',      color: '#f5c518', count: 0,                        icon: '📦',  location: 'Business orders 10lb+',      tag: '' },
-    { label: 'Car Sales',                   revenue: vehicleSalesCount * (CAR_SALE_MARKUP / 0.1), profit: carSalesProfit, margin: '$650/car', color: '#f5c518', count: vehicleSalesCount, icon: '🚗', location: 'Nassau · +10% VAT', tag: 'VAT' },
-    { label: 'Car Rentals',                 revenue: vehicleRentalDays * (RENTAL_DAY_MARKUP / 0.1), profit: rentalProfit, margin: '$10/day', color: '#60a5fa', count: vehicleRentalDays, icon: '🔑', location: 'Nassau · +10% VAT', tag: 'VAT' },
-    { label: 'Auto Parts',                  revenue: autoPartsRevenue, profit: autoPartsProfit, margin: '10%+VAT', color: '#a78bfa', count: 0, icon: '🔧', location: 'Ships nationwide', tag: 'VAT' },
-    { label: 'Utility Bill Payments',       revenue: utilityPayments.count * 100, profit: utilityProfit, margin: '4.5% fee', color: '#4ade80', count: utilityPayments.count, icon: '⚡', location: 'BEC · Water · Cable · Aliv', tag: '' },
-    { label: 'US Supplier Sales',           revenue: 0,              profit: 0,             margin: 'TBD',      color: '#60a5fa', count: 0,                        icon: '🇺🇸', location: 'Florida & Miami imports',     tag: '' },
-  ];
+  // Staff redirect banner
+  const StaffBanner = () => isStaff ? (
+    <div style={{ background: "linear-gradient(135deg, #1a1200, #2a1e00)", borderBottom: "1px solid #f5c518", padding: "10px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <p style={{ margin: 0, color: "#f5c518", fontSize: 12, fontWeight: "bold" }}>👑 Staff Account Detected</p>
+      <button onClick={() => router.push(STAFF_ROUTES[staffRole] || "/dashboard")} style={{ background: "none", border: "1px solid #f5c518", borderRadius: 8, color: "#f5c518", fontWeight: "bold", fontSize: 12, cursor: "pointer", padding: "5px 14px" }}>
+        Go to My Dashboard →
+      </button>
+    </div>
+  ) : null;
 
-  const NAV_GROUPS = [
-    { label: 'BUSINESS OVERVIEW', items: [
-      { section: 'overview' as Section, label: 'Full Picture',      icon: '📊' },
-      { section: 'freezer'  as Section, label: 'Freezer Inventory', icon: '🧊' },
-      { section: 'purchase' as Section, label: 'Purchase Orders',   icon: '📦' },
-    ]},
-    { label: 'OPERATIONS', items: [
-      { section: 'pos'    as Section, label: 'POS Locations',    icon: '🛒', badge: 'LIVE' },
-      { section: 'orders' as Section, label: 'Order Management', icon: '📋' },
-      { section: 'report' as Section, label: 'Daily Report',     icon: '📄' },
-      { section: 'yield'  as Section, label: 'Yield Calculator', icon: '🧮' },
-    ]},
-    { label: 'SALES & MONEY', items: [
-      { section: 'profit'    as Section, label: 'Profit Report',  icon: '📈' },
-      { section: 'suppliers' as Section, label: 'Supplier Admin', icon: '🚢' },
-    ]},
-    { label: 'MARKETPLACE', items: [
-      { section: 'market'    as Section, label: 'Online Market', icon: '🏪' },
-      { section: 'inventory' as Section, label: 'Stock Alerts',  icon: '⚠️' },
-    ]},
-    { label: 'TOOLS', items: [
-      { section: 'ai' as Section, label: 'BSC AI Assistant', icon: '🤖' },
-    ]},
-  ];
-
-  const SidebarContent = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #1a2a3a', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #f5c518, #e6a800)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🦀</div>
-          <div>
-            <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 15 }}>BSC Control</p>
-            <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>Nassau + Andros</p>
-          </div>
-        </div>
-      </div>
-      <div style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
-        {NAV_GROUPS.map(group => (
-          <div key={group.label} style={{ marginBottom: 20 }}>
-            <p style={{ margin: '0 0 4px', padding: '0 20px', color: '#2a3a5a', fontSize: 9, letterSpacing: 2, fontWeight: 'bold' }}>{group.label}</p>
-            {group.items.map((item, idx) => {
-              const isActive = section === item.section;
-              return (
-                <button key={idx} onClick={() => navTo(item.section)} style={{ width: '100%', textAlign: 'left', padding: '10px 20px', backgroundColor: isActive ? 'rgba(245,197,24,0.12)' : 'transparent', color: isActive ? '#f5c518' : '#9ca3af', border: 'none', cursor: 'pointer', fontSize: 13, borderLeft: isActive ? '3px solid #f5c518' : '3px solid transparent', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                  {'badge' in item && item.badge && <span style={{ backgroundColor: '#4ade80', color: '#000', borderRadius: 6, padding: '1px 6px', fontSize: 8, fontWeight: 'bold' }}>{item.badge}</span>}
-                  {item.section === 'suppliers' && pendingCount > 0 && <span style={{ backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', flexShrink: 0 }}>{pendingCount}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div style={{ padding: '12px 16px', borderTop: '1px solid #1a2a3a', flexShrink: 0 }}>
-        <div style={{ backgroundColor: 'rgba(30,58,120,0.3)', border: '1px solid #1e3a7f', borderRadius: 12, padding: '10px 14px', marginBottom: 10 }}>
-          <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, fontWeight: 'bold' }}>MARKET URL</p>
-          <p style={{ margin: '4px 0 0', color: '#fff', fontSize: 11, wordBreak: 'break-all' as const }}>bscbahamas.com/market</p>
-        </div>
-        <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }} style={{ width: '100%', padding: '9px', borderRadius: 10, backgroundColor: 'transparent', color: '#4a5568', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}>
-          Sign Out
+  const Header = () => (
+    <div style={{ background: "linear-gradient(135deg, #060d1f, #0d1f3c)", borderBottom: "1px solid #1e3a5f", padding: "14px 18px", position: "sticky" as const, top: 0, zIndex: 50 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 640, margin: "0 auto" }}>
+        <button onClick={() => setView("home")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+          <p style={{ margin: 0, color: "#f5c518", fontWeight: "bold", fontSize: 18 }}>🐟 BSC Market</p>
+          <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>Fresh · Local · Bahamian</p>
         </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {cartCount > 0 && (
+            <button onClick={() => setView("cart")} style={{ padding: "8px 14px", borderRadius: 20, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}>
+              🛒 {cartCount}
+            </button>
+          )}
+          {user ? (
+            <button onClick={() => setView("profile")} style={{ width: 38, height: 38, borderRadius: "50%", backgroundColor: "#0d1f3c", border: "2px solid #f5c518", cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>👤</button>
+          ) : (
+            <button onClick={() => setView("login")} style={{ padding: "8px 14px", borderRadius: 20, backgroundColor: "#0d1f3c", color: "#f5c518", border: "1px solid #f5c518", cursor: "pointer", fontSize: 13, fontWeight: "bold" }}>Login</button>
+          )}
+        </div>
       </div>
     </div>
   );
 
-  const MainContent = () => (
-    <>
-      {section === 'overview' && (
-        <>
-          {pendingCount > 0 && (
-            <div onClick={() => setSection('suppliers')} style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', border: '1px solid #f5c518', borderRadius: 16, padding: '14px 18px', marginBottom: 20, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>🚢 {pendingCount} Supplier Application{pendingCount > 1 ? 's' : ''} Pending</p>
-                <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 12 }}>Tap to review and approve</p>
-              </div>
-              <span style={{ color: '#f5c518', fontSize: 22 }}>›</span>
-            </div>
-          )}
-
-          {/* LOW STOCK ALERT from live supplier_products */}
-          {lowStockProducts.length > 0 && (
-            <div style={{ background: 'linear-gradient(135deg, #2d0000, #3b0000)', border: '1px solid #f87171', borderRadius: 16, padding: '14px 18px', marginBottom: 20 }}>
-              <p style={{ margin: '0 0 10px', color: '#f87171', fontWeight: 'bold', fontSize: 14 }}>⚠️ {lowStockProducts.length} Low Stock — Reorder Needed</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {lowStockProducts.slice(0, 4).map(p => (
-                  <div key={p.id} style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p style={{ margin: 0, color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{p.name}</p>
-                    <span style={{ backgroundColor: '#7f1d1d', color: '#f87171', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 'bold' }}>{p.stock_qty} left</span>
-                  </div>
-                ))}
-              </div>
-              {lowStockProducts.length > 4 && <p style={{ margin: '8px 0 0', color: '#f87171', fontSize: 11 }}>+{lowStockProducts.length - 4} more items low</p>}
-            </div>
-          )}
-
-          {/* TWO LOCATIONS */}
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 14, marginBottom: 20 }}>
-            <div style={{ background: 'linear-gradient(135deg, #001a3a, #002a5a)', border: '1px solid #1e5a9f', borderRadius: 18, padding: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, letterSpacing: 1, fontWeight: 'bold' }}>NASSAU · 38% MARGIN</p>
-                  <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>BSC Marketplace</p>
-                  <p style={{ margin: 0, color: '#6b7280', fontSize: 11 }}>Firetrial Road, Nassau</p>
-                </div>
-                <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '3px 10px', fontSize: 10, fontWeight: 'bold' }}>ACTIVE</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>REVENUE</p>
-                  <p style={{ margin: '4px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>${nassauRevenue.toFixed(2)}</p>
-                </div>
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>PROFIT</p>
-                  <p style={{ margin: '4px 0 0', color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>${nassauProfit.toFixed(2)}</p>
-                </div>
-              </div>
-              <Link href="/pos" style={{ display: 'block', marginTop: 12, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>🛒 Nassau POS</Link>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, #1a0a2a, #2a1040)', border: '1px solid #7c3aed', borderRadius: 18, padding: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  <p style={{ margin: 0, color: '#a78bfa', fontSize: 10, letterSpacing: 1, fontWeight: 'bold' }}>ANDROS · 43% MARGIN</p>
-                  <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Ceta's Variety Store</p>
-                  <p style={{ margin: 0, color: '#6b7280', fontSize: 11 }}>Mastic Point, North Andros</p>
-                </div>
-                <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '3px 10px', fontSize: 10, fontWeight: 'bold' }}>ACTIVE</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>REVENUE</p>
-                  <p style={{ margin: '4px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>${androsRevenue.toFixed(2)}</p>
-                </div>
-                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 12px' }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>PROFIT</p>
-                  <p style={{ margin: '4px 0 0', color: '#a78bfa', fontWeight: 'bold', fontSize: 16 }}>${androsProfit.toFixed(2)}</p>
-                </div>
-              </div>
-              <Link href="/pos-andros" style={{ display: 'block', marginTop: 12, padding: '10px', borderRadius: 10, backgroundColor: '#7c3aed', color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>🛒 Andros POS</Link>
-            </div>
-          </div>
-
-          {/* COGS BUSINESS ENGINE SUMMARY */}
-          <div style={{ background: 'linear-gradient(135deg, #0a1220, #0d1a2e)', border: '1px solid #1e3a5f', borderRadius: 20, padding: 20, marginBottom: 20 }}>
-            <p style={{ margin: '0 0 14px', color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>💰 COGS Business Engine — Real Cost Tracking</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 14 }}>
-              {[
-                { label: 'TOTAL COGS',       value: '$' + totalCOGS.toFixed(2),         color: '#f87171', icon: '📦', note: 'Supplier cost of all paid orders' },
-                { label: 'SUPPLIER OWED',    value: '$' + totalSupplierOwed.toFixed(2),  color: '#f5c518', icon: '💳', note: 'Unpaid COGS to suppliers' },
-                { label: 'REAL PROFIT',      value: '$' + (totalProfit).toFixed(2),      color: '#4ade80', icon: '💰', note: 'Revenue minus true COGS' },
-              ].map(stat => (
-                <div key={stat.label} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: '14px', border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' as const }}>
-                  <p style={{ margin: 0, fontSize: 22 }}>{stat.icon}</p>
-                  <p style={{ margin: '6px 0 2px', color: stat.color, fontWeight: 'bold', fontSize: isMobile ? 16 : 20 }}>{stat.value}</p>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>{stat.label}</p>
-                  <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 10 }}>{stat.note}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ margin: 0, color: '#aaa', fontSize: 12 }}>💡 Every paid order automatically records COGS to supplier ledger and reduces stock</p>
-              <button onClick={loadCOGSData} style={{ padding: '6px 12px', borderRadius: 8, backgroundColor: '#0d1f3c', color: '#60a5fa', border: '1px solid #1e3a5f', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>Refresh</button>
-            </div>
-          </div>
-
-          {/* SPINY TAILS */}
-          <div style={{ background: 'linear-gradient(135deg, #001a3a, #002a5a, #001a2a)', border: '1px solid #1e5a9f', borderRadius: 20, padding: 24, marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span style={{ fontSize: 48 }}>🦞</span>
-                <div>
-                  <p style={{ margin: 0, color: '#60a5fa', fontSize: 11, letterSpacing: 1, fontWeight: 'bold' }}>CENTRAL PROCESSING PLANT</p>
-                  <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Spiny Tails Processing</p>
-                  <p style={{ margin: 0, color: '#6b7280', fontSize: 12 }}>Firetrial Road, Nassau · Supplies Nassau + Andros</p>
-                </div>
-              </div>
-              <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '4px 14px', fontSize: 11, fontWeight: 'bold', flexShrink: 0 }}>ACTIVE</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              {[
-                { label: 'Freezer Capacity', value: '30,000 lbs',                                         color: '#60a5fa', icon: '🧊' },
-                { label: 'Current Stock',    value: TOTAL_LBS.toLocaleString() + ' lbs',                  color: '#4ade80', icon: '📦' },
-                { label: 'Capacity Used',    value: ((TOTAL_LBS / FREEZER_CAPACITY) * 100).toFixed(1) + '%', color: '#f5c518', icon: '📊' },
-                { label: 'Products Stored',  value: SPINY_TAILS_INVENTORY.length + ' types',              color: '#a78bfa', icon: '🐟' },
-              ].map(stat => (
-                <div key={stat.label} style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <p style={{ margin: 0, fontSize: 18 }}>{stat.icon}</p>
-                  <p style={{ margin: '6px 0 2px', color: stat.color, fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>{stat.value}</p>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>{stat.label}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' as const }}>
-              <button onClick={() => setSection('freezer')} style={{ backgroundColor: '#1e3a7f', color: '#60a5fa', border: '1px solid #1e5a9f', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>🧊 View Full Inventory</button>
-              <button onClick={() => setSection('purchase')} style={{ backgroundColor: '#0a2010', color: '#4ade80', border: '1px solid #1e5a2f', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>📦 Purchase Orders</button>
-              <button onClick={() => setSection('yield')} style={{ backgroundColor: '#1a1200', color: '#f5c518', border: '1px solid #3a2e00', borderRadius: 10, padding: '8px 16px', fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>🧮 Yield Calculator</button>
-            </div>
-          </div>
-
-          {/* KPI STRIP */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
-            {[
-              { label: 'TOTAL REVENUE', value: '$' + totalRevenue.toFixed(2),        sub: finance.transactions + ' food sales', color: '#4ade80', bg: 'linear-gradient(135deg, #0a1f0a, #0d2b14)' },
-              { label: 'BSC PROFIT',    value: '$' + totalProfit.toFixed(2),          sub: 'All streams combined',               color: '#f5c518', bg: 'linear-gradient(135deg, #1a1200, #2a1e00)' },
-              { label: 'SUPPLIER OWED', value: '$' + totalSupplierOwed.toFixed(2),   sub: 'Exact COGS — not estimate',          color: '#60a5fa', bg: 'linear-gradient(135deg, #001a2a, #002a3a)' },
-            ].map(kpi => (
-              <div key={kpi.label} style={{ background: kpi.bg, borderRadius: 16, padding: 18, border: '1px solid #1e3a5f' }}>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 2 }}>{kpi.label}</p>
-                <p style={{ margin: '6px 0 4px', color: kpi.color, fontWeight: 'bold', fontSize: isMobile ? 16 : 22 }}>{kpi.value}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{kpi.sub}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* REVENUE STREAMS */}
-          <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>📊 Revenue Streams — All BSC Income Sources</p>
-            {ALL_STREAMS.map(stream => (
-              <div key={stream.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e3a5f' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 18 }}>{stream.icon}</span>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{stream.label}</p>
-                      {stream.tag === 'VAT' && <span style={{ backgroundColor: '#1a0a2a', color: '#a78bfa', border: '1px solid #a78bfa44', borderRadius: 6, padding: '1px 6px', fontSize: 8, fontWeight: 'bold' }}>+10% VAT</span>}
-                    </div>
-                    <p style={{ margin: '2px 0 0', color: '#6b7280', fontSize: 10 }}>{stream.location} · {stream.margin} · {stream.count} orders</p>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 14 }}>${stream.revenue.toFixed(2)}</p>
-                  <p style={{ margin: '2px 0 0', color: stream.color, fontSize: 11, fontWeight: 'bold' }}>+${stream.profit.toFixed(2)}</p>
-                </div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12 }}>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Total BSC Profit</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 18 }}>${totalProfit.toFixed(2)}</p>
-            </div>
-          </div>
-
-          {/* QUICK ACTIONS */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <Link href="/pos" style={{ background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🛒 Nassau POS</Link>
-            <Link href="/pos-andros" style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: '#fff', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block' }}>🏝️ Andros POS</Link>
-            <Link href="/vehicles" style={{ background: 'linear-gradient(135deg, #001a2a, #002a3a)', color: '#60a5fa', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block', border: '1px solid #60a5fa66' }}>🚗 Vehicles & Parts</Link>
-            <Link href="/utilities" style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', color: '#f5c518', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block', border: '1px solid #f5c51866' }}>⚡ Pay Bills</Link>
-            <Link href="/orders" style={{ background: 'linear-gradient(135deg, #0a1f0a, #0d2b14)', color: '#4ade80', fontWeight: 'bold', fontSize: 13, padding: '14px', borderRadius: 14, textAlign: 'center', textDecoration: 'none', display: 'block', border: '1px solid #4ade80' }}>📋 Order Management</Link>
-            <button onClick={() => setSection('suppliers')} style={{ ...card, color: '#f5c518', fontWeight: 'bold', fontSize: 13, padding: '14px', textAlign: 'center', border: '1px solid rgba(245,197,24,0.3)', cursor: 'pointer', marginBottom: 0, position: 'relative' as const }}>
-              🚢 Suppliers
-              {pendingCount > 0 && <span style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pendingCount}</span>}
-            </button>
-          </div>
-
-          {/* MARKET URL */}
-          <div style={{ background: 'linear-gradient(135deg, #001a3a, #002a5a)', border: '1px solid #1e5a9f', borderRadius: 16, padding: 20 }}>
-            <div style={{ marginBottom: 12 }}>
-              <p style={{ margin: 0, color: '#60a5fa', fontSize: 10, letterSpacing: 1, fontWeight: 'bold' }}>CUSTOMER MARKET URL</p>
-              <p style={{ margin: '4px 0 2px', color: '#fff', fontWeight: 'bold', fontSize: 15 }}>🏪 BSC Online Marketplace</p>
-              <p style={{ margin: 0, color: '#6b7280', fontSize: 11 }}>Share with customers · Delivery all Bahamas islands</p>
-            </div>
-            <div style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontFamily: 'monospace' }}>
-              <p style={{ margin: 0, color: '#60a5fa', fontSize: 13 }}>bscbahamas.com/market</p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Link href="/market" target="_blank" style={{ display: 'block', padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>Open Market →</Link>
-              <button onClick={() => setSection('orders')} style={{ padding: '10px', borderRadius: 10, backgroundColor: 'transparent', color: '#4ade80', fontWeight: 'bold', fontSize: 13, border: '1px solid #4ade80', cursor: 'pointer' }}>📋 View Orders</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {section === 'freezer' && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 20 }}>🧊 Freezer Inventory</p>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 16 }}>{TOTAL_LBS.toLocaleString()} lbs</p>
-              <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>of {FREEZER_CAPACITY.toLocaleString()} lb capacity</p>
-            </div>
-          </div>
-          <div style={card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>Spiny Tails · Firetrial Road · Nassau</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>{((TOTAL_LBS / FREEZER_CAPACITY) * 100).toFixed(1)}% full</p>
-            </div>
-            <div style={{ backgroundColor: '#060d1f', borderRadius: 8, height: 12, overflow: 'hidden' }}>
-              <div style={{ width: ((TOTAL_LBS / FREEZER_CAPACITY) * 100) + '%', height: '100%', background: 'linear-gradient(90deg, #4ade80, #60a5fa)', borderRadius: 8 }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-              <p style={{ margin: 0, color: '#4ade80', fontSize: 11 }}>● Blast Freezer · ● Holding Freezer</p>
-              <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{(FREEZER_CAPACITY - TOTAL_LBS).toLocaleString()} lbs available</p>
-            </div>
-          </div>
-          {(['seafood', 'poultry', 'meat'] as const).map(cat => {
-            const items    = SPINY_TAILS_INVENTORY.filter(i => i.category === cat && i.lbs > 0);
-            if (items.length === 0) return null;
-            const catLabel = cat === 'seafood' ? '🐟 Seafood' : cat === 'poultry' ? '🍗 Poultry' : '🥩 Meats';
-            const catTotal = items.reduce((s, i) => s + i.lbs, 0);
-            return (
-              <div key={cat} style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>{catLabel}</p>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 12 }}>{catTotal.toLocaleString()} lbs</p>
-                </div>
-                {items.map(item => (
-                  <div key={item.name} style={{ ...card, padding: '12px 16px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 20 }}>{item.icon}</span>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>{item.name}</p>
-                    </div>
-                    <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 14 }}>{item.lbs.toLocaleString()} lbs</p>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </>
-      )}
-
-      {section === 'purchase' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 6 }}>📦 Purchase Orders</p>
-          <p style={{ color: '#4a5568', fontSize: 13, marginBottom: 20 }}>Snap a supplier invoice · AI reads it · Allocate to retail/wholesale</p>
-          <Link href="/purchase-orders" style={{ display: 'block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px', borderRadius: 14, textDecoration: 'none', fontSize: 16, textAlign: 'center', marginBottom: 14 }}>
-            📦 Open Purchase Orders →
-          </Link>
-          <div style={{ ...card, background: 'linear-gradient(135deg, #0a1220, #0d1a2e)' }}>
-            <p style={{ margin: '0 0 10px', color: '#60a5fa', fontWeight: 'bold', fontSize: 13 }}>How it works</p>
-            {['📷 Snap or upload a supplier invoice photo', '🤖 AI reads and extracts all line items automatically', '📊 Allocate: Retail Physical · Retail Online · Wholesale Physical · Wholesale Online', '🦞 Record processing weights at Spiny Tails to calculate true cost', '✅ Saved to inventory and order history'].map((step, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 11, minWidth: 16 }}>{i + 1}.</p>
-                <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>{step}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {section === 'pos' && (
-        <div style={{ paddingTop: 20 }}>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 6 }}>🛒 POS Locations</p>
-          <p style={{ color: '#4a5568', fontSize: 13, marginBottom: 20 }}>Select a location to open the point of sale</p>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
-            <div style={{ background: 'linear-gradient(135deg, #1a0a00, #2a1200)', border: '1px solid rgba(245,197,24,0.4)', borderRadius: 18, padding: 24 }}>
-              <p style={{ margin: '0 0 6px', fontSize: 36 }}>🛒</p>
-              <p style={{ margin: '0 0 4px', color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>BSC Marketplace</p>
-              <p style={{ margin: '0 0 4px', color: '#aaa', fontSize: 12 }}>Firetrial Road, Nassau</p>
-              <p style={{ margin: '0 0 16px', color: '#4ade80', fontSize: 12, fontWeight: 'bold' }}>38% BSC Margin</p>
-              <Link href="/pos" style={{ display: 'block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '13px', borderRadius: 12, textDecoration: 'none', fontSize: 15, textAlign: 'center' }}>Open Nassau POS →</Link>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, #1a0a2a, #2a1040)', border: '1px solid rgba(124,58,237,0.5)', borderRadius: 18, padding: 24 }}>
-              <p style={{ margin: '0 0 6px', fontSize: 36 }}>🏝️</p>
-              <p style={{ margin: '0 0 4px', color: '#a78bfa', fontWeight: 'bold', fontSize: 16 }}>Ceta's Variety Store</p>
-              <p style={{ margin: '0 0 4px', color: '#aaa', fontSize: 12 }}>Mastic Point, North Andros</p>
-              <p style={{ margin: '0 0 16px', color: '#a78bfa', fontSize: 12, fontWeight: 'bold' }}>43% BSC Margin · PIN Required</p>
-              <Link href="/pos-andros" style={{ display: 'block', background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: '#fff', fontWeight: 'bold', padding: '13px', borderRadius: 12, textDecoration: 'none', fontSize: 15, textAlign: 'center' }}>Open Andros POS →</Link>
-            </div>
+  // ── HOME ──
+  if (view === "home") return (
+    <div style={pg}>
+      <StaffBanner />
+      <Header />
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "0 0 20px" }}>
+        <div style={{ position: "relative", overflow: "hidden", height: 220 }}>
+          <img src="https://images.unsplash.com/photo-1534482421-64566f976cfa?w=800&q=80" alt="Fresh Seafood" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(6,13,31,0.3), rgba(6,13,31,0.85))" }} />
+          <div style={{ position: "absolute", bottom: 24, left: 20, right: 20 }}>
+            <p style={{ margin: 0, color: "#f5c518", fontSize: 11, letterSpacing: 2, fontWeight: "bold" }}>BAHAMIAN SEAFOOD CONNECTION</p>
+            <p style={{ margin: "6px 0 4px", color: "#fff", fontWeight: "bold", fontSize: 24, lineHeight: 1.2 }}>Fresh From Our Waters<br />To Your Table</p>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.7)", fontSize: 13 }}>Firetrial Road, Nassau · Delivery across the Bahamas</p>
           </div>
         </div>
-      )}
-
-      {section === 'orders' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>📋</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>Order Management</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 32 }}>Mark orders PAID → COGS auto-records → Stock updates → Supplier owed tracked</p>
-          <Link href="/orders" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>Open Order Management →</Link>
-        </div>
-      )}
-
-      {section === 'yield' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 20 }}>🧮 Yield Conversion Calculator</p>
-          <div style={card}>
-            <p style={{ margin: '0 0 20px', color: '#aaa', fontSize: 14 }}>Enter whole weight to calculate usable product after processing.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 20 }}>
-              <div>
-                <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 11, letterSpacing: 1 }}>PRODUCT TYPE</p>
-                <select value={yieldType} onChange={(e) => setYieldType(e.target.value)} style={{ width: '100%', padding: '14px 16px', borderRadius: 12, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 15, outline: 'none' }}>
-                  {Object.entries(YIELD_PRESETS).map(([key, val]) => <option key={key} value={key}>{val.icon} {key} — {(val.yield * 100).toFixed(0)}% yield</option>)}
-                </select>
-              </div>
-              <div>
-                <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 11, letterSpacing: 1 }}>WHOLE WEIGHT (lbs)</p>
-                <input type="number" value={yieldWeight} onChange={(e) => setYieldWeight(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: '14px 16px', borderRadius: 12, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 22, fontWeight: 'bold', outline: 'none', boxSizing: 'border-box' as const }} />
-              </div>
+        {user && (
+          <div style={{ margin: "16px 18px 0", backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p style={{ margin: 0, color: "#4ade80", fontWeight: "bold", fontSize: 14 }}>Welcome back, {user.name.split(" ")[0]}! 👋</p>
+              <p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 12 }}>Ready to shop fresh today?</p>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[
-                { label: 'YIELD RATE',      value: (currentYield.yield * 100).toFixed(0) + '%', color: '#4ade80', bg: 'linear-gradient(135deg, #0a1f0a, #0d2b14)', border: '#1e5a2f' },
-                { label: 'USABLE WEIGHT',   value: usableWeight + ' lbs',                       color: '#60a5fa', bg: 'linear-gradient(135deg, #001a2a, #002a3a)', border: '#1e3a5f' },
-                { label: 'RETAIL PORTIONS', value: '~' + retailPortions,                        color: '#f5c518', bg: 'linear-gradient(135deg, #1a1200, #2a1e00)', border: '#3a2e00' },
-              ].map(x => (
-                <div key={x.label} style={{ background: x.bg, borderRadius: 14, padding: 18, textAlign: 'center', border: '1px solid ' + x.border }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 10, letterSpacing: 1 }}>{x.label}</p>
-                  <p style={{ margin: '8px 0 4px', color: x.color, fontWeight: 'bold', fontSize: 24 }}>{x.value}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 16, backgroundColor: '#060d1f', borderRadius: 12, padding: 16, border: '1px solid #1e3a5f' }}>
-              <p style={{ margin: '0 0 8px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Summary</p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Starting: <b style={{ color: '#fff' }}>{yieldWeight} lbs</b> whole {yieldType}</p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Waste/trim: <b style={{ color: '#f87171' }}>{(yieldWeight * (1 - currentYield.yield)).toFixed(1)} lbs</b></p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Usable: <b style={{ color: '#4ade80' }}>{usableWeight} lbs</b></p>
-              <p style={{ margin: '3px 0', color: '#aaa', fontSize: 13 }}>Retail packs: <b style={{ color: '#f5c518' }}>~{retailPortions} units</b> at ¾ lb each</p>
-            </div>
+            <button onClick={() => { setView("orders"); loadMyOrders(); }} style={{ padding: "7px 12px", borderRadius: 10, backgroundColor: "#0d2b14", color: "#4ade80", border: "1px solid #4ade80", cursor: "pointer", fontSize: 12, fontWeight: "bold" }}>My Orders</button>
           </div>
-        </>
-      )}
-
-      {section === 'profit' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 20 }}>💰 Sales & Money — All Streams</p>
-
-          {/* REAL COGS SUPPLIER PAYOUT LEDGER */}
-          <div style={{ ...card, borderColor: '#60a5fa44' }}>
-            <p style={{ margin: '0 0 6px', color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>📊 Supplier Payout Ledger — Real COGS</p>
-            <p style={{ margin: '0 0 14px', color: '#4a5568', fontSize: 12 }}>Based on actual supplier cost price per unit sold. Triggered on every paid order.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-              {[
-                { label: 'TOTAL COGS',    value: '$' + totalCOGS.toFixed(2),        color: '#f87171' },
-                { label: 'OWED (UNPAID)', value: '$' + totalSupplierOwed.toFixed(2), color: '#f5c518' },
-                { label: 'LOW STOCK',     value: lowStockProducts.length + ' items', color: '#f87171' },
-              ].map(s => (
-                <div key={s.label} style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '10px 12px', textAlign: 'center' as const, border: '1px solid #1e3a5f' }}>
-                  <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>{s.label}</p>
-                  <p style={{ margin: '4px 0 0', color: s.color, fontWeight: 'bold', fontSize: 18 }}>{s.value}</p>
-                </div>
-              ))}
-            </div>
-            {Object.keys(supplierPayoutMap).length === 0 ? (
-              <div style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '20px', textAlign: 'center' as const, border: '1px solid #1e3a5f' }}>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 13 }}>No COGS recorded yet. Mark an order as PAID to start tracking.</p>
-              </div>
-            ) : (
-              Object.entries(supplierPayoutMap).map(([supplierId, data]) => (
-                <div key={supplierId} style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '12px 14px', marginBottom: 10, border: data.owed > 0 ? '1px solid #f5c51866' : '1px solid #1e3a5f' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div>
-                      <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{data.name}</p>
-                      <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>Cost of goods sold — exact cost price</p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      {data.owed > 0 && <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>${data.owed.toFixed(2)} owed</p>}
-                      {data.paid > 0 && <p style={{ margin: '2px 0 0', color: '#4ade80', fontSize: 12 }}>${data.paid.toFixed(2)} paid</p>}
-                    </div>
-                  </div>
-                  {data.owed > 0 && (
-                    <button onClick={() => markSupplierPaid(supplierId)} style={{ width: '100%', padding: '9px', borderRadius: 10, backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', fontWeight: 'bold', fontSize: 13, cursor: 'pointer' }}>
-                      ✅ Mark ${data.owed.toFixed(2)} as Paid to {data.name}
-                    </button>
-                  )}
-                  {data.owed === 0 && data.paid > 0 && (
-                    <div style={{ backgroundColor: '#0a1f0a', borderRadius: 8, padding: '8px 12px', textAlign: 'center' as const }}>
-                      <p style={{ margin: 0, color: '#4ade80', fontSize: 12 }}>✅ All paid — ${data.paid.toFixed(2)} total</p>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* LOW STOCK — REORDER INTELLIGENCE */}
-          {lowStockProducts.length > 0 && (
-            <div style={{ ...card, borderColor: '#f8717144' }}>
-              <p style={{ margin: '0 0 6px', color: '#f87171', fontWeight: 'bold', fontSize: 14 }}>📦 Reorder Now — Buy What Sold</p>
-              <p style={{ margin: '0 0 14px', color: '#4a5568', fontSize: 12 }}>These products are running low based on actual sales. Reorder only what customers are buying.</p>
-              {lowStockProducts.map(p => (
-                <div key={p.id} style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '10px 14px', marginBottom: 8, border: '1px solid #7f1d1d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{p.name}</p>
-                    <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>By {p.supplier_name} · Cost: ${p.unit_cost?.toFixed(2) || p.case_cost?.toFixed(2) || '0.00'}/unit</p>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ backgroundColor: '#7f1d1d', color: '#f87171', borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 'bold' }}>{p.stock_qty} left</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* PROFIT BY CHANNEL */}
-          <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Profit by Channel</p>
-            {ALL_STREAMS.map(item => (
-              <div key={item.label} style={{ backgroundColor: '#060d1f', borderRadius: 12, padding: '12px 14px', marginBottom: 10, border: '1px solid #1e3a5f' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20 }}>{item.icon}</span>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: 13 }}>{item.label}</p>
-                        {item.tag === 'VAT' && <span style={{ backgroundColor: '#1a0a2a', color: '#a78bfa', border: '1px solid #a78bfa44', borderRadius: 6, padding: '1px 5px', fontSize: 8, fontWeight: 'bold' }}>VAT</span>}
-                      </div>
-                      <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>BSC: {item.margin}</p>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, color: '#fff', fontSize: 13 }}>${item.revenue.toFixed(2)}</p>
-                    <p style={{ margin: 0, color: item.color, fontWeight: 'bold', fontSize: 13 }}>+${item.profit.toFixed(2)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div style={{ background: 'linear-gradient(135deg, #1a1200, #2a1e00)', borderRadius: 12, padding: '14px 16px', border: '1px solid #f5c51833', display: 'flex', justifyContent: 'space-between' }}>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Total BSC Profit — All Streams</p>
-              <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 20 }}>${totalProfit.toFixed(2)}</p>
-            </div>
-          </div>
-
-          {/* SUMMARY */}
-          <div style={card}>
-            <p style={{ margin: '0 0 14px', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>Summary</p>
-            {[
-              { label: 'Total Revenue',       value: '$' + totalRevenue.toFixed(2),       color: '#fff'    },
-              { label: 'Nassau Revenue',      value: '$' + nassauRevenue.toFixed(2),      color: '#4ade80' },
-              { label: 'Andros Revenue',      value: '$' + androsRevenue.toFixed(2),      color: '#a78bfa' },
-              { label: 'Online Revenue',      value: '$' + marketRevenue.toFixed(2),      color: '#60a5fa' },
-              { label: 'Auto Parts Revenue',  value: '$' + autoPartsRevenue.toFixed(2),   color: '#a78bfa' },
-              { label: 'Car Sales (units)',   value: vehicleSalesCount + ' sold',          color: '#f5c518' },
-              { label: 'Car Sales Profit',    value: '$' + carSalesProfit.toFixed(2),     color: '#f5c518' },
-              { label: 'Auto Parts Profit',   value: '$' + autoPartsProfit.toFixed(2),    color: '#a78bfa' },
-              { label: 'Utility Fee Income',  value: '$' + utilityProfit.toFixed(2),      color: '#4ade80' },
-              { label: 'Total COGS (real)',   value: '$' + totalCOGS.toFixed(2),          color: '#f87171' },
-              { label: 'Supplier Owed (real)',value: '$' + totalSupplierOwed.toFixed(2),  color: '#60a5fa' },
-              { label: 'Total BSC Profit',    value: '$' + totalProfit.toFixed(2),        color: '#f5c518' },
-              { label: 'Food Sales',          value: String(finance.transactions),        color: '#4ade80' },
-              { label: 'Avg Order Value',     value: '$' + avgTransaction,               color: '#aaa'    },
-            ].map(row => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid #1e3a5f' }}>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>{row.label}</p>
-                <p style={{ margin: 0, color: row.color, fontWeight: 'bold', fontSize: 13 }}>{row.value}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {section === 'inventory' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 20 }}>⚠️ Stock Alerts</p>
-          {lowStockProducts.length > 0 && (
-            <div style={{ ...card, borderColor: '#7f1d1d', backgroundColor: '#1a0808' }}>
-              <p style={{ margin: '0 0 12px', color: '#f87171', fontWeight: 'bold', fontSize: 14 }}>🔴 Live Low Stock — From Supplier Products</p>
-              {lowStockProducts.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div>
-                    <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>{p.name}</p>
-                    <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>Supplier: {p.supplier_name}</p>
-                  </div>
-                  <p style={{ margin: 0, color: '#f87171', fontWeight: 'bold', fontSize: 13 }}>{p.stock_qty} left</p>
-                </div>
-              ))}
-            </div>
-          )}
-          {lowStockItems.length === 0 && lowStockProducts.length === 0 && (
-            <div style={{ ...card, textAlign: 'center', padding: 28 }}><p style={{ color: '#4ade80', margin: 0 }}>✅ All stock levels healthy</p></div>
-          )}
-          {lowStockItems.length > 0 && (
-            <div style={{ ...card, borderColor: '#7f1d1d', backgroundColor: '#1a0808' }}>
-              <p style={{ margin: '0 0 12px', color: '#f87171', fontWeight: 'bold', fontSize: 14 }}>Local POS Stock Alerts</p>
-              {lowStockItems.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>{p.name}</p>
-                  <p style={{ margin: 0, color: '#f87171', fontWeight: 'bold', fontSize: 13 }}>{p.stock} left</p>
-                </div>
-              ))}
-            </div>
-          )}
-          <Link href="/inventory" style={{ display: 'block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '14px', borderRadius: 12, textDecoration: 'none', fontSize: 15, textAlign: 'center' }}>Open Full Inventory →</Link>
-        </>
-      )}
-
-      {section === 'market' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>🏪</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>BSC Online Marketplace</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 12 }}>Local + US supplier products · Delivery all Bahamas islands</p>
-          <div style={{ backgroundColor: '#0d1f3c', borderRadius: 12, padding: '12px 16px', marginBottom: 24, display: 'inline-block' }}>
-            <p style={{ margin: 0, color: '#60a5fa', fontFamily: 'monospace', fontSize: 14 }}>bscbahamas.com/market</p>
-          </div>
-          <br />
-          <Link href="/market" target="_blank" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>Open Marketplace →</Link>
-        </div>
-      )}
-
-      {section === 'report' && (
-        <div style={{ textAlign: 'center', paddingTop: 60 }}>
-          <p style={{ fontSize: 64, marginBottom: 20 }}>📄</p>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 22, marginBottom: 8 }}>Daily Reports</p>
-          <p style={{ color: '#4a5568', fontSize: 14, marginBottom: 32 }}>All sales, invoices, and transactions</p>
-          <Link href="/report" style={{ display: 'inline-block', background: 'linear-gradient(135deg, #f5c518, #e6b800)', color: '#000', fontWeight: 'bold', padding: '16px 40px', borderRadius: 14, textDecoration: 'none', fontSize: 17 }}>Open Reports →</Link>
-        </div>
-      )}
-
-      {section === 'suppliers' && (
-        <>
-          <p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 20, marginBottom: 6 }}>🚢 Supplier Admin</p>
-          <div style={{ backgroundColor: '#0a1220', border: '1px solid #1e3a5f', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
-            <p style={{ margin: 0, color: '#60a5fa', fontSize: 11, fontWeight: 'bold' }}>SUPPLIER PORTAL URL</p>
-            <p style={{ margin: '4px 0 0', color: '#fff', fontSize: 13, fontFamily: 'monospace' }}>https://bscbahamas.com/supplier</p>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-            {[
-              { label: 'PENDING',  value: allSuppliers.filter(s => s.status === 'pending').length,  color: '#f5c518' },
-              { label: 'APPROVED', value: allSuppliers.filter(s => s.status === 'approved').length, color: '#4ade80' },
-              { label: 'PRODUCTS', value: allProducts.filter(p => p.status === 'pending').length,   color: '#60a5fa' },
-            ].map(stat => (
-              <div key={stat.label} style={{ ...card, textAlign: 'center', padding: 14, marginBottom: 0 }}>
-                <p style={{ margin: 0, color: stat.color, fontSize: 22, fontWeight: 'bold' }}>{stat.value}</p>
-                <p style={{ margin: '4px 0 0', color: '#4a5568', fontSize: 10 }}>{stat.label}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            {(['applications', 'products'] as const).map(tab => (
-              <button key={tab} onClick={() => setSupplierTab(tab)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: supplierTab === tab ? '#f5c518' : '#0d1f3c', color: supplierTab === tab ? '#000' : '#6b7280', border: '1px solid #1e3a5f', fontWeight: 'bold', cursor: 'pointer', fontSize: 12 }}>
-                {tab === 'applications' ? 'Applications (' + allSuppliers.length + ')' : 'Products (' + allProducts.filter(p => p.status === 'pending').length + ' pending)'}
+        )}
+        <div style={{ padding: "20px 18px 0" }}>
+          <p style={{ margin: "0 0 12px", color: "#f5c518", fontWeight: "bold", fontSize: 15 }}>Shop by Category</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 24 }}>
+            {CATEGORIES.map(cat => (
+              <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setView("shop"); }} style={{ padding: "14px 8px", borderRadius: 14, backgroundColor: "#0d1f3c", border: "1px solid #1e3a5f", cursor: "pointer", textAlign: "center" as const }}>
+                <p style={{ margin: "0 0 6px", fontSize: 26 }}>{cat.icon}</p>
+                <p style={{ margin: 0, color: "#fff", fontSize: 11, fontWeight: "bold" }}>{cat.label}</p>
               </button>
             ))}
           </div>
-          {supplierLoading && <p style={{ color: '#4a5568', textAlign: 'center', padding: 20 }}>Loading...</p>}
-          {!supplierLoading && supplierTab === 'applications' && (
-            <>
-              {allSuppliers.length === 0 && <div style={{ ...card, textAlign: 'center', padding: 30 }}><p style={{ color: '#4a5568', margin: 0 }}>No applications yet</p></div>}
-              {allSuppliers.map(sup => {
-                const supProds = allProducts.filter(p => p.supplier_id === sup.id);
-                return (
-                  <div key={sup.id} style={{ ...card, borderColor: sup.status === 'pending' ? '#f5c518' : '#1e3a5f' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: 15 }}>{sup.full_name}</p>
-                        <p style={{ margin: '2px 0', color: '#aaa', fontSize: 13 }}>{sup.company_name}</p>
-                        <p style={{ margin: '2px 0', color: '#60a5fa', fontSize: 12 }}>{sup.email}</p>
+          <p style={{ margin: "0 0 12px", color: "#f5c518", fontWeight: "bold", fontSize: 15 }}>Fresh Today</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+            {products.filter(p => p.stock > p.minStock).slice(0, 4).map(product => {
+              const displayPrice = product.price * markup;
+              const inCart = cart.find(c => c.product.id === product.id);
+              return (
+                <div key={product.id} style={{ backgroundColor: "#0d1f3c", borderRadius: 16, overflow: "hidden", border: "1px solid #1e3a5f" }}>
+                  <div style={{ position: "relative", height: 130 }}>
+                    <img src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent, rgba(6,13,31,0.6))" }} />
+                  </div>
+                  <div style={{ padding: "10px 12px" }}>
+                    <p style={{ margin: "0 0 2px", fontWeight: "bold", fontSize: 13 }}>{product.name}</p>
+                    <p style={{ margin: "0 0 8px", color: "#f5c518", fontWeight: "bold", fontSize: 16 }}>${displayPrice.toFixed(2)}</p>
+                    {inCart ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <button onClick={() => adjustQty(product.id, -1)} style={{ flex: 1, padding: "6px", borderRadius: 8, backgroundColor: "#1e3a5f", color: "#fff", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold" }}>−</button>
+                        <span style={{ fontWeight: "bold", fontSize: 14 }}>{inCart.qty}</span>
+                        <button onClick={() => adjustQty(product.id, 1)} style={{ flex: 1, padding: "6px", borderRadius: 8, backgroundColor: "#f5c518", color: "#000", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold" }}>+</button>
                       </div>
-                      <span style={statusBadge(sup.status)}>{sup.status.toUpperCase()}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
-                      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, backgroundColor: '#060d1f', color: '#a78bfa', border: '1px solid #1e3a5f' }}>{sup.category}</span>
-                      {sup.whatsapp && <a href={'https://wa.me/' + sup.whatsapp.replace(/\D/g, '')} target="_blank" rel="noopener noreferrer" style={{ padding: '3px 12px', borderRadius: 20, fontSize: 11, backgroundColor: '#0a2010', color: '#4ade80', border: '1px solid #4ade80', textDecoration: 'none', fontWeight: 'bold' }}>💬 WhatsApp {sup.whatsapp}</a>}
-                    </div>
-                    {supProds.length > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <p style={{ margin: '0 0 8px', color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>PRODUCTS ({supProds.length})</p>
-                        {supProds.map(prod => (
-                          <div key={prod.id} style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '10px 12px', marginBottom: 6, border: '1px solid #1e3a5f' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                {prod.photo_url && <img src={prod.photo_url} alt={prod.name} style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }} />}
-                                <div>
-                                  <p style={{ margin: 0, fontWeight: 'bold', fontSize: 12 }}>{prod.name}</p>
-                                  <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>Cost: ${prod.case_cost?.toFixed(2) || '0.00'} · Stock: {prod.stock_qty || 0}</p>
-                                </div>
-                              </div>
-                              <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
-                            </div>
-                            {prod.status === 'pending' && (
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => approveProduct(prod.id)} style={{ flex: 1, padding: '7px', borderRadius: 8, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 11 }}>Approve</button>
-                                <button onClick={() => rejectProduct(prod.id)} style={{ flex: 1, padding: '7px', borderRadius: 8, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 11 }}>Reject</button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {sup.status === 'pending' && (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => approveSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>Approve Supplier</button>
-                        <button onClick={() => rejectSupplier(sup.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>Reject</button>
-                      </div>
+                    ) : (
+                      <button onClick={() => addToCart(product)} style={{ width: "100%", padding: "7px", borderRadius: 8, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}>Add to Cart</button>
                     )}
                   </div>
-                );
-              })}
-            </>
-          )}
-          {!supplierLoading && supplierTab === 'products' && (
-            <>
-              {allProducts.length === 0 && <div style={{ ...card, textAlign: 'center', padding: 30 }}><p style={{ color: '#4a5568', margin: 0 }}>No products yet</p></div>}
-              {allProducts.map(prod => (
-                <div key={prod.id} style={card}>
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                    {prod.photo_url && <img src={prod.photo_url} alt={prod.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }} />}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{prod.name}</p>
-                        <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
-                      </div>
-                      <p style={{ margin: '2px 0', color: '#4a5568', fontSize: 12 }}>By {prod.supplier_name}</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: prod.status === 'pending' ? 10 : 0 }}>
-                    {[
-                      { l: 'RETAIL',    v: '$' + (prod.retail_price?.toFixed(2) || '0.00'),  c: '#4ade80' },
-                      { l: 'WHOLESALE', v: '$' + (prod.wholesale_price?.toFixed(2) || '0.00'), c: '#f5c518' },
-                      { l: 'COST',      v: '$' + (prod.unit_cost?.toFixed(2) || '0.00'),      c: '#60a5fa' },
-                      { l: 'STOCK',     v: String(prod.stock_qty || 0),                        c: (prod.stock_qty || 0) <= 5 ? '#f87171' : '#4ade80' },
-                    ].map(x => (
-                      <div key={x.l} style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '8px 10px' }}>
-                        <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>{x.l}</p>
-                        <p style={{ margin: '2px 0 0', color: x.c, fontWeight: 'bold', fontSize: 13 }}>{x.v}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {prod.status === 'pending' && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => approveProduct(prod.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>Approve & Go Live</button>
-                      <button onClick={() => rejectProduct(prod.id)} style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>Reject</button>
-                    </div>
-                  )}
                 </div>
-              ))}
-            </>
-          )}
-          <Link href="/supplier" style={{ textDecoration: 'none' }}>
-            <div style={{ ...card, textAlign: 'center', background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
-              <p style={{ margin: 0, color: '#a78bfa', fontWeight: 'bold', fontSize: 14 }}>🚢 Open Full Supplier Portal</p>
-            </div>
-          </Link>
-        </>
-      )}
-
-      {section === 'ai' && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e3a5f', background: 'linear-gradient(135deg, #0d1f3c, #132a4a)' }}>
-            <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 16 }}>🤖 BSC AI Assistant</p>
-            <p style={{ margin: '3px 0 0', color: '#4a5568', fontSize: 12 }}>Real COGS · Stock levels · Reorder intelligence · All income streams</p>
+              );
+            })}
           </div>
-          <div style={{ height: 420, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {aiMessages.map((msg, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{ maxWidth: '80%', padding: '12px 16px', fontSize: 14, lineHeight: 1.6, borderRadius: msg.role === 'user' ? '16px 16px 2px 16px' : '16px 16px 16px 2px', backgroundColor: msg.role === 'user' ? '#f5c518' : '#0d1f3c', color: msg.role === 'user' ? '#000' : '#fff', border: msg.role === 'ai' ? '1px solid #1e3a5f' : 'none' }}>
-                  {msg.text}
-                </div>
+          <button onClick={() => { setActiveCategory("all"); setView("shop"); }} style={primaryBtn}>View All Products →</button>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 8 }}>
+            {[
+              { icon: "🚚", title: "Island Delivery", desc: "All Bahamas islands" },
+              { icon: "❄️", title: "Fresh & Frozen",  desc: "Cold chain guaranteed" },
+              { icon: "🐟", title: "Local & Fresh",   desc: "Caught locally" },
+            ].map(info => (
+              <div key={info.title} style={{ backgroundColor: "#0d1f3c", borderRadius: 12, padding: "14px 10px", textAlign: "center" as const, border: "1px solid #1e3a5f" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 22 }}>{info.icon}</p>
+                <p style={{ margin: "0 0 2px", color: "#fff", fontWeight: "bold", fontSize: 11 }}>{info.title}</p>
+                <p style={{ margin: 0, color: "#4a5568", fontSize: 10 }}>{info.desc}</p>
               </div>
             ))}
-            {aiLoading && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{ padding: '12px 16px', borderRadius: '16px 16px 16px 2px', backgroundColor: '#0d1f3c', border: '1px solid #1e3a5f', color: '#4a5568', fontSize: 14 }}>Thinking...</div>
+          </div>
+          {!user && (
+            <div style={{ marginTop: 24, backgroundColor: "#0a1220", border: "1px solid #1e3a5f", borderRadius: 14, padding: "18px 20px", textAlign: "center" as const }}>
+              <p style={{ margin: "0 0 6px", color: "#f5c518", fontWeight: "bold", fontSize: 15 }}>🐟 Join BSC Market</p>
+              <p style={{ margin: "0 0 14px", color: "#4a5568", fontSize: 13 }}>Create a free account to track orders and checkout faster</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setView("register")} style={{ flex: 1, padding: "12px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 14 }}>Create Account</button>
+                <button onClick={() => setView("login")} style={{ flex: 1, padding: "12px", borderRadius: 10, backgroundColor: "transparent", color: "#f5c518", border: "1px solid #f5c518", cursor: "pointer", fontSize: 14 }}>Sign In</button>
               </div>
-            )}
-          </div>
-          <div style={{ padding: '14px 18px', borderTop: '1px solid #1e3a5f', display: 'flex', gap: 10 }}>
-            <input placeholder="Ask about COGS, what to reorder, supplier owed, profits..." value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiSend()} style={{ flex: 1, padding: '12px 16px', borderRadius: 12, backgroundColor: '#060d1f', color: '#fff', border: '1px solid #1e3a5f', fontSize: 14, outline: 'none' }} />
-            <button onClick={handleAiSend} disabled={aiLoading} style={{ padding: '12px 20px', borderRadius: 12, backgroundColor: aiLoading ? '#555' : '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: aiLoading ? 'not-allowed' : 'pointer', fontSize: 14 }}>Send</button>
-          </div>
+            </div>
+          )}
         </div>
-      )}
-    </>
-  );
-
-  const BottomNav = () => (
-    <div style={{ position: 'fixed', bottom: 0, left: isMobile ? 0 : 260, right: 0, zIndex: 100, background: 'rgba(6,10,25,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderTop: '1px solid rgba(245,197,24,0.12)', padding: '8px 12px 12px' }}>
-      <p style={{ margin: '0 0 6px', textAlign: 'center', color: 'rgba(245,197,24,0.3)', fontSize: 8, letterSpacing: 3, fontWeight: 'bold' }}>BSC QUICK CONTROL</p>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, maxWidth: 620, margin: '0 auto' }}>
-        {BOTTOM_NAV.map(item => {
-          const isActive = section === item.s;
-          const hasBadge = item.s === 'suppliers' && pendingCount > 0;
-          return (
-            <button key={item.s} onClick={() => navTo(item.s)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '8px 4px 6px', borderRadius: 14, border: 'none', cursor: 'pointer', position: 'relative' as const, background: isActive ? 'linear-gradient(135deg, rgba(245,197,24,0.22), rgba(245,197,24,0.10))' : 'rgba(13,31,60,0.6)', boxShadow: isActive ? '0 0 18px rgba(245,197,24,0.2), inset 0 1px 0 rgba(245,197,24,0.15)' : '0 1px 4px rgba(0,0,0,0.3)', outline: isActive ? '1px solid rgba(245,197,24,0.3)' : '1px solid rgba(255,255,255,0.04)' }}>
-              <span style={{ fontSize: isMobile ? 20 : 18 }}>{item.icon}</span>
-              <span style={{ fontSize: 8, letterSpacing: 0.8, fontWeight: isActive ? 'bold' : '500', color: isActive ? '#f5c518' : 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap' as const }}>{item.label}</span>
-              {isActive && <div style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: '#f5c518', marginTop: 2, boxShadow: '0 0 6px #f5c518' }} />}
-              {hasBadge && <span style={{ position: 'absolute', top: 4, right: 6, backgroundColor: '#f87171', color: '#fff', borderRadius: '50%', width: 14, height: 14, fontSize: 8, fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pendingCount}</span>}
+      </div>
+      {cartCount > 0 && (
+        <div style={{ position: "fixed", bottom: 20, left: 0, right: 0, padding: "0 18px", zIndex: 40 }}>
+          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+            <button onClick={() => setView("cart")} style={{ ...primaryBtn, marginBottom: 0, boxShadow: "0 8px 32px rgba(245,197,24,0.3)" }}>
+              🛒 View Cart · {cartCount} items · ${cartSubtotal.toFixed(2)}
             </button>
-          );
-        })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── SHOP ──
+  if (view === "shop") return (
+    <div style={pg}>
+      <StaffBanner />
+      <Header />
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 18px" }}>
+        <input placeholder="🔍 Search products..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inp, marginBottom: 12 }} />
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto" as const }}>
+          {CATEGORIES.map(cat => (
+            <button key={cat.id} onClick={() => setActiveCategory(cat.id)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: "bold", whiteSpace: "nowrap" as const, flexShrink: 0, backgroundColor: activeCategory === cat.id ? "#f5c518" : "#0d1f3c", color: activeCategory === cat.id ? "#000" : "#6b7280" }}>
+              {cat.icon} {cat.label}
+            </button>
+          ))}
+        </div>
+        {allProducts.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <p style={{ fontSize: 40 }}>🔍</p>
+            <p style={{ color: "#4a5568" }}>No products found</p>
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          {allProducts.map(product => {
+            const displayPrice = product.price * markup;
+            const inCart = cart.find(c => c.product.id === product.id);
+            return (
+              <div key={product.id} style={{ backgroundColor: "#0d1f3c", borderRadius: 16, overflow: "hidden", border: "1px solid #1e3a5f" }}>
+                <div style={{ position: "relative", height: 140 }}>
+                  <img src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <div style={{ position: "absolute", top: 8, right: 8, backgroundColor: "rgba(6,13,31,0.8)", borderRadius: 20, padding: "3px 8px" }}>
+                    <p style={{ margin: 0, color: "#f5c518", fontWeight: "bold", fontSize: 12 }}>${displayPrice.toFixed(2)}</p>
+                  </div>
+                </div>
+                <div style={{ padding: "10px 12px" }}>
+                  <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: 13 }}>{product.name}</p>
+                  {inCart ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button onClick={() => adjustQty(product.id, -1)} style={{ flex: 1, padding: "7px", borderRadius: 8, backgroundColor: "#1e3a5f", color: "#fff", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold" }}>−</button>
+                      <span style={{ fontWeight: "bold", fontSize: 14, minWidth: 20, textAlign: "center" as const }}>{inCart.qty}</span>
+                      <button onClick={() => adjustQty(product.id, 1)} style={{ flex: 1, padding: "7px", borderRadius: 8, backgroundColor: "#f5c518", color: "#000", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold" }}>+</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => addToCart(product as Product)} style={{ width: "100%", padding: "8px", borderRadius: 8, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}>Add to Cart</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {cartCount > 0 && (
+        <div style={{ position: "fixed", bottom: 20, left: 0, right: 0, padding: "0 18px", zIndex: 40 }}>
+          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+            <button onClick={() => setView("cart")} style={{ ...primaryBtn, marginBottom: 0, boxShadow: "0 8px 32px rgba(245,197,24,0.3)" }}>
+              🛒 View Cart · {cartCount} items · ${cartSubtotal.toFixed(2)}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── LOGIN ──
+  if (view === "login") return (
+    <div style={pg}>
+      <StaffBanner />
+      <Header />
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "30px 18px" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <p style={{ fontSize: 48, margin: "0 0 10px" }}>👋</p>
+          <h2 style={{ margin: "0 0 6px", color: "#f5c518", fontSize: 22 }}>Welcome Back</h2>
+          <p style={{ margin: 0, color: "#4a5568", fontSize: 14 }}>Sign in to your BSC Market account</p>
+        </div>
+        <label style={lbl}>Email</label>
+        <input type="email" placeholder="your@email.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} style={inp} />
+        <label style={lbl}>Password</label>
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <input type={showPw ? "text" : "password"} placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} style={{ ...inp, marginBottom: 0, paddingRight: 46 }} />
+          <button onClick={() => setShowPw(!showPw)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280" }}>{showPw ? "🙈" : "👁"}</button>
+        </div>
+        {authError && <p style={{ color: "#f87171", fontSize: 13, backgroundColor: "#2d0000", padding: "10px 12px", borderRadius: 8, marginBottom: 12 }}>{authError}</p>}
+        <button onClick={handleLogin} disabled={loading} style={{ ...primaryBtn, backgroundColor: loading ? "#555" : "#f5c518", cursor: loading ? "not-allowed" : "pointer" }}>{loading ? "Signing in..." : "Sign In"}</button>
+        <button onClick={() => { setAuthError(""); setView("register"); }} style={ghostBtn}>New customer? Create account</button>
+        <button onClick={() => setView("home")} style={{ ...ghostBtn, marginBottom: 0 }}>← Back to Market</button>
       </div>
     </div>
   );
 
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#060d1f', color: '#fff', fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      {!isMobile && (
-        <div style={{ width: 260, backgroundColor: '#070e1d', borderRight: '1px solid #1a2a3a', position: 'sticky' as const, top: 0, height: '100vh', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-          <SidebarContent />
+  // ── REGISTER ──
+  if (view === "register") return (
+    <div style={pg}>
+      <StaffBanner />
+      <Header />
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "30px 18px" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <p style={{ fontSize: 48, margin: "0 0 10px" }}>🐟</p>
+          <h2 style={{ margin: "0 0 6px", color: "#f5c518", fontSize: 22 }}>Create Account</h2>
+          <p style={{ margin: 0, color: "#4a5568", fontSize: 14 }}>Join BSC Market for fresh Bahamian seafood</p>
         </div>
-      )}
-      {sidebarOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex' }}>
-          <div onClick={() => setSidebarOpen(false)} style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)' }} />
-          <div style={{ position: 'relative', zIndex: 1, width: 280, backgroundColor: '#070e1d', display: 'flex', flexDirection: 'column', height: '100vh', borderRight: '1px solid #1a2a3a' }}>
-            <SidebarContent />
-          </div>
+        <label style={lbl}>Full Name</label>
+        <input placeholder="Your full name" value={authName} onChange={e => setAuthName(e.target.value)} style={inp} />
+        <label style={lbl}>Phone / WhatsApp</label>
+        <input placeholder="242-xxx-xxxx" value={authPhone} onChange={e => setAuthPhone(e.target.value)} type="tel" style={inp} />
+        <label style={lbl}>Email</label>
+        <input type="email" placeholder="your@email.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} style={inp} />
+        <label style={lbl}>Password</label>
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <input type={showPw ? "text" : "password"} placeholder="Min 6 characters" value={authPassword} onChange={e => setAuthPassword(e.target.value)} style={{ ...inp, marginBottom: 0, paddingRight: 46 }} />
+          <button onClick={() => setShowPw(!showPw)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280" }}>{showPw ? "🙈" : "👁"}</button>
         </div>
-      )}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ background: 'linear-gradient(135deg, #070e1d, #0d1f3c)', borderBottom: '1px solid #1a2a3a', padding: '14px 20px', position: 'sticky' as const, top: 0, zIndex: 50 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: 'none', border: 'none', color: '#f5c518', fontSize: 22, cursor: 'pointer', padding: 0 }}>☰</button>
-              <div>
-                <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 18 }}>BSC Control</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 10 }}>{today}</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: isMobile ? 12 : 24, alignItems: 'center' }}>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${totalRevenue.toFixed(2)}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>REVENUE</p>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${totalProfit.toFixed(2)}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>PROFIT</p>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: isMobile ? 14 : 18 }}>${totalSupplierOwed.toFixed(2)}</p>
-                <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>OWED</p>
-              </div>
-              <div style={{ backgroundColor: '#0a2010', color: '#4ade80', borderRadius: 20, padding: '5px 14px', fontSize: 11, fontWeight: 'bold', border: '1px solid #4ade80' }}>LIVE</div>
-            </div>
-          </div>
-        </div>
-        <div style={{ flex: 1, padding: '24px 20px', overflowY: 'auto', paddingBottom: 100, maxWidth: 1200, margin: '0 auto', width: '100%', boxSizing: 'border-box' as const }}>
-          <MainContent />
-        </div>
-        <BottomNav />
+        {authError && <p style={{ color: "#f87171", fontSize: 13, backgroundColor: "#2d0000", padding: "10px 12px", borderRadius: 8, marginBottom: 12 }}>{authError}</p>}
+        <button onClick={handleRegister} disabled={loading} style={{ ...primaryBtn, backgroundColor: loading ? "#555" : "#f5c518", cursor: loading ? "not-allowed" : "pointer" }}>{loading ? "Creating Account..." : "Create Account"}</button>
+        <button onClick={() => { setAuthError(""); setView("login"); }} style={ghostBtn}>Already have an account? Sign in</button>
+        <button onClick={() => setView("home")} style={{ ...ghostBtn, marginBottom: 0 }}>← Back to Market</button>
       </div>
     </div>
   );
-}
+
+  // ── CART ──
+  if (view === "cart") return (
+    <div style={pg}>
+      <StaffBanner />
+      <Header />
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 18px" }}>
+        <h2 style={{ margin: "0 0 16px", color: "#f5c518", fontSize: 20 }}>🛒 Your Cart</h2>
+        {!user && (
+          <div style={{ backgroundColor: "#1a1400", border: "1px solid #f5c518", borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
+            <p style={{ margin: "0 0 8px", color: "#f5c518", fontWeight: "bold", fontSize: 14 }}>Sign in to place your order</p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setView("login")} style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", cursor: "pointer", fontSize: 13 }}>Sign In</button>
+              <button onClick={() => setView("register")} style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: "transparent", color: "#f5c518", border: "1px solid #f5c518", cursor: "pointer", fontSize: 13 }}>Register</button>
+            </div>
+          </div>
+        )}
+        {cart.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <p style={{ fontSize: 48, marginBottom: 12 }}>🛒</p>
+            <p style={{ color: "#4a5568", marginBottom: 16 }}>Your cart is empty</p>
+            <button onClick={() => setView("shop")} style={primaryBtn}>Start Shopping</button>
+          </div>
+        ) : (
+          <>
+            {cart.map(c => (
+              <div key={c.product.id} style={{ backgroundColor: "#0d1f3c", borderRadius: 14, padding: "12px 14px", marginBottom: 10, border: "1px solid #1e3a5f", display: "flex", gap: 12, alignItems: "center" }}>
+                <img src={c.product.image} alt={c.product.name} style={{ width: 60, height: 60, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: "0 0 2px", fontWeight: "bold", fontSize: 14 }}>{c.product.name}</p>
+                  <p style={{ margin: "0 0 8px", color: "#f5c518", fontSize: 13 }}>${(c.product.price * markup).toFixed(2)} each</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button onClick={() => adjustQty(c.product.id, -1)} style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: "#1e3a5f", color: "#fff", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold" }}>−</button>
+                    <span style={{ fontWeight: "bold", fontSize: 15 }}>{c.qty}</span>
+                    <button onClick={() => adjustQty(c.product.id, 1)} style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: "#f5c518", color: "#000", border: "none", cursor: "pointer", fontSize: 16, fontWeight: "bold" }}>+</button>
+                  </div>
+                </div>
+                <p style={{ margin: 0, color: "#4ade80", fontWeight: "bold", fontSize: 16 }}>${(c.product.price * markup * c.qty).toFixed(2)}</p>
+              </div>
+            ))}
+            <div style={{ backgroundColor: "#0d1f3c", borderRadius: 14, padding: "14px 16px", border: "1px solid #1e3a5f", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}><p style={{ margin: 0, color: "#aaa", fontSize: 14 }}>Subtotal</p><p style={{ margin: 0, fontSize: 14 }}>${cartSubtotal.toFixed(2)}</p></div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}><p style={{ margin: 0, color: "#aaa", fontSize: 14 }}>Delivery</p><p style={{ margin: 0, color: "#f5c518", fontSize: 14 }}>+$15.00</p></div>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #1e3a5f" }}><p style={{ margin: 0, fontWeight: "bold", fontSize: 16 }}>Estimated Total</p><p style={{ margin: 0, color: "#4ade80", fontWeight: "bold", fontSize: 18 }}>${(cartSubtotal + DELIVERY_FEE).toFixed(2)}</p></div>
+            </div>
+            <button onClick={() => { if (!user) { setView("login"); } else { setView("checkout"); } }} style={primaryBtn}>{user ? "Proceed to Checkout →" : "Sign In to Checkout →"}</button>
+            <button onClick={() => setView("shop")} style={ghostBtn}>← Continue Shopping</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── CHECKOUT ──
+  if (view === "checkout") return (
+    <div style={pg}>
+      <StaffBanner />
+      <Header />
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 18px" }}>
+        <h2 style={{ margin: "0 0 4px", color: "#f5c518", fontSize: 20 }}>Checkout</h2>
+        <p style={{ margin: "0 0 20px", color: "#4a5568", fontSize: 13 }}>Placing order for {user?.name}</p>
+        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+          <button onClick={() => setFulfillment("delivery")} style={{ flex: 1, padding: "14px", borderRadius: 12, backgroundColor: fulfillment === "delivery" ? "#f5c518" : "#0d1f3c", color: fulfillment === "delivery" ? "#000" : "#aaa", border: fulfillment === "delivery" ? "none" : "1px solid #1e3a5f", fontWeight: "bold", fontSize: 14, cursor: "pointer" }}>🚚 Delivery +$15</button>
+          <button onClick={() => setFulfillment("pickup")} style={{ flex: 1, padding: "14px", borderRadius: 12, backgroundColor: fulfillment === "pickup" ? "#f5c518" : "#0d1f3c", color: fulfillment === "pickup" ? "#000" : "#aaa", border: fulfillment === "pickup" ? "none" : "1px solid #1e3a5f", fontWeight: "bold", fontSize: 14, cursor: "pointer" }}>🏪 Pickup FREE</button>
+        </div>
+        {fulfillment === "delivery" && (
+          <>
+            <label style={lbl}>Delivery Address</label>
+            <input placeholder="Street address, area..." value={address} onChange={e => setAddress(e.target.value)} style={inp} />
+            <label style={lbl}>Island</label>
+            <select value={island} onChange={e => { setIsland(e.target.value); setMailboat(""); }} style={inp}>
+              {BAHAMAS_ISLANDS.map(isl => <option key={isl} value={isl}>{isl}</option>)}
+            </select>
+            {isOutIsland && availableMailboats.length > 0 && (
+              <>
+                <label style={lbl}>Select Mailboat</label>
+                <select value={mailboat} onChange={e => setMailboat(e.target.value)} style={inp}>
+                  <option value="">-- Select mailboat --</option>
+                  {availableMailboats.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <div style={{ backgroundColor: "#1a1400", border: "1px solid #f5c518", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+                  <p style={{ margin: 0, color: "#f5c518", fontSize: 12 }}>⚠️ Orders must be placed 48 hours before mailboat departure</p>
+                </div>
+              </>
+            )}
+            <label style={lbl}>Delivery Notes (optional)</label>
+            <input placeholder="Gate code, landmark, special instructions..." value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)} style={inp} />
+          </>
+        )}
+        {fulfillment === "pickup" && (
+          <>
+            <label style={lbl}>Pickup Date (Next Day Minimum)</label>
+            <input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)} min={new Date(Date.now() + 86400000).toISOString().split("T")[0]} style={inp} />
+            <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 12 }}>
+              <p style={{ margin: "0 0 4px", color: "#4ade80", fontWeight: "bold", fontSize: 13 }}>📍 Pickup Location</p>
+              <p style={{ margin: 0, color: "#aaa", fontSize: 12 }}>BSC Marketplace · Firetrial Road,​​​​​​​​​​​​​​​​
