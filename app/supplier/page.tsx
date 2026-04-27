@@ -1,7 +1,7 @@
 // File: app/supplier/page.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -15,13 +15,13 @@ const ANDROS_MARGIN    = 1.43;
 const ONLINE_MARGIN    = 1.25;
 const WHOLESALE_MARGIN = 1.12;
 const ADMIN_EMAIL      = "dedrick@bahamianseafoodconnection.com";
-const BSC_WA_NUMBER    = "12423613474"; // Main BSC WhatsApp
+const BSC_WA_NUMBER    = "12423613474";
 
 // ── VEHICLE / PARTS PRICING ENGINE ──
-const CAR_SALE_MARKUP   = 650;   // flat $650 BSC profit per car sold
-const RENTAL_DAY_MARKUP = 10;    // $10/day BSC profit
-const PARTS_MARKUP_RATE = 0.10;  // 10% markup on supplier cost
-const VAT_RATE          = 0.10;  // 10% Bahamas VAT
+const CAR_SALE_MARKUP   = 650;
+const RENTAL_DAY_MARKUP = 10;
+const PARTS_MARKUP_RATE = 0.10;
+const VAT_RATE          = 0.10;
 
 function calcVehicleSalePrice(supplierCost: number) {
   const beforeVat = supplierCost + CAR_SALE_MARKUP;
@@ -87,7 +87,6 @@ function calcPricing(caseCost: string, pieces: string, category: string, name: s
   };
 }
 
-// ── YIELD PRESETS (reference only — real yield from purchase orders) ──
 const YIELD_PRESETS = {
   Conch:   { yield: 0.35, icon: "🐚" },
   Fish:    { yield: 0.48, icon: "🐟" },
@@ -117,6 +116,7 @@ type SupplierProduct = {
   supplier_id: string; supplier_name: string; supplier_whatsapp: string;
   photo_url: string; status: string; created_at: string;
   price_per_lb?: number; country_of_origin?: string;
+  vin?: string; year_make_model?: string;
 };
 
 export default function SupplierPage() {
@@ -137,18 +137,14 @@ export default function SupplierPage() {
   const [myProducts, setMyProducts]             = useState<SupplierProduct[]>([]);
   const [editingProduct, setEditingProduct]     = useState<SupplierProduct | null>(null);
 
-  // WhatsApp sidebar
   const [waOpen, setWaOpen]                     = useState(false);
   const [waTab, setWaTab]                       = useState<"chat" | "qr">("chat");
 
-  // Yield calculator state (shown in every portal)
-  const [yieldType, setYieldType]               = useState("Conch");
   const [yieldWeightIn, setYieldWeightIn]       = useState("");
   const [yieldWeightOut, setYieldWeightOut]     = useState("");
   const [yieldTotalCost, setYieldTotalCost]     = useState("");
   const [showYield, setShowYield]               = useState(false);
 
-  // Application form
   const [appName, setAppName]                   = useState("");
   const [appCompany, setAppCompany]             = useState("");
   const [appEmail, setAppEmail]                 = useState("");
@@ -156,12 +152,10 @@ export default function SupplierPage() {
   const [appCategory, setAppCategory]           = useState("seafood");
   const [appLocation, setAppLocation]           = useState("bahamas");
 
-  // Login form
   const [loginEmail, setLoginEmail]             = useState("");
   const [loginPassword, setLoginPassword]       = useState("");
   const [showLoginPw, setShowLoginPw]           = useState(false);
 
-  // Product form
   const [prodName, setProdName]                 = useState("");
   const [prodCategory, setProdCategory]         = useState("seafood");
   const [prodSku, setProdSku]                   = useState("");
@@ -176,7 +170,6 @@ export default function SupplierPage() {
   const [prodPhoto, setProdPhoto]               = useState<File | null>(null);
   const [prodPhotoPreview, setProdPhotoPreview] = useState("");
   const [prodWhatsApp, setProdWhatsApp]         = useState("");
-  // Vehicle-specific supplier cost fields
   const [vehicleSupplierCost, setVehicleSupplierCost]           = useState("");
   const [vehicleSupplierDailyRate, setVehicleSupplierDailyRate] = useState("");
   const [vehicleListingType, setVehicleListingType]             = useState<"sale" | "rental">("sale");
@@ -184,18 +177,16 @@ export default function SupplierPage() {
 
   const isUSSupplier = supplier?.location === "florida" || supplier?.location === "usa";
 
-  // ── YIELD CALCULATIONS (real — based on actual in/out weights) ──
-  const yieldIn      = parseFloat(yieldWeightIn) || 0;
-  const yieldOut     = parseFloat(yieldWeightOut) || 0;
-  const yieldCost    = parseFloat(yieldTotalCost) || 0;
-  const yieldPct     = yieldIn > 0 && yieldOut > 0 ? ((yieldOut / yieldIn) * 100).toFixed(1) : null;
-  const trueCostPerLb = yieldOut > 0 && yieldCost > 0 ? (yieldCost / yieldOut).toFixed(2) : null;
+  const yieldIn           = parseFloat(yieldWeightIn) || 0;
+  const yieldOut          = parseFloat(yieldWeightOut) || 0;
+  const yieldCost         = parseFloat(yieldTotalCost) || 0;
+  const yieldPct          = yieldIn > 0 && yieldOut > 0 ? ((yieldOut / yieldIn) * 100).toFixed(1) : null;
+  const trueCostPerLb     = yieldOut > 0 && yieldCost > 0 ? (yieldCost / yieldOut).toFixed(2) : null;
   const nassauPriceYield    = trueCostPerLb ? (parseFloat(trueCostPerLb) * NASSAU_MARGIN).toFixed(2) : null;
   const androsPriceYield    = trueCostPerLb ? (parseFloat(trueCostPerLb) * ANDROS_MARGIN).toFixed(2) : null;
   const onlinePriceYield    = trueCostPerLb ? (parseFloat(trueCostPerLb) * ONLINE_MARGIN).toFixed(2) : null;
   const wholesalePriceYield = trueCostPerLb ? (parseFloat(trueCostPerLb) * WHOLESALE_MARGIN).toFixed(2) : null;
 
-  // ── SESSION CHECK ──
   useEffect(() => {
     async function checkSession() {
       try {
@@ -323,7 +314,6 @@ export default function SupplierPage() {
     };
 
     if (prodCategory === "vehicle") {
-      // Supplier enters their cost — system applies BSC markup + VAT
       if (vehicleListingType === "sale") {
         const cost    = parseFloat(vehicleSupplierCost) || 0;
         const pricing = calcVehicleSalePrice(cost);
@@ -375,7 +365,8 @@ export default function SupplierPage() {
     setProdOrigin(prod.country_of_origin || "");
     setProdWhatsApp(prod.supplier_whatsapp || supplier?.whatsapp || "");
     setProdPhotoPreview(prod.photo_url || "");
-    setProdVin(prod.vin || ""); setProdYearMakeModel(prod.year_make_model || "");
+    setProdVin(prod.vin || "");
+    setProdYearMakeModel(prod.year_make_model || "");
     setVehicleSupplierCost(prod.case_cost?.toString() || "");
     setPartSupplierCost(prod.case_cost?.toString() || "");
     setProdPhoto(null); setError(""); setSuccess("");
@@ -383,12 +374,12 @@ export default function SupplierPage() {
   }
 
   // ── STYLES ──
-  const pg: React.CSSProperties          = { padding: 18, backgroundColor: "#0a0f1e", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif", paddingBottom: 100, maxWidth: 560, margin: "0 auto", position: "relative" };
-  const inp: React.CSSProperties         = { display: "block", width: "100%", padding: "11px 13px", borderRadius: 10, backgroundColor: "#111c33", color: "#fff", border: "1px solid #1e2d4a", fontSize: 14, marginBottom: 12, boxSizing: "border-box" as const, outline: "none" };
-  const lbl: React.CSSProperties         = { display: "block", color: "#6b7280", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 5 };
-  const primaryBtn: React.CSSProperties  = { width: "100%", padding: "13px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", fontSize: 15, cursor: "pointer", marginBottom: 10 };
+  const pg: React.CSSProperties           = { padding: 18, backgroundColor: "#0a0f1e", minHeight: "100vh", color: "#fff", fontFamily: "sans-serif", paddingBottom: 100, maxWidth: 560, margin: "0 auto", position: "relative" };
+  const inp: React.CSSProperties          = { display: "block", width: "100%", padding: "11px 13px", borderRadius: 10, backgroundColor: "#111c33", color: "#fff", border: "1px solid #1e2d4a", fontSize: 14, marginBottom: 12, boxSizing: "border-box" as const, outline: "none" };
+  const lbl: React.CSSProperties          = { display: "block", color: "#6b7280", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 5 };
+  const primaryBtn: React.CSSProperties   = { width: "100%", padding: "13px", borderRadius: 10, backgroundColor: "#f5c518", color: "#000", fontWeight: "bold", border: "none", fontSize: 15, cursor: "pointer", marginBottom: 10 };
   const secondaryBtn: React.CSSProperties = { width: "100%", padding: "11px", borderRadius: 10, backgroundColor: "transparent", color: "#6b7280", border: "1px solid #1e2d4a", fontSize: 14, cursor: "pointer", marginBottom: 10 };
-  const card: React.CSSProperties        = { backgroundColor: "#111c33", borderRadius: 12, padding: "14px 16px", marginBottom: 12, border: "1px solid #1e2d4a" };
+  const card: React.CSSProperties         = { backgroundColor: "#111c33", borderRadius: 12, padding: "14px 16px", marginBottom: 12, border: "1px solid #1e2d4a" };
   const statusBadge = (status: string): React.CSSProperties => ({
     padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: "bold",
     backgroundColor: status === "approved" ? "#0a1f0a" : status === "rejected" ? "#2d0000" : "#1a1400",
@@ -396,17 +387,14 @@ export default function SupplierPage() {
     border: "1px solid " + (status === "approved" ? "#4ade80" : status === "rejected" ? "#f87171" : "#f5c518"),
   });
 
-  // ── BSC CONTROL BACK BUTTON ──
   const BSCBack = () => (
     <button onClick={() => router.push("/")} style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg, #1a1200, #2a1e00)", border: "1px solid #f5c518", borderRadius: 10, color: "#f5c518", fontWeight: "bold", fontSize: 12, cursor: "pointer", padding: "7px 14px", marginBottom: 14 }}>
       ← BSC Control
     </button>
   );
 
-  // ── WHATSAPP FLOATING SIDEBAR ──
   const WhatsAppSidebar = () => (
     <>
-      {/* Floating trigger button */}
       <button
         onClick={() => setWaOpen(o => !o)}
         style={{ position: "fixed", bottom: 24, right: 18, zIndex: 300, width: 56, height: 56, borderRadius: "50%", backgroundColor: "#25d366", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, boxShadow: "0 4px 20px rgba(37,211,102,0.4)" }}
@@ -414,11 +402,8 @@ export default function SupplierPage() {
       >
         💬
       </button>
-
-      {/* Sidebar panel */}
       {waOpen && (
         <div style={{ position: "fixed", bottom: 90, right: 12, zIndex: 400, width: 340, maxWidth: "calc(100vw - 24px)", backgroundColor: "#0d1f3c", borderRadius: 20, border: "1px solid #1e3a5f", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", overflow: "hidden" }}>
-          {/* Header */}
           <div style={{ background: "linear-gradient(135deg, #25d366, #128c7e)", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ margin: 0, color: "#fff", fontWeight: "bold", fontSize: 15 }}>💬 BSC WhatsApp</p>
@@ -426,8 +411,6 @@ export default function SupplierPage() {
             </div>
             <button onClick={() => setWaOpen(false)} style={{ background: "none", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", padding: 0, lineHeight: 1 }}>×</button>
           </div>
-
-          {/* Tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid #1e3a5f" }}>
             {(["chat", "qr"] as const).map(t => (
               <button key={t} onClick={() => setWaTab(t)} style={{ flex: 1, padding: "10px", border: "none", cursor: "pointer", fontWeight: "bold", fontSize: 12, backgroundColor: waTab === t ? "#0a1f0a" : "#0d1f3c", color: waTab === t ? "#25d366" : "#6b7280", borderBottom: waTab === t ? "2px solid #25d366" : "2px solid transparent" }}>
@@ -435,13 +418,10 @@ export default function SupplierPage() {
               </button>
             ))}
           </div>
-
           <div style={{ padding: 16 }}>
             {waTab === "chat" ? (
               <>
-                <p style={{ margin: "0 0 12px", color: "#aaa", fontSize: 13, lineHeight: 1.5 }}>
-                  Connect directly with BSC Admin or Manager. Ask about your products, pricing, orders, or approvals.
-                </p>
+                <p style={{ margin: "0 0 12px", color: "#aaa", fontSize: 13, lineHeight: 1.5 }}>Connect directly with BSC Admin or Manager.</p>
                 <div style={{ backgroundColor: "#060d1f", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: "1px solid #1e3a5f" }}>
                   <p style={{ margin: 0, color: "#f5c518", fontWeight: "bold", fontSize: 13 }}>📞 BSC Main Line</p>
                   <p style={{ margin: "4px 0 0", color: "#fff", fontSize: 15, fontWeight: "bold" }}>+1 (242) 361-3474</p>
@@ -458,15 +438,11 @@ export default function SupplierPage() {
               </>
             ) : (
               <>
-                <p style={{ margin: "0 0 12px", color: "#aaa", fontSize: 13 }}>Scan this QR code to open WhatsApp chat with BSC:</p>
+                <p style={{ margin: "0 0 12px", color: "#aaa", fontSize: 13 }}>Scan to open WhatsApp chat with BSC:</p>
                 <div style={{ backgroundColor: "#fff", borderRadius: 12, padding: 12, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent("https://api.whatsapp.com/send?phone=" + BSC_WA_NUMBER)}`}
-                    alt="BSC WhatsApp QR Code"
-                    style={{ width: 200, height: 200, borderRadius: 8 }}
-                  />
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent("https://api.whatsapp.com/send?phone=" + BSC_WA_NUMBER)}`} alt="BSC WhatsApp QR Code" style={{ width: 200, height: 200, borderRadius: 8 }} />
                 </div>
-                <p style={{ margin: 0, color: "#4a5568", fontSize: 11, textAlign: "center" as const }}>Scan with your phone camera to open WhatsApp</p>
+                <p style={{ margin: 0, color: "#4a5568", fontSize: 11, textAlign: "center" as const }}>Scan with your phone camera</p>
               </>
             )}
           </div>
@@ -475,23 +451,16 @@ export default function SupplierPage() {
     </>
   );
 
-  // ── YIELD CALCULATOR SECTION (shown in every portal) ──
   const YieldCalculator = () => (
     <div style={{ marginBottom: 16 }}>
-      <button
-        onClick={() => setShowYield(y => !y)}
-        style={{ width: "100%", padding: "12px 16px", borderRadius: 12, backgroundColor: showYield ? "#0a1f0a" : "#111c33", border: "1px solid " + (showYield ? "#4ade80" : "#1e2d4a"), color: showYield ? "#4ade80" : "#aaa", fontWeight: "bold", fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showYield ? 0 : 0 }}
-      >
+      <button onClick={() => setShowYield(y => !y)} style={{ width: "100%", padding: "12px 16px", borderRadius: 12, backgroundColor: showYield ? "#0a1f0a" : "#111c33", border: "1px solid " + (showYield ? "#4ade80" : "#1e2d4a"), color: showYield ? "#4ade80" : "#aaa", fontWeight: "bold", fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>🧮 Yield Calculator</span>
         <span style={{ fontSize: 18 }}>{showYield ? "▲" : "▼"}</span>
       </button>
-
       {showYield && (
-        <div style={{ backgroundColor: "#0a1220", border: "1px solid #1e3a5f", borderRadius: "0 0 12px 12px", padding: "16px 14px", marginBottom: 0 }}>
+        <div style={{ backgroundColor: "#0a1220", border: "1px solid #1e3a5f", borderRadius: "0 0 12px 12px", padding: "16px 14px" }}>
           <p style={{ margin: "0 0 12px", color: "#60a5fa", fontWeight: "bold", fontSize: 13 }}>🦞 Processing Yield Engine</p>
           <p style={{ margin: "0 0 14px", color: "#6b7280", fontSize: 12 }}>Enter real weights from your processing batch to calculate true cost per lb and BSC selling prices.</p>
-
-          {/* REAL YIELD INPUTS */}
           <div style={{ backgroundColor: "#060d1f", borderRadius: 10, padding: "12px 14px", marginBottom: 12, border: "1px solid #1e3a5f" }}>
             <p style={{ margin: "0 0 10px", color: "#f5c518", fontWeight: "bold", fontSize: 12 }}>📦 BATCH PROCESSING DATA</p>
             <label style={lbl}>Weight In — Whole/Raw (lbs)</label>
@@ -501,17 +470,15 @@ export default function SupplierPage() {
             <label style={lbl}>Total Cost Paid to Supplier ($)</label>
             <input type="number" placeholder="e.g. 250.00" value={yieldTotalCost} onChange={e => setYieldTotalCost(e.target.value)} style={{ ...inp, marginBottom: 0 }} />
           </div>
-
-          {/* RESULTS */}
           {yieldPct && trueCostPerLb && (
             <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 12 }}>
               <p style={{ margin: "0 0 10px", color: "#4ade80", fontWeight: "bold", fontSize: 12 }}>📊 YIELD RESULTS</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
                 {[
-                  { label: "ACTUAL YIELD %",      value: yieldPct + "%",         color: "#4ade80" },
-                  { label: "TRUE COST / LB",       value: "$" + trueCostPerLb,    color: "#f5c518" },
-                  { label: "WASTE",                value: (yieldIn - yieldOut).toFixed(1) + " lbs", color: "#f87171" },
-                  { label: "USABLE WEIGHT",        value: yieldOut.toFixed(1) + " lbs", color: "#60a5fa" },
+                  { label: "ACTUAL YIELD %",  value: yieldPct + "%",                          color: "#4ade80" },
+                  { label: "TRUE COST / LB",  value: "$" + trueCostPerLb,                     color: "#f5c518" },
+                  { label: "WASTE",           value: (yieldIn - yieldOut).toFixed(1) + " lbs", color: "#f87171" },
+                  { label: "USABLE WEIGHT",   value: yieldOut.toFixed(1) + " lbs",            color: "#60a5fa" },
                 ].map(x => (
                   <div key={x.label} style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
                     <p style={{ margin: 0, color: "#4a5568", fontSize: 9, letterSpacing: 1 }}>{x.label}</p>
@@ -540,8 +507,6 @@ export default function SupplierPage() {
               </div>
             </div>
           )}
-
-          {/* REFERENCE PRESETS */}
           <div style={{ backgroundColor: "#111c33", borderRadius: 10, padding: "10px 12px", border: "1px solid #1e2d4a" }}>
             <p style={{ margin: "0 0 8px", color: "#6b7280", fontWeight: "bold", fontSize: 11, letterSpacing: 1 }}>INDUSTRY YIELD REFERENCE</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
@@ -560,13 +525,10 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── PRODUCT FORM ──
   const ProductForm = ({ isEdit }: { isEdit: boolean }) => {
     const currentIsUS = isUSSupplier;
     const foodPricing = (prodCategory !== "vehicle" && prodCategory !== "auto" && prodCaseCost && prodPieces)
-      ? calcPricing(prodCaseCost, prodPieces, prodCategory, prodName, currentIsUS)
-      : null;
-    // Vehicle pricing previews
+      ? calcPricing(prodCaseCost, prodPieces, prodCategory, prodName, currentIsUS) : null;
     const salePricing   = prodCategory === "vehicle" && vehicleListingType === "sale" && vehicleSupplierCost
       ? calcVehicleSalePrice(parseFloat(vehicleSupplierCost) || 0) : null;
     const rentalPricing = prodCategory === "vehicle" && vehicleListingType === "rental" && vehicleSupplierDailyRate
@@ -586,14 +548,11 @@ export default function SupplierPage() {
             <p style={{ margin: 0, color: "#4ade80", fontWeight: "bold", fontSize: 13 }}>⚡ Admin — Changes go live instantly.</p>
           </div>
         )}
-
-        {/* PHOTO */}
         <label style={lbl}>Product Photo</label>
         <div onClick={() => document.getElementById(isEdit ? "photoInputEdit" : "photoInput")?.click()} style={{ width: "100%", height: 140, borderRadius: 12, border: "2px dashed #1e2d4a", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 14, overflow: "hidden", backgroundColor: "#111c33" }}>
           {prodPhotoPreview ? <img src={prodPhotoPreview} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ textAlign: "center" }}><p style={{ margin: 0, fontSize: 28 }}>📷</p><p style={{ margin: "6px 0 0", color: "#4a5568", fontSize: 12 }}>Tap to take photo or upload</p></div>}
         </div>
         <input id={isEdit ? "photoInputEdit" : "photoInput"} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { const file = e.target.files?.[0]; if (file) { setProdPhoto(file); setProdPhotoPreview(URL.createObjectURL(file)); } }} />
-
         <label style={lbl}>Product Name</label>
         <input placeholder="e.g. Grouper Fillet" value={prodName} onChange={(e) => setProdName(e.target.value)} style={inp} />
         <label style={lbl}>Category</label>
@@ -605,7 +564,6 @@ export default function SupplierPage() {
         <label style={lbl}>WhatsApp Contact</label>
         <input placeholder="242-xxx-xxxx" value={prodWhatsApp} onChange={(e) => setProdWhatsApp(e.target.value)} style={inp} />
 
-        {/* FOOD / SEAFOOD / MEAT / POULTRY */}
         {(prodCategory === "seafood" || prodCategory === "poultry" || prodCategory === "meat" || prodCategory === "general") && (
           <>
             <div style={{ backgroundColor: "#0a1220", borderRadius: 10, padding: "12px 14px", marginBottom: 14, border: "1px solid #1e2d4a" }}>
@@ -646,7 +604,6 @@ export default function SupplierPage() {
           </>
         )}
 
-        {/* AUTO PARTS — supplier enters their cost, BSC adds 10% + VAT */}
         {prodCategory === "auto" && (
           <div style={{ backgroundColor: "#0a1220", borderRadius: 10, padding: "12px 14px", marginBottom: 14, border: "1px solid #a78bfa44" }}>
             <p style={{ margin: "0 0 10px", color: "#a78bfa", fontSize: 12, fontWeight: "bold" }}>🔧 AUTO PART DETAILS</p>
@@ -671,12 +628,10 @@ export default function SupplierPage() {
           </div>
         )}
 
-        {/* VEHICLE — supplier enters cost, BSC adds $650 + VAT (sale) or $10/day + VAT (rental) */}
         {prodCategory === "vehicle" && (
           <div style={{ backgroundColor: "#0a1220", borderRadius: 10, padding: "12px 14px", marginBottom: 14, border: "1px solid #f5c51844" }}>
             <p style={{ margin: "0 0 10px", color: "#f5c518", fontSize: 12, fontWeight: "bold" }}>🚗 VEHICLE DETAILS</p>
             <p style={{ margin: "0 0 12px", color: "#4a5568", fontSize: 12 }}>Enter your cost price. BSC adds its markup + 10% VAT automatically.</p>
-            {/* Listing type toggle */}
             <label style={lbl}>Listing Type</label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
               {(["sale", "rental"] as const).map(t => (
@@ -751,7 +706,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── ADMIN VIEW ──
   if (view === "admin") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -766,7 +720,6 @@ export default function SupplierPage() {
           <button onClick={async () => { await supabase.auth.signOut(); setIsAdmin(false); setIsControlAdmin(false); setIsSpinyAdmin(false); setSupplier(null); setMyProducts([]); setView("home"); }} style={{ background: "none", border: "1px solid #1e2d4a", color: "#f87171", fontSize: 12, cursor: "pointer", padding: "6px 12px", borderRadius: 8 }}>Sign Out</button>
         </div>
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
         {[
           { value: allSuppliers.filter(s => s.status === "pending").length,  label: "PENDING",  color: "#f5c518" },
@@ -779,7 +732,6 @@ export default function SupplierPage() {
           </div>
         ))}
       </div>
-
       {isSpinyAdmin && (
         <div style={{ ...card, borderColor: "#f5c518", background: "linear-gradient(135deg, #1a1200, #2a1e00)", marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -791,7 +743,6 @@ export default function SupplierPage() {
           </div>
         </div>
       )}
-
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button onClick={() => setAdminTab("suppliers")} style={{ flex: 1, padding: "10px", borderRadius: 10, backgroundColor: adminTab === "suppliers" ? "#f5c518" : "#111c33", color: adminTab === "suppliers" ? "#000" : "#6b7280", border: "1px solid #1e2d4a", fontWeight: "bold", cursor: "pointer", fontSize: 12 }}>
           Suppliers ({allSuppliers.length})
@@ -800,7 +751,6 @@ export default function SupplierPage() {
           Products ({allProducts.filter(p => p.status === "pending").length} pending)
         </button>
       </div>
-
       {adminTab === "suppliers" && (
         <>
           {allSuppliers.length === 0 && <div style={{ ...card, textAlign: "center", padding: 30 }}><p style={{ color: "#4a5568", margin: 0 }}>No supplier applications yet</p></div>}
@@ -878,7 +828,6 @@ export default function SupplierPage() {
           })}
         </>
       )}
-
       {adminTab === "products" && (
         <>
           {allProducts.length === 0 && <div style={{ ...card, textAlign: "center", padding: 30 }}><p style={{ color: "#4a5568", margin: 0 }}>No products yet</p></div>}
@@ -920,7 +869,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── SPINY TAILS ──
   if (view === "spiny") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -929,9 +877,7 @@ export default function SupplierPage() {
       <h2 style={{ margin: "0 0 4px", color: "#f5c518", fontSize: 20 }}>🦞 Spiny Tails Processing</h2>
       <p style={{ margin: "0 0 20px", color: "#4a5568", fontSize: 11 }}>Your products · Changes go live instantly</p>
       {success && <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}><p style={{ margin: 0, color: "#4ade80", fontSize: 13 }}>{success}</p></div>}
-
       <YieldCalculator />
-
       <div style={{ ...card, background: "linear-gradient(135deg, #0a1220, #0d1a2e)", borderColor: "#f5c518", marginBottom: 16 }}>
         <p style={{ margin: "0 0 4px", color: "#f5c518", fontWeight: "bold", fontSize: 13 }}>⚡ Admin Pricing Control</p>
         <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>Prices are auto-calculated by BSC margins. Suppliers never set or see prices.</p>
@@ -944,9 +890,7 @@ export default function SupplierPage() {
           ))}
         </div>
       </div>
-
       <button onClick={() => { clearProductFields(); setEditingProduct(null); setSuccess(""); setError(""); setView("upload"); }} style={primaryBtn}>+ Add New Product</button>
-
       {myProducts.length === 0
         ? <div style={{ ...card, textAlign: "center", padding: 30 }}><p style={{ margin: 0, color: "#4a5568", fontSize: 13 }}>No products yet.</p></div>
         : myProducts.map(prod => (
@@ -977,7 +921,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── HOME ──
   if (view === "home") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -1004,7 +947,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── APPLY ──
   if (view === "apply") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -1047,7 +989,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── LOGIN ──
   if (view === "login") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -1066,7 +1007,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── PORTAL (every regular supplier sees this) ──
   if (view === "portal") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -1079,12 +1019,8 @@ export default function SupplierPage() {
         <button onClick={() => supabase.auth.signOut().then(() => { setSupplier(null); setMyProducts([]); setView("home"); })} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer" }}>Sign Out</button>
       </div>
       {success && <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}><p style={{ margin: 0, color: "#4ade80", fontSize: 13 }}>{success}</p></div>}
-
-      {/* YIELD CALCULATOR — every supplier sees this */}
       <YieldCalculator />
-
       <button onClick={() => { clearProductFields(); setEditingProduct(null); setSuccess(""); setError(""); setView("upload"); }} style={primaryBtn}>+ Upload New Product</button>
-
       {myProducts.length === 0
         ? <div style={{ ...card, textAlign: "center", padding: 30 }}><p style={{ margin: 0, color: "#4a5568", fontSize: 13 }}>No products yet. Upload your first product above.</p></div>
         : myProducts.map(prod => (
@@ -1107,7 +1043,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── UPLOAD ──
   if (view === "upload") return (
     <div style={pg}>
       <WhatsAppSidebar />
@@ -1120,7 +1055,6 @@ export default function SupplierPage() {
     </div>
   );
 
-  // ── EDIT ──
   if (view === "edit") return (
     <div style={pg}>
       <WhatsAppSidebar />
