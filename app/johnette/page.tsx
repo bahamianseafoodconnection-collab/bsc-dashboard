@@ -1,0 +1,172 @@
+// File: app/johnette/page.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+import Link from 'next/link';
+
+const supabase = createClient(
+'https://auqjjrisivhfmpleusyt.supabase.co',
+'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg'
+);
+
+const CAR_MARKUP = 650;
+const RENTAL_MARKUP = 10;
+const PARTS_MARKUP = 0.10;
+const VAT = 0.10;
+
+export default function JohnetteDashboard() {
+const router = useRouter();
+const [vehicles, setVehicles] = useState<any[]>([]);
+const [parts, setParts] = useState<any[]>([]);
+const [loading, setLoading] = useState(true);
+const [tab, setTab] = useState<'overview' | 'forsale' | 'rental' | 'parts'>('overview');
+
+useEffect(() => { checkAuth(); loadData(); }, []);
+
+async function checkAuth() {
+const { data: { session } } = await supabase.auth.getSession();
+if (!session?.user) { router.push('/login'); return; }
+const { data: p } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+if (!['automotive', 'control_admin'].includes(p?.role)) router.push('/login');
+}
+
+async function loadData() {
+try {
+const [v, p] = await Promise.all([
+supabase.from('vehicles').select('*').order('created_at', { ascending: false }),
+supabase.from('auto_parts').select('*').order('created_at', { ascending: false }),
+]);
+if (v.data) setVehicles(v.data);
+if (p.data) setParts(p.data);
+} catch (e) {}
+setLoading(false);
+}
+
+const forSale = vehicles.filter(v => v.listing_type === 'sale' && v.status === 'active');
+const sold = vehicles.filter(v => v.listing_type === 'sale' && v.status === 'inactive');
+const forRent = vehicles.filter(v => v.listing_type === 'rental' && v.status === 'active');
+const totalProfit = sold.length * CAR_MARKUP + parts.filter(p => p.status === 'inactive').reduce((s, p) => s + (p.bsc_markup || 0), 0);
+
+const pg: React.CSSProperties = { backgroundColor: '#060d1f', minHeight: '100vh', color: '#fff', fontFamily: "'Inter', sans-serif", paddingBottom: 80 };
+const card: React.CSSProperties = { backgroundColor: '#0d1f3c', borderRadius: 14, padding: '14px 16px', border: '1px solid #1e3a5f', marginBottom: 12 };
+
+if (loading) return <div style={{ ...pg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p style={{ color: '#4a5568' }}>Loading...</p></div>;
+
+return (
+<div style={pg}>
+<div style={{ background: 'linear-gradient(135deg, #070e1d, #0d1f3c)', borderBottom: '1px solid #1e3a5f', padding: '14px 18px', position: 'sticky' as const, top: 0, zIndex: 50 }}>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: 640, margin: '0 auto' }}>
+<div>
+<p style={{ margin: 0, color: '#60a5fa', fontWeight: 'bold', fontSize: 16 }}>🚗 Automotive Dashboard</p>
+<p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>Johnette Wright Strachan · Automotive Manager</p>
+</div>
+<div style={{ display: 'flex', gap: 8 }}>
+<Link href="/vehicles" style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#60a5fa', color: '#000', fontWeight: 'bold', fontSize: 12, textDecoration: 'none' }}>+ Upload</Link>
+<button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#0d1f3c', color: '#6b7280', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}>Out</button>
+</div>
+</div>
+</div>
+
+<div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 18px' }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+{[
+{ label: 'FOR SALE', value: String(forSale.length), color: '#f5c518' },
+{ label: 'SOLD', value: String(sold.length), color: '#4ade80' },
+{ label: 'RENTALS', value: String(forRent.length), color: '#60a5fa' },
+{ label: 'PROFIT', value: '$' + totalProfit.toFixed(0), color: '#4ade80' },
+].map(k => (
+<div key={k.label} style={{ ...card, textAlign: 'center', padding: 12, marginBottom: 0 }}>
+<p style={{ margin: 0, color: '#4a5568', fontSize: 8 }}>{k.label}</p>
+<p style={{ margin: '4px 0 0', color: k.color, fontWeight: 'bold', fontSize: 17 }}>{k.value}</p>
+</div>
+))}
+</div>
+
+<div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+{[
+{ key: 'overview', label: '📊 Overview' },
+{ key: 'forsale', label: '🏷️ For Sale' },
+{ key: 'rental', label: '🔑 Rentals' },
+{ key: 'parts', label: '🔧 Parts' },
+].map(t => (
+<button key={t.key} onClick={() => setTab(t.key as any)} style={{ flex: 1, padding: '9px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 'bold', backgroundColor: tab === t.key ? '#60a5fa' : '#0d1f3c', color: tab === t.key ? '#000' : '#6b7280' }}>
+{t.label}
+</button>
+))}
+</div>
+
+{tab === 'overview' && (
+<>
+<div style={card}>
+<p style={{ margin: '0 0 12px', color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>🚗 My Responsibilities</p>
+{[
+{ icon: '🚗', task: 'List cars for sale — enter cost, system calculates $650 markup + VAT' },
+{ icon: '🔑', task: 'List cars for rent — enter daily rate, system adds $10/day + VAT' },
+{ icon: '🔧', task: 'Upload auto parts — enter cost, system adds 10% markup + VAT' },
+{ icon: '📸', task: 'Add photos to every listing' },
+{ icon: '💬', task: 'Handle WhatsApp inquiries from customers' },
+{ icon: '💰', task: '$650 profit per car sold · $10/day per rental · 10% on parts' },
+].map((r, i) => (
+<div key={i} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: '1px solid #1e3a5f' }}>
+<span style={{ fontSize: 16 }}>{r.icon}</span>
+<p style={{ margin: 0, color: '#aaa', fontSize: 13 }}>{r.task}</p>
+</div>
+))}
+</div>
+<Link href="/vehicles" style={{ display: 'block', padding: '14px', borderRadius: 14, backgroundColor: '#60a5fa', color: '#000', fontWeight: 'bold', fontSize: 15, textAlign: 'center', textDecoration: 'none', marginBottom: 10 }}>
+🚗 Open Vehicle Manager →
+</Link>
+</>
+)}
+
+{tab === 'forsale' && (
+<>
+<p style={{ color: '#f5c518', fontWeight: 'bold', fontSize: 15, marginBottom: 12 }}>Cars For Sale ({forSale.length})</p>
+{forSale.length === 0 ? <div style={{ ...card, textAlign: 'center', padding: 24 }}><p style={{ color: '#4a5568' }}>No listings yet.</p><Link href="/vehicles" style={{ color: '#60a5fa' }}>+ Add Vehicle</Link></div> : forSale.map(v => (
+<div key={v.id} style={card}>
+{v.photo_url && <img src={v.photo_url} alt={v.year_make_model} style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
+<p style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: 15 }}>{v.year_make_model}</p>
+<p style={{ margin: '0 0 8px', color: '#4a5568', fontSize: 12 }}>VIN: {v.vin || 'N/A'}</p>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+<div style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '8px 10px' }}><p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>BSC PROFIT</p><p style={{ margin: '2px 0 0', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>$650.00</p></div>
+<div style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '8px 10px' }}><p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>CUSTOMER PAYS</p><p style={{ margin: '2px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 14 }}>${v.customer_price?.toFixed(2) || 'TBD'}</p></div>
+</div>
+</div>
+))}
+</>
+)}
+
+{tab === 'rental' && (
+<>
+<p style={{ color: '#60a5fa', fontWeight: 'bold', fontSize: 15, marginBottom: 12 }}>Rental Fleet ({forRent.length})</p>
+{forRent.length === 0 ? <div style={{ ...card, textAlign: 'center', padding: 24 }}><p style={{ color: '#4a5568' }}>No rentals yet.</p></div> : forRent.map(v => (
+<div key={v.id} style={card}>
+<p style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: 15 }}>{v.year_make_model}</p>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+<div style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '8px 10px' }}><p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>DAILY RATE</p><p style={{ margin: '2px 0 0', color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>${v.daily_rate?.toFixed(2) || 'TBD'}</p></div>
+<div style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '8px 10px' }}><p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>BSC PROFIT</p><p style={{ margin: '2px 0 0', color: '#f5c518', fontWeight: 'bold', fontSize: 14 }}>$10/day</p></div>
+</div>
+</div>
+))}
+</>
+)}
+
+{tab === 'parts' && (
+<>
+<p style={{ color: '#a78bfa', fontWeight: 'bold', fontSize: 15, marginBottom: 12 }}>Auto Parts ({parts.length})</p>
+{parts.length === 0 ? <div style={{ ...card, textAlign: 'center', padding: 24 }}><p style={{ color: '#4a5568' }}>No parts listed yet.</p></div> : parts.map(p => (
+<div key={p.id} style={card}>
+<div style={{ display: 'flex', justifyContent: 'space-between' }}>
+<div><p style={{ margin: 0, fontWeight: 'bold', fontSize: 14 }}>{p.name || p.part_number}</p><p style={{ margin: '2px 0', color: '#4a5568', fontSize: 12 }}>{p.year_make_model}</p></div>
+<div style={{ textAlign: 'right' as const }}><p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 16 }}>${p.price?.toFixed(2)}</p><p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>BSC: ${p.bsc_markup?.toFixed(2)}</p></div>
+</div>
+</div>
+))}
+</>
+)}
+</div>
+</div>
+);
+}
