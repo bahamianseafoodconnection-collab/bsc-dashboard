@@ -16,6 +16,7 @@ const ONLINE_MARGIN    = 1.25;
 const WHOLESALE_MARGIN = 1.12;
 const ADMIN_EMAIL      = "dedrick@bahamianseafoodconnection.com";
 const BSC_WA_NUMBER    = "12423613474";
+const BSC_US_MARKUP    = 0.10; // 10% BSC profit on all US import products
 
 // ── VEHICLE / PARTS PRICING ENGINE ──
 const CAR_SALE_MARKUP   = 650;
@@ -55,7 +56,6 @@ function getDutyRate(category: string, productName: string): number {
   const name = productName.toLowerCase();
   const cat  = category.toLowerCase();
 
-  // ── SEAFOOD ──
   if (cat === "seafood") {
     if (name.includes("shrimp"))                                          return 0;
     if (name.includes("salmon"))                                          return 0;
@@ -83,7 +83,6 @@ function getDutyRate(category: string, productName: string): number {
     return 0.35;
   }
 
-  // ── POULTRY ──
   if (cat === "poultry") {
     if (name.includes("duck"))                                            return 0.05;
     if (name.includes("turkey") && name.includes("deli"))                 return 0;
@@ -92,7 +91,6 @@ function getDutyRate(category: string, productName: string): number {
     return 0.10;
   }
 
-  // ── MEAT ──
   if (cat === "meat") {
     if (name.includes("beef"))                                            return 0;
     if (name.includes("lamb"))                                            return 0;
@@ -108,7 +106,6 @@ function getDutyRate(category: string, productName: string): number {
     return 0.10;
   }
 
-  // ── AUTO PARTS ──
   if (cat === "auto") {
     if (name.includes("tire") || name.includes("tyre"))                   return 0.25;
     if (name.includes("transmission"))                                    return 0.40;
@@ -119,7 +116,6 @@ function getDutyRate(category: string, productName: string): number {
     return 0.60;
   }
 
-  // ── VEHICLES ──
   if (cat === "vehicle") {
     if (name.includes("hybrid"))                                          return 0.10;
     if (name.includes("boat") || name.includes("pleasure"))               return 0.10;
@@ -128,7 +124,6 @@ function getDutyRate(category: string, productName: string): number {
     return 0.45;
   }
 
-  // ── ELECTRONICS ──
   if (cat === "electronics") {
     if (name.includes("computer") || name.includes("laptop") ||
         name.includes("monitor") || name.includes("printer"))             return 0;
@@ -145,14 +140,10 @@ function getDutyRate(category: string, productName: string): number {
     return 0.35;
   }
 
-  // ── BABY ITEMS ──
   if (cat === "baby")                                                     return 0;
-
-  // ── MEDICAL / HEALTH ──
   if (cat === "medical" || cat === "health")                              return 0;
 
-  // ── GENERAL / GROCERY / FOOD ──
-  // FREE items first
+  // GENERAL / GROCERY / FOOD
   if (name.includes("rice"))                                              return 0;
   if (name.includes("bread"))                                             return 0;
   if (name.includes("cereal"))                                            return 0;
@@ -180,7 +171,6 @@ function getDutyRate(category: string, productName: string): number {
   if (name.includes("perfume"))                                           return 0;
   if (name.includes("jewelry") || name.includes("jewellery"))             return 0;
   if (name.includes("watch"))                                             return 0;
-  // 5%
   if (name.includes("dryer"))                                             return 0.05;
   if (name.includes("freezer"))                                           return 0.05;
   if (name.includes("generator"))                                         return 0.05;
@@ -188,9 +178,7 @@ function getDutyRate(category: string, productName: string): number {
   if (name.includes("stove"))                                             return 0.05;
   if (name.includes("refrigerator"))                                      return 0.05;
   if (name.includes("copy paper"))                                        return 0.05;
-  // 10%
   if (name.includes("phone") || name.includes("cellular"))                return 0.10;
-  // 20%
   if (name.includes("biscuit") || name.includes("cookie"))                return 0.20;
   if (name.includes("cake") || name.includes("pastry"))                   return 0.20;
   if (name.includes("ice cream"))                                         return 0.20;
@@ -199,19 +187,16 @@ function getDutyRate(category: string, productName: string): number {
   if (name.includes("sock"))                                              return 0.20;
   if (name.includes("toy"))                                               return 0.20;
   if (name.includes("lock"))                                              return 0.20;
-  // 25%
   if (name.includes("furniture"))                                         return 0.25;
   if (name.includes("garbage bag"))                                       return 0.25;
   if (name.includes("pots") || name.includes("pans"))                     return 0.25;
   if (name.includes("toilet paper") || name.includes("tissue"))           return 0.25;
   if (name.includes("shampoo"))                                           return 0.25;
   if (name.includes("tire") || name.includes("tyre"))                     return 0.25;
-  // 30%
   if (name.includes("aluminum foil"))                                     return 0.30;
   if (name.includes("curtain"))                                           return 0.30;
   if (name.includes("towel"))                                             return 0.30;
   if (name.includes("tile"))                                              return 0.30;
-  // 35%
   if (name.includes("blender"))                                           return 0.35;
   if (name.includes("microwave"))                                         return 0.35;
   if (name.includes("oven"))                                              return 0.35;
@@ -220,7 +205,6 @@ function getDutyRate(category: string, productName: string): number {
   if (name.includes("makeup") || name.includes("cosmetic"))               return 0.35;
   if (name.includes("lawn mower"))                                        return 0.35;
   if (name.includes("paint"))                                             return 0.35;
-  // 45%
   if (name.includes("air freshener"))                                     return 0.45;
   if (name.includes("amplifier"))                                         return 0.45;
   if (name.includes("carpet") || name.includes("rug"))                    return 0.45;
@@ -234,33 +218,40 @@ function getDutyRate(category: string, productName: string): number {
   if (name.includes("pillow"))                                            return 0.45;
   if (name.includes("motor oil") || name.includes("body oil"))            return 0.45;
   if (name.includes("video game"))                                        return 0.45;
-  // 50%
   if (name.includes("wine"))                                              return 0.50;
   if (name.includes("rum") || name.includes("spirits"))                   return 0.50;
   if (name.includes("cigarette"))                                         return 0.50;
-  // 55%
   if (name.includes("energy drink"))                                      return 0.55;
-  // 60%
   if (name.includes("candy") || name.includes("sweets"))                  return 0.60;
   if (name.includes("plastic bag") || name.includes("shopping bag"))      return 0.60;
   if (name.includes("mattress"))                                          return 0.60;
   if (name.includes("beer"))                                              return 0.10;
-  // 220%
   if (name.includes("cigar"))                                             return 2.20;
 
-  return 0.25; // default fallback
+  return 0.25;
 }
 
+// ── PRICING ENGINE ──
+// US imports: cost + duty + shipping = landed cost → ×1.10 BSC markup → unit cost → channel margins
+// Bahamas suppliers: cost only → unit cost → channel margins
 function calcPricing(caseCost: string, pieces: string, category: string, name: string, isUS: boolean) {
   const cost         = parseFloat(caseCost) || 0;
   const pcs          = parseFloat(pieces) || 1;
   const dutyRate     = isUS ? getDutyRate(category, name) : 0;
-  const dutyAmount   = isUS ? cost * dutyRate : 0;
+  const dutyAmount   = isUS ? parseFloat((cost * dutyRate).toFixed(2)) : 0;
   const shippingCost = isUS ? 400 : 0;
-  const totalCost    = cost + dutyAmount + shippingCost;
+  const landedCost   = cost + dutyAmount + shippingCost;
+  // BSC 10% markup applied to landed cost for US imports only
+  const bscMarkup    = isUS ? parseFloat((landedCost * BSC_US_MARKUP).toFixed(2)) : 0;
+  const totalCost    = landedCost + bscMarkup;
   const unitCost     = pcs > 0 ? totalCost / pcs : totalCost;
   return {
-    dutyRate, dutyAmount, shippingCost, unitCost,
+    dutyRate,
+    dutyAmount,
+    shippingCost,
+    bscMarkup,
+    landedCost,
+    unitCost,
     nassauPrice:    parseFloat((unitCost * NASSAU_MARGIN).toFixed(2)),
     androsPrice:    parseFloat((unitCost * ANDROS_MARGIN).toFixed(2)),
     onlinePrice:    parseFloat((unitCost * ONLINE_MARGIN).toFixed(2)),
@@ -286,7 +277,7 @@ const CATEGORIES = [
 
 const LOCATIONS = [
   { value: "bahamas", label: "🇧🇸 Bahamas (Local Supplier)" },
-  { value: "florida", label: "🇺🇸 Florida / USA (Import)" },
+  { value: "florida", label: "🇺🇸 Florida / USA (Import)"   },
 ];
 
 type View = "home" | "apply" | "login" | "portal" | "upload" | "edit" | "admin" | "spiny";
@@ -308,55 +299,55 @@ type SupplierProduct = {
 
 export default function SupplierPage() {
   const router = useRouter();
-  const [view, setView]                         = useState<View>("home");
-  const [supplier, setSupplier]                 = useState<Supplier | null>(null);
-  const [isAdmin, setIsAdmin]                   = useState(false);
-  const [isControlAdmin, setIsControlAdmin]     = useState(false);
-  const [isSpinyAdmin, setIsSpinyAdmin]         = useState(false);
-  const [loading, setLoading]                   = useState(false);
-  const [success, setSuccess]                   = useState("");
-  const [error, setError]                       = useState("");
-  const [checkingSession, setCheckingSession]   = useState(true);
+  const [view, setView]                           = useState<View>("home");
+  const [supplier, setSupplier]                   = useState<Supplier | null>(null);
+  const [isAdmin, setIsAdmin]                     = useState(false);
+  const [isControlAdmin, setIsControlAdmin]       = useState(false);
+  const [isSpinyAdmin, setIsSpinyAdmin]           = useState(false);
+  const [loading, setLoading]                     = useState(false);
+  const [success, setSuccess]                     = useState("");
+  const [error, setError]                         = useState("");
+  const [checkingSession, setCheckingSession]     = useState(true);
 
-  const [allSuppliers, setAllSuppliers]         = useState<Supplier[]>([]);
-  const [allProducts, setAllProducts]           = useState<SupplierProduct[]>([]);
-  const [adminTab, setAdminTab]                 = useState<"suppliers" | "products">("suppliers");
-  const [myProducts, setMyProducts]             = useState<SupplierProduct[]>([]);
-  const [editingProduct, setEditingProduct]     = useState<SupplierProduct | null>(null);
+  const [allSuppliers, setAllSuppliers]           = useState<Supplier[]>([]);
+  const [allProducts, setAllProducts]             = useState<SupplierProduct[]>([]);
+  const [adminTab, setAdminTab]                   = useState<"suppliers" | "products">("suppliers");
+  const [myProducts, setMyProducts]               = useState<SupplierProduct[]>([]);
+  const [editingProduct, setEditingProduct]       = useState<SupplierProduct | null>(null);
 
-  const [waOpen, setWaOpen]                     = useState(false);
-  const [waTab, setWaTab]                       = useState<"chat" | "qr">("chat");
+  const [waOpen, setWaOpen]                       = useState(false);
+  const [waTab, setWaTab]                         = useState<"chat" | "qr">("chat");
 
-  const [yieldWeightIn, setYieldWeightIn]       = useState("");
-  const [yieldWeightOut, setYieldWeightOut]     = useState("");
-  const [yieldTotalCost, setYieldTotalCost]     = useState("");
-  const [showYield, setShowYield]               = useState(false);
+  const [yieldWeightIn, setYieldWeightIn]         = useState("");
+  const [yieldWeightOut, setYieldWeightOut]       = useState("");
+  const [yieldTotalCost, setYieldTotalCost]       = useState("");
+  const [showYield, setShowYield]                 = useState(false);
 
-  const [appName, setAppName]                   = useState("");
-  const [appCompany, setAppCompany]             = useState("");
-  const [appEmail, setAppEmail]                 = useState("");
-  const [appWhatsApp, setAppWhatsApp]           = useState("");
-  const [appCategory, setAppCategory]           = useState("seafood");
-  const [appLocation, setAppLocation]           = useState("bahamas");
+  const [appName, setAppName]                     = useState("");
+  const [appCompany, setAppCompany]               = useState("");
+  const [appEmail, setAppEmail]                   = useState("");
+  const [appWhatsApp, setAppWhatsApp]             = useState("");
+  const [appCategory, setAppCategory]             = useState("seafood");
+  const [appLocation, setAppLocation]             = useState("bahamas");
 
-  const [loginEmail, setLoginEmail]             = useState("");
-  const [loginPassword, setLoginPassword]       = useState("");
-  const [showLoginPw, setShowLoginPw]           = useState(false);
+  const [loginEmail, setLoginEmail]               = useState("");
+  const [loginPassword, setLoginPassword]         = useState("");
+  const [showLoginPw, setShowLoginPw]             = useState(false);
 
-  const [prodName, setProdName]                 = useState("");
-  const [prodCategory, setProdCategory]         = useState("seafood");
-  const [prodSku, setProdSku]                   = useState("");
-  const [prodCaseCost, setProdCaseCost]         = useState("");
-  const [prodCaseWeight, setProdCaseWeight]     = useState("");
-  const [prodPieces, setProdPieces]             = useState("");
-  const [prodPricePerLb, setProdPricePerLb]     = useState("");
-  const [prodOrigin, setProdOrigin]             = useState("");
-  const [prodPartNumber, setProdPartNumber]     = useState("");
-  const [prodVin, setProdVin]                   = useState("");
+  const [prodName, setProdName]                   = useState("");
+  const [prodCategory, setProdCategory]           = useState("seafood");
+  const [prodSku, setProdSku]                     = useState("");
+  const [prodCaseCost, setProdCaseCost]           = useState("");
+  const [prodCaseWeight, setProdCaseWeight]       = useState("");
+  const [prodPieces, setProdPieces]               = useState("");
+  const [prodPricePerLb, setProdPricePerLb]       = useState("");
+  const [prodOrigin, setProdOrigin]               = useState("");
+  const [prodPartNumber, setProdPartNumber]       = useState("");
+  const [prodVin, setProdVin]                     = useState("");
   const [prodYearMakeModel, setProdYearMakeModel] = useState("");
-  const [prodPhoto, setProdPhoto]               = useState<File | null>(null);
-  const [prodPhotoPreview, setProdPhotoPreview] = useState("");
-  const [prodWhatsApp, setProdWhatsApp]         = useState("");
+  const [prodPhoto, setProdPhoto]                 = useState<File | null>(null);
+  const [prodPhotoPreview, setProdPhotoPreview]   = useState("");
+  const [prodWhatsApp, setProdWhatsApp]           = useState("");
   const [vehicleSupplierCost, setVehicleSupplierCost]           = useState("");
   const [vehicleSupplierDailyRate, setVehicleSupplierDailyRate] = useState("");
   const [vehicleListingType, setVehicleListingType]             = useState<"sale" | "rental">("sale");
@@ -364,11 +355,11 @@ export default function SupplierPage() {
 
   const isUSSupplier = supplier?.location === "florida" || supplier?.location === "usa";
 
-  const yieldIn           = parseFloat(yieldWeightIn) || 0;
-  const yieldOut          = parseFloat(yieldWeightOut) || 0;
-  const yieldCost         = parseFloat(yieldTotalCost) || 0;
-  const yieldPct          = yieldIn > 0 && yieldOut > 0 ? ((yieldOut / yieldIn) * 100).toFixed(1) : null;
-  const trueCostPerLb     = yieldOut > 0 && yieldCost > 0 ? (yieldCost / yieldOut).toFixed(2) : null;
+  const yieldIn             = parseFloat(yieldWeightIn) || 0;
+  const yieldOut            = parseFloat(yieldWeightOut) || 0;
+  const yieldCost           = parseFloat(yieldTotalCost) || 0;
+  const yieldPct            = yieldIn > 0 && yieldOut > 0 ? ((yieldOut / yieldIn) * 100).toFixed(1) : null;
+  const trueCostPerLb       = yieldOut > 0 && yieldCost > 0 ? (yieldCost / yieldOut).toFixed(2) : null;
   const nassauPriceYield    = trueCostPerLb ? (parseFloat(trueCostPerLb) * NASSAU_MARGIN).toFixed(2) : null;
   const androsPriceYield    = trueCostPerLb ? (parseFloat(trueCostPerLb) * ANDROS_MARGIN).toFixed(2) : null;
   const onlinePriceYield    = trueCostPerLb ? (parseFloat(trueCostPerLb) * ONLINE_MARGIN).toFixed(2) : null;
@@ -460,7 +451,7 @@ export default function SupplierPage() {
     }
     const { data: sup } = await supabase.from("suppliers").select("*").eq("email", data.user.email).single();
     setLoading(false);
-    if (!sup) { setError("No supplier account found. Apply first."); return; }
+    if (!sup)                   { setError("No supplier account found. Apply first."); return; }
     if (sup.status === "pending") { setError("Your application is still pending approval."); return; }
     if (sup.status === "rejected") { setError("Your application was not approved. Contact BSC."); return; }
     setSupplier(sup); setProdWhatsApp(sup.whatsapp || "");
@@ -485,7 +476,8 @@ export default function SupplierPage() {
     const status   = isAdmin ? "approved" : "pending";
 
     let payload: any = {
-      supplier_id: supplier!.id, supplier_name: supplier!.full_name,
+      supplier_id:       supplier!.id,
+      supplier_name:     supplier!.full_name,
       supplier_whatsapp: prodWhatsApp || supplier!.whatsapp,
       sku: prodSku, name: prodName, category: prodCategory,
       photo_url: photoUrl || existing, status,
@@ -493,21 +485,34 @@ export default function SupplierPage() {
 
     if (prodCategory === "vehicle") {
       if (vehicleListingType === "sale") {
-        const cost = parseFloat(vehicleSupplierCost) || 0;
+        const cost    = parseFloat(vehicleSupplierCost) || 0;
         const pricing = calcVehicleSalePrice(cost);
         payload = { ...payload, case_cost: cost, unit_cost: cost, retail_price: pricing.customerPrice, wholesale_price: pricing.customerPrice, duty_rate: 0, duty_amount: 0, shipping_cost: 0, pieces_per_case: 1, year_make_model: prodYearMakeModel, vin: prodVin };
       } else {
         const dailyRate = parseFloat(vehicleSupplierDailyRate) || 0;
-        const pricing = calcRentalPrice(dailyRate);
+        const pricing   = calcRentalPrice(dailyRate);
         payload = { ...payload, case_cost: dailyRate, unit_cost: dailyRate, retail_price: pricing.dailyCustomer, wholesale_price: pricing.weeklyCustomer, duty_rate: 0, duty_amount: 0, shipping_cost: 0, pieces_per_case: 1, year_make_model: prodYearMakeModel, vin: prodVin };
       }
     } else if (prodCategory === "auto") {
-      const cost = parseFloat(partSupplierCost) || 0;
+      const cost    = parseFloat(partSupplierCost) || 0;
       const pricing = calcPartPrice(cost);
       payload = { ...payload, case_cost: cost, unit_cost: cost, retail_price: pricing.customerPrice, wholesale_price: pricing.customerPrice, duty_rate: 0, duty_amount: 0, shipping_cost: 0, pieces_per_case: 1, part_number: prodPartNumber, year_make_model: prodYearMakeModel, vin: prodVin };
     } else {
       const pricing = calcPricing(prodCaseCost, prodPieces, prodCategory, prodName, isUSSupplier);
-      payload = { ...payload, case_cost: parseFloat(prodCaseCost) || 0, case_weight_lbs: parseFloat(prodCaseWeight) || 0, pieces_per_case: parseFloat(prodPieces) || 1, price_per_lb: parseFloat(prodPricePerLb) || 0, country_of_origin: prodOrigin, unit_cost: parseFloat(pricing.unitCost.toFixed(2)), retail_price: pricing.retailPrice, wholesale_price: pricing.wholesalePrice, duty_rate: pricing.dutyRate, duty_amount: parseFloat(pricing.dutyAmount.toFixed(2)), shipping_cost: pricing.shippingCost };
+      payload = {
+        ...payload,
+        case_cost:        parseFloat(prodCaseCost) || 0,
+        case_weight_lbs:  parseFloat(prodCaseWeight) || 0,
+        pieces_per_case:  parseFloat(prodPieces) || 1,
+        price_per_lb:     parseFloat(prodPricePerLb) || 0,
+        country_of_origin: prodOrigin,
+        unit_cost:        parseFloat(pricing.unitCost.toFixed(2)),
+        retail_price:     pricing.retailPrice,
+        wholesale_price:  pricing.wholesalePrice,
+        duty_rate:        pricing.dutyRate,
+        duty_amount:      parseFloat(pricing.dutyAmount.toFixed(2)),
+        shipping_cost:    pricing.shippingCost,
+      };
     }
 
     const { error: err } = editingProduct
@@ -561,7 +566,7 @@ export default function SupplierPage() {
   const statusBadge = (status: string): React.CSSProperties => ({
     padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: "bold",
     backgroundColor: status === "approved" ? "#0a1f0a" : status === "rejected" ? "#2d0000" : "#1a1400",
-    color: status === "approved" ? "#4ade80" : status === "rejected" ? "#f87171" : "#f5c518",
+    color:           status === "approved" ? "#4ade80" : status === "rejected" ? "#f87171" : "#f5c518",
     border: "1px solid " + (status === "approved" ? "#4ade80" : status === "rejected" ? "#f87171" : "#f5c518"),
   });
 
@@ -649,10 +654,10 @@ export default function SupplierPage() {
               <p style={{ margin: "0 0 10px", color: "#4ade80", fontWeight: "bold", fontSize: 12 }}>📊 YIELD RESULTS</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
                 {[
-                  { label: "ACTUAL YIELD %",  value: yieldPct + "%",                          color: "#4ade80" },
-                  { label: "TRUE COST / LB",  value: "$" + trueCostPerLb,                     color: "#f5c518" },
+                  { label: "ACTUAL YIELD %",  value: yieldPct + "%",                           color: "#4ade80" },
+                  { label: "TRUE COST / LB",  value: "$" + trueCostPerLb,                      color: "#f5c518" },
                   { label: "WASTE",           value: (yieldIn - yieldOut).toFixed(1) + " lbs", color: "#f87171" },
-                  { label: "USABLE WEIGHT",   value: yieldOut.toFixed(1) + " lbs",            color: "#60a5fa" },
+                  { label: "USABLE WEIGHT",   value: yieldOut.toFixed(1) + " lbs",             color: "#60a5fa" },
                 ].map(x => (
                   <div key={x.label} style={{ backgroundColor: "#060d1f", borderRadius: 8, padding: "8px 10px" }}>
                     <p style={{ margin: 0, color: "#4a5568", fontSize: 9, letterSpacing: 1 }}>{x.label}</p>
@@ -714,7 +719,7 @@ export default function SupplierPage() {
       <>
         <div style={{ backgroundColor: currentIsUS ? "#1a0a00" : "#0a1f0a", border: "1px solid " + (currentIsUS ? "#f87171" : "#4ade80"), borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
           <p style={{ margin: 0, color: currentIsUS ? "#f87171" : "#4ade80", fontWeight: "bold", fontSize: 13 }}>
-            {currentIsUS ? "🇺🇸 US/Florida — Bahamas Customs Duty + $400 shipping applied" : "🇧🇸 Bahamas Supplier — No duty or shipping"}
+            {currentIsUS ? "🇺🇸 US/Florida — Customs Duty + $400 shipping + 10% BSC markup applied" : "🇧🇸 Bahamas Supplier — No duty, shipping, or BSC markup"}
           </p>
         </div>
         {isAdmin && (
@@ -761,15 +766,18 @@ export default function SupplierPage() {
               <div style={{ backgroundColor: "#0a1220", border: "1px solid #f5c518", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
                 <p style={{ margin: "0 0 10px", color: "#f5c518", fontSize: 12, fontWeight: "bold" }}>📊 CHANNEL PRICING PREVIEW</p>
                 {currentIsUS && (
-                  <p style={{ margin: "2px 0 8px", color: foodPricing.dutyRate === 0 ? "#4ade80" : "#f87171", fontSize: 12 }}>
-                    {foodPricing.dutyRate === 0
-                      ? "✅ Duty FREE — 0% Bahamas Customs"
-                      : `⚖️ Bahamas Duty (${(foodPricing.dutyRate * 100).toFixed(0)}%): +$${foodPricing.dutyAmount.toFixed(2)}`}
-                  </p>
+                  <>
+                    <p style={{ margin: "2px 0 6px", color: foodPricing.dutyRate === 0 ? "#4ade80" : "#f87171", fontSize: 12 }}>
+                      {foodPricing.dutyRate === 0
+                        ? "✅ Duty FREE — 0% Bahamas Customs"
+                        : `⚖️ Bahamas Duty (${(foodPricing.dutyRate * 100).toFixed(0)}%): +$${foodPricing.dutyAmount.toFixed(2)}`}
+                    </p>
+                    <p style={{ margin: "2px 0", color: "#aaa", fontSize: 12 }}>Shipping: +${foodPricing.shippingCost.toFixed(2)}</p>
+                    <p style={{ margin: "2px 0 6px", color: "#f5c518", fontSize: 12 }}>BSC Markup (10%): +${foodPricing.bscMarkup.toFixed(2)}</p>
+                  </>
                 )}
-                {currentIsUS && <p style={{ margin: "2px 0", color: "#aaa", fontSize: 12 }}>Shipping: +${foodPricing.shippingCost.toFixed(2)}</p>}
-                {!currentIsUS && <p style={{ margin: "2px 0", color: "#4ade80", fontSize: 12 }}>✅ No duty or shipping — Bahamas supplier</p>}
-                <p style={{ margin: "4px 0 8px", color: "#aaa", fontSize: 12 }}>Unit Cost: ${foodPricing.unitCost.toFixed(2)}</p>
+                {!currentIsUS && <p style={{ margin: "2px 0 6px", color: "#4ade80", fontSize: 12 }}>✅ No duty, shipping, or BSC markup — Bahamas supplier</p>}
+                <p style={{ margin: "2px 0 8px", color: "#aaa", fontSize: 12 }}>Unit Cost (after all fees): ${foodPricing.unitCost.toFixed(2)}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {[
                     { label: "Nassau POS 38%",    value: foodPricing.nassauPrice,    color: "#60a5fa" },
@@ -952,7 +960,7 @@ export default function SupplierPage() {
                     </div>
                     <p style={{ margin: "2px 0", color: "#aaa", fontSize: 13 }}>{sup.company_name}</p>
                     <p style={{ margin: "2px 0", color: "#60a5fa", fontSize: 12 }}>{sup.email}</p>
-                    <p style={{ margin: "4px 0 0", color: isUS ? "#f87171" : "#4ade80", fontSize: 12, fontWeight: "bold" }}>{isUS ? "🇺🇸 Florida / USA" : "🇧🇸 Bahamas"}</p>
+                    <p style={{ margin: "4px 0 0", color: isUS ? "#f87171" : "#4ade80", fontSize: 12, fontWeight: "bold" }}>{isUS ? "🇺🇸 Florida / USA — 10% BSC markup applied" : "🇧🇸 Bahamas"}</p>
                   </div>
                   <span style={statusBadge(sup.status)}>{sup.status.toUpperCase()}</span>
                 </div>
@@ -971,7 +979,7 @@ export default function SupplierPage() {
                             <div>
                               <p style={{ margin: 0, fontWeight: "bold", fontSize: 13 }}>{prod.name}</p>
                               <p style={{ margin: 0, color: "#4a5568", fontSize: 11 }}>{prod.category} · Cost: ${prod.case_cost?.toFixed(2) || "0.00"}</p>
-                              {isUS && <p style={{ margin: 0, color: prod.duty_rate === 0 ? "#4ade80" : "#f87171", fontSize: 10 }}>{prod.duty_rate === 0 ? "✅ Duty FREE" : `⚖️ Duty: ${((prod.duty_rate || 0) * 100).toFixed(0)}%`}</p>}
+                              {isUS && <p style={{ margin: 0, color: prod.duty_rate === 0 ? "#4ade80" : "#f87171", fontSize: 10 }}>{prod.duty_rate === 0 ? "✅ Duty FREE · +10% BSC markup" : `⚖️ Duty: ${((prod.duty_rate || 0) * 100).toFixed(0)}% · +10% BSC markup`}</p>}
                             </div>
                           </div>
                           <span style={statusBadge(prod.status)}>{prod.status.toUpperCase()}</span>
@@ -1163,12 +1171,12 @@ export default function SupplierPage() {
           </div>
           {appLocation === "florida" && (
             <div style={{ backgroundColor: "#1a0a00", border: "1px solid #f87171", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-              <p style={{ margin: 0, color: "#f87171", fontSize: 12 }}>🇺🇸 US suppliers: Bahamas Customs duty applied per product category + $400/pallet shipping.</p>
+              <p style={{ margin: 0, color: "#f87171", fontSize: 12 }}>🇺🇸 US suppliers: Bahamas Customs duty + $400/pallet shipping + 10% BSC markup applied to all products.</p>
             </div>
           )}
           {appLocation === "bahamas" && (
             <div style={{ backgroundColor: "#0a1f0a", border: "1px solid #4ade80", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-              <p style={{ margin: 0, color: "#4ade80", fontSize: 12 }}>🇧🇸 Bahamas suppliers: No duty or shipping costs applied.</p>
+              <p style={{ margin: 0, color: "#4ade80", fontSize: 12 }}>🇧🇸 Bahamas suppliers: No duty, shipping, or BSC markup applied.</p>
             </div>
           )}
           {error && <p style={{ color: "#f87171", fontSize: 13, backgroundColor: "#2d0000", padding: "10px 12px", borderRadius: 8, marginBottom: 12 }}>{error}</p>}
