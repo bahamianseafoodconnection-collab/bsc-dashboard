@@ -1,14 +1,12 @@
-// File: app/login/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
 const SUPABASE_URL  = 'https://auqjjrisivhfmpleusyt.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1cWpqcmlzaXZoZm1wbGV1c3l0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MTk4NDcsImV4cCI6MjA5MTM5NTg0N30.gukwxBD4tFRVWMiA8_fauiV2JdEyvXMYJjzLcZiZpCg';
 
-// ── Role → default route map ─────────────────────────────────────────────
 const ROLE_ROUTES: Record<string, string> = {
   control_admin:  '/dashboard',
   manager:        '/ashley',
@@ -28,32 +26,30 @@ const LANGUAGES = [
 ];
 
 const T: Record<string, Record<string, string>> = {
-  title:    { en: 'BSC Staff Login',       es: 'Inicio de Sesión BSC',  ht: 'Koneksyon Anplwaye BSC' },
+  title:    { en: 'BSC Staff Login',          es: 'Inicio de Sesión BSC',       ht: 'Koneksyon Anplwaye BSC' },
   subtitle: { en: 'Bahamian Seafood Connection', es: 'Bahamian Seafood Connection', ht: 'Bahamian Seafood Connection' },
-  email:    { en: 'Email Address',          es: 'Correo Electrónico',    ht: 'Adrès Imèl'             },
-  password: { en: 'Password',               es: 'Contraseña',            ht: 'Modpas'                 },
-  signin:   { en: 'Sign In',                es: 'Iniciar Sesión',        ht: 'Konekte'                },
-  signing:  { en: 'Signing in...',          es: 'Iniciando...',          ht: 'Ap konekte...'          },
+  email:    { en: 'Email Address',             es: 'Correo Electrónico',         ht: 'Adrès Imèl'             },
+  password: { en: 'Password',                  es: 'Contraseña',                 ht: 'Modpas'                 },
+  signin:   { en: 'Sign In',                   es: 'Iniciar Sesión',             ht: 'Konekte'                },
+  signing:  { en: 'Signing in...',             es: 'Iniciando...',               ht: 'Ap konekte...'          },
   error:    { en: 'Invalid email or password', es: 'Correo o contraseña incorrectos', ht: 'Imèl oswa modpas enkòrèk' },
 };
 
-export default function LoginPage() {
+// ── Inner component uses useSearchParams — must be inside Suspense ─────────
+function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  const [lang, setLang]       = useState('en');
-  const [email, setEmail]     = useState('');
+  const [lang, setLang]         = useState('en');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw]   = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [showPw, setShowPw]     = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
 
-  // Use SSR-compatible browser client so middleware can read the session cookie
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
-
   const t = (key: string) => T[key]?.[lang] || T[key]?.['en'] || key;
 
-  // If already logged in, redirect immediately
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) redirectByRole(session.user.id);
@@ -97,7 +93,6 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: "'Inter', -apple-system, sans-serif" }}>
 
-      {/* Language selector */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
         {LANGUAGES.map(l => (
           <button key={l.code} onClick={() => setLang(l.code)} style={{ padding: '7px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', backgroundColor: lang === l.code ? '#f5c518' : '#0d1f3c', color: lang === l.code ? '#000' : '#6b7280', fontWeight: lang === l.code ? 'bold' : 'normal', fontSize: 13 }}>
@@ -106,14 +101,12 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* Logo */}
       <div style={{ textAlign: 'center' as const, marginBottom: 32 }}>
         <div style={{ fontSize: 56, marginBottom: 12 }}>🐟</div>
         <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 22 }}>{t('title')}</p>
         <p style={{ margin: '6px 0 0', color: '#4a5568', fontSize: 13 }}>{t('subtitle')}</p>
       </div>
 
-      {/* Form */}
       <div style={{ width: '100%', maxWidth: 400 }}>
         {error && (
           <div style={{ backgroundColor: '#2d0000', border: '1px solid #f87171', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
@@ -123,10 +116,10 @@ export default function LoginPage() {
 
         <label style={{ display: 'block', color: '#6b7280', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 6 }}>{t('email')}</label>
         <input
-          type='email'
+          type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          placeholder='your@email.com'
+          placeholder="your@email.com"
           onKeyDown={e => e.key === 'Enter' && handleLogin()}
           style={{ display: 'block', width: '100%', padding: '14px 16px', borderRadius: 12, backgroundColor: '#0d1f3c', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, marginBottom: 14, boxSizing: 'border-box' as const, outline: 'none' }}
         />
@@ -137,7 +130,7 @@ export default function LoginPage() {
             type={showPw ? 'text' : 'password'}
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder='••••••••'
+            placeholder="••••••••"
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             style={{ display: 'block', width: '100%', padding: '14px 48px 14px 16px', borderRadius: 12, backgroundColor: '#0d1f3c', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, boxSizing: 'border-box' as const, outline: 'none' }}
           />
@@ -155,10 +148,22 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Footer */}
       <p style={{ marginTop: 40, color: '#1e3a5f', fontSize: 11, textAlign: 'center' as const }}>
-        2025 BSC Marketplace - Owned by Dedrick Storr Snr and Family
+        2025 BSC Marketplace · Owned by Dedrick Storr Snr & Family
       </p>
     </div>
+  );
+}
+
+// ── Outer component wraps LoginForm in Suspense ────────────────────────────
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#4a5568', fontSize: 14 }}>Loading...</p>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
