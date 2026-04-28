@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
-const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const STAFF_ROLES = new Set([
@@ -13,75 +13,109 @@ const STAFF_ROLES = new Set([
   'manager',
   'cashier',
   'andros_staff',
-  'supplier'
+  'supplier',
 ]);
 
-function getStaffRoute(role: string): string {
+function getDestination(role: string): string {
   switch (role) {
     case 'control_admin':
-    case 'basic_admin':  return '/dashboard';
-    case 'manager':      return '/ashley';
-    case 'cashier':      return '/pos';
-    case 'andros_staff': return '/pos-andros';
-    case 'supplier':     return '/supplier';
-    default:             return '/market';
+    case 'basic_admin':
+      return '/dashboard';
+    case 'manager':
+      return '/ashley';
+    case 'cashier':
+      return '/pos';
+    case 'andros_staff':
+      return '/pos-andros';
+    case 'supplier':
+      return '/supplier';
+    default:
+      return '/market';
   }
 }
 
+function hardRedirect(destination: string) {
+  console.log('[AUTH /login] REDIRECT:', destination);
+  window.location.href = destination;
+}
+
 function LoginForm() {
-  const router       = useRouter();
   const searchParams = useSearchParams();
 
-  const [email, setEmail]       = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw]     = useState(false);
-  const [loading, setLoading]   = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [error, setError]       = useState('');
+  const [error, setError] = useState('');
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
 
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(async ({ data: { session } }) => {
+    async function init() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
         if (session?.user) {
-          await handlePostLogin(session.user.id);
+          await resolveAndRedirect(session.user.id);
         } else {
           setChecking(false);
         }
-      })
-      .catch(() => setChecking(false));
+      } catch {
+        setChecking(false);
+      }
+    }
+
+    init();
   }, []);
 
-  async function handlePostLogin(userId: string) {
+  async function resolveAndRedirect(userId: string) {
+    console.log('[AUTH /login] USER:', userId);
+
     let role = 'customer';
 
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
 
-      if (profile?.role) role = profile.role;
-    } catch {}
+      if (!error && profile?.role) {
+        role = profile.role;
+      } else if (error) {
+        console.error('[AUTH /login] Profile error:', error.message);
+      }
+    } catch (err) {
+      console.error('[AUTH /login] Profile fetch failed:', err);
+    }
 
-    console.log('[LOGIN] ROLE:', role);
+    console.log('[AUTH /login] ROLE:', role);
 
-    // 🔥 STAFF → DASHBOARD
     if (STAFF_ROLES.has(role)) {
-      router.replace(getStaffRoute(role));
+      hardRedirect(getDestination(role));
       return;
     }
 
-    // 👇 CUSTOMER FLOW
     const redirectParam = searchParams.get('redirect');
     if (redirectParam && redirectParam.startsWith('/')) {
-      router.replace(redirectParam);
+      hardRedirect(redirectParam);
       return;
     }
 
-    router.replace('/market');
+    hardRedirect('/market');
+  }
+
+  function handleEmailBlur() {
+    const lower = email.toLowerCase();
+
+    const looksLikeStaff =
+      lower.includes('@bsc') ||
+      lower.includes('@bahamianseafood');
+
+    if (looksLikeStaff) {
+      window.location.href = '/staff-login';
+    }
   }
 
   async function handleLogin() {
@@ -95,19 +129,18 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const { data, error: authErr } =
-        await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-      if (authErr || !data?.user) {
+      if (error || !data?.user) {
         setError('Invalid email or password');
         setLoading(false);
         return;
       }
 
-      await handlePostLogin(data.user.id);
+      await resolveAndRedirect(data.user.id);
 
     } catch {
       setError('Something went wrong. Please try again.');
@@ -125,41 +158,33 @@ function LoginForm() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-
-      <h2 style={{ color: '#f5c518', marginBottom: 20 }}>BSC Marketplace Login</h2>
+      <h2 style={{ color: '#f5c518' }}>BSC Marketplace Login</h2>
 
       <div style={{ width: '100%', maxWidth: 400 }}>
-
-        {error && (
-          <div style={{ color: '#f87171', marginBottom: 10 }}>{error}</div>
-        )}
+        {error && <p style={{ color: 'red' }}>{error}</p>}
 
         <input
           type="email"
-          placeholder="Email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
-          style={{ width: '100%', marginBottom: 10 }}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={handleEmailBlur}
+          placeholder="email"
         />
 
         <input
           type={showPw ? 'text' : 'password'}
-          placeholder="Password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
-          style={{ width: '100%', marginBottom: 10 }}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="password"
         />
 
         <button onClick={handleLogin} disabled={loading}>
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
 
-        <div style={{ marginTop: 10 }}>
-          <button onClick={() => router.push('/staff-login')}>
-            Staff Login
-          </button>
-        </div>
-
+        <p>
+          Staff? <a href="/staff-login">Go to staff login</a>
+        </p>
       </div>
     </div>
   );
