@@ -116,6 +116,7 @@ export default function DashboardPage() {
   const [totalCOGS, setTotalCOGS]                   = useState(0);
   const [totalSupplierOwed, setTotalSupplierOwed]   = useState(0);
   const [lowStockProducts, setLowStockProducts]     = useState<SupplierProduct[]>([]);
+  const [adminPhotoUploading, setAdminPhotoUploading] = useState<string | null>(null);
 
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     { role: 'ai', text: 'Hi Dedrick! Full system control. All 9 revenue streams, COGS, staff, expenses. Ask me anything.' }
@@ -287,6 +288,23 @@ export default function DashboardPage() {
   const approveProduct  = async (id: string) => { await supabase.from('supplier_products').update({ status: 'approved' }).eq('id', id); setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'approved' } : p)); };
   const rejectProduct   = async (id: string) => { await supabase.from('supplier_products').update({ status: 'rejected' }).eq('id', id); setAllProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'rejected' } : p)); };
 
+  // ── Admin photo override ──
+  async function uploadAdminPhoto(productId: string, file: File) {
+    setAdminPhotoUploading(productId);
+    try {
+      const fileName = "admin-" + productId + "-" + Date.now() + "-" + file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+      const { error: uploadErr } = await supabase.storage.from("product-images").upload(fileName, file, { upsert: true });
+      if (uploadErr) { alert("Upload failed: " + uploadErr.message); setAdminPhotoUploading(null); return; }
+      const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(fileName);
+      const { error: updateErr } = await supabase.from("supplier_products").update({ admin_photo_url: urlData.publicUrl }).eq("id", productId);
+      if (updateErr) { alert("Save failed: " + updateErr.message); setAdminPhotoUploading(null); return; }
+      setAllProducts(prev => prev.map(p => p.id === productId ? { ...p, admin_photo_url: urlData.publicUrl } as any : p));
+      setSupplierProducts(prev => prev.map(p => p.id === productId ? { ...p, admin_photo_url: urlData.publicUrl } as any : p));
+      alert("Photo updated. Marketplace now shows your BSC photo.");
+    } catch (e: any) { alert("Error: " + e.message); }
+    setAdminPhotoUploading(null);
+  }
+
   // ── Computed values ──
   const nassauInvoices  = recentInvoices.filter(i => !i.customerName.includes('DELIVERY') && !i.customerName.includes('PICKUP') && !i.customerName.includes('ANDROS'));
   const androsInvoices  = recentInvoices.filter(i => i.customerName.includes('ANDROS'));
@@ -331,6 +349,43 @@ export default function DashboardPage() {
     color:           status === 'approved' ? '#4ade80' : status === 'rejected' ? '#f87171' : '#f5c518',
     border: '1px solid ' + (status === 'approved' ? '#4ade80' : status === 'rejected' ? '#f87171' : '#f5c518'),
   });
+
+  // ── Admin photo button component ──
+  const AdminPhotoBtn = ({ prod }: { prod: any }) => {
+    const isUploading = adminPhotoUploading === prod.id;
+    const hasOverride = !!(prod as any).admin_photo_url;
+    return (
+      <div style={{ marginTop: 8 }}>
+        <input
+          id={"admin-photo-" + prod.id}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadAdminPhoto(prod.id, file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          onClick={() => document.getElementById("admin-photo-" + prod.id)?.click()}
+          disabled={isUploading}
+          style={{ width: "100%", padding: "8px", borderRadius: 8, backgroundColor: hasOverride ? "#0a1f0a" : "#1a1200", border: "1px solid " + (hasOverride ? "#4ade80" : "#f5c518"), color: hasOverride ? "#4ade80" : "#f5c518", fontWeight: "bold", fontSize: 12, cursor: isUploading ? "not-allowed" : "pointer", opacity: isUploading ? 0.6 : 1 }}
+        >
+          {isUploading ? "Uploading..." : hasOverride ? "BSC Photo Set — Tap to Change" : "Set BSC Market Photo"}
+        </button>
+        {hasOverride && (
+          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+            <img src={(prod as any).admin_photo_url} alt="BSC override" style={{ width: 48, height: 48, borderRadius: 6, objectFit: "cover", border: "2px solid #4ade80" }} />
+            <div>
+              <p style={{ margin: 0, color: "#4ade80", fontSize: 10, fontWeight: "bold" }}>BSC MARKET PHOTO ACTIVE</p>
+              <p style={{ margin: "2px 0 0", color: "#4a5568", fontSize: 10 }}>Marketplace shows this photo</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (loading) return (
     <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -679,6 +734,7 @@ export default function DashboardPage() {
                     <div style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '7px 10px' }}><p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>ONLINE</p><p style={{ margin: '2px 0 0', color: '#4ade80', fontWeight: 'bold', fontSize: 13 }}>${prod.retail_price?.toFixed(2) || '0.00'}</p></div>
                     <div style={{ backgroundColor: '#060d1f', borderRadius: 8, padding: '7px 10px' }}><p style={{ margin: 0, color: '#4a5568', fontSize: 9 }}>WHOLESALE</p><p style={{ margin: '2px 0 0', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>${prod.wholesale_price?.toFixed(2) || '0.00'}</p></div>
                   </div>
+                  <AdminPhotoBtn prod={prod} />
                 </div>
               ))}
             </>
@@ -964,6 +1020,7 @@ export default function DashboardPage() {
                   <button onClick={() => rejectProduct(prod.id)}  style={{ flex: 1, padding: '10px', borderRadius: 10, backgroundColor: '#3b0000', color: '#f87171', border: '1px solid #7f1d1d', cursor: 'pointer', fontSize: 13 }}>Reject</button>
                 </div>
               )}
+              {prod.status === 'approved' && <AdminPhotoBtn prod={prod} />}
             </div>
           ))}
           <Link href='/supplier' style={{ textDecoration: 'none' }}>
