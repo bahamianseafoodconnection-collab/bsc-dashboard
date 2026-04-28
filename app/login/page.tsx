@@ -4,29 +4,19 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
-const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL  as string;
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-
-if (!SUPABASE_URL || !SUPABASE_ANON) {
-  throw new Error('Missing Supabase environment variables. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.');
-}
+const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 function getRouteForRole(role: string | null): string {
   switch (role) {
-    case 'control_admin':
-    case 'basic_admin':
-      return '/dashboard';
-    case 'manager':
-      return '/ashley';
-    case 'cashier':
-      return '/pos';
-    case 'andros_staff':
-      return '/pos-andros';
-    case 'supplier':
-      return '/supplier';
+    case 'control_admin': return '/dashboard';
+    case 'basic_admin':   return '/dashboard';
+    case 'manager':       return '/ashley';
+    case 'cashier':       return '/pos';
+    case 'andros_staff':  return '/pos-andros';
+    case 'supplier':      return '/supplier';
     case 'customer':
-    default:
-      return '/market';
+    default:              return '/market';
   }
 }
 
@@ -42,7 +32,7 @@ const T: Record<string, Record<string, string>> = {
   email:    { en: 'Email Address',              es: 'Correo Electronico',              ht: 'Adres Imel'                },
   password: { en: 'Password',                   es: 'Contrasena',                      ht: 'Modpas'                    },
   signin:   { en: 'Sign In',                    es: 'Iniciar Sesion',                  ht: 'Konekte'                   },
-  signing:  { en: 'Signing in...',              es: 'Iniciando...',                    ht: 'Ap konekte...'             },
+  signing:  { en: 'Redirecting...',             es: 'Redirigiendo...',                 ht: 'Ap redirije...'            },
   error:    { en: 'Invalid email or password',  es: 'Correo o contrasena incorrectos', ht: 'Imel oswa modpas enkorek'  },
 };
 
@@ -55,42 +45,61 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
   const [loading, setLoading]   = useState(false);
+  const [checking, setChecking] = useState(true); // checking existing session
   const [error, setError]       = useState('');
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
   const t = (key: string) => T[key]?.[lang] || T[key]?.['en'] || key;
 
+  // On mount: check if already logged in — wait for BOTH session AND profile
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        await redirectAfterLogin(session.user.id);
+    async function checkExistingSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          setChecking(false);
+          return;
+        }
+        // Session exists — fetch role before redirecting
+        await redirectByRole(session.user.id);
+      } catch {
+        setChecking(false);
       }
-    });
+    }
+    checkExistingSession();
   }, []);
 
-  async function redirectAfterLogin(userId: string) {
+  // Fetch role from profiles then redirect — never redirects before role is known
+  async function redirectByRole(userId: string) {
     const redirectParam = searchParams.get('redirect');
 
-    let role: string | null = null;
+    let role: string = 'customer';
     try {
-      const { data, error: profileErr } = await supabase
+      const { data: profile, error: profileErr } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
 
-      if (!profileErr && data?.role) {
-        role = data.role;
+      if (!profileErr && profile?.role) {
+        role = profile.role;
       }
     } catch {
+      // Profile fetch failed — fall back to customer safely
       role = 'customer';
     }
 
-    if (redirectParam && redirectParam.startsWith('/') && role && role !== 'customer') {
+    // If middleware sent a ?redirect= and user is staff, honour it
+    if (
+      redirectParam &&
+      redirectParam.startsWith('/') &&
+      role !== 'customer'
+    ) {
       router.replace(redirectParam);
       return;
     }
 
+    // Route by role — always resolves after profile is confirmed
     router.replace(getRouteForRole(role));
   }
 
@@ -113,16 +122,33 @@ function LoginForm() {
         return;
       }
 
-      await redirectAfterLogin(data.user.id);
+      // Auth succeeded — now fetch profile BEFORE routing
+      await redirectByRole(data.user.id);
+
+      // Note: do NOT setLoading(false) here — keep spinner
+      // while router.replace() takes effect so user sees no flicker
     } catch {
       setError(t('error'));
       setLoading(false);
     }
   }
 
+  // Show full-screen loader while checking existing session
+  if (checking) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' as const }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🐟</div>
+          <p style={{ color: '#4a5568', fontSize: 14, fontFamily: 'sans-serif' }}>Checking session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: "'Inter', -apple-system, sans-serif" }}>
 
+      {/* Language selector */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
         {LANGUAGES.map(l => (
           <button
@@ -135,16 +161,18 @@ function LoginForm() {
         ))}
       </div>
 
+      {/* Logo */}
       <div style={{ textAlign: 'center' as const, marginBottom: 32 }}>
         <div style={{ fontSize: 52, marginBottom: 12 }}>🐟</div>
         <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 22 }}>{t('title')}</p>
         <p style={{ margin: '6px 0 0', color: '#4a5568', fontSize: 13 }}>{t('subtitle')}</p>
       </div>
 
+      {/* Form */}
       <div style={{ width: '100%', maxWidth: 400 }}>
         {error && (
           <div style={{ backgroundColor: '#2d0000', border: '1px solid #f87171', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-            <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>Warning: {error}</p>
+            <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>⚠️ {error}</p>
           </div>
         )}
 
@@ -165,7 +193,7 @@ function LoginForm() {
             type={showPw ? 'text' : 'password'}
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="password"
+            placeholder="••••••••"
             onKeyDown={e => e.key === 'Enter' && !loading && handleLogin()}
             disabled={loading}
             style={{ display: 'block', width: '100%', padding: '14px 48px 14px 16px', borderRadius: 12, backgroundColor: '#0d1f3c', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, boxSizing: 'border-box' as const, outline: 'none', opacity: loading ? 0.6 : 1 }}
@@ -181,14 +209,21 @@ function LoginForm() {
         <button
           onClick={handleLogin}
           disabled={loading}
-          style={{ width: '100%', padding: '15px', borderRadius: 12, backgroundColor: loading ? '#2a2a2a' : '#f5c518', color: loading ? '#666' : '#000', fontWeight: 'bold', border: loading ? '1px solid #333' : 'none', fontSize: 16, cursor: loading ? 'not-allowed' : 'pointer' }}
+          style={{ width: '100%', padding: '15px', borderRadius: 12, backgroundColor: loading ? '#1a2a1a' : '#f5c518', color: loading ? '#4ade80' : '#000', fontWeight: 'bold', border: loading ? '1px solid #4ade80' : 'none', fontSize: 16, cursor: loading ? 'not-allowed' : 'pointer' }}
         >
-          {loading ? t('signing') : t('signin')}
+          {loading ? (
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #4ade80', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              {t('signing')}
+            </span>
+          ) : t('signin')}
         </button>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
 
       <p style={{ marginTop: 40, color: '#1e3a5f', fontSize: 11, textAlign: 'center' as const }}>
-        2025 BSC Marketplace - Owned by Dedrick Storr Snr and Family
+        2025 BSC Marketplace — Owned by Dedrick Storr Snr and Family
       </p>
     </div>
   );
