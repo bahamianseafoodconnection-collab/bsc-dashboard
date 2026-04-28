@@ -1,4 +1,4 @@
-'use client';
+use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -20,22 +20,21 @@ const ROLE_ROUTES: Record<string, string> = {
 };
 
 const LANGUAGES = [
-  { code: 'en', label: 'English', flag: '🇧🇸' },
-  { code: 'es', label: 'Español', flag: '🇪🇸' },
-  { code: 'ht', label: 'Kreyòl',  flag: '🇭🇹' },
+  { code: 'en', label: 'English', flag: 'EN' },
+  { code: 'es', label: 'Espanol', flag: 'ES' },
+  { code: 'ht', label: 'Kreyol',  flag: 'HT' },
 ];
 
 const T: Record<string, Record<string, string>> = {
-  title:    { en: 'BSC Staff Login',          es: 'Inicio de Sesión BSC',       ht: 'Koneksyon Anplwaye BSC' },
-  subtitle: { en: 'Bahamian Seafood Connection', es: 'Bahamian Seafood Connection', ht: 'Bahamian Seafood Connection' },
-  email:    { en: 'Email Address',             es: 'Correo Electrónico',         ht: 'Adrès Imèl'             },
-  password: { en: 'Password',                  es: 'Contraseña',                 ht: 'Modpas'                 },
-  signin:   { en: 'Sign In',                   es: 'Iniciar Sesión',             ht: 'Konekte'                },
-  signing:  { en: 'Signing in...',             es: 'Iniciando...',               ht: 'Ap konekte...'          },
-  error:    { en: 'Invalid email or password', es: 'Correo o contraseña incorrectos', ht: 'Imèl oswa modpas enkòrèk' },
+  title:    { en: 'BSC Staff Login',            es: 'Inicio de Sesion BSC',           ht: 'Koneksyon Anplwaye BSC'    },
+  subtitle: { en: 'Bahamian Seafood Connection', es: 'Bahamian Seafood Connection',    ht: 'Bahamian Seafood Connection' },
+  email:    { en: 'Email Address',              es: 'Correo Electronico',             ht: 'Adres Imel'                },
+  password: { en: 'Password',                   es: 'Contrasena',                     ht: 'Modpas'                    },
+  signin:   { en: 'Sign In',                    es: 'Iniciar Sesion',                 ht: 'Konekte'                   },
+  signing:  { en: 'Signing in...',              es: 'Iniciando...',                   ht: 'Ap konekte...'             },
+  error:    { en: 'Invalid email or password',  es: 'Correo o contrasena incorrectos', ht: 'Imel oswa modpas enkorek' },
 };
 
-// ── Inner component uses useSearchParams — must be inside Suspense ─────────
 function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -110,7 +109,7 @@ function LoginForm() {
       <div style={{ width: '100%', maxWidth: 400 }}>
         {error && (
           <div style={{ backgroundColor: '#2d0000', border: '1px solid #f87171', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-            <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>⚠️ {error}</p>
+            <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>Error: {error}</p>
           </div>
         )}
 
@@ -130,11 +129,11 @@ function LoginForm() {
             type={showPw ? 'text' : 'password'}
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="password"
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             style={{ display: 'block', width: '100%', padding: '14px 48px 14px 16px', borderRadius: 12, backgroundColor: '#0d1f3c', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, boxSizing: 'border-box' as const, outline: 'none' }}
           />
-          <button onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#6b7280', padding: 0 }}>
+          <button onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#6b7280', padding: 0 }}>
             {showPw ? 'Hide' : 'Show'}
           </button>
         </div>
@@ -149,13 +148,12 @@ function LoginForm() {
       </div>
 
       <p style={{ marginTop: 40, color: '#1e3a5f', fontSize: 11, textAlign: 'center' as const }}>
-        2025 BSC Marketplace · Owned by Dedrick Storr Snr & Family
+        2025 BSC Marketplace - Owned by Dedrick Storr Snr and Family
       </p>
     </div>
   );
 }
 
-// ── Outer component wraps LoginForm in Suspense ────────────────────────────
 export default function LoginPage() {
   return (
     <Suspense fallback={
