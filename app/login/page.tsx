@@ -7,7 +7,7 @@ import { createBrowserClient } from '@supabase/ssr';
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-function getRouteForRole(role: string | null): string {
+function getRouteForRole(role: string): string {
   switch (role) {
     case 'control_admin': return '/dashboard';
     case 'basic_admin':   return '/dashboard';
@@ -32,7 +32,7 @@ const T: Record<string, Record<string, string>> = {
   email:    { en: 'Email Address',              es: 'Correo Electronico',              ht: 'Adres Imel'                },
   password: { en: 'Password',                   es: 'Contrasena',                      ht: 'Modpas'                    },
   signin:   { en: 'Sign In',                    es: 'Iniciar Sesion',                  ht: 'Konekte'                   },
-  signing:  { en: 'Redirecting...',             es: 'Redirigiendo...',                 ht: 'Ap redirije...'            },
+  signing:  { en: 'Signing in...',              es: 'Iniciando...',                    ht: 'Ap konekte...'             },
   error:    { en: 'Invalid email or password',  es: 'Correo o contrasena incorrectos', ht: 'Imel oswa modpas enkorek'  },
 };
 
@@ -45,35 +45,39 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
   const [loading, setLoading]   = useState(false);
-  const [checking, setChecking] = useState(true); // checking existing session
+  const [checking, setChecking] = useState(true);
   const [error, setError]       = useState('');
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
   const t = (key: string) => T[key]?.[lang] || T[key]?.['en'] || key;
 
-  // On mount: check if already logged in — wait for BOTH session AND profile
   useEffect(() => {
     async function checkExistingSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
+        if (session?.user) {
+          await redirectByRole(session.user.id);
+        } else {
           setChecking(false);
-          return;
         }
-        // Session exists — fetch role before redirecting
-        await redirectByRole(session.user.id);
-      } catch {
+      } catch (err) {
+        console.error('Session check error:', err);
         setChecking(false);
       }
     }
     checkExistingSession();
   }, []);
 
-  // Fetch role from profiles then redirect — never redirects before role is known
+  // ── THE ONLY PLACE routing happens ──────────────────────────
+  // Step 1: receive userId
+  // Step 2: fetch role from profiles — AWAIT this fully
+  // Step 3: log everything for live verification
+  // Step 4: call router.replace ONLY after role is confirmed
   async function redirectByRole(userId: string) {
-    const redirectParam = searchParams.get('redirect');
+    console.log('[BSC Login] USER ID:', userId);
 
-    let role: string = 'customer';
+    let role = 'customer'; // safe default — overwritten if fetch succeeds
+
     try {
       const { data: profile, error: profileErr } = await supabase
         .from('profiles')
@@ -81,26 +85,30 @@ function LoginForm() {
         .eq('id', userId)
         .single();
 
-      if (!profileErr && profile?.role) {
+      if (profileErr) {
+        console.error('[BSC Login] Profile fetch error:', profileErr.message);
+      } else if (profile?.role) {
         role = profile.role;
+      } else {
+        console.warn('[BSC Login] Profile row found but role is empty — defaulting to customer');
       }
-    } catch {
-      // Profile fetch failed — fall back to customer safely
-      role = 'customer';
+    } catch (err) {
+      console.error('[BSC Login] Profile fetch threw:', err);
     }
 
-    // If middleware sent a ?redirect= and user is staff, honour it
-    if (
-      redirectParam &&
-      redirectParam.startsWith('/') &&
-      role !== 'customer'
-    ) {
+    console.log('[BSC Login] ROLE:', role);
+
+    // Honour middleware ?redirect= only for staff — never send staff to customer pages
+    const redirectParam = searchParams.get('redirect');
+    if (redirectParam && redirectParam.startsWith('/') && role !== 'customer') {
+      console.log('[BSC Login] REDIRECTING TO (middleware param):', redirectParam);
       router.replace(redirectParam);
       return;
     }
 
-    // Route by role — always resolves after profile is confirmed
-    router.replace(getRouteForRole(role));
+    const destination = getRouteForRole(role);
+    console.log('[BSC Login] REDIRECTING TO:', destination);
+    router.replace(destination);
   }
 
   async function handleLogin() {
@@ -109,31 +117,34 @@ function LoginForm() {
       setError(t('error'));
       return;
     }
+
     setLoading(true);
+
     try {
+      // Step 1 — authenticate
       const { data, error: authErr } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+        email:    email.trim(),
+        password: password,
       });
 
       if (authErr || !data?.user) {
+        console.error('[BSC Login] Auth error:', authErr?.message);
         setError(t('error'));
         setLoading(false);
         return;
       }
 
-      // Auth succeeded — now fetch profile BEFORE routing
+      // Step 2 — auth confirmed, now fetch role and route
+      // Do NOT call setLoading(false) — keep spinner until redirect completes
       await redirectByRole(data.user.id);
 
-      // Note: do NOT setLoading(false) here — keep spinner
-      // while router.replace() takes effect so user sees no flicker
-    } catch {
+    } catch (err) {
+      console.error('[BSC Login] Unexpected error:', err);
       setError(t('error'));
       setLoading(false);
     }
   }
 
-  // Show full-screen loader while checking existing session
   if (checking) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
