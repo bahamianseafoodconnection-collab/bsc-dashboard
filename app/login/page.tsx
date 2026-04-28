@@ -7,40 +7,31 @@ import { createBrowserClient } from '@supabase/ssr';
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-function getRouteForRole(role: string): string {
+const STAFF_ROLES = new Set([
+  'control_admin',
+  'basic_admin',
+  'manager',
+  'cashier',
+  'andros_staff',
+  'supplier'
+]);
+
+function getStaffRoute(role: string): string {
   switch (role) {
-    case 'control_admin': return '/dashboard';
-    case 'basic_admin':   return '/dashboard';
-    case 'manager':       return '/ashley';
-    case 'cashier':       return '/pos';
-    case 'andros_staff':  return '/pos-andros';
-    case 'supplier':      return '/supplier';
-    case 'customer':
-    default:              return '/market';
+    case 'control_admin':
+    case 'basic_admin':  return '/dashboard';
+    case 'manager':      return '/ashley';
+    case 'cashier':      return '/pos';
+    case 'andros_staff': return '/pos-andros';
+    case 'supplier':     return '/supplier';
+    default:             return '/market';
   }
 }
-
-const LANGUAGES = [
-  { code: 'en', label: 'English', flag: 'EN' },
-  { code: 'es', label: 'Espanol', flag: 'ES' },
-  { code: 'ht', label: 'Kreyol',  flag: 'HT' },
-];
-
-const T: Record<string, Record<string, string>> = {
-  title:    { en: 'BSC Staff Login',            es: 'Inicio de Sesion BSC',            ht: 'Koneksyon Anplwaye BSC'    },
-  subtitle: { en: 'Bahamian Seafood Connection', es: 'Bahamian Seafood Connection',     ht: 'Bahamian Seafood Connection' },
-  email:    { en: 'Email Address',              es: 'Correo Electronico',              ht: 'Adres Imel'                },
-  password: { en: 'Password',                   es: 'Contrasena',                      ht: 'Modpas'                    },
-  signin:   { en: 'Sign In',                    es: 'Iniciar Sesion',                  ht: 'Konekte'                   },
-  signing:  { en: 'Signing in...',              es: 'Iniciando...',                    ht: 'Ap konekte...'             },
-  error:    { en: 'Invalid email or password',  es: 'Correo o contrasena incorrectos', ht: 'Imel oswa modpas enkorek'  },
-};
 
 function LoginForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  const [lang, setLang]         = useState('en');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
@@ -49,98 +40,77 @@ function LoginForm() {
   const [error, setError]       = useState('');
 
   const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
-  const t = (key: string) => T[key]?.[lang] || T[key]?.['en'] || key;
 
   useEffect(() => {
-    async function checkExistingSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
         if (session?.user) {
-          await redirectByRole(session.user.id);
+          await handlePostLogin(session.user.id);
         } else {
           setChecking(false);
         }
-      } catch (err) {
-        console.error('Session check error:', err);
-        setChecking(false);
-      }
-    }
-    checkExistingSession();
+      })
+      .catch(() => setChecking(false));
   }, []);
 
-  // ── THE ONLY PLACE routing happens ──────────────────────────
-  // Step 1: receive userId
-  // Step 2: fetch role from profiles — AWAIT this fully
-  // Step 3: log everything for live verification
-  // Step 4: call router.replace ONLY after role is confirmed
-  async function redirectByRole(userId: string) {
-    console.log('[BSC Login] USER ID:', userId);
-
-    let role = 'customer'; // safe default — overwritten if fetch succeeds
+  async function handlePostLogin(userId: string) {
+    let role = 'customer';
 
     try {
-      const { data: profile, error: profileErr } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
 
-      if (profileErr) {
-        console.error('[BSC Login] Profile fetch error:', profileErr.message);
-      } else if (profile?.role) {
-        role = profile.role;
-      } else {
-        console.warn('[BSC Login] Profile row found but role is empty — defaulting to customer');
-      }
-    } catch (err) {
-      console.error('[BSC Login] Profile fetch threw:', err);
+      if (profile?.role) role = profile.role;
+    } catch {}
+
+    console.log('[LOGIN] ROLE:', role);
+
+    // 🔥 STAFF → DASHBOARD
+    if (STAFF_ROLES.has(role)) {
+      router.replace(getStaffRoute(role));
+      return;
     }
 
-    console.log('[BSC Login] ROLE:', role);
-
-    // Honour middleware ?redirect= only for staff — never send staff to customer pages
+    // 👇 CUSTOMER FLOW
     const redirectParam = searchParams.get('redirect');
-    if (redirectParam && redirectParam.startsWith('/') && role !== 'customer') {
-      console.log('[BSC Login] REDIRECTING TO (middleware param):', redirectParam);
+    if (redirectParam && redirectParam.startsWith('/')) {
       router.replace(redirectParam);
       return;
     }
 
-    const destination = getRouteForRole(role);
-    console.log('[BSC Login] REDIRECTING TO:', destination);
-    router.replace(destination);
+    router.replace('/market');
   }
 
   async function handleLogin() {
     setError('');
+
     if (!email.trim() || !password) {
-      setError(t('error'));
+      setError('Email and password required');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Step 1 — authenticate
-      const { data, error: authErr } = await supabase.auth.signInWithPassword({
-        email:    email.trim(),
-        password: password,
-      });
+      const { data, error: authErr } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
       if (authErr || !data?.user) {
-        console.error('[BSC Login] Auth error:', authErr?.message);
-        setError(t('error'));
+        setError('Invalid email or password');
         setLoading(false);
         return;
       }
 
-      // Step 2 — auth confirmed, now fetch role and route
-      // Do NOT call setLoading(false) — keep spinner until redirect completes
-      await redirectByRole(data.user.id);
+      await handlePostLogin(data.user.id);
 
-    } catch (err) {
-      console.error('[BSC Login] Unexpected error:', err);
-      setError(t('error'));
+    } catch {
+      setError('Something went wrong. Please try again.');
       setLoading(false);
     }
   }
@@ -148,105 +118,56 @@ function LoginForm() {
   if (checking) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' as const }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🐟</div>
-          <p style={{ color: '#4a5568', fontSize: 14, fontFamily: 'sans-serif' }}>Checking session...</p>
-        </div>
+        <p style={{ color: '#4a5568' }}>Checking session...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: "'Inter', -apple-system, sans-serif" }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
 
-      {/* Language selector */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
-        {LANGUAGES.map(l => (
-          <button
-            key={l.code}
-            onClick={() => setLang(l.code)}
-            style={{ padding: '7px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', backgroundColor: lang === l.code ? '#f5c518' : '#0d1f3c', color: lang === l.code ? '#000' : '#6b7280', fontWeight: lang === l.code ? 'bold' : 'normal', fontSize: 13 }}
-          >
-            {l.flag} {l.label}
-          </button>
-        ))}
-      </div>
+      <h2 style={{ color: '#f5c518', marginBottom: 20 }}>BSC Marketplace Login</h2>
 
-      {/* Logo */}
-      <div style={{ textAlign: 'center' as const, marginBottom: 32 }}>
-        <div style={{ fontSize: 52, marginBottom: 12 }}>🐟</div>
-        <p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 22 }}>{t('title')}</p>
-        <p style={{ margin: '6px 0 0', color: '#4a5568', fontSize: 13 }}>{t('subtitle')}</p>
-      </div>
-
-      {/* Form */}
       <div style={{ width: '100%', maxWidth: 400 }}>
+
         {error && (
-          <div style={{ backgroundColor: '#2d0000', border: '1px solid #f87171', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-            <p style={{ margin: 0, color: '#f87171', fontSize: 13 }}>⚠️ {error}</p>
-          </div>
+          <div style={{ color: '#f87171', marginBottom: 10 }}>{error}</div>
         )}
 
-        <label style={{ display: 'block', color: '#6b7280', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 6 }}>{t('email')}</label>
         <input
           type="email"
+          placeholder="Email"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          placeholder="your@email.com"
-          onKeyDown={e => e.key === 'Enter' && !loading && handleLogin()}
-          disabled={loading}
-          style={{ display: 'block', width: '100%', padding: '14px 16px', borderRadius: 12, backgroundColor: '#0d1f3c', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, marginBottom: 14, boxSizing: 'border-box' as const, outline: 'none', opacity: loading ? 0.6 : 1 }}
+          style={{ width: '100%', marginBottom: 10 }}
         />
 
-        <label style={{ display: 'block', color: '#6b7280', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 6 }}>{t('password')}</label>
-        <div style={{ position: 'relative', marginBottom: 24 }}>
-          <input
-            type={showPw ? 'text' : 'password'}
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="••••••••"
-            onKeyDown={e => e.key === 'Enter' && !loading && handleLogin()}
-            disabled={loading}
-            style={{ display: 'block', width: '100%', padding: '14px 48px 14px 16px', borderRadius: 12, backgroundColor: '#0d1f3c', color: '#fff', border: '1px solid #1e3a5f', fontSize: 16, boxSizing: 'border-box' as const, outline: 'none', opacity: loading ? 0.6 : 1 }}
-          />
-          <button
-            onClick={() => setShowPw(!showPw)}
-            style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6b7280', padding: 0 }}
-          >
-            {showPw ? 'Hide' : 'Show'}
+        <input
+          type={showPw ? 'text' : 'password'}
+          placeholder="Password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          style={{ width: '100%', marginBottom: 10 }}
+        />
+
+        <button onClick={handleLogin} disabled={loading}>
+          {loading ? 'Signing in...' : 'Sign In'}
+        </button>
+
+        <div style={{ marginTop: 10 }}>
+          <button onClick={() => router.push('/staff-login')}>
+            Staff Login
           </button>
         </div>
 
-        <button
-          onClick={handleLogin}
-          disabled={loading}
-          style={{ width: '100%', padding: '15px', borderRadius: 12, backgroundColor: loading ? '#1a2a1a' : '#f5c518', color: loading ? '#4ade80' : '#000', fontWeight: 'bold', border: loading ? '1px solid #4ade80' : 'none', fontSize: 16, cursor: loading ? 'not-allowed' : 'pointer' }}
-        >
-          {loading ? (
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #4ade80', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-              {t('signing')}
-            </span>
-          ) : t('signin')}
-        </button>
-
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
-
-      <p style={{ marginTop: 40, color: '#1e3a5f', fontSize: 11, textAlign: 'center' as const }}>
-        2025 BSC Marketplace — Owned by Dedrick Storr Snr and Family
-      </p>
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#4a5568', fontSize: 14 }}>Loading...</p>
-      </div>
-    }>
+    <Suspense fallback={<div>Loading...</div>}>
       <LoginForm />
     </Suspense>
   );
