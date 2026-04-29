@@ -117,30 +117,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const role = profile?.role || 'customer';
         setRoleState(role);
 
-        // 🔥 FINAL FIX — STAFF ALWAYS LAND ON DASHBOARD
-        if (STAFF_ROLES.has(role)) {
-          const correctRoute =
-            role === 'manager' ? '/ashley' :
-            role === 'cashier' ? '/pos' :
-            role === 'andros_staff' ? '/pos-andros' :
-            role === 'supplier' ? '/supplier' :
-            '/dashboard';
-
-          if (!pathname.startsWith(correctRoute)) {
-            console.log('[AppShell FIX] Redirecting staff to:', correctRoute);
-            router.replace(correctRoute);
-            return;
-          }
-        }
-
-        // Customer protection
+        // Customer protection — keep customers out of staff-only routes
         if (!STAFF_ROLES.has(role)) {
           const blocked =
             STAFF_ONLY_PREFIXES.some(p => pathname.startsWith(p)) ||
             isStaffCustomerRoute(pathname);
 
-          if (blocked) router.replace('/market');
+          if (blocked) {
+            router.replace('/market');
+            return;
+          }
         }
+
+        // Staff are authenticated and authorized — let them navigate freely.
+        // Login pages handle initial landing; AppShell only protects boundaries.
 
       } catch {
         setRoleState('unauthenticated');
