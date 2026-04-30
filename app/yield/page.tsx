@@ -33,6 +33,7 @@ type YieldResult = {
   vesselName: string;
   vesselReg: string;
   captainName: string;
+  dateReceived: string;
   weightIn: number;
   weightOut: number;
   yieldPct: number;
@@ -50,6 +51,7 @@ export default function YieldPage() {
   const [vesselName, setVesselName]       = useState('');
   const [vesselReg, setVesselReg]         = useState('');
   const [captainName, setCaptainName]     = useState('');
+  const [dateReceived, setDateReceived]     = useState(new Date().toISOString().split('T')[0]);
   const [weightIn, setWeightIn]           = useState('');
   const [weightOut, setWeightOut]         = useState('');
   const [totalCost, setTotalCost]         = useState('');
@@ -101,6 +103,7 @@ export default function YieldPage() {
       vesselName,
       vesselReg,
       captainName,
+      dateReceived,
       weightIn: wIn,
       weightOut: wOut,
       yieldPct,
@@ -125,6 +128,7 @@ export default function YieldPage() {
         vessel_name:       result.vesselName,
         vessel_reg:        result.vesselReg,
         captain_name:      result.captainName,
+        date_received:     result.dateReceived,
         weight_in_lbs:     result.weightIn,
         weight_out_lbs:    result.weightOut,
         yield_pct:         result.yieldPct,
@@ -202,7 +206,7 @@ export default function YieldPage() {
             <div class="row"><span class="label-key">Captain/Owner</span><span class="label-val">${result?.captainName || '—'}</span></div>
             <div class="row"><span class="label-key">Vessel Name</span><span class="label-val">${result?.vesselName || '—'}</span></div>
             <div class="row"><span class="label-key">Vessel Reg #</span><span class="label-val">${result?.vesselReg || '—'}</span></div>
-            <div class="row"><span class="label-key">Date Received</span><span class="label-val">${result?.date}</span></div>
+            <div class="row"><span class="label-key">Date Received</span><span class="label-val">${result?.dateReceived}</span></div>
           </div>
 
           <div class="divider"></div>
@@ -314,6 +318,20 @@ export default function YieldPage() {
                 <input type="text" value={f.value} onChange={(e) => f.setter(e.target.value)} placeholder={f.placeholder} style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* DATE RECEIVED */}
+        <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginBottom: '12px' }}>📅 Date Product Received</h3>
+          <input
+            type="date"
+            value={dateReceived}
+            onChange={(e) => setDateReceived(e.target.value)}
+            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '16px', fontWeight: 700, outline: 'none', boxSizing: 'border-box' as const, color: '#1a2e5a' }}
+          />
+          <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '6px' }}>
+            Date the fisherman delivered this product to BSC
           </div>
         </div>
 
@@ -441,7 +459,7 @@ export default function YieldPage() {
                 { key: 'Captain',      val: result.captainName },
                 { key: 'Vessel Name',  val: result.vesselName },
                 { key: 'Vessel Reg',   val: result.vesselReg },
-                { key: 'Date',         val: result.date },
+                { key: 'Date Received', val: result.dateReceived },
               ].map((row) => row.val && (
                 <div key={row.key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ color: '#999', fontSize: '11px' }}>{row.key}</span>
