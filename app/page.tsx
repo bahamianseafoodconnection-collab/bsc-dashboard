@@ -1,347 +1,366 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from "react";
+import Link from "next/link";
 
 export default function HomePage() {
-const router = useRouter();
-const [mounted, setMounted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-useEffect(() => {
-setMounted(true);
-}, []);
+  return (
+    <div className="min-h-screen bg-white font-sans">
+      {/* ─── HEADER ─── */}
+      <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-[#1a2e5a] flex items-center justify-center overflow-hidden">
+                <svg viewBox="0 0 40 40" className="w-8 h-8" fill="none">
+                  <circle cx="20" cy="20" r="20" fill="#1a2e5a" />
+                  <path d="M8 22c3-5 8-8 14-7s10 5 10 9c0 0-5-3-10-2s-9 4-14 0z" fill="#f4c842" />
+                  <ellipse cx="27" cy="18" rx="5" ry="3.5" fill="#38bdf8" opacity="0.7" />
+                  <circle cx="29" cy="17" r="1" fill="white" />
+                  <path d="M32 20 l4-3 l-1 3 l1 3z" fill="#f4c842" />
+                </svg>
+              </div>
+              <div className="leading-tight">
+                <div className="text-[#1a2e5a] font-black text-lg tracking-tight">BSC</div>
+                <div className="text-[#1a2e5a] font-bold text-[10px] tracking-widest uppercase -mt-1">Marketplace</div>
+                <div className="text-gray-400 text-[8px] tracking-wide">Fresh. Local. Reliable.</div>
+              </div>
+            </Link>
 
-const SERVICES = [
-{
-icon: '🐟',
-title: 'Shop Marketplace',
-desc: 'Fresh seafood, premium meats & everyday essentials delivered to your door.',
-cta: 'Shop Now',
-href: '/market',
-accent: '#f5c518',
-bg: 'linear-gradient(135deg, #1a1400 0%, #2a2000 100%)',
-border: 'rgba(245,197,24,0.3)',
-},
-{
-icon: '📦',
-title: 'Wholesale & Bulk',
-desc: 'Large-volume orders for restaurants, businesses and families.',
-cta: 'Order Bulk',
-href: '/market',
-accent: '#60a5fa',
-bg: 'linear-gradient(135deg, #001830 0%, #002040 100%)',
-border: 'rgba(96,165,250,0.3)',
-},
-{
-icon: '⚡',
-title: 'Pay Utility Bills',
-desc: 'BEC, Water, Cable, Aliv, BTC, Flow — fast, simple, secure.',
-cta: 'Pay Bills',
-href: '/utilities',
-accent: '#4ade80',
-bg: 'linear-gradient(135deg, #001a0a 0%, #002a10 100%)',
-border: 'rgba(74,222,128,0.3)',
-},
-{
-icon: '🚚',
-title: 'Delivery Services',
-desc: 'Same-day and next-day delivery across Nassau and New Providence.',
-cta: 'Schedule Delivery',
-href: '/market',
-accent: '#a78bfa',
-bg: 'linear-gradient(135deg, #1a0a2a 0%, #2a1040 100%)',
-border: 'rgba(167,139,250,0.3)',
-},
-{
-icon: '🚢',
-title: 'Mailboat Shipping',
-desc: 'Reliable shipping to all Family Islands via official mailboat routes.',
-cta: 'Ship Now',
-href: '/market',
-accent: '#f87171',
-bg: 'linear-gradient(135deg, #2a0a0a 0%, #3b1010 100%)',
-border: 'rgba(248,113,113,0.3)',
-},
-];
+            {/* Desktop Nav */}
+            <nav className="hidden md:flex items-center gap-7">
+              {["Home", "Shop", "Services", "About Us", "Help & Support"].map((item) => (
+                <Link
+                  key={item}
+                  href={item === "Shop" ? "/market" : item === "Services" ? "/utilities" : "#"}
+                  className="text-sm font-medium text-gray-700 hover:text-[#1a2e5a] transition-colors"
+                >
+                  {item}
+                </Link>
+              ))}
+            </nav>
 
-const TRUST = [
-{ icon: '🏆', title: 'Wide Selection', desc: 'Hundreds of fresh products' },
-{ icon: '💰', title: 'Great Prices', desc: 'Competitive local rates' },
-{ icon: '🔒', title: 'Secure & Easy', desc: 'Safe checkout always' },
-{ icon: '🇧🇸', title: 'Support Local', desc: 'Proudly Bahamian' },
-{ icon: '📞', title: 'Customer Support', desc: 'Real people, real help' },
-];
+            {/* Right side */}
+            <div className="flex items-center gap-3">
+              {/* Cart */}
+              <Link href="/market" className="relative p-2 text-gray-600 hover:text-[#1a2e5a]">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </Link>
+              <Link
+                href="/login"
+                className="bg-[#1a2e5a] text-white text-sm font-semibold px-5 py-2 rounded-lg hover:bg-[#243d78] transition-colors"
+              >
+                Sign In
+              </Link>
+              {/* Mobile hamburger */}
+              <button
+                className="md:hidden p-2 text-gray-600"
+                onClick={() => setMenuOpen(!menuOpen)}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
 
-return (
-<div style={{ backgroundColor: '#060d1f', minHeight: '100vh', color: '#fff', fontFamily: "'Georgia', 'Times New Roman', serif", overflowX: 'hidden' }}>
+        {/* Mobile menu */}
+        {menuOpen && (
+          <div className="md:hidden bg-white border-t border-gray-100 px-4 py-3 flex flex-col gap-3">
+            {["Home", "Shop", "Services", "About Us", "Help & Support"].map((item) => (
+              <Link key={item} href="#" className="text-sm font-medium text-gray-700 py-1">
+                {item}
+              </Link>
+            ))}
+          </div>
+        )}
+      </header>
 
-<style>{`
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600&display=swap');
+      {/* ─── HERO ─── */}
+      <section className="relative h-[580px] md:h-[640px] overflow-hidden">
+        {/* Background image — replace src with your actual hero image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage:
+              "url('https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=1600&q=80')",
+          }}
+        />
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/55 to-black/30" />
 
-.bsc-hero-title {
-font-family: 'Playfair Display', Georgia, serif;
-font-weight: 900;
-font-size: clamp(2rem, 6vw, 3.5rem);
-line-height: 1.1;
-letter-spacing: -0.02em;
-}
-.bsc-section-title {
-font-family: 'Playfair Display', Georgia, serif;
-font-weight: 700;
-}
-.bsc-body {
-font-family: 'DM Sans', system-ui, sans-serif;
-}
-.bsc-btn-primary {
-transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.bsc-btn-primary:hover {
-transform: translateY(-2px);
-box-shadow: 0 12px 40px rgba(245,197,24,0.4);
-}
-.bsc-btn-secondary:hover {
-background: rgba(255,255,255,0.08) !important;
-}
-.bsc-service-card {
-transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.bsc-service-card:hover {
-transform: translateY(-4px);
-}
-@keyframes fadeUp {
-from { opacity: 0; transform: translateY(24px); }
-to { opacity: 1; transform: translateY(0); }
-}
-.bsc-fade-up {
-opacity: 0;
-animation: fadeUp 0.7s ease forwards;
-}
-.bsc-fade-up-1 { animation-delay: 0.1s; }
-.bsc-fade-up-2 { animation-delay: 0.25s; }
-.bsc-fade-up-3 { animation-delay: 0.4s; }
-.bsc-fade-up-4 { animation-delay: 0.55s; }
-`}</style>
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-4">
+          <p className="text-white/70 text-sm uppercase tracking-widest mb-3 font-medium">
+            Nassau & Andros, Bahamas 🇧🇸
+          </p>
+          <h1 className="text-white font-black text-4xl md:text-6xl leading-tight mb-3">
+            Welcome to
+            <br />
+            <span className="text-white">BSC Marketplace</span>
+          </h1>
+          <p className="text-[#f4c842] text-xl md:text-2xl font-bold mb-2 tracking-wide">
+            Seafood. Meats. Essentials. Services.
+          </p>
+          <p className="text-white/80 text-base md:text-lg mb-8">
+            Everything you need. All in one place.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+            <Link
+              href="/login"
+              className="flex-1 bg-[#f4c842] text-[#1a2e5a] font-bold py-3.5 px-6 rounded-lg text-center hover:bg-[#f0bb2a] transition-colors text-base shadow-lg"
+            >
+              Create Account
+            </Link>
+            <Link
+              href="/login"
+              className="flex-1 border-2 border-white text-white font-bold py-3.5 px-6 rounded-lg text-center hover:bg-white/10 transition-colors text-base"
+            >
+              Sign In
+            </Link>
+          </div>
+        </div>
+      </section>
 
-{/* ── NAV ── */}
-<nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, background: 'rgba(6,13,31,0.92)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(245,197,24,0.12)', padding: '14px 24px' }}>
-<div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-<div>
-<p style={{ margin: 0, color: '#f5c518', fontWeight: 'bold', fontSize: 20, fontFamily: "'Playfair Display', Georgia, serif" }}>BSC Marketplace</p>
-<p style={{ margin: 0, color: '#4a5568', fontSize: 10, fontFamily: "'DM Sans', system-ui, sans-serif", letterSpacing: '0.15em' }}>BAHAMIAN SEAFOOD CONNECTION</p>
-</div>
-<div style={{ display: 'flex', gap: 10 }}>
-<button
-onClick={() => router.push('/login')}
-className="bsc-body"
-style={{ padding: '9px 20px', borderRadius: 10, background: 'transparent', border: '1px solid rgba(245,197,24,0.4)', color: '#f5c518', fontWeight: '600', fontSize: 13, cursor: 'pointer' }}
->
-Sign In
-</button>
-<button
-onClick={() => router.push('/login')}
-className="bsc-body bsc-btn-primary"
-style={{ padding: '9px 20px', borderRadius: 10, background: '#f5c518', border: 'none', color: '#000', fontWeight: '700', fontSize: 13, cursor: 'pointer' }}
->
-Create Account
-</button>
-</div>
-</div>
-</nav>
+      {/* ─── TRUST BAR ─── */}
+      <section className="bg-[#1a2e5a] py-5">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              {
+                icon: (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                ),
+                label: "Fresh & Quality",
+                sub: "Premium seafood & meats",
+              },
+              {
+                icon: (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                ),
+                label: "Secure Payments",
+                sub: "Your payments are safe",
+              },
+              {
+                icon: (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                ),
+                label: "Fast Delivery",
+                sub: "Nassau & Family Islands",
+              },
+              {
+                icon: (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                ),
+                label: "Trusted by Locals",
+                sub: "Committed to our community",
+              },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-[#f4c842]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {item.icon}
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-white font-bold text-sm">{item.label}</div>
+                  <div className="text-white/60 text-xs">{item.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-{/* ── HERO ── */}
-<div style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80 }}>
-{/* Background split image simulation with gradients */}
-<div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-<div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #0a1a0a 0%, #060d1f 40%, #1a0a00 70%, #0d0800 100%)' }} />
-{/* Left seafood side */}
-<div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', background: 'linear-gradient(135deg, rgba(74,222,128,0.06) 0%, transparent 60%)' }} />
-{/* Right meats side */}
-<div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%', background: 'linear-gradient(225deg, rgba(245,197,24,0.08) 0%, transparent 60%)' }} />
-{/* Radial glow center */}
-<div style={{ position: 'absolute', top: '30%', left: '50%', transform: 'translateX(-50%)', width: 800, height: 400, background: 'radial-gradient(ellipse, rgba(245,197,24,0.06) 0%, transparent 70%)', borderRadius: '50%' }} />
-{/* Decorative fish/seafood icons */}
-<div style={{ position: 'absolute', left: '8%', top: '20%', fontSize: 80, opacity: 0.07, transform: 'rotate(-15deg)' }}>🐟</div>
-<div style={{ position: 'absolute', left: '15%', bottom: '25%', fontSize: 60, opacity: 0.05, transform: 'rotate(10deg)' }}>🦞</div>
-<div style={{ position: 'absolute', left: '5%', bottom: '40%', fontSize: 50, opacity: 0.06 }}>🦐</div>
-<div style={{ position: 'absolute', right: '8%', top: '25%', fontSize: 80, opacity: 0.07, transform: 'rotate(15deg)' }}>🥩</div>
-<div style={{ position: 'absolute', right: '15%', bottom: '30%', fontSize: 60, opacity: 0.05, transform: 'rotate(-10deg)' }}>🍗</div>
-<div style={{ position: 'absolute', right: '5%', top: '50%', fontSize: 50, opacity: 0.06 }}>🐠</div>
-{/* Dividing line */}
-<div style={{ position: 'absolute', top: '10%', bottom: '10%', left: '50%', width: 1, background: 'linear-gradient(to bottom, transparent, rgba(245,197,24,0.15), transparent)', transform: 'translateX(-50%)' }} />
-</div>
+      {/* ─── SERVICES ─── */}
+      <section className="py-16 px-4 bg-white">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-center text-[#1a2e5a] font-black text-2xl md:text-3xl tracking-wider mb-10 uppercase">
+            Shop. Pay. Save. All in One Place.
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+            {[
+              {
+                emoji: "🛒",
+                title: "Shop Marketplace",
+                desc: "Fresh seafood, meats, groceries and more.",
+                cta: "Shop Now",
+                href: "/market",
+              },
+              {
+                emoji: "📦",
+                title: "Wholesale & Bulk",
+                desc: "Bulk orders for businesses and organizations.",
+                cta: "Order Bulk",
+                href: "/market",
+              },
+              {
+                emoji: "🧾",
+                title: "Pay Utility Bills",
+                desc: "Pay water, electricity, internet and more.",
+                cta: "Pay Bills",
+                href: "/utilities",
+              },
+              {
+                emoji: "🚚",
+                title: "Delivery Services",
+                desc: "Fast & reliable delivery to your doorstep.",
+                cta: "Schedule Delivery",
+                href: "/market",
+              },
+              {
+                emoji: "🚢",
+                title: "Mailboat Shipping",
+                desc: "We ship to all major Family Islands.",
+                cta: "Ship Now",
+                href: "/market",
+              },
+            ].map((s) => (
+              <div
+                key={s.title}
+                className="bg-white border border-gray-100 rounded-2xl p-5 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="text-4xl mb-3">{s.emoji}</div>
+                <h3 className="font-bold text-[#1a2e5a] text-sm mb-2">{s.title}</h3>
+                <p className="text-gray-500 text-xs mb-4 leading-relaxed">{s.desc}</p>
+                <Link
+                  href={s.href}
+                  className="mt-auto border border-gray-300 text-[#1a2e5a] text-xs font-semibold px-4 py-2 rounded-lg hover:bg-[#1a2e5a] hover:text-white transition-colors"
+                >
+                  {s.cta}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-{/* Hero content */}
-<div style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '0 24px', maxWidth: 700 }}>
-<div className="bsc-fade-up bsc-fade-up-1">
-<p className="bsc-body" style={{ margin: '0 0 16px', color: '#f5c518', fontSize: 11, letterSpacing: '0.35em', fontWeight: '600', textTransform: 'uppercase' as const }}>
-Nassau · Bahamas
-</p>
-</div>
-<div className="bsc-fade-up bsc-fade-up-2">
-<h1 className="bsc-hero-title" style={{ margin: '0 0 16px', color: '#ffffff' }}>
-Welcome to<br />
-<span style={{ color: '#f5c518' }}>BSC Marketplace</span>
-</h1>
-</div>
-<div className="bsc-fade-up bsc-fade-up-3">
-<p className="bsc-body" style={{ margin: '0 0 8px', fontSize: 18, color: 'rgba(255,255,255,0.85)', fontWeight: '500', letterSpacing: '0.05em' }}>
-Seafood. Meats. Essentials. Services.
-</p>
-<p className="bsc-body" style={{ margin: '0 0 40px', fontSize: 14, color: '#4a5568' }}>
-Everything you need. All in one place.
-</p>
-</div>
-<div className="bsc-fade-up bsc-fade-up-4" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' as const }}>
-<button
-onClick={() => router.push('/login')}
-className="bsc-body bsc-btn-primary"
-style={{ padding: '16px 36px', borderRadius: 14, background: '#f5c518', border: 'none', color: '#000', fontWeight: '700', fontSize: 16, cursor: 'pointer', minWidth: 180, boxShadow: '0 8px 32px rgba(245,197,24,0.3)' }}
->
-Create Account
-</button>
-<button
-onClick={() => router.push('/login')}
-className="bsc-body bsc-btn-secondary"
-style={{ padding: '16px 36px', borderRadius: 14, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', fontWeight: '600', fontSize: 16, cursor: 'pointer', minWidth: 180, backdropFilter: 'blur(8px)' }}
->
-Sign In
-</button>
-</div>
-</div>
+      {/* ─── WHY BSC ─── */}
+      <section className="py-14 px-4 bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-center text-[#1a2e5a] font-black text-2xl md:text-3xl tracking-wider mb-10 uppercase">
+            Why Shop with BSC?
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            {[
+              { emoji: "🐟", title: "Wide Selection", desc: "Seafood, meats, groceries, essentials & more." },
+              { emoji: "💰", title: "Great Prices", desc: "Competitive prices with quality you can trust." },
+              { emoji: "🔒", title: "Secure & Easy", desc: "Safe payments and easy checkout." },
+              { emoji: "🇧🇸", title: "Support Local", desc: "Empowering Bahamian suppliers & communities." },
+              { emoji: "💬", title: "Customer Support", desc: "We're here to help you every step of the way." },
+            ].map((w) => (
+              <div key={w.title} className="flex flex-col items-center text-center">
+                <div className="text-3xl mb-3">{w.emoji}</div>
+                <h3 className="font-bold text-[#1a2e5a] text-sm mb-1">{w.title}</h3>
+                <p className="text-gray-500 text-xs leading-relaxed">{w.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-{/* Scroll indicator */}
-<div style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 6, opacity: 0.4 }}>
-<p className="bsc-body" style={{ margin: 0, fontSize: 10, letterSpacing: '0.2em', color: '#fff' }}>SCROLL</p>
-<div style={{ width: 1, height: 40, background: 'linear-gradient(to bottom, #fff, transparent)' }} />
-</div>
-</div>
+      {/* ─── DUAL BANNER ─── */}
+      <section className="grid md:grid-cols-2 min-h-[280px]">
+        {/* Seafood */}
+        <div
+          className="relative overflow-hidden flex items-end p-8 md:p-12 min-h-[220px]"
+          style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1534482421-64566f976cfa?w=800&q=80')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="absolute inset-0 bg-[#1a2e5a]/70" />
+          <div className="relative z-10">
+            <h3 className="text-white font-black text-2xl md:text-3xl uppercase leading-tight mb-1">
+              Fresh Seafood
+              <br />
+              Delivered Daily
+            </h3>
+            <p className="text-white/75 text-sm mb-5">From our waters to your table.</p>
+            <Link
+              href="/market"
+              className="inline-block bg-[#f4c842] text-[#1a2e5a] font-bold px-6 py-2.5 rounded-lg hover:bg-[#f0bb2a] transition-colors text-sm"
+            >
+              Shop Seafood
+            </Link>
+          </div>
+        </div>
 
-{/* ── TRUST BAR ── */}
-<div style={{ background: 'rgba(245,197,24,0.05)', borderTop: '1px solid rgba(245,197,24,0.12)', borderBottom: '1px solid rgba(245,197,24,0.12)', padding: '20px 24px' }}>
-<div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-{[
-{ icon: '✦', title: 'Fresh & Quality', desc: 'Premium seafood & meats' },
-{ icon: '✦', title: 'Secure Payments', desc: 'Your payments are safe' },
-{ icon: '✦', title: 'Fast Delivery', desc: 'Nassau & Family Islands' },
-{ icon: '✦', title: 'Trusted by Locals', desc: 'Committed to community' },
-].map(item => (
-<div key={item.title} style={{ textAlign: 'center' as const }}>
-<p className="bsc-body" style={{ margin: '0 0 2px', color: '#f5c518', fontSize: 10, letterSpacing: '0.15em', fontWeight: '600' }}>{item.icon} {item.title.toUpperCase()}</p>
-<p className="bsc-body" style={{ margin: 0, color: '#6b7280', fontSize: 12 }}>{item.desc}</p>
-</div>
-))}
-</div>
-</div>
+        {/* Meats */}
+        <div
+          className="relative overflow-hidden flex items-end p-8 md:p-12 min-h-[220px]"
+          style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=800&q=80')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10">
+            <h3 className="text-white font-black text-2xl md:text-3xl uppercase leading-tight mb-1">
+              Premium Meats
+              <br />
+              Cut Fresh
+            </h3>
+            <p className="text-white/75 text-sm mb-5">Quality you can taste.</p>
+            <Link
+              href="/market"
+              className="inline-block bg-[#f4c842] text-[#1a2e5a] font-bold px-6 py-2.5 rounded-lg hover:bg-[#f0bb2a] transition-colors text-sm"
+            >
+              Shop Meats
+            </Link>
+          </div>
+        </div>
+      </section>
 
-{/* ── SERVICES SECTION ── */}
-<div style={{ padding: '80px 24px', maxWidth: 1100, margin: '0 auto' }}>
-<div style={{ textAlign: 'center' as const, marginBottom: 56 }}>
-<p className="bsc-body" style={{ margin: '0 0 10px', color: '#f5c518', fontSize: 11, letterSpacing: '0.3em', fontWeight: '600' }}>WHAT WE OFFER</p>
-<h2 className="bsc-section-title" style={{ margin: 0, fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', color: '#fff', lineHeight: 1.2 }}>
-Shop. Pay. Save.<br />
-<span style={{ color: '#f5c518' }}>All In One Place.</span>
-</h2>
-</div>
+      {/* ─── TRUST FOOTER BADGES ─── */}
+      <section className="py-10 px-4 bg-white border-t border-gray-100">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
+          {[
+            { emoji: "🔒", title: "Secure Checkout", sub: "100% secure payments" },
+            { emoji: "✅", title: "Verified Suppliers", sub: "Trusted local suppliers" },
+            { emoji: "⭐", title: "Quality Guaranteed", sub: "Freshness you can trust" },
+            { emoji: "🤝", title: "Satisfaction Guaranteed", sub: "We stand behind every order" },
+          ].map((b) => (
+            <div key={b.title} className="flex flex-col items-center text-center">
+              <div className="text-2xl mb-2">{b.emoji}</div>
+              <div className="font-bold text-[#1a2e5a] text-sm">{b.title}</div>
+              <div className="text-gray-500 text-xs mt-0.5">{b.sub}</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-{SERVICES.map(svc => (
-<div
-key={svc.title}
-className="bsc-service-card"
-style={{ background: svc.bg, border: '1px solid ' + svc.border, borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column' as const, gap: 0 }}
->
-<span style={{ fontSize: 36, marginBottom: 16, display: 'block' }}>{svc.icon}</span>
-<p className="bsc-section-title" style={{ margin: '0 0 8px', color: '#fff', fontSize: 18, fontWeight: '700' }}>{svc.title}</p>
-<p className="bsc-body" style={{ margin: '0 0 24px', color: '#6b7280', fontSize: 13, lineHeight: 1.6, flex: 1 }}>{svc.desc}</p>
-<button
-onClick={() => router.push(svc.href)}
-className="bsc-body"
-style={{ padding: '12px 20px', borderRadius: 10, background: 'transparent', border: '1px solid ' + svc.accent, color: svc.accent, fontWeight: '600', fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start' as const, transition: 'background 0.15s ease' }}
-onMouseEnter={e => { (e.target as HTMLButtonElement).style.background = svc.accent; (e.target as HTMLButtonElement).style.color = '#000'; }}
-onMouseLeave={e => { (e.target as HTMLButtonElement).style.background = 'transparent'; (e.target as HTMLButtonElement).style.color = svc.accent; }}
->
-{svc.cta} →
-</button>
-</div>
-))}
-</div>
-</div>
-
-{/* ── WHY BSC ── */}
-<div style={{ background: 'linear-gradient(135deg, #070e1d 0%, #0d1a30 100%)', borderTop: '1px solid rgba(255,255,255,0.05)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '80px 24px' }}>
-<div style={{ maxWidth: 1100, margin: '0 auto' }}>
-<div style={{ textAlign: 'center' as const, marginBottom: 48 }}>
-<p className="bsc-body" style={{ margin: '0 0 10px', color: '#f5c518', fontSize: 11, letterSpacing: '0.3em', fontWeight: '600' }}>OUR PROMISE</p>
-<h2 className="bsc-section-title" style={{ margin: 0, fontSize: 'clamp(1.4rem, 3.5vw, 2rem)', color: '#fff' }}>Why Shop With BSC?</h2>
-</div>
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-{TRUST.map(item => (
-<div key={item.title} style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '24px 20px', textAlign: 'center' as const }}>
-<span style={{ fontSize: 32, display: 'block', marginBottom: 12 }}>{item.icon}</span>
-<p className="bsc-section-title" style={{ margin: '0 0 6px', color: '#fff', fontSize: 15, fontWeight: '700' }}>{item.title}</p>
-<p className="bsc-body" style={{ margin: 0, color: '#4a5568', fontSize: 12 }}>{item.desc}</p>
-</div>
-))}
-</div>
-</div>
-</div>
-
-{/* ── FEATURE SPLIT STRIP ── */}
-<div style={{ padding: '0 24px', maxWidth: 1100, margin: '0 auto' }}>
-<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '60px 0' }}>
-{/* Seafood */}
-<div style={{ position: 'relative', borderRadius: 24, overflow: 'hidden', minHeight: 260, background: 'linear-gradient(135deg, #001a0a 0%, #002a10 50%, #0a2010 100%)', border: '1px solid rgba(74,222,128,0.2)', padding: '36px 32px', display: 'flex', flexDirection: 'column' as const, justifyContent: 'flex-end' }}>
-<div style={{ position: 'absolute', top: 24, right: 24, fontSize: 64, opacity: 0.15 }}>🐟</div>
-<div style={{ position: 'absolute', top: 50, right: 60, fontSize: 40, opacity: 0.1 }}>🦞</div>
-<p className="bsc-body" style={{ margin: '0 0 6px', color: '#4ade80', fontSize: 11, letterSpacing: '0.25em', fontWeight: '600' }}>DELIVERED DAILY</p>
-<h3 className="bsc-section-title" style={{ margin: '0 0 16px', color: '#fff', fontSize: 'clamp(1.2rem, 2.5vw, 1.6rem)' }}>Fresh Seafood<br />Delivered Daily</h3>
-<button
-onClick={() => router.push('/market')}
-className="bsc-body"
-style={{ padding: '12px 24px', borderRadius: 10, background: '#4ade80', border: 'none', color: '#000', fontWeight: '700', fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start' as const }}
->
-Shop Seafood
-</button>
-</div>
-{/* Meats */}
-<div style={{ position: 'relative', borderRadius: 24, overflow: 'hidden', minHeight: 260, background: 'linear-gradient(135deg, #1a1000 0%, #2a1a00 50%, #201000 100%)', border: '1px solid rgba(245,197,24,0.2)', padding: '36px 32px', display: 'flex', flexDirection: 'column' as const, justifyContent: 'flex-end' }}>
-<div style={{ position: 'absolute', top: 24, right: 24, fontSize: 64, opacity: 0.15 }}>🥩</div>
-<div style={{ position: 'absolute', top: 50, right: 60, fontSize: 40, opacity: 0.1 }}>🍗</div>
-<p className="bsc-body" style={{ margin: '0 0 6px', color: '#f5c518', fontSize: 11, letterSpacing: '0.25em', fontWeight: '600' }}>CUT FRESH</p>
-<h3 className="bsc-section-title" style={{ margin: '0 0 16px', color: '#fff', fontSize: 'clamp(1.2rem, 2.5vw, 1.6rem)' }}>Premium Meats<br />Cut Fresh</h3>
-<button
-onClick={() => router.push('/market')}
-className="bsc-body"
-style={{ padding: '12px 24px', borderRadius: 10, background: '#f5c518', border: 'none', color: '#000', fontWeight: '700', fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start' as const }}
->
-Shop Meats
-</button>
-</div>
-</div>
-</div>
-
-{/* ── FOOTER TRUST STRIP ── */}
-<div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '32px 24px' }}>
-<div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-{[
-{ icon: '🔐', label: 'Secure Checkout' },
-{ icon: '✅', label: 'Verified Suppliers' },
-{ icon: '⭐', label: 'Quality Guaranteed' },
-{ icon: '💯', label: 'Satisfaction Guaranteed' },
-].map(item => (
-<div key={item.label} style={{ textAlign: 'center' as const }}>
-<span style={{ fontSize: 24, display: 'block', marginBottom: 6 }}>{item.icon}</span>
-<p className="bsc-body" style={{ margin: 0, color: '#4a5568', fontSize: 11, fontWeight: '600' }}>{item.label}</p>
-</div>
-))}
-</div>
-<div style={{ textAlign: 'center' as const, marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-<p className="bsc-section-title" style={{ margin: '0 0 4px', color: '#f5c518', fontSize: 16 }}>BSC Marketplace</p>
-<p className="bsc-body" style={{ margin: '0 0 8px', color: '#4a5568', fontSize: 12 }}>Firetrial Road, Nassau, Bahamas · +1 (242) 361-3474</p>
-<p className="bsc-body" style={{ margin: 0, color: '#2a3a5a', fontSize: 11 }}>© 2025 BSC Marketplace · Owned by Dedrick Tamico Storr Snr & Family · All Rights Reserved</p>
-</div>
-</div>
-
-</div>
-);
+      {/* ─── FOOTER ─── */}
+      <footer className="bg-white border-t border-gray-100 py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-wrap justify-center gap-6 mb-5">
+            {[
+              { label: "About Us", href: "#" },
+              { label: "How It Works", href: "#" },
+              { label: "FAQs", href: "#" },
+              { label: "Contact Us", href: "#" },
+              { label: "Terms & Conditions", href: "/legal" },
+              { label: "Privacy Policy", href: "/legal" },
+            ].map((l) => (
+              <Link key={l.label} href={l.href} className="text-gray-500 text-xs hover:text-[#1a2e5a] transition-colors">
+                {l.label}
+              </Link>
+            ))}
+          </div>
+          <p className="text-center text-gray-400 text-xs">
+            © 2025 BSC Marketplace. All Rights Reserved.{" "}
+            <span className="ml-1">Proudly Bahamian 🇧🇸</span>
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
 }
