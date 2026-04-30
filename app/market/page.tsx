@@ -340,7 +340,7 @@ export default function MarketPage() {
             <div>
               <h4 style={{ color: '#f4c842', fontWeight: 900, fontSize: '14px', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Contact</h4>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', margin: '0 0 6px' }}>📍 Firetrial Road, Nassau</p>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', margin: '0 0 6px' }}>💬 +1 (242) 361-3474</p>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', margin: '0 0 6px' }}>💬 +1 (242) 558-4495</p>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', margin: 0 }}>🇧🇸 Nassau & Andros</p>
             </div>
           </div>
