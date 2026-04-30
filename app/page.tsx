@@ -1,244 +1,296 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
-const HERO_IMAGE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/hero.jpg';
-const SEAFOOD_BANNER = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/seafood-banner.jpg';
-const MEATS_BANNER = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/meats-banner.jpg';
+const SUPABASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
+
+const NAV_LINKS = [
+  { label: 'Home',          href: '/' },
+  { label: 'Shop',          href: '/market' },
+  { label: 'Services',      href: '/utilities' },
+  { label: 'About Us',      href: '/legal' },
+  { label: 'Help & Support',href: '#contact' },
+];
+
+const TRUST_BADGES = [
+  { icon: '🛡️', title: 'Fresh & Quality',    sub: 'Premium seafood & meats' },
+  { icon: '🔒', title: 'Secure Payments',    sub: 'Your payments are safe' },
+  { icon: '🚚', title: 'Fast Delivery',      sub: 'Nassau & Family Islands' },
+  { icon: '🇧🇸', title: 'Trusted by Locals', sub: 'Committed to our community' },
+];
+
+const SERVICE_CARDS = [
+  { icon: '🐟', title: 'Shop Marketplace',   sub: 'Fresh seafood, meats, groceries and more.', cta: 'Shop Now',         href: '/market' },
+  { icon: '📦', title: 'Wholesale & Bulk',   sub: 'Bulk orders for businesses and organizations.', cta: 'Order Bulk', href: '/market' },
+  { icon: '⚡', title: 'Pay Utility Bills',   sub: 'Pay water, electricity, internet and more.', cta: 'Pay Bills',      href: '/utilities' },
+  { icon: '🚗', title: 'Vehicles & Parts',   sub: 'Cars for sale & rent, auto parts, VAT incl.', cta: 'View Vehicles',  href: '/vehicles' },
+  { icon: '🚢', title: 'Supplier Portal',    sub: 'List your products and grow your business.', cta: 'Apply Now',       href: '/supplier' },
+];
+
+const WHY_BSC = [
+  { icon: '🦞', title: 'Wide Selection',   sub: 'Seafood, meats, groceries, essentials & more.' },
+  { icon: '💰', title: 'Great Prices',     sub: 'Competitive prices with quality you can trust.' },
+  { icon: '🔐', title: 'Secure & Easy',    sub: 'Safe payments and easy checkout.' },
+  { icon: '🤝', title: 'Support Local',    sub: 'Empowering Bahamian suppliers & communities.' },
+  { icon: '💬', title: 'WhatsApp Support', sub: 'Reach us anytime on +1 (242) 558-4495.' },
+];
+
+const FOOTER_LINKS = ['About Us', 'How It Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'];
 
 export default function HomePage() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen,   setMenuOpen]   = useState(false);
+  const [cartCount,  setCartCount]  = useState(0);
+  const [scrolled,   setScrolled]   = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif', margin: 0, padding: 0 }}>
+    <div style={{ fontFamily: "'Segoe UI', Arial, sans-serif", backgroundColor: '#fff', color: '#1a1a1a', overflowX: 'hidden' }}>
 
-      {/* HEADER */}
-      <header style={{ position: 'sticky', top: 0, zIndex: 50, backgroundColor: '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', borderBottom: '1px solid #f0f0f0' }}>
+      {/* ── NAV ── */}
+      <header style={{ position: 'sticky', top: 0, zIndex: 100, backgroundColor: scrolled ? 'rgba(255,255,255,0.97)' : '#fff', boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,0.1)' : '0 1px 0 #eee', transition: 'all 0.3s' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
-
+          {/* Logo */}
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg viewBox="0 0 44 44" width="36" height="36" fill="none">
-                <circle cx="22" cy="22" r="22" fill="#1a2e5a" />
-                <path d="M10 24c3-5 9-8 15-7s11 5 11 9c0 0-5-3-11-2s-10 4-15 0z" fill="#f4c842" />
-                <ellipse cx="28" cy="19" rx="6" ry="4" fill="#38bdf8" opacity="0.85" />
-                <circle cx="30" cy="18" r="1.2" fill="white" />
-                <circle cx="30.4" cy="17.6" r="0.5" fill="#1a2e5a" />
-                <path d="M34 21 l5-3 l-1.5 3 l1.5 3z" fill="#f4c842" />
-              </svg>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #1a2e5a' }}>
+              <img src={`${SUPABASE}/logo.jpg`} alt="BSC" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
-            <div style={{ lineHeight: 1.1 }}>
-              <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>BSC</div>
-              <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '9px', letterSpacing: '3px', textTransform: 'uppercase' }}>MARKETPLACE</div>
-              <div style={{ color: '#999', fontSize: '8px', letterSpacing: '1px' }}>Fresh. Local. Reliable.</div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '18px', color: '#1a2e5a', lineHeight: 1 }}>BSC</div>
+              <div style={{ fontWeight: 700, fontSize: '11px', color: '#1a2e5a', letterSpacing: '2px', lineHeight: 1 }}>MARKETPLACE</div>
+              <div style={{ fontWeight: 400, fontSize: '9px', color: '#888', letterSpacing: '1px' }}>Fresh. Local. Reliable.</div>
             </div>
           </Link>
 
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
-            {[
-              { label: 'Home', href: '/' },
-              { label: 'Shop', href: '/market' },
-              { label: 'Services', href: '/utilities' },
-              { label: 'About Us', href: '#' },
-              { label: 'Help & Support', href: '#' },
-            ].map((item) => (
-              <Link key={item.label} href={item.href} style={{ color: '#444', fontSize: '14px', fontWeight: 500, textDecoration: 'none' }}>
-                {item.label}
+          {/* Desktop Nav */}
+          <nav style={{ display: 'flex', gap: '4px', alignItems: 'center' }} className="desktop-nav">
+            {NAV_LINKS.map((l) => (
+              <Link key={l.label} href={l.href} style={{ padding: '6px 14px', borderRadius: '6px', textDecoration: 'none', color: '#333', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s' }}>
+                {l.label}
               </Link>
             ))}
           </nav>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Link href="/market" style={{ color: '#555', padding: '8px', display: 'flex' }}>
-              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
+          {/* Right Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Link href="/market" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', border: '1.5px solid #1a2e5a', borderRadius: '8px', textDecoration: 'none', color: '#1a2e5a', fontSize: '14px', fontWeight: 600 }}>
+              🛒 Cart {cartCount > 0 && <span style={{ backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 900, padding: '1px 6px', borderRadius: '20px' }}>{cartCount}</span>}
             </Link>
-            <Link href="/login" style={{ backgroundColor: '#1a2e5a', color: '#fff', fontSize: '14px', fontWeight: 700, padding: '9px 22px', borderRadius: '8px', textDecoration: 'none' }}>
+            <Link href="/login" style={{ backgroundColor: '#1a2e5a', color: '#fff', padding: '8px 18px', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 700 }}>
               Sign In
             </Link>
-            <button onClick={() => setMenuOpen(!menuOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', display: 'none' }}>
-              <svg width="22" height="22" fill="none" stroke="#333" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+            {/* Mobile hamburger */}
+            <button onClick={() => setMenuOpen(!menuOpen)} style={{ display: 'none', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }} className="hamburger">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a2e5a" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
           </div>
         </div>
 
+        {/* Mobile menu */}
         {menuOpen && (
-          <div style={{ backgroundColor: '#fff', borderTop: '1px solid #f0f0f0', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {['Home', 'Shop', 'Services', 'About Us', 'Help & Support'].map((item) => (
-              <Link key={item} href="#" style={{ color: '#444', fontSize: '14px', fontWeight: 500, textDecoration: 'none', padding: '4px 0' }}>{item}</Link>
+          <div style={{ backgroundColor: '#fff', borderTop: '1px solid #eee', padding: '12px 20px' }}>
+            {NAV_LINKS.map((l) => (
+              <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 0', color: '#333', textDecoration: 'none', fontSize: '15px', fontWeight: 500, borderBottom: '1px solid #f5f5f5' }}>
+                {l.label}
+              </Link>
             ))}
           </div>
         )}
       </header>
 
-      {/* HERO */}
-      <section style={{ position: 'relative', height: '580px', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: `url('${HERO_IMAGE}')`, backgroundSize: 'cover', backgroundPosition: 'center top' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.58) 50%, rgba(0,0,0,0.38) 100%)' }} />
-        <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '0 20px' }}>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '12px', fontWeight: 500 }}>
-            Nassau & Andros, Bahamas
-          </p>
-          <h1 style={{ color: '#fff', fontWeight: 900, fontSize: 'clamp(32px, 6vw, 58px)', lineHeight: 1.1, margin: '0 0 10px' }}>
-            Welcome to<br />BSC Marketplace
-          </h1>
-          <p style={{ color: '#f4c842', fontSize: 'clamp(16px, 3vw, 22px)', fontWeight: 800, margin: '0 0 8px', letterSpacing: '0.5px' }}>
-            Seafood. Meats. Essentials. Services.
-          </p>
-          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '16px', margin: '0 0 32px' }}>
-            Everything you need. All in one place.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
-            <Link href="/login" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', fontWeight: 800, fontSize: '15px', padding: '14px 0', borderRadius: '10px', textDecoration: 'none', textAlign: 'center', boxShadow: '0 4px 16px rgba(244,200,66,0.4)' }}>
-              Create Account
-            </Link>
-            <Link href="/login" style={{ border: '2px solid rgba(255,255,255,0.8)', color: '#fff', fontWeight: 700, fontSize: '15px', padding: '13px 0', borderRadius: '10px', textDecoration: 'none', textAlign: 'center' }}>
-              Sign In
-            </Link>
+      {/* ── HERO ── */}
+      <section style={{ position: 'relative', minHeight: '520px', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+        {/* Background photo */}
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <img src={`${SUPABASE}/hero.jpg`} alt="BSC Hero" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(15,25,50,0.88) 0%, rgba(15,25,50,0.65) 50%, rgba(15,25,50,0.3) 100%)' }} />
+        </div>
+
+        {/* Hero content */}
+        <div style={{ position: 'relative', zIndex: 2, maxWidth: '1200px', margin: '0 auto', padding: '60px 24px', width: '100%' }}>
+          <div style={{ maxWidth: '520px' }}>
+            <p style={{ color: '#f4c842', fontWeight: 700, fontSize: '13px', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '12px' }}>Welcome to BSC Marketplace</p>
+            <h1 style={{ color: '#fff', fontWeight: 900, fontSize: 'clamp(28px, 5vw, 52px)', lineHeight: 1.15, margin: '0 0 16px' }}>
+              BSC Marketplace
+            </h1>
+            <p style={{ color: '#f4c842', fontWeight: 700, fontSize: 'clamp(16px, 2.5vw, 22px)', margin: '0 0 10px' }}>
+              Seafood. Meats. Essentials. Services.
+            </p>
+            <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '15px', margin: '0 0 32px', lineHeight: 1.6 }}>
+              Everything you need. All in one place. Delivered to Nassau & Andros 🇧🇸
+            </p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Link href="/login" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', padding: '14px 28px', borderRadius: '8px', textDecoration: 'none', fontWeight: 800, fontSize: '15px', display: 'inline-block' }}>
+                Create Account
+              </Link>
+              <Link href="/login" style={{ backgroundColor: 'transparent', color: '#fff', padding: '14px 28px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '15px', border: '2px solid rgba(255,255,255,0.5)', display: 'inline-block' }}>
+                Sign In
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* TRUST BAR */}
-      <section style={{ backgroundColor: '#1a2e5a', padding: '20px 20px' }}>
+      {/* ── TRUST BADGES ── */}
+      <section style={{ backgroundColor: '#1a2e5a', padding: '0' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          {TRUST_BADGES.map((b, i) => (
+            <div key={b.title} style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', borderRight: i < 3 ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+              <span style={{ fontSize: '24px' }}>{b.icon}</span>
+              <div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: '13px' }}>{b.title}</div>
+                <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '11px' }}>{b.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── SERVICES ── */}
+      <section style={{ padding: '60px 24px', maxWidth: '1200px', margin: '0 auto' }}>
+        <h2 style={{ textAlign: 'center', color: '#1a2e5a', fontWeight: 900, fontSize: '22px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '36px' }}>
+          SHOP. PAY. SAVE. ALL IN ONE PLACE.
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+          {SERVICE_CARDS.map((s) => (
+            <div key={s.title} style={{ backgroundColor: '#fff', border: '1.5px solid #e5e7eb', borderRadius: '14px', padding: '24px 16px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'all 0.2s' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>{s.icon}</div>
+              <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginBottom: '8px' }}>{s.title}</div>
+              <div style={{ color: '#666', fontSize: '12px', lineHeight: 1.5, marginBottom: '16px' }}>{s.sub}</div>
+              <Link href={s.href} style={{ display: 'block', backgroundColor: '#f8f9fa', color: '#1a2e5a', textDecoration: 'none', fontWeight: 700, fontSize: '12px', padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e5e7eb' }}>
+                {s.cta}
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── WHY BSC ── */}
+      <section style={{ backgroundColor: '#f8f9fa', padding: '60px 24px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <h2 style={{ textAlign: 'center', color: '#1a2e5a', fontWeight: 900, fontSize: '22px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '36px' }}>
+            WHY SHOP WITH BSC?
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '24px' }}>
+            {WHY_BSC.map((w) => (
+              <div key={w.title} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}>{w.icon}</div>
+                <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '14px', marginBottom: '6px' }}>{w.title}</div>
+                <div style={{ color: '#666', fontSize: '12px', lineHeight: 1.5 }}>{w.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── DUAL BANNER ── */}
+      <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '60px 24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          {/* Seafood */}
+          <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', minHeight: '280px', display: 'flex', alignItems: 'flex-end' }}>
+            <img src={`${SUPABASE}/seafood-banner.jpg`} alt="Fresh Seafood" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(15,25,50,0.85) 0%, transparent 60%)' }} />
+            <div style={{ position: 'relative', zIndex: 2, padding: '24px' }}>
+              <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '20px', lineHeight: 1.2, marginBottom: '6px' }}>FRESH SEAFOOD<br/>DELIVERED DAILY</div>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '16px' }}>From our waters to your table.</div>
+              <Link href="/market" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 800, fontSize: '13px', display: 'inline-block' }}>
+                Shop Seafood
+              </Link>
+            </div>
+          </div>
+
+          {/* Meats */}
+          <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', minHeight: '280px', display: 'flex', alignItems: 'flex-end' }}>
+            <img src={`${SUPABASE}/meats-banner.jpg`} alt="Premium Meats" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(15,25,50,0.85) 0%, transparent 60%)' }} />
+            <div style={{ position: 'relative', zIndex: 2, padding: '24px' }}>
+              <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '20px', lineHeight: 1.2, marginBottom: '6px' }}>PREMIUM MEATS<br/>CUT FRESH</div>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '16px' }}>Quality you can taste.</div>
+              <Link href="/market" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 800, fontSize: '13px', display: 'inline-block' }}>
+                Shop Meats
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── BOTTOM TRUST ── */}
+      <section style={{ borderTop: '1px solid #eee', padding: '24px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
           {[
-            { icon: '✅', label: 'Fresh & Quality', sub: 'Premium seafood & meats' },
-            { icon: '🔒', label: 'Secure Payments', sub: 'Your payments are safe' },
-            { icon: '⚡', label: 'Fast Delivery', sub: 'Nassau & Family Islands' },
-            { icon: '🤝', label: 'Trusted by Locals', sub: 'Committed to our community' },
-          ].map((item) => (
-            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0 }}>
-                {item.icon}
+            { icon: '🔒', title: 'Secure Checkout',      sub: '100% secure payments' },
+            { icon: '✅', title: 'Verified Suppliers',    sub: 'Trusted local suppliers' },
+            { icon: '⭐', title: 'Quality Guaranteed',    sub: 'Freshness you can trust' },
+            { icon: '💯', title: 'Satisfaction Guaranteed',sub: 'We stand behind every order' },
+          ].map((t) => (
+            <div key={t.title} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '22px' }}>{t.icon}</span>
+              <div>
+                <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '12px' }}>{t.title}</div>
+                <div style={{ color: '#999', fontSize: '11px' }}>{t.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer style={{ backgroundColor: '#1a2e5a', padding: '32px 24px 20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          {/* Top row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)' }}>
+                <img src={`${SUPABASE}/logo.jpg`} alt="BSC" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
               <div>
-                <div style={{ color: '#fff', fontWeight: 700, fontSize: '13px' }}>{item.label}</div>
-                <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '11px' }}>{item.sub}</div>
+                <div style={{ color: '#fff', fontWeight: 900, fontSize: '16px' }}>BSC Marketplace</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>Fresh. Local. Reliable. 🇧🇸</div>
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* SERVICES */}
-      <section style={{ padding: '60px 20px', backgroundColor: '#fff' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center', color: '#1a2e5a', fontWeight: 900, fontSize: '22px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '40px' }}>
-            Shop. Pay. Save. All in One Place.
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
-            {[
-              { emoji: '🛒', title: 'Shop Marketplace', desc: 'Fresh seafood, meats, groceries and more.', cta: 'Shop Now', href: '/market' },
-              { emoji: '📦', title: 'Wholesale & Bulk', desc: 'Bulk orders for businesses and organizations.', cta: 'Order Bulk', href: '/market' },
-              { emoji: '🧾', title: 'Pay Utility Bills', desc: 'Pay water, electricity, internet and more.', cta: 'Pay Bills', href: '/utilities' },
-              { emoji: '🚚', title: 'Delivery Services', desc: 'Fast & reliable delivery to your doorstep.', cta: 'Schedule Delivery', href: '/market' },
-              { emoji: '🚢', title: 'Mailboat Shipping', desc: 'We ship to all major Family Islands.', cta: 'Ship Now', href: '/market' },
-            ].map((s) => (
-              <div key={s.title} style={{ backgroundColor: '#fff', border: '1px solid #ebebeb', borderRadius: '16px', padding: '22px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <div style={{ fontSize: '38px', marginBottom: '12px' }}>{s.emoji}</div>
-                <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '13px', margin: '0 0 8px' }}>{s.title}</h3>
-                <p style={{ color: '#777', fontSize: '11px', lineHeight: 1.6, margin: '0 0 18px', flex: 1 }}>{s.desc}</p>
-                <Link href={s.href} style={{ border: '1px solid #ccc', color: '#1a2e5a', fontSize: '11px', fontWeight: 700, padding: '7px 16px', borderRadius: '8px', textDecoration: 'none' }}>
-                  {s.cta}
-                </Link>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
+                💬 WhatsApp: <span style={{ color: '#f4c842', fontWeight: 700 }}>+1 (242) 558-4495</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* WHY BSC */}
-      <section style={{ padding: '50px 20px', backgroundColor: '#f8f9fa' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center', color: '#1a2e5a', fontWeight: 900, fontSize: '22px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '40px' }}>
-            Why Shop with BSC?
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '24px' }}>
-            {[
-              { emoji: '🐟', title: 'Wide Selection', desc: 'Seafood, meats, groceries, essentials & more.' },
-              { emoji: '💰', title: 'Great Prices', desc: 'Competitive prices with quality you can trust.' },
-              { emoji: '🔒', title: 'Secure & Easy', desc: 'Safe payments and easy checkout.' },
-              { emoji: '🇧🇸', title: 'Support Local', desc: 'Empowering Bahamian suppliers & communities.' },
-              { emoji: '💬', title: 'Customer Support', desc: 'We\'re here to help you every step of the way.' },
-            ].map((w) => (
-              <div key={w.title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                <div style={{ fontSize: '30px', marginBottom: '10px' }}>{w.emoji}</div>
-                <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '13px', margin: '0 0 6px' }}>{w.title}</h3>
-                <p style={{ color: '#777', fontSize: '11px', lineHeight: 1.5, margin: 0 }}>{w.desc}</p>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
+                📞 Landline: <span style={{ color: '#f4c842', fontWeight: 700 }}>+1 (242) 361-3474</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* DUAL BANNER */}
-      <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-        <div style={{ position: 'relative', overflow: 'hidden', minHeight: '280px', display: 'flex', alignItems: 'flex-end', padding: '40px' }}>
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: `url('${SEAFOOD_BANNER}')`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(26,46,90,0.70)' }} />
-          <div style={{ position: 'relative', zIndex: 10 }}>
-            <h3 style={{ color: '#fff', fontWeight: 900, fontSize: 'clamp(18px, 2.5vw, 28px)', textTransform: 'uppercase', lineHeight: 1.15, margin: '0 0 6px' }}>
-              Fresh Seafood<br />Delivered Daily
-            </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', margin: '0 0 18px' }}>From our waters to your table.</p>
-            <Link href="/market" style={{ display: 'inline-block', backgroundColor: '#f4c842', color: '#1a2e5a', fontWeight: 800, fontSize: '13px', padding: '10px 22px', borderRadius: '8px', textDecoration: 'none' }}>
-              Shop Seafood
-            </Link>
-          </div>
-        </div>
-
-        <div style={{ position: 'relative', overflow: 'hidden', minHeight: '280px', display: 'flex', alignItems: 'flex-end', padding: '40px' }}>
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: `url('${MEATS_BANNER}')`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.60)' }} />
-          <div style={{ position: 'relative', zIndex: 10 }}>
-            <h3 style={{ color: '#fff', fontWeight: 900, fontSize: 'clamp(18px, 2.5vw, 28px)', textTransform: 'uppercase', lineHeight: 1.15, margin: '0 0 6px' }}>
-              Premium Meats<br />Cut Fresh
-            </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', margin: '0 0 18px' }}>Quality you can taste.</p>
-            <Link href="/market" style={{ display: 'inline-block', backgroundColor: '#f4c842', color: '#1a2e5a', fontWeight: 800, fontSize: '13px', padding: '10px 22px', borderRadius: '8px', textDecoration: 'none' }}>
-              Shop Meats
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* TRUST BADGES */}
-      <section style={{ padding: '40px 20px', backgroundColor: '#fff', borderTop: '1px solid #f0f0f0' }}>
-        <div style={{ maxWidth: '900px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-          {[
-            { emoji: '🔒', title: 'Secure Checkout', sub: '100% secure payments' },
-            { emoji: '✅', title: 'Verified Suppliers', sub: 'Trusted local suppliers' },
-            { emoji: '⭐', title: 'Quality Guaranteed', sub: 'Freshness you can trust' },
-            { emoji: '🤝', title: 'Satisfaction Guaranteed', sub: 'We stand behind every order' },
-          ].map((b) => (
-            <div key={b.title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>{b.emoji}</div>
-              <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '13px', marginBottom: '4px' }}>{b.title}</div>
-              <div style={{ color: '#999', fontSize: '11px' }}>{b.sub}</div>
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
+                📍 <span style={{ color: '#f4c842', fontWeight: 700 }}>Firetrial Road, Nassau</span>
+              </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer style={{ backgroundColor: '#fff', borderTop: '1px solid #ebebeb', padding: '28px 20px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '24px', marginBottom: '16px' }}>
-            {['About Us', 'How It Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'].map((l) => (
-              <Link key={l} href="#" style={{ color: '#888', fontSize: '12px', textDecoration: 'none' }}>{l}</Link>
+          </div>
+          {/* Links */}
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '20px' }}>
+            {FOOTER_LINKS.map((l) => (
+              <a key={l} href="#" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', textDecoration: 'none' }}>{l}</a>
             ))}
           </div>
-          <p style={{ textAlign: 'center', color: '#aaa', fontSize: '12px', margin: 0 }}>
-            2025 BSC Marketplace. All Rights Reserved. Proudly Bahamian
-          </p>
+          {/* Copyright */}
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+            © 2025 BSC Marketplace. All Rights Reserved. &nbsp;·&nbsp; Proudly Bahamian 🇧🇸
+          </div>
         </div>
       </footer>
 
+      {/* ── MOBILE CSS ── */}
+      <style>{`
+        @media (max-width: 768px) {
+          .desktop-nav { display: none !important; }
+          .hamburger { display: block !important; }
+        }
+        @media (max-width: 640px) {
+          section > div > div[style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
+          section > div > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+          section > div > div[style*="gridTemplateColumns: 'repeat(4, 1fr)'"] { grid-template-columns: repeat(2,1fr) !important; }
+        }
+      `}</style>
     </div>
   );
 }
