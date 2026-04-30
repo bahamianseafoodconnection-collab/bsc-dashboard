@@ -274,7 +274,7 @@ export default function NassauPOSPage() {
             </div>
             <div style={{ padding: '20px', flex: 1, textAlign: 'center' }}>
               <a
-                href="https://wa.me/12423613474"
+                href="https://wa.me/12425584495"
                 target="_blank"
                 rel="noreferrer"
                 style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '14px', fontWeight: 800, fontSize: '14px', marginBottom: '20px' }}
@@ -282,12 +282,13 @@ export default function NassauPOSPage() {
                 Open BSC WhatsApp Chat
               </a>
               <img
-                src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://wa.me/12423613474"
+                src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://wa.me/12425584495"
                 alt="WhatsApp QR Code"
                 style={{ borderRadius: '12px', border: '4px solid #f0f0f0' }}
               />
               <p style={{ color: '#666', fontSize: '12px', marginTop: '10px' }}>Scan to open WhatsApp</p>
-              <p style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>+1 (242) 361-3474</p>
+              <p style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>💬 WhatsApp: +1 (242) 558-4495</p>
+              <p style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '13px', marginTop: '6px' }}>📞 Landline: +1 (242) 361-3474</p>
             </div>
           </div>
         </>
@@ -330,7 +331,7 @@ export default function NassauPOSPage() {
               </div>
 
               <a
-                href={`https://wa.me/12423613474?text=BSC Receipt ${lastSale.ref} — Total: $${lastSale.total.toFixed(2)} — Thank you ${lastSale.customer}!`}
+                href={`https://wa.me/12425584495?text=BSC Receipt ${lastSale.ref} — Total: $${lastSale.total.toFixed(2)} — Thank you ${lastSale.customer}!`}
                 target="_blank"
                 rel="noreferrer"
                 style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '12px', textAlign: 'center', fontWeight: 800, fontSize: '14px', marginBottom: '10px' }}
