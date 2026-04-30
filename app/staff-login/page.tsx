@@ -1,159 +1,167 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const STAFF_ROLES = new Set([
-  'control_admin','basic_admin','manager','cashier','andros_staff','supplier'
-]);
-
-function getRouteForRole(role: string): string {
-  switch (role) {
-    case 'control_admin':
-    case 'basic_admin': return '/dashboard';
-    case 'manager': return '/ashley';
-    case 'cashier': return '/pos';
-    case 'andros_staff': return '/pos-andros';
-    case 'supplier': return '/supplier';
-    default: return '/market';
-  }
-}
-
-function StaffLoginForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
+export default function StaffLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
 
-  const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        await redirectByRole(session.user.id);
-      } else {
-        setChecking(false);
-      }
-    }).catch(() => setChecking(false));
-  }, []);
+  const ROLE_ROUTES: Record<string, string> = {
+    control_admin: '/dashboard',
+    basic_admin: '/dashboard',
+    manager: '/ashley',
+    cashier: '/pos',
+    andros_staff: '/pos-andros',
+    supplier: '/supplier',
+    customer: '/market',
+  };
 
-  async function redirectByRole(userId: string) {
-    let role = 'customer';
-
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
     try {
-      const { data, error } = await supabase
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) { setError('Invalid email or password.'); setLoading(false); return; }
+      await new Promise((r) => setTimeout(r, 400));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) { setError('Session error. Please try again.'); setLoading(false); return; }
+      const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', userId)
+        .eq('id', sessionData.session.user.id)
         .single();
-
-      if (error) {
-        console.error('Profile lookup error:', error);
-      }
-
-      if (data?.role) role = data.role;
-    } catch (e) {
-      console.error('Profile query exception:', e);
-    }
-
-    if (STAFF_ROLES.has(role)) {
-      router.replace(getRouteForRole(role));
-      return;
-    }
-
-    router.replace('/market');
-  }
-
-  async function handleLogin() {
-    setError('');
-    if (!email || !password) {
-      setError('Email and password required');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (signInError) {
-        setError('Invalid login');
-        setLoading(false);
-        return;
-      }
-
-      // Wait for session cookies to propagate before role lookup
-      await new Promise(resolve => setTimeout(resolve, 400));
-
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        setError('Session not established. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      await redirectByRole(session.user.id);
-
+      const role = profile?.role || 'customer';
+      const route = ROLE_ROUTES[role] || '/dashboard';
+      window.location.href = route;
     } catch {
-      setError('Login failed');
+      setError('Something went wrong. Please try again.');
       setLoading(false);
     }
   }
 
-  if (checking) {
-    return (
-      <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#060d1f'}}>
-        <p style={{color:'#aaa'}}>Checking session...</p>
-      </div>
-    );
-  }
-
   return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#060d1f',color:'#fff'}}>
-      <div style={{width:320}}>
-        <h2 style={{color:'#f5c518'}}>STAFF LOGIN</h2>
+    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
-        {error && <p style={{color:'red'}}>{error}</p>}
+      {/* HEADER */}
+      <header style={{ padding: '0 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg viewBox="0 0 44 44" width="30" height="30" fill="none">
+                <path d="M10 24c3-5 9-8 15-7s11 5 11 9c0 0-5-3-11-2s-10 4-15 0z" fill="#f4c842" />
+                <ellipse cx="28" cy="19" rx="6" ry="4" fill="#38bdf8" opacity="0.9" />
+                <circle cx="30" cy="18" r="1.2" fill="white" />
+                <path d="M34 21 l5-3 l-1.5 3 l1.5 3z" fill="#f4c842" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ color: '#fff', fontWeight: 900, fontSize: '16px' }}>BSC Control</div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase' }}>Staff Portal</div>
+            </div>
+          </Link>
+          <Link href="/market" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', textDecoration: 'none' }}>
+            ← Back to Market
+          </Link>
+        </div>
+      </header>
 
-        <input
-          placeholder="Email"
-          value={email}
-          onChange={e=>setEmail(e.target.value)}
-          style={{width:'100%',marginBottom:10,padding:10}}
-        />
+      {/* MAIN */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
+        <div style={{ width: '100%', maxWidth: '400px' }}>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={e=>setPassword(e.target.value)}
-          style={{width:'100%',marginBottom:10,padding:10}}
-        />
+          {/* Card */}
+          <div style={{ backgroundColor: '#0f1a2e', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
 
-        <button onClick={handleLogin} style={{width:'100%',padding:12,background:'#f5c518',border:'none'}}>
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
+            {/* Card top */}
+            <div style={{ padding: '32px 32px 24px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#f4c842', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '26px' }}>
+                🔐
+              </div>
+              <h1 style={{ color: '#fff', fontWeight: 900, fontSize: '22px', margin: '0 0 6px' }}>Staff Login</h1>
+              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', margin: 0 }}>BSC Control · Authorized Personnel Only</p>
+            </div>
+
+            {/* Form */}
+            <div style={{ padding: '28px 32px' }}>
+              {error && (
+                <div style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', color: '#f87171', fontSize: '13px', fontWeight: 600 }}>
+                  ⚠️ {error}
+                </div>
+              )}
+
+              <form onSubmit={handleLogin}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '12px', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@bahamianseafoodconnection.com"
+                    required
+                    style={{ width: '100%', padding: '13px 16px', borderRadius: '10px', border: '1.5px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '28px' }}>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: '12px', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    style={{ width: '100%', padding: '13px 16px', borderRadius: '10px', border: '1.5px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{ width: '100%', backgroundColor: loading ? '#4b5563' : '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: 900, fontSize: '15px', cursor: loading ? 'not-allowed' : 'pointer', marginBottom: '16px' }}
+                >
+                  {loading ? 'Signing in...' : 'Sign In to BSC Control'}
+                </button>
+              </form>
+
+              {/* Role hints */}
+              <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '14px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
+                  Role → Dashboard
+                </div>
+                {[
+                  { role: 'Control Admin', route: '/dashboard', color: '#f4c842' },
+                  { role: 'Manager', route: '/ashley', color: '#38bdf8' },
+                  { role: 'Cashier', route: '/pos', color: '#4ade80' },
+                  { role: 'Andros Staff', route: '/pos-andros', color: '#a78bfa' },
+                ].map((r) => (
+                  <div key={r.role} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{r.role}</span>
+                    <span style={{ color: r.color, fontSize: '12px', fontWeight: 700 }}>{r.route}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: '12px', marginTop: '24px' }}>
+            🇧🇸 Bahamian Seafood Connection · Confidential
+          </p>
+        </div>
       </div>
     </div>
-  );
-}
-
-export default function Page() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <StaffLoginForm />
-    </Suspense>
   );
 }
