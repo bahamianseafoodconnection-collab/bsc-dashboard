@@ -188,12 +188,12 @@ export default function SupplierPage() {
               {"We'll review your application and contact you via WhatsApp within 24 hours."}
             </p>
             <a
-              href="https://wa.me/12423613474?text=Hi BSC! I just submitted a supplier application."
+              href="https://wa.me/12425584495?text=Hi BSC! I just submitted a supplier application."
               target="_blank"
               rel="noreferrer"
               style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '13px', fontWeight: 800, fontSize: '14px', marginBottom: '10px' }}
             >
-              💬 Message BSC on WhatsApp
+              💬 WhatsApp BSC: +1 (242) 558-4495
             </a>
             <button onClick={() => setScreen('home')} style={{ width: '100%', backgroundColor: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: '12px', padding: '13px', fontWeight: 900, fontSize: '14px', cursor: 'pointer' }}>
               Back to Home
