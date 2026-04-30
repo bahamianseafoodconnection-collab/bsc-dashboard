@@ -273,11 +273,11 @@ export default function AndrosPOSPage() {
               <button onClick={() => setWhatsappOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
             <div style={{ padding: '20px', textAlign: 'center' }}>
-              <a href="https://wa.me/12423613474" target="_blank" rel="noreferrer" style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '14px', fontWeight: 800, fontSize: '14px', marginBottom: '20px' }}>
+              <a href="https://wa.me/12425584495" target="_blank" rel="noreferrer" style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '14px', fontWeight: 800, fontSize: '14px', marginBottom: '20px' }}>
                 Open BSC WhatsApp
               </a>
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://wa.me/12423613474" alt="WhatsApp QR Code" style={{ borderRadius: '10px', border: '4px solid #f0f0f0' }} />
-              <p style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginTop: '10px' }}>+1 (242) 361-3474</p>
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://wa.me/12425584495" alt="WhatsApp QR Code" style={{ borderRadius: '10px', border: '4px solid #f0f0f0' }} />
+              <p style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginTop: '10px' }}>+1 (242) 558-4495 (WhatsApp)</p>
             </div>
           </div>
         </>
@@ -320,7 +320,7 @@ export default function AndrosPOSPage() {
               </div>
 
               <a
-                href={`https://wa.me/12423613474?text=BSC Andros Receipt ${lastSale.ref} — Total: $${lastSale.total.toFixed(2)} — Thank you ${lastSale.customer}!`}
+                href={`https://wa.me/12425584495?text=BSC Andros Receipt ${lastSale.ref} — Total: $${lastSale.total.toFixed(2)} — Thank you ${lastSale.customer}!`}
                 target="_blank"
                 rel="noreferrer"
                 style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '12px', textAlign: 'center', fontWeight: 800, fontSize: '14px', marginBottom: '10px' }}
