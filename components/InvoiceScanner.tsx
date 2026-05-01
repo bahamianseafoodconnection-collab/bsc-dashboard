@@ -1,153 +1,188 @@
-// ============================================================
-// BSC MARKETPLACE — INVOICE SAVE API
-// File: app/api/invoice-save/route.ts
-// Saves invoice to DB, updates inventory, tracks balance
-// ============================================================
+'use client';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { useState, useRef } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 
-const supabase = createClient(
-process.env.NEXT_PUBLIC_SUPABASE_URL!,
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-export async function POST(req: NextRequest) {
-try {
-const { items, location, summary, totalAmount, supplierOwed, imageCount } = await req.json();
+type LocationKey = 'nassau' | 'andros' | 'online' | 'all';
 
-if (!items || !location) {
-return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+const LOCATIONS = [
+  { key: 'nassau' as LocationKey,  label: 'Nassau POS',    icon: '🟡', margin: 0.38 },
+  { key: 'andros' as LocationKey,  label: 'Andros POS',    icon: '🟣', margin: 0.43 },
+  { key: 'online' as LocationKey,  label: 'Online Market', icon: '🛒', margin: 0.25 },
+  { key: 'all' as LocationKey,     label: 'All Locations', icon: '📍', margin: 0.30 },
+];
+
+function fmtBSD(n: number) {
+  return `BSD $${n.toFixed(2)}`;
 }
 
-const invoiceRef = `BSC-INV-${Date.now()}`;
+export default function InvoiceScanner() {
+  const [pages, setPages]           = useState<string[]>([]);
+  const [location, setLocation]     = useState<LocationKey | null>(null);
+  const [step, setStep]             = useState<'upload' | 'location' | 'processing' | 'done'>('upload');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [result, setResult]         = useState<{bscKeeps: number; supplierOwed: number; summary: string} | null>(null);
+  const cameraRef                   = useRef<HTMLInputElement>(null);
+  const fileRef                     = useRef<HTMLInputElement>(null);
 
-// Save invoice to purchase_invoices
-const { data: invoice, error: invoiceError } = await supabase
-.from('purchase_invoices')
-.insert([{
-invoice_ref: invoiceRef,
-location,
-total_amount: totalAmount,
-balance_owed: supplierOwed,
-status: 'unpaid',
-items: items,
-summary,
-image_urls: [],
-created_at: new Date().toISOString(),
-updated_at: new Date().toISOString(),
-}])
-.select()
-.single();
+  function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => setPages((prev) => [...prev, reader.result as string]);
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
 
-if (invoiceError) {
-console.error('Invoice save error:', invoiceError);
-return NextResponse.json({ error: 'Failed to save invoice' }, { status: 500 });
-}
+  async function analyze() {
+    if (!pages.length || !location) return;
+    setLoading(true);
+    setError('');
+    try {
+      const loc = LOCATIONS.find((l) => l.key === location)!;
+      const images = pages.map((p) => p.split(',')[1]);
+      const res = await fetch('/api/invoice-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images, location: loc.label, margin: loc.margin }),
+      });
+      const data = await res.json();
+      if (data.split) {
+        const total = (data.split.items || []).reduce((s: number, i: {price: string}) => {
+          return s + parseFloat(i.price.replace(/[^0-9.]/g, '') || '0');
+        }, 0);
+        setResult({
+          bscKeeps: total * loc.margin,
+          supplierOwed: total * (1 - loc.margin),
+          summary: data.split.summary || 'Invoice processed.',
+        });
 
-// Auto-update inventory — insert each item as a yield_lot entry
-const yieldInserts = items.map((item: {
-item: string;
-qty: string;
-price: string;
-wholesale: boolean;
-}) => {
-const qtyNum = parseFloat(item.qty.replace(/[^0-9.]/g, '')) || 0;
-const priceNum = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
-const today = new Date();
-const lotNum = `BSC-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 999).toString().padStart(3, '0')}`;
+        // Save to Supabase
+        await supabase.from('purchase_invoices').insert([{
+          invoice_ref: `BSC-INV-${Date.now()}`,
+          location: loc.label,
+          total_amount: total,
+          balance_owed: total * (1 - loc.margin),
+          status: 'unpaid',
+          items: data.split.items || [],
+          summary: data.split.summary || '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }]);
 
-return {
-lot_number: lotNum,
-product_name: item.item,
-weight_in: qtyNum,
-weight_out: qtyNum,
-total_cost: priceNum,
-location: location,
-channel: item.wholesale ? 'wholesale' : location.toLowerCase().replace(' pos', '').replace(' market', ''),
-invoice_id: invoice.id,
-created_at: new Date().toISOString(),
-};
-});
+        setStep('done');
+      } else {
+        setError('Could not read invoice. Try a clearer photo.');
+      }
+    } catch {
+      setError('Connection error. Please try again.');
+    }
+    setLoading(false);
+  }
 
-// Insert into yield_lots (inventory)
-if (yieldInserts.length > 0) {
-const { error: yieldError } = await supabase
-.from('yield_lots')
-.insert(yieldInserts);
+  function reset() {
+    setPages([]);
+    setLocation(null);
+    setStep('upload');
+    setResult(null);
+    setError('');
+  }
 
-if (yieldError) {
-console.error('Yield lot insert error:', yieldError);
-// Don't fail — invoice is saved, inventory update is secondary
-}
-}
+  const card: React.CSSProperties = {
+    backgroundColor: '#fff', borderRadius: 16, padding: 18,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 20,
+    display: 'flex', flexDirection: 'column', gap: 12,
+  };
 
-return NextResponse.json({
-success: true,
-invoiceId: invoice.id,
-invoiceRef,
-balanceOwed: supplierOwed,
-});
+  if (step === 'done' && result) return (
+    <div style={card}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 40 }}>✅</div>
+        <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16, margin: '8px 0 4px' }}>Invoice Saved</h2>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ backgroundColor: '#e8f5e9', borderRadius: 10, padding: 12, textAlign: 'center' }}>
+          <div style={{ color: '#666', fontSize: 10 }}>BSC Keeps</div>
+          <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: 18 }}>{fmtBSD(result.bscKeeps)}</div>
+        </div>
+        <div style={{ backgroundColor: '#fde8e8', borderRadius: 10, padding: 12, textAlign: 'center' }}>
+          <div style={{ color: '#666', fontSize: 10 }}>Supplier Owed</div>
+          <div style={{ color: '#dc2626', fontWeight: 900, fontSize: 18 }}>{fmtBSD(result.supplierOwed)}</div>
+        </div>
+      </div>
+      <div style={{ backgroundColor: '#fef9e7', borderRadius: 10, padding: 12, borderLeft: '4px solid #f4c842', fontSize: 13, color: '#444', lineHeight: 1.6 }}>
+        {result.summary}
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button onClick={reset} style={{ flex: 1, backgroundColor: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 10, padding: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+          📷 Scan Another
+        </button>
+      </div>
+    </div>
+  );
 
-} catch (error) {
-console.error('Invoice save route error:', error);
-return NextResponse.json({ error: 'Server error' }, { status: 500 });
-}
-}
+  if (step === 'location') return (
+    <div style={card}>
+      <button onClick={() => setStep('upload')} style={{ background: 'none', border: 'none', color: '#1a2e5a', fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0 }}>← Back</button>
+      <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 15, margin: 0 }}>📍 Where are these products being sold?</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {LOCATIONS.map((loc) => (
+          <button key={loc.key} onClick={() => setLocation(loc.key)} style={{ backgroundColor: location === loc.key ? '#eff6ff' : '#f8f9fa', border: `2px solid ${location === loc.key ? '#1a2e5a' : '#e5e7eb'}`, borderRadius: 12, padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            <span style={{ fontSize: 28 }}>{loc.icon}</span>
+            <span style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 13 }}>{loc.label}</span>
+            <span style={{ color: '#2e7d32', fontSize: 11, fontWeight: 600 }}>{(loc.margin * 100).toFixed(0)}% BSC margin</span>
+          </button>
+        ))}
+      </div>
+      {error && <p style={{ color: '#dc2626', fontSize: 13, margin: 0 }}>{error}</p>}
+      <button onClick={analyze} disabled={!location || loading} style={{ backgroundColor: !location || loading ? '#94a3b8' : '#2e7d32', color: '#fff', border: 'none', borderRadius: 12, padding: 14, fontWeight: 800, fontSize: 14, cursor: !location || loading ? 'not-allowed' : 'pointer' }}>
+        {loading ? '🤖 Reading Invoice...' : '🤖 Analyze Invoice →'}
+      </button>
+    </div>
+  );
 
-// Apply a payment against an invoice
-export async function PATCH(req: NextRequest) {
-try {
-const { invoiceId, paymentAmount, note, orderId } = await req.json();
+  return (
+    <div style={card}>
+      <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 15, margin: 0 }}>📷 Invoice Scanner</h2>
+      <p style={{ color: '#999', fontSize: 12, margin: 0 }}>Take photos of each invoice page. AI reads all pages and splits wholesale vs retail automatically.</p>
 
-if (!invoiceId || !paymentAmount) {
-return NextResponse.json({ error: 'Missing invoiceId or paymentAmount' }, { status: 400 });
-}
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple onChange={handleFiles} style={{ display: 'none' }} />
+      <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: 'none' }} />
 
-// Get current invoice
-const { data: invoice, error: fetchError } = await supabase
-.from('purchase_invoices')
-.select('*')
-.eq('id', invoiceId)
-.single();
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button onClick={() => cameraRef.current?.click()} style={{ flex: 1, backgroundColor: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 12, padding: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>📸 Camera</button>
+        <button onClick={() => fileRef.current?.click()} style={{ flex: 1, backgroundColor: '#f0f4ff', color: '#1a2e5a', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>📁 Upload</button>
+      </div>
 
-if (fetchError || !invoice) {
-return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
-}
+      {pages.length > 0 && (
+        <>
+          <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 13 }}>{pages.length} page{pages.length > 1 ? 's' : ''} ready</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {pages.map((page, i) => (
+              <div key={i} style={{ position: 'relative' }}>
+                <img src={page} alt={`Page ${i + 1}`} style={{ width: 72, height: 90, objectFit: 'cover', borderRadius: 8, border: '2px solid #1a2e5a' }} />
+                <button onClick={() => setPages((prev) => prev.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: 3, right: 3, backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 5px', fontSize: 10, cursor: 'pointer' }}>✕</button>
+              </div>
+            ))}
+            <button onClick={() => cameraRef.current?.click()} style={{ width: 72, height: 90, border: '2px dashed #d1d5db', borderRadius: 8, backgroundColor: '#f8f9fa', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+              <span style={{ fontSize: 20 }}>+</span>
+              <span style={{ fontSize: 10, color: '#999' }}>Add</span>
+            </button>
+          </div>
+          <button onClick={() => setStep('location')} style={{ backgroundColor: '#2e7d32', color: '#fff', border: 'none', borderRadius: 12, padding: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+            Next — Select Location →
+          </button>
+        </>
+      )}
 
-const newBalance = Math.max(0, invoice.balance_owed - paymentAmount);
-const newStatus = newBalance === 0 ? 'paid' : 'partial';
-
-// Update invoice balance
-await supabase
-.from('purchase_invoices')
-.update({
-balance_owed: newBalance,
-status: newStatus,
-updated_at: new Date().toISOString(),
-})
-.eq('id', invoiceId);
-
-// Log the payment
-await supabase
-.from('invoice_payments')
-.insert([{
-invoice_id: invoiceId,
-amount: paymentAmount,
-note: note || 'Payment applied',
-order_id: orderId || null,
-created_at: new Date().toISOString(),
-}]);
-
-return NextResponse.json({
-success: true,
-newBalance,
-status: newStatus,
-paidInFull: newStatus === 'paid',
-});
-
-} catch (error) {
-console.error('Payment apply error:', error);
-return NextResponse.json({ error: 'Server error' }, { status: 500 });
-}
+      {error && <p style={{ color: '#dc2626', fontSize: 13, margin: 0 }}>{error}</p>}
+    </div>
+  );
 }
