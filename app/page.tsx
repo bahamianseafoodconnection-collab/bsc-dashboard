@@ -1,296 +1,631 @@
+// ============================================================
+// BSC MARKETPLACE — HOMEPAGE
+// File: app/page.tsx
+// Route: /
+// Images pulled from Supabase bucket: site-images
+// ============================================================
+
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
-const SUPABASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
-
-const NAV_LINKS = [
-  { label: 'Home',          href: '/' },
-  { label: 'Shop',          href: '/market' },
-  { label: 'Services',      href: '/utilities' },
-  { label: 'About Us',      href: '/legal' },
-  { label: 'Help & Support',href: '#contact' },
-];
-
-const TRUST_BADGES = [
-  { icon: '🛡️', title: 'Fresh & Quality',    sub: 'Premium seafood & meats' },
-  { icon: '🔒', title: 'Secure Payments',    sub: 'Your payments are safe' },
-  { icon: '🚚', title: 'Fast Delivery',      sub: 'Nassau & Family Islands' },
-  { icon: '🇧🇸', title: 'Trusted by Locals', sub: 'Committed to our community' },
-];
-
-const SERVICE_CARDS = [
-  { icon: '🐟', title: 'Shop Marketplace',   sub: 'Fresh seafood, meats, groceries and more.', cta: 'Shop Now',         href: '/market' },
-  { icon: '📦', title: 'Wholesale & Bulk',   sub: 'Bulk orders for businesses and organizations.', cta: 'Order Bulk', href: '/market' },
-  { icon: '⚡', title: 'Pay Utility Bills',   sub: 'Pay water, electricity, internet and more.', cta: 'Pay Bills',      href: '/utilities' },
-  { icon: '🚗', title: 'Vehicles & Parts',   sub: 'Cars for sale & rent, auto parts, VAT incl.', cta: 'View Vehicles',  href: '/vehicles' },
-  { icon: '🚢', title: 'Supplier Portal',    sub: 'List your products and grow your business.', cta: 'Apply Now',       href: '/supplier' },
-];
-
-const WHY_BSC = [
-  { icon: '🦞', title: 'Wide Selection',   sub: 'Seafood, meats, groceries, essentials & more.' },
-  { icon: '💰', title: 'Great Prices',     sub: 'Competitive prices with quality you can trust.' },
-  { icon: '🔐', title: 'Secure & Easy',    sub: 'Safe payments and easy checkout.' },
-  { icon: '🤝', title: 'Support Local',    sub: 'Empowering Bahamian suppliers & communities.' },
-  { icon: '💬', title: 'WhatsApp Support', sub: 'Reach us anytime on +1 (242) 558-4495.' },
-];
-
-const FOOTER_LINKS = ['About Us', 'How It Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'];
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const img = (file: string) =>
+  `${SUPABASE_URL}/storage/v1/object/public/site-images/${file}`;
 
 export default function HomePage() {
-  const [menuOpen,   setMenuOpen]   = useState(false);
-  const [cartCount,  setCartCount]  = useState(0);
-  const [scrolled,   setScrolled]   = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  const router = useRouter();
 
   return (
-    <div style={{ fontFamily: "'Segoe UI', Arial, sans-serif", backgroundColor: '#fff', color: '#1a1a1a', overflowX: 'hidden' }}>
+    <div style={s.page}>
 
-      {/* ── NAV ── */}
-      <header style={{ position: 'sticky', top: 0, zIndex: 100, backgroundColor: scrolled ? 'rgba(255,255,255,0.97)' : '#fff', boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,0.1)' : '0 1px 0 #eee', transition: 'all 0.3s' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
-          {/* Logo */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #1a2e5a' }}>
-              <img src={`${SUPABASE}/logo.jpg`} alt="BSC" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
+      {/* NAV */}
+      <nav style={s.nav}>
+        <div style={s.navInner}>
+          <div style={s.logo} onClick={() => router.push('/')}>
+            <img src={img('logo.jpg')} alt="BSC Logo" style={s.logoImg} />
             <div>
-              <div style={{ fontWeight: 900, fontSize: '18px', color: '#1a2e5a', lineHeight: 1 }}>BSC</div>
-              <div style={{ fontWeight: 700, fontSize: '11px', color: '#1a2e5a', letterSpacing: '2px', lineHeight: 1 }}>MARKETPLACE</div>
-              <div style={{ fontWeight: 400, fontSize: '9px', color: '#888', letterSpacing: '1px' }}>Fresh. Local. Reliable.</div>
+              <div style={s.logoName}>BSC</div>
+              <div style={s.logoSub}>MARKETPLACE</div>
+              <div style={s.logoTagline}>Fresh. Local. Reliable.</div>
             </div>
-          </Link>
+          </div>
+          <div style={s.navLinks}>
+            <button style={s.navLink} onClick={() => router.push('/')}>Home</button>
+            <button style={s.navLink} onClick={() => router.push('/market')}>Shop</button>
+            <button style={s.navLink} onClick={() => router.push('/utilities')}>Services</button>
+            <button style={s.navLink}>About Us</button>
+            <button style={s.navLink}>Help & Support</button>
+          </div>
+          <div style={s.navActions}>
+            <button style={s.cartBtn} onClick={() => router.push('/market')}>🛒</button>
+            <button style={s.signInBtn} onClick={() => router.push('/login')}>Sign In</button>
+          </div>
+        </div>
+      </nav>
 
-          {/* Desktop Nav */}
-          <nav style={{ display: 'flex', gap: '4px', alignItems: 'center' }} className="desktop-nav">
-            {NAV_LINKS.map((l) => (
-              <Link key={l.label} href={l.href} style={{ padding: '6px 14px', borderRadius: '6px', textDecoration: 'none', color: '#333', fontSize: '14px', fontWeight: 500, transition: 'all 0.2s' }}>
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Right Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Link href="/market" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', border: '1.5px solid #1a2e5a', borderRadius: '8px', textDecoration: 'none', color: '#1a2e5a', fontSize: '14px', fontWeight: 600 }}>
-              🛒 Cart {cartCount > 0 && <span style={{ backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 900, padding: '1px 6px', borderRadius: '20px' }}>{cartCount}</span>}
-            </Link>
-            <Link href="/login" style={{ backgroundColor: '#1a2e5a', color: '#fff', padding: '8px 18px', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 700 }}>
+      {/* HERO */}
+      <div style={s.hero}>
+        <img src={img('hero.jpg')} alt="BSC Hero" style={s.heroImg} />
+        <div style={s.heroOverlay} />
+        <div style={s.heroContent}>
+          <p style={s.heroWelcome}>Welcome to</p>
+          <h1 style={s.heroTitle}>BSC Marketplace</h1>
+          <p style={s.heroSub}>Seafood. Meats. Essentials. Services.</p>
+          <p style={s.heroTagline}>Everything you need. All in one place.</p>
+          <div style={s.heroBtns}>
+            <button style={s.btnYellow} onClick={() => router.push('/login')}>
+              Create Account
+            </button>
+            <button style={s.btnOutline} onClick={() => router.push('/login')}>
               Sign In
-            </Link>
-            {/* Mobile hamburger */}
-            <button onClick={() => setMenuOpen(!menuOpen)} style={{ display: 'none', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }} className="hamburger">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a2e5a" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* TRUST BAR */}
+      <div style={s.trustBar}>
+        {[
+          { icon: '🦞', title: 'Fresh & Quality', sub: 'Premium seafood & meats' },
+          { icon: '🔒', title: 'Secure Payments', sub: 'Your payments are safe' },
+          { icon: '🚚', title: 'Fast Delivery', sub: 'Nassau & Family Islands' },
+          { icon: '🤝', title: 'Trusted by Locals', sub: 'Committed to our community' },
+        ].map((item) => (
+          <div key={item.title} style={s.trustItem}>
+            <span style={s.trustIcon}>{item.icon}</span>
+            <div>
+              <div style={s.trustTitle}>{item.title}</div>
+              <div style={s.trustSub}>{item.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* SERVICES */}
+      <div style={s.section}>
+        <h2 style={s.sectionTitle}>SHOP. PAY. SAVE. ALL IN ONE PLACE.</h2>
+        <div style={s.serviceGrid}>
+          {[
+            {
+              icon: '🛒',
+              title: 'Shop Marketplace',
+              sub: 'Fresh seafood, meats, groceries and more.',
+              btn: 'Shop Now',
+              route: '/market',
+            },
+            {
+              icon: '📦',
+              title: 'Wholesale & Bulk',
+              sub: 'Bulk orders for businesses and organizations.',
+              btn: 'Order Bulk',
+              route: '/market',
+            },
+            {
+              icon: '💡',
+              title: 'Pay Utility Bills',
+              sub: 'Pay water, electricity, internet and more.',
+              btn: 'Pay Bills',
+              route: '/utilities',
+            },
+            {
+              icon: '🚛',
+              title: 'Delivery Services',
+              sub: 'Fast & reliable delivery to your doorstep.',
+              btn: 'Schedule Delivery',
+              route: '/market',
+            },
+            {
+              icon: '⛵',
+              title: 'Mailboat Shipping',
+              sub: 'We ship to all major Family Islands.',
+              btn: 'Ship Now',
+              route: '/market',
+            },
+          ].map((item) => (
+            <div key={item.title} style={s.serviceCard}>
+              <div style={s.serviceIcon}>{item.icon}</div>
+              <div style={s.serviceTitle}>{item.title}</div>
+              <div style={s.serviceSub}>{item.sub}</div>
+              <button
+                style={s.serviceBtn}
+                onClick={() => router.push(item.route)}
+              >
+                {item.btn}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* WHY BSC */}
+      <div style={s.whySection}>
+        <h2 style={s.sectionTitle}>WHY SHOP WITH BSC?</h2>
+        <div style={s.whyGrid}>
+          {[
+            { icon: '🦐', title: 'Wide Selection', sub: 'Seafood, meats, groceries, essentials & more.' },
+            { icon: '💰', title: 'Great Prices', sub: 'Competitive prices with quality you can trust.' },
+            { icon: '🔐', title: 'Secure & Easy', sub: 'Safe payments and easy checkout.' },
+            { icon: '🇧🇸', title: 'Support Local', sub: 'Empowering Bahamian suppliers & communities.' },
+            { icon: '💬', title: 'Customer Support', sub: "We're here to help you every step of the way." },
+          ].map((item) => (
+            <div key={item.title} style={s.whyCard}>
+              <div style={s.whyIcon}>{item.icon}</div>
+              <div style={s.whyTitle}>{item.title}</div>
+              <div style={s.whySub}>{item.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* DUAL BANNER */}
+      <div style={s.dualBanner}>
+        {/* Seafood Banner */}
+        <div style={s.bannerCard}>
+          <img src={img('seafood-banner.jpg')} alt="Seafood" style={s.bannerImg} />
+          <div style={s.bannerOverlay} />
+          <div style={s.bannerContent}>
+            <p style={s.bannerEyebrow}>FRESH SEAFOOD</p>
+            <h3 style={s.bannerTitle}>DELIVERED DAILY</h3>
+            <p style={s.bannerSub}>From our waters to your table.</p>
+            <button style={s.btnYellow} onClick={() => router.push('/market')}>
+              Shop Seafood
             </button>
           </div>
         </div>
 
-        {/* Mobile menu */}
-        {menuOpen && (
-          <div style={{ backgroundColor: '#fff', borderTop: '1px solid #eee', padding: '12px 20px' }}>
-            {NAV_LINKS.map((l) => (
-              <Link key={l.label} href={l.href} onClick={() => setMenuOpen(false)} style={{ display: 'block', padding: '10px 0', color: '#333', textDecoration: 'none', fontSize: '15px', fontWeight: 500, borderBottom: '1px solid #f5f5f5' }}>
-                {l.label}
-              </Link>
-            ))}
-          </div>
-        )}
-      </header>
-
-      {/* ── HERO ── */}
-      <section style={{ position: 'relative', minHeight: '520px', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-        {/* Background photo */}
-        <div style={{ position: 'absolute', inset: 0 }}>
-          <img src={`${SUPABASE}/hero.jpg`} alt="BSC Hero" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(15,25,50,0.88) 0%, rgba(15,25,50,0.65) 50%, rgba(15,25,50,0.3) 100%)' }} />
-        </div>
-
-        {/* Hero content */}
-        <div style={{ position: 'relative', zIndex: 2, maxWidth: '1200px', margin: '0 auto', padding: '60px 24px', width: '100%' }}>
-          <div style={{ maxWidth: '520px' }}>
-            <p style={{ color: '#f4c842', fontWeight: 700, fontSize: '13px', letterSpacing: '3px', textTransform: 'uppercase', marginBottom: '12px' }}>Welcome to BSC Marketplace</p>
-            <h1 style={{ color: '#fff', fontWeight: 900, fontSize: 'clamp(28px, 5vw, 52px)', lineHeight: 1.15, margin: '0 0 16px' }}>
-              BSC Marketplace
-            </h1>
-            <p style={{ color: '#f4c842', fontWeight: 700, fontSize: 'clamp(16px, 2.5vw, 22px)', margin: '0 0 10px' }}>
-              Seafood. Meats. Essentials. Services.
-            </p>
-            <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '15px', margin: '0 0 32px', lineHeight: 1.6 }}>
-              Everything you need. All in one place. Delivered to Nassau & Andros 🇧🇸
-            </p>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Link href="/login" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', padding: '14px 28px', borderRadius: '8px', textDecoration: 'none', fontWeight: 800, fontSize: '15px', display: 'inline-block' }}>
-                Create Account
-              </Link>
-              <Link href="/login" style={{ backgroundColor: 'transparent', color: '#fff', padding: '14px 28px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '15px', border: '2px solid rgba(255,255,255,0.5)', display: 'inline-block' }}>
-                Sign In
-              </Link>
-            </div>
+        {/* Meats Banner */}
+        <div style={s.bannerCard}>
+          <img src={img('meats-banner.jpg')} alt="Meats" style={s.bannerImg} />
+          <div style={s.bannerOverlay} />
+          <div style={s.bannerContent}>
+            <p style={s.bannerEyebrow}>PREMIUM MEATS</p>
+            <h3 style={s.bannerTitle}>CUT FRESH</h3>
+            <p style={s.bannerSub}>Quality you can taste.</p>
+            <button style={s.btnYellow} onClick={() => router.push('/market')}>
+              Shop Meats
+            </button>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ── TRUST BADGES ── */}
-      <section style={{ backgroundColor: '#1a2e5a', padding: '0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
-          {TRUST_BADGES.map((b, i) => (
-            <div key={b.title} style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', borderRight: i < 3 ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
-              <span style={{ fontSize: '24px' }}>{b.icon}</span>
-              <div>
-                <div style={{ color: '#fff', fontWeight: 700, fontSize: '13px' }}>{b.title}</div>
-                <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '11px' }}>{b.sub}</div>
-              </div>
-            </div>
+      {/* BOTTOM TRUST */}
+      <div style={s.bottomTrust}>
+        {[
+          { icon: '🔒', title: 'Secure Checkout', sub: '100% secure payments' },
+          { icon: '✅', title: 'Verified Suppliers', sub: 'Trusted local suppliers' },
+          { icon: '⭐', title: 'Quality Guaranteed', sub: 'Freshness you can trust' },
+          { icon: '😊', title: 'Satisfaction Guaranteed', sub: 'We stand behind every order' },
+        ].map((item) => (
+          <div key={item.title} style={s.bottomTrustItem}>
+            <span style={s.bottomTrustIcon}>{item.icon}</span>
+            <div style={s.bottomTrustTitle}>{item.title}</div>
+            <div style={s.bottomTrustSub}>{item.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* FOOTER */}
+      <footer style={s.footer}>
+        <div style={s.footerLinks}>
+          {['About Us', 'How it Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'].map((link) => (
+            <button key={link} style={s.footerLink}>{link}</button>
           ))}
         </div>
-      </section>
-
-      {/* ── SERVICES ── */}
-      <section style={{ padding: '60px 24px', maxWidth: '1200px', margin: '0 auto' }}>
-        <h2 style={{ textAlign: 'center', color: '#1a2e5a', fontWeight: 900, fontSize: '22px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '36px' }}>
-          SHOP. PAY. SAVE. ALL IN ONE PLACE.
-        </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-          {SERVICE_CARDS.map((s) => (
-            <div key={s.title} style={{ backgroundColor: '#fff', border: '1.5px solid #e5e7eb', borderRadius: '14px', padding: '24px 16px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'all 0.2s' }}>
-              <div style={{ fontSize: '40px', marginBottom: '12px' }}>{s.icon}</div>
-              <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginBottom: '8px' }}>{s.title}</div>
-              <div style={{ color: '#666', fontSize: '12px', lineHeight: 1.5, marginBottom: '16px' }}>{s.sub}</div>
-              <Link href={s.href} style={{ display: 'block', backgroundColor: '#f8f9fa', color: '#1a2e5a', textDecoration: 'none', fontWeight: 700, fontSize: '12px', padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e5e7eb' }}>
-                {s.cta}
-              </Link>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── WHY BSC ── */}
-      <section style={{ backgroundColor: '#f8f9fa', padding: '60px 24px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h2 style={{ textAlign: 'center', color: '#1a2e5a', fontWeight: 900, fontSize: '22px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '36px' }}>
-            WHY SHOP WITH BSC?
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '24px' }}>
-            {WHY_BSC.map((w) => (
-              <div key={w.title} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '36px', marginBottom: '10px' }}>{w.icon}</div>
-                <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '14px', marginBottom: '6px' }}>{w.title}</div>
-                <div style={{ color: '#666', fontSize: '12px', lineHeight: 1.5 }}>{w.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── DUAL BANNER ── */}
-      <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '60px 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          {/* Seafood */}
-          <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', minHeight: '280px', display: 'flex', alignItems: 'flex-end' }}>
-            <img src={`${SUPABASE}/seafood-banner.jpg`} alt="Fresh Seafood" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(15,25,50,0.85) 0%, transparent 60%)' }} />
-            <div style={{ position: 'relative', zIndex: 2, padding: '24px' }}>
-              <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '20px', lineHeight: 1.2, marginBottom: '6px' }}>FRESH SEAFOOD<br/>DELIVERED DAILY</div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '16px' }}>From our waters to your table.</div>
-              <Link href="/market" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 800, fontSize: '13px', display: 'inline-block' }}>
-                Shop Seafood
-              </Link>
-            </div>
-          </div>
-
-          {/* Meats */}
-          <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', minHeight: '280px', display: 'flex', alignItems: 'flex-end' }}>
-            <img src={`${SUPABASE}/meats-banner.jpg`} alt="Premium Meats" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(15,25,50,0.85) 0%, transparent 60%)' }} />
-            <div style={{ position: 'relative', zIndex: 2, padding: '24px' }}>
-              <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '20px', lineHeight: 1.2, marginBottom: '6px' }}>PREMIUM MEATS<br/>CUT FRESH</div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', marginBottom: '16px' }}>Quality you can taste.</div>
-              <Link href="/market" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 800, fontSize: '13px', display: 'inline-block' }}>
-                Shop Meats
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── BOTTOM TRUST ── */}
-      <section style={{ borderTop: '1px solid #eee', padding: '24px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-          {[
-            { icon: '🔒', title: 'Secure Checkout',      sub: '100% secure payments' },
-            { icon: '✅', title: 'Verified Suppliers',    sub: 'Trusted local suppliers' },
-            { icon: '⭐', title: 'Quality Guaranteed',    sub: 'Freshness you can trust' },
-            { icon: '💯', title: 'Satisfaction Guaranteed',sub: 'We stand behind every order' },
-          ].map((t) => (
-            <div key={t.title} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '22px' }}>{t.icon}</span>
-              <div>
-                <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '12px' }}>{t.title}</div>
-                <div style={{ color: '#999', fontSize: '11px' }}>{t.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── FOOTER ── */}
-      <footer style={{ backgroundColor: '#1a2e5a', padding: '32px 24px 20px' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          {/* Top row */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)' }}>
-                <img src={`${SUPABASE}/logo.jpg`} alt="BSC" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div>
-                <div style={{ color: '#fff', fontWeight: 900, fontSize: '16px' }}>BSC Marketplace</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>Fresh. Local. Reliable. 🇧🇸</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
-                💬 WhatsApp: <span style={{ color: '#f4c842', fontWeight: 700 }}>+1 (242) 558-4495</span>
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
-                📞 Landline: <span style={{ color: '#f4c842', fontWeight: 700 }}>+1 (242) 361-3474</span>
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
-                📍 <span style={{ color: '#f4c842', fontWeight: 700 }}>Firetrial Road, Nassau</span>
-              </div>
-            </div>
-          </div>
-          {/* Links */}
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '20px' }}>
-            {FOOTER_LINKS.map((l) => (
-              <a key={l} href="#" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', textDecoration: 'none' }}>{l}</a>
-            ))}
-          </div>
-          {/* Copyright */}
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
-            © 2025 BSC Marketplace. All Rights Reserved. &nbsp;·&nbsp; Proudly Bahamian 🇧🇸
-          </div>
-        </div>
+        <p style={s.footerCopy}>© 2025 BSC Marketplace. All Rights Reserved.</p>
+        <p style={s.footerBahamian}>Proudly Bahamian 🇧🇸</p>
       </footer>
-
-      {/* ── MOBILE CSS ── */}
-      <style>{`
-        @media (max-width: 768px) {
-          .desktop-nav { display: none !important; }
-          .hamburger { display: block !important; }
-        }
-        @media (max-width: 640px) {
-          section > div > div[style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
-          section > div > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
-          section > div > div[style*="gridTemplateColumns: 'repeat(4, 1fr)'"] { grid-template-columns: repeat(2,1fr) !important; }
-        }
-      `}</style>
     </div>
   );
 }
+
+const s: Record<string, React.CSSProperties> = {
+  page: {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    backgroundColor: '#ffffff',
+    margin: 0,
+    padding: 0,
+  },
+
+  // NAV
+  nav: {
+    backgroundColor: '#1a2e4a',
+    padding: '0 24px',
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  },
+  navInner: {
+    maxWidth: 1200,
+    margin: '0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 70,
+    gap: 16,
+  },
+  logo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  logoImg: {
+    width: 48,
+    height: 48,
+    borderRadius: '50%',
+    objectFit: 'cover',
+  },
+  logoName: {
+    color: '#f5a623',
+    fontWeight: 900,
+    fontSize: 20,
+    lineHeight: 1,
+    letterSpacing: 2,
+  },
+  logoSub: {
+    color: '#ffffff',
+    fontWeight: 700,
+    fontSize: 11,
+    letterSpacing: 1.5,
+  },
+  logoTagline: {
+    color: '#94a3b8',
+    fontSize: 9,
+    letterSpacing: 0.5,
+  },
+  navLinks: {
+    display: 'flex',
+    gap: 4,
+    flex: 1,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+  },
+  navLink: {
+    background: 'none',
+    border: 'none',
+    color: '#cbd5e1',
+    fontSize: 14,
+    cursor: 'pointer',
+    padding: '6px 12px',
+    borderRadius: 6,
+    fontWeight: 500,
+  },
+  navActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 0,
+  },
+  cartBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: 22,
+    cursor: 'pointer',
+  },
+  signInBtn: {
+    backgroundColor: 'transparent',
+    border: '2px solid #f5a623',
+    color: '#f5a623',
+    padding: '8px 20px',
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  // HERO
+  hero: {
+    position: 'relative',
+    height: '85vh',
+    minHeight: 500,
+    overflow: 'hidden',
+  },
+  heroImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    objectPosition: 'center',
+  },
+  heroOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'linear-gradient(to right, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0.2) 100%)',
+  },
+  heroContent: {
+    position: 'absolute',
+    top: '50%',
+    left: '8%',
+    transform: 'translateY(-50%)',
+    maxWidth: 520,
+  },
+  heroWelcome: {
+    color: '#cbd5e1',
+    fontSize: 18,
+    margin: '0 0 4px 0',
+    fontWeight: 400,
+  },
+  heroTitle: {
+    color: '#ffffff',
+    fontSize: 52,
+    fontWeight: 900,
+    margin: '0 0 8px 0',
+    lineHeight: 1.1,
+  },
+  heroSub: {
+    color: '#f5a623',
+    fontSize: 22,
+    fontWeight: 700,
+    margin: '0 0 6px 0',
+  },
+  heroTagline: {
+    color: '#e2e8f0',
+    fontSize: 16,
+    margin: '0 0 28px 0',
+  },
+  heroBtns: {
+    display: 'flex',
+    gap: 14,
+    flexWrap: 'wrap',
+  },
+
+  // BUTTONS
+  btnYellow: {
+    backgroundColor: '#f5a623',
+    color: '#1a2e4a',
+    border: 'none',
+    padding: '14px 28px',
+    borderRadius: 8,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  btnOutline: {
+    backgroundColor: 'transparent',
+    color: '#ffffff',
+    border: '2px solid #ffffff',
+    padding: '12px 28px',
+    borderRadius: 8,
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  // TRUST BAR
+  trustBar: {
+    backgroundColor: '#1a2e4a',
+    display: 'flex',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 0,
+    padding: '16px 24px',
+  },
+  trustItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 32px',
+    borderRight: '1px solid rgba(255,255,255,0.1)',
+  },
+  trustIcon: {
+    fontSize: 24,
+  },
+  trustTitle: {
+    color: '#ffffff',
+    fontWeight: 700,
+    fontSize: 13,
+  },
+  trustSub: {
+    color: '#94a3b8',
+    fontSize: 11,
+  },
+
+  // SERVICES
+  section: {
+    maxWidth: 1200,
+    margin: '0 auto',
+    padding: '60px 24px',
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: '#1a2e4a',
+    letterSpacing: 1,
+    marginBottom: 36,
+  },
+  serviceGrid: {
+    display: 'flex',
+    gap: 20,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  serviceCard: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: 12,
+    padding: '28px 20px',
+    width: 180,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+  },
+  serviceIcon: {
+    fontSize: 40,
+    marginBottom: 4,
+  },
+  serviceTitle: {
+    fontWeight: 700,
+    fontSize: 14,
+    color: '#1a2e4a',
+    textAlign: 'center',
+  },
+  serviceSub: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 1.4,
+    flex: 1,
+  },
+  serviceBtn: {
+    backgroundColor: '#1a2e4a',
+    color: '#ffffff',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: 8,
+  },
+
+  // WHY BSC
+  whySection: {
+    backgroundColor: '#f8fafc',
+    padding: '60px 24px',
+    textAlign: 'center',
+  },
+  whyGrid: {
+    display: 'flex',
+    gap: 24,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    maxWidth: 1000,
+    margin: '0 auto',
+  },
+  whyCard: {
+    width: 160,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+  },
+  whyIcon: {
+    fontSize: 36,
+  },
+  whyTitle: {
+    fontWeight: 700,
+    fontSize: 14,
+    color: '#1a2e4a',
+  },
+  whySub: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 1.4,
+  },
+
+  // DUAL BANNER
+  dualBanner: {
+    display: 'flex',
+    gap: 0,
+    height: 340,
+  },
+  bannerCard: {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  bannerImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  bannerOverlay: {
+    position: 'absolute',
+    inset: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  bannerContent: {
+    position: 'absolute',
+    top: '50%',
+    left: '10%',
+    transform: 'translateY(-50%)',
+  },
+  bannerEyebrow: {
+    color: '#f5a623',
+    fontWeight: 700,
+    fontSize: 13,
+    letterSpacing: 2,
+    margin: '0 0 4px 0',
+  },
+  bannerTitle: {
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: 900,
+    margin: '0 0 8px 0',
+    lineHeight: 1.1,
+  },
+  bannerSub: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    margin: '0 0 20px 0',
+  },
+
+  // BOTTOM TRUST
+  bottomTrust: {
+    display: 'flex',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 32,
+    padding: '40px 24px',
+    backgroundColor: '#ffffff',
+    borderTop: '1px solid #e2e8f0',
+  },
+  bottomTrustItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
+    textAlign: 'center',
+    width: 140,
+  },
+  bottomTrustIcon: {
+    fontSize: 28,
+  },
+  bottomTrustTitle: {
+    fontWeight: 700,
+    fontSize: 13,
+    color: '#1a2e4a',
+  },
+  bottomTrustSub: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+
+  // FOOTER
+  footer: {
+    backgroundColor: '#1a2e4a',
+    padding: '32px 24px',
+    textAlign: 'center',
+  },
+  footerLinks: {
+    display: 'flex',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  footerLink: {
+    background: 'none',
+    border: 'none',
+    color: '#94a3b8',
+    fontSize: 13,
+    cursor: 'pointer',
+    padding: '4px 8px',
+  },
+  footerCopy: {
+    color: '#64748b',
+    fontSize: 12,
+    margin: '0 0 4px 0',
+  },
+  footerBahamian: {
+    color: '#94a3b8',
+    fontSize: 12,
+    margin: 0,
+  },
+};
