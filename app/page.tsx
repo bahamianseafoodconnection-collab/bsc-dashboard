@@ -1,529 +1,285 @@
-// ============================================================
-// BSC MARKETPLACE — HOMEPAGE
-// File: app/page.tsx
-// ============================================================
-
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
 export default function HomePage() {
   const router = useRouter();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <div style={s.page}>
+    <>
+      <style>{`
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(28px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+        .fade-up { animation: fadeUp 0.7s ease both; }
+        .fade-up-2 { animation: fadeUp 0.7s ease 0.15s both; }
+        .fade-up-3 { animation: fadeUp 0.7s ease 0.3s both; }
+        .fade-up-4 { animation: fadeUp 0.7s ease 0.45s both; }
+        .nav-link:hover { color: #f5a623 !important; }
+        .service-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
+        .service-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .why-card:hover .why-icon { transform: scale(1.15); }
+        .why-icon { transition: transform 0.2s ease; display: inline-block; }
+        .btn-yellow:hover { background-color: #e09400 !important; transform: translateY(-1px); }
+        .btn-yellow { transition: background-color 0.2s ease, transform 0.15s ease; }
+        .btn-outline:hover { background-color: rgba(255,255,255,0.15) !important; }
+        .btn-outline { transition: background-color 0.2s ease; }
+        .scroll-indicator { animation: pulse 2s infinite; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #1a2e4a; border-radius: 3px; }
+      `}</style>
 
-      {/* NAV */}
-      <nav style={s.nav}>
-        <div style={s.navInner}>
-          <div style={s.logo} onClick={() => router.push('/')}>
-            <img src={`${BASE}/logo.jpg`} alt="BSC Logo" style={s.logoImg} />
-            <div>
-              <div style={s.logoName}>BSC</div>
-              <div style={s.logoSub}>MARKETPLACE</div>
-              <div style={s.logoTagline}>Fresh. Local. Reliable.</div>
+      <div style={{ minHeight: '100vh', backgroundColor: '#fff' }}>
+
+        {/* STICKY NAV */}
+        <nav style={{
+          backgroundColor: scrolled ? 'rgba(26,46,74,0.98)' : '#1a2e4a',
+          backdropFilter: scrolled ? 'blur(10px)' : 'none',
+          padding: '0 24px',
+          position: 'fixed',
+          top: 0, left: 0, right: 0,
+          zIndex: 100,
+          boxShadow: scrolled ? '0 2px 20px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.2)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 68 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => router.push('/')}>
+              <img src={`${BASE}/logo.jpg`} alt="BSC" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid #f5a623' }} />
+              <div>
+                <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 18, letterSpacing: 2, lineHeight: 1 }}>BSC</div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 10, letterSpacing: 1.5 }}>MARKETPLACE</div>
+                <div style={{ color: '#94a3b8', fontSize: 8, letterSpacing: 0.5 }}>Fresh. Local. Reliable.</div>
+              </div>
             </div>
-          </div>
-          <div style={s.navLinks}>
-            <button style={s.navLink} onClick={() => router.push('/')}>Home</button>
-            <button style={s.navLink} onClick={() => router.push('/market')}>Shop</button>
-            <button style={s.navLink} onClick={() => router.push('/utilities')}>Services</button>
-            <button style={s.navLink}>About Us</button>
-            <button style={s.navLink}>Help & Support</button>
-          </div>
-          <div style={s.navActions}>
-            <button style={s.cartBtn} onClick={() => router.push('/market')}>🛒</button>
-            <button style={s.signInBtn} onClick={() => router.push('/login')}>Sign In</button>
-          </div>
-        </div>
-      </nav>
 
-      {/* HERO */}
-      <div
-        style={{
-          ...s.hero,
-          backgroundImage: `url(${BASE}/hero.jpg)`,
-        }}
-      >
-        <div style={s.heroOverlay} />
-        <div style={s.heroContent}>
-          <p style={s.heroWelcome}>Welcome to</p>
-          <h1 style={s.heroTitle}>BSC Marketplace</h1>
-          <p style={s.heroSub}>Seafood. Meats. Essentials. Services.</p>
-          <p style={s.heroTagline}>Everything you need. All in one place.</p>
-          <div style={s.heroBtns}>
-            <button style={s.btnYellow} onClick={() => router.push('/login')}>
-              Create Account
-            </button>
-            <button style={s.btnOutline} onClick={() => router.push('/login')}>
-              Sign In
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* TRUST BAR */}
-      <div style={s.trustBar}>
-        {[
-          { icon: '🦞', title: 'Fresh & Quality', sub: 'Premium seafood & meats' },
-          { icon: '🔒', title: 'Secure Payments', sub: 'Your payments are safe' },
-          { icon: '🚚', title: 'Fast Delivery', sub: 'Nassau & Family Islands' },
-          { icon: '🤝', title: 'Trusted by Locals', sub: 'Committed to our community' },
-        ].map((item) => (
-          <div key={item.title} style={s.trustItem}>
-            <span style={s.trustIcon}>{item.icon}</span>
-            <div>
-              <div style={s.trustTitle}>{item.title}</div>
-              <div style={s.trustSub}>{item.sub}</div>
+            <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              {['Home', 'Shop', 'Services', 'About Us', 'Help & Support'].map((link, i) => (
+                <button
+                  key={link}
+                  className="nav-link"
+                  onClick={() => {
+                    if (link === 'Shop') router.push('/market');
+                    else if (link === 'Services') router.push('/utilities');
+                  }}
+                  style={{ background: 'none', border: 'none', color: i === 0 ? '#f5a623' : '#cbd5e1', fontSize: 14, cursor: 'pointer', padding: '6px 12px', borderRadius: 6, fontWeight: i === 0 ? 700 : 500, display: window && window.innerWidth < 768 ? 'none' : 'block' }}
+                >
+                  {link}
+                </button>
+              ))}
             </div>
-          </div>
-        ))}
-      </div>
 
-      {/* SERVICES */}
-      <div style={s.section}>
-        <h2 style={s.sectionTitle}>SHOP. PAY. SAVE. ALL IN ONE PLACE.</h2>
-        <div style={s.serviceGrid}>
-          {[
-            { icon: '🛒', title: 'Shop Marketplace', sub: 'Fresh seafood, meats, groceries and more.', btn: 'Shop Now', route: '/market' },
-            { icon: '📦', title: 'Wholesale & Bulk', sub: 'Bulk orders for businesses and organizations.', btn: 'Order Bulk', route: '/market' },
-            { icon: '💡', title: 'Pay Utility Bills', sub: 'Pay water, electricity, internet and more.', btn: 'Pay Bills', route: '/utilities' },
-            { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.', btn: 'Schedule Delivery', route: '/market' },
-            { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.', btn: 'Ship Now', route: '/market' },
-          ].map((item) => (
-            <div key={item.title} style={s.serviceCard}>
-              <div style={s.serviceIcon}>{item.icon}</div>
-              <div style={s.serviceTitle}>{item.title}</div>
-              <div style={s.serviceSub}>{item.sub}</div>
-              <button style={s.serviceBtn} onClick={() => router.push(item.route)}>
-                {item.btn}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => router.push('/market')} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#fff' }}>🛒</button>
+              <button
+                onClick={() => router.push('/login')}
+                style={{ backgroundColor: 'transparent', border: '2px solid #f5a623', color: '#f5a623', padding: '8px 18px', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Sign In
               </button>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        </nav>
 
-      {/* WHY BSC */}
-      <div style={s.whySection}>
-        <h2 style={s.sectionTitle}>WHY SHOP WITH BSC?</h2>
-        <div style={s.whyGrid}>
-          {[
-            { icon: '🦐', title: 'Wide Selection', sub: 'Seafood, meats, groceries, essentials & more.' },
-            { icon: '💰', title: 'Great Prices', sub: 'Competitive prices with quality you can trust.' },
-            { icon: '🔐', title: 'Secure & Easy', sub: 'Safe payments and easy checkout.' },
-            { icon: '🇧🇸', title: 'Support Local', sub: 'Empowering Bahamian suppliers & communities.' },
-            { icon: '💬', title: 'Customer Support', sub: "We're here to help you every step of the way." },
-          ].map((item) => (
-            <div key={item.title} style={s.whyCard}>
-              <div style={s.whyIcon}>{item.icon}</div>
-              <div style={s.whyTitle}>{item.title}</div>
-              <div style={s.whySub}>{item.sub}</div>
+        {/* HERO */}
+        <div style={{ position: 'relative', height: '100vh', minHeight: 600, backgroundImage: `url(${BASE}/hero.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.1) 100%)' }} />
+
+          <div style={{ position: 'absolute', top: '50%', left: '8%', transform: 'translateY(-50%)', maxWidth: 560, zIndex: 2 }}>
+            <p className="fade-up" style={{ color: '#f5a623', fontSize: 13, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 }}>
+              Nassau · Bahamas 🇧🇸
+            </p>
+            <h1 className="fade-up-2" style={{ color: '#ffffff', fontSize: 58, fontWeight: 900, lineHeight: 1.05, marginBottom: 12 }}>
+              BSC<br />Marketplace
+            </h1>
+            <p className="fade-up-3" style={{ color: '#f5a623', fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
+              Seafood. Meats. Essentials. Services.
+            </p>
+            <p className="fade-up-3" style={{ color: '#e2e8f0', fontSize: 16, marginBottom: 36, lineHeight: 1.6 }}>
+              Everything you need. All in one place.<br />Fresh from Bahamian waters to your table.
+            </p>
+            <div className="fade-up-4" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <button className="btn-yellow" onClick={() => router.push('/login')} style={{ backgroundColor: '#f5a623', color: '#1a2e4a', border: 'none', padding: '15px 32px', borderRadius: 10, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>
+                Create Account
+              </button>
+              <button className="btn-outline" onClick={() => router.push('/login')} style={{ backgroundColor: 'transparent', color: '#fff', border: '2px solid rgba(255,255,255,0.7)', padding: '13px 32px', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
+                Sign In
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* DUAL BANNER */}
-      <div style={s.dualBanner}>
-        <div
-          style={{
-            ...s.bannerCard,
-            backgroundImage: `url(${BASE}/seafood-banner.jpg)`,
-          }}
-        >
-          <div style={s.bannerOverlay} />
-          <div style={s.bannerContent}>
-            <p style={s.bannerEyebrow}>FRESH SEAFOOD</p>
-            <h3 style={s.bannerTitle}>DELIVERED DAILY</h3>
-            <p style={s.bannerSub}>From our waters to your table.</p>
-            <button style={s.btnYellow} onClick={() => router.push('/market')}>
-              Shop Seafood
+          {/* Scroll indicator */}
+          <div className="scroll-indicator" style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', zIndex: 2 }} onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}>
+            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>Scroll</span>
+            <div style={{ width: 24, height: 40, border: '2px solid rgba(255,255,255,0.4)', borderRadius: 12, display: 'flex', justifyContent: 'center', paddingTop: 6 }}>
+              <div style={{ width: 4, height: 8, backgroundColor: '#f5a623', borderRadius: 2 }} />
+            </div>
+          </div>
+        </div>
+
+        {/* TRUST BAR */}
+        <div style={{ backgroundColor: '#1a2e4a', borderTop: '3px solid #f5a623' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', padding: '0 24px' }}>
+            {[
+              { icon: '🦞', title: 'Fresh & Quality', sub: 'Premium seafood & meats' },
+              { icon: '🔒', title: 'Secure Payments', sub: 'Your payments are safe' },
+              { icon: '🚚', title: 'Fast Delivery', sub: 'Nassau & Family Islands' },
+              { icon: '🤝', title: 'Trusted by Locals', sub: 'Committed to our community' },
+            ].map((item, i) => (
+              <div key={item.title} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 32px', borderRight: i < 3 ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+                <span style={{ fontSize: 26 }}>{item.icon}</span>
+                <div>
+                  <div style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>{item.title}</div>
+                  <div style={{ color: '#94a3b8', fontSize: 11 }}>{item.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* SERVICES */}
+        <div style={{ padding: '80px 24px', backgroundColor: '#ffffff' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
+            <p style={{ color: '#f5a623', fontWeight: 700, fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>What We Offer</p>
+            <h2 style={{ color: '#1a2e4a', fontSize: 32, fontWeight: 900, marginBottom: 8 }}>SHOP. PAY. SAVE. ALL IN ONE PLACE.</h2>
+            <p style={{ color: '#64748b', fontSize: 15, marginBottom: 48 }}>Everything a Bahamian family or business needs, under one roof.</p>
+
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {[
+                { icon: '🛒', title: 'Shop Marketplace', sub: 'Fresh seafood, meats, groceries and more.', btn: 'Shop Now', route: '/market', color: '#e8f4fd' },
+                { icon: '📦', title: 'Wholesale & Bulk', sub: 'Bulk orders for businesses and organizations.', btn: 'Order Bulk', route: '/market', color: '#f0fde8' },
+                { icon: '💡', title: 'Pay Utility Bills', sub: 'Water, electricity, internet and more.', btn: 'Pay Bills', route: '/utilities', color: '#fef9e7' },
+                { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.', btn: 'Schedule', route: '/market', color: '#fde8f0' },
+                { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.', btn: 'Ship Now', route: '/market', color: '#f5f0ff' },
+              ].map((item) => (
+                <div key={item.title} className="service-card" style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '28px 20px', width: 190, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <div style={{ width: 60, height: 60, borderRadius: 16, backgroundColor: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{item.icon}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: '#1a2e4a', textAlign: 'center' }}>{item.title}</div>
+                  <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 1.5, flex: 1 }}>{item.sub}</div>
+                  <button onClick={() => router.push(item.route)} style={{ backgroundColor: '#1a2e4a', color: '#f5a623', border: 'none', padding: '9px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+                    {item.btn}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* WHY BSC */}
+        <div style={{ padding: '80px 24px', backgroundColor: '#f8fafc' }}>
+          <div style={{ maxWidth: 1000, margin: '0 auto', textAlign: 'center' }}>
+            <p style={{ color: '#f5a623', fontWeight: 700, fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>Our Promise</p>
+            <h2 style={{ color: '#1a2e4a', fontSize: 28, fontWeight: 900, marginBottom: 48 }}>WHY SHOP WITH BSC?</h2>
+            <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {[
+                { icon: '🦐', title: 'Wide Selection', sub: 'Seafood, meats, groceries, essentials & more.' },
+                { icon: '💰', title: 'Great Prices', sub: 'Competitive prices with quality you can trust.' },
+                { icon: '🔐', title: 'Secure & Easy', sub: 'Safe payments and easy checkout.' },
+                { icon: '🇧🇸', title: 'Support Local', sub: 'Empowering Bahamian suppliers & communities.' },
+                { icon: '💬', title: 'Customer Support', sub: "We're here to help every step of the way." },
+              ].map((item) => (
+                <div key={item.title} className="why-card" style={{ width: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <span className="why-icon" style={{ fontSize: 40 }}>{item.icon}</span>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: '#1a2e4a' }}>{item.title}</div>
+                  <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 1.5 }}>{item.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* DUAL BANNER */}
+        <div style={{ display: 'flex', minHeight: 380 }}>
+          <div style={{ flex: 1, position: 'relative', backgroundImage: `url(${BASE}/seafood-banner.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.72) 40%, rgba(0,0,0,0.2) 100%)' }} />
+            <div style={{ position: 'absolute', top: '50%', left: '10%', transform: 'translateY(-50%)', zIndex: 2 }}>
+              <p style={{ color: '#f5a623', fontWeight: 700, fontSize: 12, letterSpacing: 2, marginBottom: 6, textTransform: 'uppercase' }}>Fresh Daily</p>
+              <h3 style={{ color: '#fff', fontSize: 32, fontWeight: 900, lineHeight: 1.1, marginBottom: 10 }}>FRESH SEAFOOD<br />DELIVERED DAILY</h3>
+              <p style={{ color: '#e2e8f0', fontSize: 14, marginBottom: 22 }}>From our waters to your table.</p>
+              <button className="btn-yellow" onClick={() => router.push('/market')} style={{ backgroundColor: '#f5a623', color: '#1a2e4a', border: 'none', padding: '13px 26px', borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                Shop Seafood
+              </button>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, position: 'relative', backgroundImage: `url(${BASE}/meats-banner.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.72) 40%, rgba(0,0,0,0.2) 100%)' }} />
+            <div style={{ position: 'absolute', top: '50%', left: '10%', transform: 'translateY(-50%)', zIndex: 2 }}>
+              <p style={{ color: '#f5a623', fontWeight: 700, fontSize: 12, letterSpacing: 2, marginBottom: 6, textTransform: 'uppercase' }}>Premium Quality</p>
+              <h3 style={{ color: '#fff', fontSize: 32, fontWeight: 900, lineHeight: 1.1, marginBottom: 10 }}>PREMIUM MEATS<br />CUT FRESH</h3>
+              <p style={{ color: '#e2e8f0', fontSize: 14, marginBottom: 22 }}>Quality you can taste.</p>
+              <button className="btn-yellow" onClick={() => router.push('/market')} style={{ backgroundColor: '#f5a623', color: '#1a2e4a', border: 'none', padding: '13px 26px', borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                Shop Meats
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA STRIP */}
+        <div style={{ backgroundColor: '#f5a623', padding: '48px 24px', textAlign: 'center' }}>
+          <h2 style={{ color: '#1a2e4a', fontSize: 28, fontWeight: 900, marginBottom: 8 }}>Ready to Shop Bahamian?</h2>
+          <p style={{ color: '#1a2e4a', fontSize: 15, marginBottom: 28, opacity: 0.8 }}>Join hundreds of Bahamian families and businesses shopping with BSC.</p>
+          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => router.push('/login')} style={{ backgroundColor: '#1a2e4a', color: '#f5a623', border: 'none', padding: '15px 36px', borderRadius: 10, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>
+              Create Free Account
+            </button>
+            <button onClick={() => router.push('/market')} style={{ backgroundColor: 'transparent', color: '#1a2e4a', border: '2px solid #1a2e4a', padding: '13px 36px', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
+              Browse Market
             </button>
           </div>
         </div>
 
-        <div
-          style={{
-            ...s.bannerCard,
-            backgroundImage: `url(${BASE}/meats-banner.jpg)`,
-          }}
-        >
-          <div style={s.bannerOverlay} />
-          <div style={s.bannerContent}>
-            <p style={s.bannerEyebrow}>PREMIUM MEATS</p>
-            <h3 style={s.bannerTitle}>CUT FRESH</h3>
-            <p style={s.bannerSub}>Quality you can taste.</p>
-            <button style={s.btnYellow} onClick={() => router.push('/market')}>
-              Shop Meats
-            </button>
+        {/* BOTTOM TRUST */}
+        <div style={{ backgroundColor: '#fff', padding: '48px 24px', borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 40 }}>
+            {[
+              { icon: '🔒', title: 'Secure Checkout', sub: '100% secure payments' },
+              { icon: '✅', title: 'Verified Suppliers', sub: 'Trusted local suppliers' },
+              { icon: '⭐', title: 'Quality Guaranteed', sub: 'Freshness you can trust' },
+              { icon: '😊', title: 'Satisfaction Guaranteed', sub: 'We stand behind every order' },
+            ].map((item) => (
+              <div key={item.title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, textAlign: 'center', width: 140 }}>
+                <span style={{ fontSize: 28 }}>{item.icon}</span>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2e4a' }}>{item.title}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{item.sub}</div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* BOTTOM TRUST */}
-      <div style={s.bottomTrust}>
-        {[
-          { icon: '🔒', title: 'Secure Checkout', sub: '100% secure payments' },
-          { icon: '✅', title: 'Verified Suppliers', sub: 'Trusted local suppliers' },
-          { icon: '⭐', title: 'Quality Guaranteed', sub: 'Freshness you can trust' },
-          { icon: '😊', title: 'Satisfaction Guaranteed', sub: 'We stand behind every order' },
-        ].map((item) => (
-          <div key={item.title} style={s.bottomTrustItem}>
-            <span style={s.bottomTrustIcon}>{item.icon}</span>
-            <div style={s.bottomTrustTitle}>{item.title}</div>
-            <div style={s.bottomTrustSub}>{item.sub}</div>
+        {/* FOOTER */}
+        <footer style={{ backgroundColor: '#1a2e4a', padding: '36px 24px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 20 }}>
+            <img src={`${BASE}/logo.jpg`} alt="BSC" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
+            <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 16, letterSpacing: 2 }}>BSC MARKETPLACE</div>
           </div>
-        ))}
+          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+            {['About Us', 'How it Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'].map((link) => (
+              <button key={link} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '4px 10px' }}>{link}</button>
+            ))}
+          </div>
+          <p style={{ color: '#475569', fontSize: 12, marginBottom: 4 }}>© 2025 BSC Marketplace. All Rights Reserved.</p>
+          <p style={{ color: '#64748b', fontSize: 12 }}>Proudly Bahamian 🇧🇸</p>
+        </footer>
       </div>
-
-      {/* FOOTER */}
-      <footer style={s.footer}>
-        <div style={s.footerLinks}>
-          {['About Us', 'How it Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'].map((link) => (
-            <button key={link} style={s.footerLink}>{link}</button>
-          ))}
-        </div>
-        <p style={s.footerCopy}>© 2025 BSC Marketplace. All Rights Reserved.</p>
-        <p style={s.footerBahamian}>Proudly Bahamian 🇧🇸</p>
-      </footer>
-    </div>
+    </>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    backgroundColor: '#ffffff',
-    margin: 0,
-    padding: 0,
-  },
-  nav: {
-    backgroundColor: '#1a2e4a',
-    padding: '0 24px',
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-  },
-  navInner: {
-    maxWidth: 1200,
-    margin: '0 auto',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 70,
-    gap: 16,
-  },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    cursor: 'pointer',
-    flexShrink: 0,
-  },
-  logoImg: {
-    width: 48,
-    height: 48,
-    borderRadius: '50%',
-    objectFit: 'cover',
-  },
-  logoName: {
-    color: '#f5a623',
-    fontWeight: 900,
-    fontSize: 20,
-    lineHeight: 1,
-    letterSpacing: 2,
-  },
-  logoSub: {
-    color: '#ffffff',
-    fontWeight: 700,
-    fontSize: 11,
-    letterSpacing: 1.5,
-  },
-  logoTagline: {
-    color: '#94a3b8',
-    fontSize: 9,
-    letterSpacing: 0.5,
-  },
-  navLinks: {
-    display: 'flex',
-    gap: 4,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  navLink: {
-    background: 'none',
-    border: 'none',
-    color: '#cbd5e1',
-    fontSize: 14,
-    cursor: 'pointer',
-    padding: '6px 12px',
-    borderRadius: 6,
-    fontWeight: 500,
-  },
-  navActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    flexShrink: 0,
-  },
-  cartBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: 22,
-    cursor: 'pointer',
-  },
-  signInBtn: {
-    backgroundColor: 'transparent',
-    border: '2px solid #f5a623',
-    color: '#f5a623',
-    padding: '8px 20px',
-    borderRadius: 8,
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  hero: {
-    position: 'relative',
-    height: '85vh',
-    minHeight: 560,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-  },
-  heroOverlay: {
-    position: 'absolute',
-    inset: 0,
-    background: 'linear-gradient(to right, rgba(0,0,0,0.78) 45%, rgba(0,0,0,0.15) 100%)',
-  },
-  heroContent: {
-    position: 'absolute',
-    top: '50%',
-    left: '8%',
-    transform: 'translateY(-50%)',
-    maxWidth: 520,
-    zIndex: 2,
-  },
-  heroWelcome: {
-    color: '#cbd5e1',
-    fontSize: 18,
-    margin: '0 0 4px 0',
-    fontWeight: 400,
-  },
-  heroTitle: {
-    color: '#ffffff',
-    fontSize: 56,
-    fontWeight: 900,
-    margin: '0 0 8px 0',
-    lineHeight: 1.05,
-  },
-  heroSub: {
-    color: '#f5a623',
-    fontSize: 22,
-    fontWeight: 700,
-    margin: '0 0 8px 0',
-  },
-  heroTagline: {
-    color: '#e2e8f0',
-    fontSize: 16,
-    margin: '0 0 32px 0',
-  },
-  heroBtns: {
-    display: 'flex',
-    gap: 14,
-    flexWrap: 'wrap',
-  },
-  btnYellow: {
-    backgroundColor: '#f5a623',
-    color: '#1a2e4a',
-    border: 'none',
-    padding: '14px 28px',
-    borderRadius: 8,
-    fontSize: 15,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  btnOutline: {
-    backgroundColor: 'transparent',
-    color: '#ffffff',
-    border: '2px solid #ffffff',
-    padding: '12px 28px',
-    borderRadius: 8,
-    fontSize: 15,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  trustBar: {
-    backgroundColor: '#1a2e4a',
-    display: 'flex',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    padding: '16px 24px',
-    borderTop: '2px solid #f5a623',
-  },
-  trustItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '10px 32px',
-    borderRight: '1px solid rgba(255,255,255,0.1)',
-  },
-  trustIcon: { fontSize: 24 },
-  trustTitle: { color: '#ffffff', fontWeight: 700, fontSize: 13 },
-  trustSub: { color: '#94a3b8', fontSize: 11 },
-  section: {
-    maxWidth: 1200,
-    margin: '0 auto',
-    padding: '60px 24px',
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: 900,
-    color: '#1a2e4a',
-    letterSpacing: 1,
-    marginBottom: 36,
-  },
-  serviceGrid: {
-    display: 'flex',
-    gap: 20,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  serviceCard: {
-    backgroundColor: '#ffffff',
-    border: '1px solid #e2e8f0',
-    borderRadius: 12,
-    padding: '28px 20px',
-    width: 180,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-  },
-  serviceIcon: { fontSize: 40, marginBottom: 4 },
-  serviceTitle: { fontWeight: 700, fontSize: 14, color: '#1a2e4a', textAlign: 'center' },
-  serviceSub: { fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 1.4, flex: 1 },
-  serviceBtn: {
-    backgroundColor: '#1a2e4a',
-    color: '#ffffff',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-    marginTop: 8,
-  },
-  whySection: {
-    backgroundColor: '#f8fafc',
-    padding: '60px 24px',
-    textAlign: 'center',
-  },
-  whyGrid: {
-    display: 'flex',
-    gap: 24,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    maxWidth: 1000,
-    margin: '0 auto',
-  },
-  whyCard: {
-    width: 160,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8,
-  },
-  whyIcon: { fontSize: 36 },
-  whyTitle: { fontWeight: 700, fontSize: 14, color: '#1a2e4a' },
-  whySub: { fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 1.4 },
-  dualBanner: {
-    display: 'flex',
-    height: 360,
-  },
-  bannerCard: {
-    flex: 1,
-    position: 'relative',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-    overflow: 'hidden',
-  },
-  bannerOverlay: {
-    position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-  },
-  bannerContent: {
-    position: 'absolute',
-    top: '50%',
-    left: '10%',
-    transform: 'translateY(-50%)',
-    zIndex: 2,
-  },
-  bannerEyebrow: {
-    color: '#f5a623',
-    fontWeight: 700,
-    fontSize: 13,
-    letterSpacing: 2,
-    margin: '0 0 4px 0',
-  },
-  bannerTitle: {
-    color: '#ffffff',
-    fontSize: 34,
-    fontWeight: 900,
-    margin: '0 0 8px 0',
-    lineHeight: 1.1,
-  },
-  bannerSub: {
-    color: '#e2e8f0',
-    fontSize: 14,
-    margin: '0 0 20px 0',
-  },
-  bottomTrust: {
-    display: 'flex',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 32,
-    padding: '40px 24px',
-    backgroundColor: '#ffffff',
-    borderTop: '1px solid #e2e8f0',
-  },
-  bottomTrustItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 6,
-    textAlign: 'center',
-    width: 140,
-  },
-  bottomTrustIcon: { fontSize: 28 },
-  bottomTrustTitle: { fontWeight: 700, fontSize: 13, color: '#1a2e4a' },
-  bottomTrustSub: { fontSize: 11, color: '#64748b' },
-  footer: {
-    backgroundColor: '#1a2e4a',
-    padding: '32px 24px',
-    textAlign: 'center',
-  },
-  footerLinks: {
-    display: 'flex',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  footerLink: {
-    background: 'none',
-    border: 'none',
-    color: '#94a3b8',
-    fontSize: 13,
-    cursor: 'pointer',
-    padding: '4px 8px',
-  },
-  footerCopy: { color: '#64748b', fontSize: 12, margin: '0 0 4px 0' },
-  footerBahamian: { color: '#94a3b8', fontSize: 12, margin: 0 },
-};
