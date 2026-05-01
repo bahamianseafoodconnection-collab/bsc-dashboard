@@ -1,17 +1,13 @@
 // ============================================================
 // BSC MARKETPLACE — HOMEPAGE
 // File: app/page.tsx
-// Route: /
-// Images pulled from Supabase bucket: site-images
 // ============================================================
 
 'use client';
 
 import { useRouter } from 'next/navigation';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const img = (file: string) =>
-  `${SUPABASE_URL}/storage/v1/object/public/site-images/${file}`;
+const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
 export default function HomePage() {
   const router = useRouter();
@@ -23,7 +19,7 @@ export default function HomePage() {
       <nav style={s.nav}>
         <div style={s.navInner}>
           <div style={s.logo} onClick={() => router.push('/')}>
-            <img src={img('logo.jpg')} alt="BSC Logo" style={s.logoImg} />
+            <img src={`${BASE}/logo.jpg`} alt="BSC Logo" style={s.logoImg} />
             <div>
               <div style={s.logoName}>BSC</div>
               <div style={s.logoSub}>MARKETPLACE</div>
@@ -45,8 +41,12 @@ export default function HomePage() {
       </nav>
 
       {/* HERO */}
-      <div style={s.hero}>
-        <img src={img('hero.jpg')} alt="BSC Hero" style={s.heroImg} />
+      <div
+        style={{
+          ...s.hero,
+          backgroundImage: `url(${BASE}/hero.jpg)`,
+        }}
+      >
         <div style={s.heroOverlay} />
         <div style={s.heroContent}>
           <p style={s.heroWelcome}>Welcome to</p>
@@ -87,50 +87,17 @@ export default function HomePage() {
         <h2 style={s.sectionTitle}>SHOP. PAY. SAVE. ALL IN ONE PLACE.</h2>
         <div style={s.serviceGrid}>
           {[
-            {
-              icon: '🛒',
-              title: 'Shop Marketplace',
-              sub: 'Fresh seafood, meats, groceries and more.',
-              btn: 'Shop Now',
-              route: '/market',
-            },
-            {
-              icon: '📦',
-              title: 'Wholesale & Bulk',
-              sub: 'Bulk orders for businesses and organizations.',
-              btn: 'Order Bulk',
-              route: '/market',
-            },
-            {
-              icon: '💡',
-              title: 'Pay Utility Bills',
-              sub: 'Pay water, electricity, internet and more.',
-              btn: 'Pay Bills',
-              route: '/utilities',
-            },
-            {
-              icon: '🚛',
-              title: 'Delivery Services',
-              sub: 'Fast & reliable delivery to your doorstep.',
-              btn: 'Schedule Delivery',
-              route: '/market',
-            },
-            {
-              icon: '⛵',
-              title: 'Mailboat Shipping',
-              sub: 'We ship to all major Family Islands.',
-              btn: 'Ship Now',
-              route: '/market',
-            },
+            { icon: '🛒', title: 'Shop Marketplace', sub: 'Fresh seafood, meats, groceries and more.', btn: 'Shop Now', route: '/market' },
+            { icon: '📦', title: 'Wholesale & Bulk', sub: 'Bulk orders for businesses and organizations.', btn: 'Order Bulk', route: '/market' },
+            { icon: '💡', title: 'Pay Utility Bills', sub: 'Pay water, electricity, internet and more.', btn: 'Pay Bills', route: '/utilities' },
+            { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.', btn: 'Schedule Delivery', route: '/market' },
+            { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.', btn: 'Ship Now', route: '/market' },
           ].map((item) => (
             <div key={item.title} style={s.serviceCard}>
               <div style={s.serviceIcon}>{item.icon}</div>
               <div style={s.serviceTitle}>{item.title}</div>
               <div style={s.serviceSub}>{item.sub}</div>
-              <button
-                style={s.serviceBtn}
-                onClick={() => router.push(item.route)}
-              >
+              <button style={s.serviceBtn} onClick={() => router.push(item.route)}>
                 {item.btn}
               </button>
             </div>
@@ -160,9 +127,12 @@ export default function HomePage() {
 
       {/* DUAL BANNER */}
       <div style={s.dualBanner}>
-        {/* Seafood Banner */}
-        <div style={s.bannerCard}>
-          <img src={img('seafood-banner.jpg')} alt="Seafood" style={s.bannerImg} />
+        <div
+          style={{
+            ...s.bannerCard,
+            backgroundImage: `url(${BASE}/seafood-banner.jpg)`,
+          }}
+        >
           <div style={s.bannerOverlay} />
           <div style={s.bannerContent}>
             <p style={s.bannerEyebrow}>FRESH SEAFOOD</p>
@@ -174,9 +144,12 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Meats Banner */}
-        <div style={s.bannerCard}>
-          <img src={img('meats-banner.jpg')} alt="Meats" style={s.bannerImg} />
+        <div
+          style={{
+            ...s.bannerCard,
+            backgroundImage: `url(${BASE}/meats-banner.jpg)`,
+          }}
+        >
           <div style={s.bannerOverlay} />
           <div style={s.bannerContent}>
             <p style={s.bannerEyebrow}>PREMIUM MEATS</p>
@@ -226,8 +199,6 @@ const s: Record<string, React.CSSProperties> = {
     margin: 0,
     padding: 0,
   },
-
-  // NAV
   nav: {
     backgroundColor: '#1a2e4a',
     padding: '0 24px',
@@ -281,7 +252,6 @@ const s: Record<string, React.CSSProperties> = {
     gap: 4,
     flex: 1,
     justifyContent: 'center',
-    flexWrap: 'wrap',
   },
   navLink: {
     background: 'none',
@@ -315,24 +285,18 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: 'pointer',
   },
-
-  // HERO
   hero: {
     position: 'relative',
     height: '85vh',
-    minHeight: 500,
-    overflow: 'hidden',
-  },
-  heroImg: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    objectPosition: 'center',
+    minHeight: 560,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
   },
   heroOverlay: {
     position: 'absolute',
     inset: 0,
-    background: 'linear-gradient(to right, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0.2) 100%)',
+    background: 'linear-gradient(to right, rgba(0,0,0,0.78) 45%, rgba(0,0,0,0.15) 100%)',
   },
   heroContent: {
     position: 'absolute',
@@ -340,6 +304,7 @@ const s: Record<string, React.CSSProperties> = {
     left: '8%',
     transform: 'translateY(-50%)',
     maxWidth: 520,
+    zIndex: 2,
   },
   heroWelcome: {
     color: '#cbd5e1',
@@ -349,29 +314,27 @@ const s: Record<string, React.CSSProperties> = {
   },
   heroTitle: {
     color: '#ffffff',
-    fontSize: 52,
+    fontSize: 56,
     fontWeight: 900,
     margin: '0 0 8px 0',
-    lineHeight: 1.1,
+    lineHeight: 1.05,
   },
   heroSub: {
     color: '#f5a623',
     fontSize: 22,
     fontWeight: 700,
-    margin: '0 0 6px 0',
+    margin: '0 0 8px 0',
   },
   heroTagline: {
     color: '#e2e8f0',
     fontSize: 16,
-    margin: '0 0 28px 0',
+    margin: '0 0 32px 0',
   },
   heroBtns: {
     display: 'flex',
     gap: 14,
     flexWrap: 'wrap',
   },
-
-  // BUTTONS
   btnYellow: {
     backgroundColor: '#f5a623',
     color: '#1a2e4a',
@@ -392,15 +355,13 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: 'pointer',
   },
-
-  // TRUST BAR
   trustBar: {
     backgroundColor: '#1a2e4a',
     display: 'flex',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    gap: 0,
     padding: '16px 24px',
+    borderTop: '2px solid #f5a623',
   },
   trustItem: {
     display: 'flex',
@@ -409,20 +370,9 @@ const s: Record<string, React.CSSProperties> = {
     padding: '10px 32px',
     borderRight: '1px solid rgba(255,255,255,0.1)',
   },
-  trustIcon: {
-    fontSize: 24,
-  },
-  trustTitle: {
-    color: '#ffffff',
-    fontWeight: 700,
-    fontSize: 13,
-  },
-  trustSub: {
-    color: '#94a3b8',
-    fontSize: 11,
-  },
-
-  // SERVICES
+  trustIcon: { fontSize: 24 },
+  trustTitle: { color: '#ffffff', fontWeight: 700, fontSize: 13 },
+  trustSub: { color: '#94a3b8', fontSize: 11 },
   section: {
     maxWidth: 1200,
     margin: '0 auto',
@@ -454,23 +404,9 @@ const s: Record<string, React.CSSProperties> = {
     gap: 8,
     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
   },
-  serviceIcon: {
-    fontSize: 40,
-    marginBottom: 4,
-  },
-  serviceTitle: {
-    fontWeight: 700,
-    fontSize: 14,
-    color: '#1a2e4a',
-    textAlign: 'center',
-  },
-  serviceSub: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 1.4,
-    flex: 1,
-  },
+  serviceIcon: { fontSize: 40, marginBottom: 4 },
+  serviceTitle: { fontWeight: 700, fontSize: 14, color: '#1a2e4a', textAlign: 'center' },
+  serviceSub: { fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 1.4, flex: 1 },
   serviceBtn: {
     backgroundColor: '#1a2e4a',
     color: '#ffffff',
@@ -482,8 +418,6 @@ const s: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     marginTop: 8,
   },
-
-  // WHY BSC
   whySection: {
     backgroundColor: '#f8fafc',
     padding: '60px 24px',
@@ -504,47 +438,32 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 8,
   },
-  whyIcon: {
-    fontSize: 36,
-  },
-  whyTitle: {
-    fontWeight: 700,
-    fontSize: 14,
-    color: '#1a2e4a',
-  },
-  whySub: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 1.4,
-  },
-
-  // DUAL BANNER
+  whyIcon: { fontSize: 36 },
+  whyTitle: { fontWeight: 700, fontSize: 14, color: '#1a2e4a' },
+  whySub: { fontSize: 12, color: '#64748b', textAlign: 'center', lineHeight: 1.4 },
   dualBanner: {
     display: 'flex',
-    gap: 0,
-    height: 340,
+    height: 360,
   },
   bannerCard: {
     flex: 1,
     position: 'relative',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
     overflow: 'hidden',
-  },
-  bannerImg: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
   },
   bannerOverlay: {
     position: 'absolute',
     inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.52)',
   },
   bannerContent: {
     position: 'absolute',
     top: '50%',
     left: '10%',
     transform: 'translateY(-50%)',
+    zIndex: 2,
   },
   bannerEyebrow: {
     color: '#f5a623',
@@ -555,7 +474,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   bannerTitle: {
     color: '#ffffff',
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: 900,
     margin: '0 0 8px 0',
     lineHeight: 1.1,
@@ -565,8 +484,6 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     margin: '0 0 20px 0',
   },
-
-  // BOTTOM TRUST
   bottomTrust: {
     display: 'flex',
     justifyContent: 'center',
@@ -584,20 +501,9 @@ const s: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     width: 140,
   },
-  bottomTrustIcon: {
-    fontSize: 28,
-  },
-  bottomTrustTitle: {
-    fontWeight: 700,
-    fontSize: 13,
-    color: '#1a2e4a',
-  },
-  bottomTrustSub: {
-    fontSize: 11,
-    color: '#64748b',
-  },
-
-  // FOOTER
+  bottomTrustIcon: { fontSize: 28 },
+  bottomTrustTitle: { fontWeight: 700, fontSize: 13, color: '#1a2e4a' },
+  bottomTrustSub: { fontSize: 11, color: '#64748b' },
   footer: {
     backgroundColor: '#1a2e4a',
     padding: '32px 24px',
@@ -618,14 +524,6 @@ const s: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: '4px 8px',
   },
-  footerCopy: {
-    color: '#64748b',
-    fontSize: 12,
-    margin: '0 0 4px 0',
-  },
-  footerBahamian: {
-    color: '#94a3b8',
-    fontSize: 12,
-    margin: 0,
-  },
+  footerCopy: { color: '#64748b', fontSize: 12, margin: '0 0 4px 0' },
+  footerBahamian: { color: '#94a3b8', fontSize: 12, margin: 0 },
 };
