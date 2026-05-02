@@ -187,11 +187,11 @@ export default function HomePage() {
             <p style={{ color: '#64748b', fontSize: 15, marginBottom: 48 }}>Everything a Bahamian family or business needs, right here at home.</p>
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
-                { icon: '🛒', title: 'Shop Marketplace',  sub: 'Fresh seafood, meats, groceries and more.',     btn: 'Shop Now',   route: '/market',           color: '#e8f4fd' },
-                { icon: '📦', title: 'Wholesale & Bulk',  sub: 'Bulk orders from Nassau\'s top wholesalers.',   btn: 'Order Bulk', route: '/local-wholesale',  color: '#f0fde8' },
-                { icon: '💡', title: 'Pay Utility Bills', sub: 'Water, electricity, internet and more.',        btn: 'Pay Bills',  route: '/utilities',        color: '#fef9e7' },
-                { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.',    btn: 'Schedule',   route: '/market',           color: '#fde8f0' },
-                { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.',           btn: 'Ship Now',   route: '/market',           color: '#f5f0ff' },
+                { icon: '🛒', title: 'Shop Marketplace',  sub: 'Fresh seafood, meats, groceries and more.',    btn: 'Shop Now',   route: '/market',          color: '#e8f4fd' },
+                { icon: '📦', title: 'Wholesale & Bulk',  sub: "Bulk orders from Nassau's top wholesalers.",   btn: 'Order Bulk', route: '/local-wholesale', color: '#f0fde8' },
+                { icon: '💡', title: 'Pay Utility Bills', sub: 'Water, electricity, internet and more.',       btn: 'Pay Bills',  route: '/utilities',       color: '#fef9e7' },
+                { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.',   btn: 'Schedule',   route: '/market',          color: '#fde8f0' },
+                { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.',          btn: 'Ship Now',   route: '/market',          color: '#f5f0ff' },
               ].map((item) => (
                 <div key={item.title} className="service-card" onClick={() => router.push(item.route)} style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '28px 20px', width: 190, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ width: 60, height: 60, borderRadius: 16, backgroundColor: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{item.icon}</div>
@@ -223,13 +223,13 @@ export default function HomePage() {
 
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 40 }}>
               {[
-                { logo: '🏭', name: 'Bahamas Food Services', color: '#1a5276' },
-                { logo: '🍾', name: 'Burns House',           color: '#7B241C' },
-                { logo: '🏪', name: 'Nassau Wholesale',      color: '#1E8449' },
-                { logo: '🌴', name: 'Caribbean Wholesale',   color: '#1A5276' },
-                { logo: '🥦', name: 'Island Foods',          color: '#196F3D' },
-                { logo: '🔧', name: 'Atlantic Wholesale',    color: '#2E4057' },
-                { logo: '🥩', name: 'Quality Distributors',  color: '#922B21' },
+                { logo: '🏪', name: 'Asa H Pritchard',           color: '#1B4F72' },
+                { logo: '🍱', name: 'Bahamas Intl Food',          color: '#1E5C2E' },
+                { logo: '🏭', name: "D'Albenas",                  color: '#784212' },
+                { logo: '📦', name: 'Bahamas Wholesale',           color: '#1A5276' },
+                { logo: '🛒', name: 'TPG',                        color: '#2C3E50' },
+                { logo: '🤝', name: 'Thompson Trading',           color: '#922B21' },
+                { logo: '🌴', name: 'Island Wholesale',           color: '#196F3D' },
               ].map((w) => (
                 <div
                   key={w.name}
