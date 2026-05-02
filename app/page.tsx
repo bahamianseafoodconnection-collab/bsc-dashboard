@@ -49,6 +49,8 @@ export default function HomePage() {
         .btn-ghost:hover { background-color: rgba(255,255,255,0.12) !important; }
         .store-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
         .store-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.25) !important; }
+        .wholesale-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+        .wholesale-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important; }
         .bobble { animation: bobble 1.8s ease-in-out infinite; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -80,16 +82,16 @@ export default function HomePage() {
 
             <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               {[
-                { label: 'Home',        route: '/' },
-                { label: 'Shop Local',  route: '/market' },
-                { label: 'Shop USA',    route: '/us-shopping' },
-                { label: 'Services',    route: '/utilities' },
-                { label: 'About Us',    route: null },
+                { label: 'Home',       route: '/' },
+                { label: 'Shop Local', route: '/market' },
+                { label: 'Wholesale',  route: '/local-wholesale' },
+                { label: 'Shop USA',   route: '/us-shopping' },
+                { label: 'Services',   route: '/utilities' },
               ].map((item, i) => (
                 <button
                   key={item.label}
                   className="nav-link"
-                  onClick={() => item.route && router.push(item.route)}
+                  onClick={() => router.push(item.route)}
                   style={{ background: 'none', border: 'none', color: i === 0 ? '#f5a623' : '#cbd5e1', fontSize: 13, cursor: 'pointer', padding: '6px 12px', borderRadius: 6, fontWeight: i === 0 ? 700 : 500 }}
                 >
                   {item.label}
@@ -129,12 +131,15 @@ export default function HomePage() {
               Seafood. Meats. Essentials. Services.
             </p>
             <p className="fade-up-3" style={{ color: '#e2e8f0', fontSize: 16, marginBottom: 38, lineHeight: 1.7 }}>
-              Shop locally or shop the USA — we bring it all to your door.<br />
-              Fresh from Bahamian waters and Florida's finest stores.
+              Shop locally, shop wholesale, or shop the USA —<br />
+              we bring it all to your door in Nassau & Andros.
             </p>
             <div className="fade-up-4" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <button className="btn-gold" onClick={() => router.push('/market')} style={{ backgroundColor: '#f5a623', color: '#1a2e4a', border: 'none', padding: '15px 32px', borderRadius: 10, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>
                 Shop Local
+              </button>
+              <button className="btn-ghost" onClick={() => router.push('/local-wholesale')} style={{ backgroundColor: 'transparent', color: '#fff', border: '2px solid rgba(255,255,255,0.65)', padding: '13px 32px', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
+                🇧🇸 Wholesale
               </button>
               <button className="btn-ghost" onClick={() => router.push('/us-shopping')} style={{ backgroundColor: 'transparent', color: '#fff', border: '2px solid rgba(255,255,255,0.65)', padding: '13px 32px', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
                 🇺🇸 Shop USA
@@ -182,11 +187,11 @@ export default function HomePage() {
             <p style={{ color: '#64748b', fontSize: 15, marginBottom: 48 }}>Everything a Bahamian family or business needs, right here at home.</p>
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
-                { icon: '🛒', title: 'Shop Marketplace',  sub: 'Fresh seafood, meats, groceries and more.',     btn: 'Shop Now',   route: '/market',    color: '#e8f4fd' },
-                { icon: '📦', title: 'Wholesale & Bulk',  sub: 'Bulk orders for businesses and organizations.', btn: 'Order Bulk', route: '/market',    color: '#f0fde8' },
-                { icon: '💡', title: 'Pay Utility Bills', sub: 'Water, electricity, internet and more.',        btn: 'Pay Bills',  route: '/utilities', color: '#fef9e7' },
-                { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.',    btn: 'Schedule',   route: '/market',    color: '#fde8f0' },
-                { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.',           btn: 'Ship Now',   route: '/market',    color: '#f5f0ff' },
+                { icon: '🛒', title: 'Shop Marketplace',  sub: 'Fresh seafood, meats, groceries and more.',     btn: 'Shop Now',   route: '/market',           color: '#e8f4fd' },
+                { icon: '📦', title: 'Wholesale & Bulk',  sub: 'Bulk orders from Nassau\'s top wholesalers.',   btn: 'Order Bulk', route: '/local-wholesale',  color: '#f0fde8' },
+                { icon: '💡', title: 'Pay Utility Bills', sub: 'Water, electricity, internet and more.',        btn: 'Pay Bills',  route: '/utilities',        color: '#fef9e7' },
+                { icon: '🚛', title: 'Delivery Services', sub: 'Fast & reliable delivery to your doorstep.',    btn: 'Schedule',   route: '/market',           color: '#fde8f0' },
+                { icon: '⛵', title: 'Mailboat Shipping', sub: 'We ship to all major Family Islands.',           btn: 'Ship Now',   route: '/market',           color: '#f5f0ff' },
               ].map((item) => (
                 <div key={item.title} className="service-card" onClick={() => router.push(item.route)} style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: '28px 20px', width: 190, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ width: 60, height: 60, borderRadius: 16, backgroundColor: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{item.icon}</div>
@@ -201,6 +206,63 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* ── LOCAL WHOLESALE ── */}
+        <div style={{ padding: '80px 24px', backgroundColor: '#0f2137' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(244,200,66,0.15)', border: '1px solid rgba(244,200,66,0.3)', borderRadius: 20, padding: '6px 16px', marginBottom: 20 }}>
+              <span style={{ fontSize: 14 }}>🇧🇸</span>
+              <span style={{ color: '#f5a623', fontSize: 11, fontWeight: 700, letterSpacing: 2 }}>LOCAL WHOLESALE PARTNERS</span>
+            </div>
+            <h2 style={{ color: '#ffffff', fontSize: 32, fontWeight: 900, marginBottom: 12 }}>
+              Shop Wholesale.<br />
+              <span style={{ color: '#f5a623' }}>Right Here in Nassau.</span>
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.7, maxWidth: 640, margin: '0 auto 40px' }}>
+              Access Nassau's top 7 wholesale suppliers through BSC Marketplace. Order in bulk at wholesale prices — BSC handles the pickup and delivery so you don't have to.
+            </p>
+
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 40 }}>
+              {[
+                { logo: '🏭', name: 'Bahamas Food Services', color: '#1a5276' },
+                { logo: '🍾', name: 'Burns House',           color: '#7B241C' },
+                { logo: '🏪', name: 'Nassau Wholesale',      color: '#1E8449' },
+                { logo: '🌴', name: 'Caribbean Wholesale',   color: '#1A5276' },
+                { logo: '🥦', name: 'Island Foods',          color: '#196F3D' },
+                { logo: '🔧', name: 'Atlantic Wholesale',    color: '#2E4057' },
+                { logo: '🥩', name: 'Quality Distributors',  color: '#922B21' },
+              ].map((w) => (
+                <div
+                  key={w.name}
+                  className="wholesale-card"
+                  onClick={() => router.push('/local-wholesale')}
+                  style={{ backgroundColor: w.color, borderRadius: 12, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+                >
+                  <span style={{ fontSize: 24 }}>{w.logo}</span>
+                  <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>{w.name}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 36 }}>
+              {[
+                { icon: '💰', text: 'Wholesale Pricing' },
+                { icon: '📦', text: 'Bulk Orders' },
+                { icon: '🚚', text: 'BSC Delivers' },
+                { icon: '🇧🇸', text: 'Nassau & Andros' },
+              ].map((step) => (
+                <div key={step.text} style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 18 }}>{step.icon}</span>
+                  <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{step.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <button className="btn-gold" onClick={() => router.push('/local-wholesale')} style={{ backgroundColor: '#f5a623', color: '#1a2e4a', border: 'none', padding: '16px 40px', borderRadius: 12, fontSize: 17, fontWeight: 900, cursor: 'pointer' }}>
+              🇧🇸 Browse Local Wholesalers →
+            </button>
+          </div>
+        </div>
+
         {/* ── US SHOPPING ── */}
         <div style={{ padding: '80px 24px', backgroundColor: '#1a2e4a' }}>
           <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
@@ -212,17 +274,17 @@ export default function HomePage() {
               Shop Locally — Or Shop the USA<br />
               <span style={{ color: '#f5a623' }}>We Bring It Home.</span>
             </h2>
-            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.7, marginBottom: 40, maxWidth: 640, margin: '0 auto 40px' }}>
+            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1.7, maxWidth: 640, margin: '0 auto 40px' }}>
               Dedrick is already in Florida shopping for BSC. Tell us what you want from these fine US stores and he'll bring it back on the same trip — fully landed cost including customs duty, delivered to your door in Nassau or Andros.
             </p>
 
             <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 40 }}>
               {[
-                { logo: '🏪', name: "Sam's Club",        color: '#0067A0' },
-                { logo: '🏬', name: "BJ's Wholesale",    color: '#CC0000' },
-                { logo: '🏢', name: 'Costco',            color: '#005DAA' },
-                { logo: '🛒', name: 'Walmart',           color: '#0071CE' },
-                { logo: '🥩', name: 'FL Steakhouse',     color: '#8B1A1A' },
+                { logo: '🏪', name: "Sam's Club",     color: '#0067A0' },
+                { logo: '🏬', name: "BJ's Wholesale", color: '#CC0000' },
+                { logo: '🏢', name: 'Costco',         color: '#005DAA' },
+                { logo: '🛒', name: 'Walmart',        color: '#0071CE' },
+                { logo: '🥩', name: 'FL Steakhouse',  color: '#8B1A1A' },
               ].map((store) => (
                 <div
                   key={store.name}
@@ -262,11 +324,11 @@ export default function HomePage() {
             <h2 style={{ color: '#1a2e4a', fontSize: 28, fontWeight: 900, marginBottom: 48 }}>WHY SHOP WITH BSC?</h2>
             <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
-                { icon: '🦐', title: 'Wide Selection',    sub: 'Seafood, meats, groceries, US imports & more.' },
-                { icon: '💰', title: 'Great Prices',      sub: 'Competitive prices with quality you can trust.' },
-                { icon: '🔐', title: 'Secure & Easy',     sub: 'Safe payments and easy checkout.' },
-                { icon: '🇧🇸', title: 'Support Local',   sub: 'Empowering Bahamian suppliers & communities.' },
-                { icon: '💬', title: 'Customer Support',  sub: "We're here to help every step of the way." },
+                { icon: '🦐', title: 'Wide Selection',   sub: 'Seafood, meats, wholesale, US imports & more.' },
+                { icon: '💰', title: 'Great Prices',     sub: 'Competitive prices with quality you can trust.' },
+                { icon: '🔐', title: 'Secure & Easy',    sub: 'Safe payments and easy checkout.' },
+                { icon: '🇧🇸', title: 'Support Local',  sub: 'Empowering Bahamian suppliers & communities.' },
+                { icon: '💬', title: 'Customer Support', sub: "We're here to help every step of the way." },
               ].map((item) => (
                 <div key={item.title} className="why-card" style={{ width: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                   <span className="why-icon" style={{ fontSize: 40 }}>{item.icon}</span>
@@ -325,7 +387,7 @@ export default function HomePage() {
           <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 48 }}>
             {[
               { icon: '🔒', title: 'Secure Checkout',        sub: '100% secure payments' },
-              { icon: '✅', title: 'Verified Suppliers',      sub: 'Trusted local suppliers' },
+              { icon: '✅', title: 'Verified Suppliers',      sub: 'Trusted local & US suppliers' },
               { icon: '⭐', title: 'Quality Guaranteed',      sub: 'Freshness you can trust' },
               { icon: '😊', title: 'Satisfaction Guaranteed', sub: 'We stand behind every order' },
             ].map((item) => (
