@@ -11,13 +11,13 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 const WHOLESALER_INFO: Record<string, { name: string; color: string; logo: string; tagline: string }> = {
-'bahamas-food-services': { name: 'Bahamas Food Services', color: '#1a5276', logo: '🏭', tagline: 'Nassau\'s premier food distributor' },
-'burns-house': { name: 'Burns House', color: '#7B241C', logo: '🍾', tagline: 'Beverages, spirits & household wholesale' },
-'nassau-wholesale': { name: 'Nassau Wholesale', color: '#1E8449', logo: '🏪', tagline: 'General wholesale goods' },
-'caribbean-wholesale': { name: 'Caribbean Wholesale', color: '#1A5276', logo: '🌴', tagline: 'Island-wide wholesale supplier' },
-'island-foods': { name: 'Island Foods Ltd', color: '#196F3D', logo: '🥦', tagline: 'Fresh produce & frozen goods in bulk' },
-'atlantic-wholesale': { name: 'Atlantic Wholesale', color: '#2E4057', logo: '🔧', tagline: 'Hardware, janitorial & business supplies' },
-'quality-distributors': { name: 'Quality Distributors', color: '#922B21', logo: '🥩', tagline: 'Premium wholesale meats & seafood' },
+'asa-h-pritchard': { name: 'Asa H Pritchard', color: '#1B4F72', logo: '🏪', tagline: 'Nassau\'s most established wholesale distributor' },
+'bahamas-international-food': { name: 'Bahamas International Food', color: '#1E5C2E', logo: '🍱', tagline: 'Premium food wholesale — meats, frozen & dairy' },
+'dalbenas': { name: "D'Albenas", color: '#784212', logo: '🏭', tagline: 'Grocery staples, canned goods & household products' },
+'bahamas-wholesale-agencies': { name: 'Bahamas Wholesale Agencies', color: '#1A5276', logo: '📦', tagline: 'Full-service wholesale agency' },
+'tpg': { name: 'TPG', color: '#2C3E50', logo: '🛒', tagline: 'The Purchasing Group — competitive wholesale pricing' },
+'thompson-trading': { name: 'Thompson Trading', color: '#922B21', logo: '🤝', tagline: 'Premium meats, poultry, seafood & specialty items' },
+'island-wholesale': { name: 'Island Wholesale', color: '#196F3D', logo: '🌴', tagline: 'Produce, frozen goods & restaurant supplies' },
 };
 
 type Product = {
@@ -38,13 +38,8 @@ featured: boolean;
 };
 
 type CartItem = {
-id: string;
-name: string;
-price: number;
-qty: number;
-unit: string;
-wholesaler: string;
-min_order_qty: number;
+id: string; name: string; price: number;
+qty: number; unit: string; wholesaler: string; min_order_qty: number;
 };
 
 function calcPrice(p: Product): number {
@@ -58,7 +53,6 @@ const withMarkup = p.wholesale_cost_bsd * (1 + p.bsc_markup_pct);
 const markup = withMarkup - p.wholesale_cost_bsd;
 const vat = withMarkup * p.vat_pct;
 const total = withMarkup + vat;
-
 return (
 <div style={{ backgroundColor: '#f8f9fa', borderRadius: 10, padding: 12, marginTop: 8, fontSize: 11 }}>
 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -116,7 +110,6 @@ setLoading(false);
 }
 
 const categories = ['All', ...Array.from(new Set(products.map(p => p.category)))];
-
 const filtered = products.filter((p) => {
 const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
 const matchCat = activeCategory === 'All' || p.category === activeCategory;
@@ -139,8 +132,7 @@ return [...prev, { id: product.id, name: product.name, price, qty: minQty, unit:
 function changeQty(id: string, delta: number) {
 setCart((prev) => prev.map((i) => {
 if (i.id !== id) return i;
-const newQty = Math.max(i.min_order_qty, i.qty + delta);
-return { ...i, qty: newQty };
+return { ...i, qty: Math.max(i.min_order_qty, i.qty + delta) };
 }));
 }
 
@@ -151,11 +143,7 @@ setCart((prev) => prev.filter((i) => i.id !== id));
 function goCheckout() {
 if (typeof window !== 'undefined') {
 localStorage.setItem('bsc_cart', JSON.stringify(cart.map(i => ({
-id: i.id,
-name: `[${info?.name}] ${i.name}`,
-price: i.price,
-quantity: i.qty,
-unit: i.unit,
+id: i.id, name: `[${info?.name}] ${i.name}`, price: i.price, quantity: i.qty, unit: i.unit,
 }))));
 router.push('/checkout');
 }
@@ -176,7 +164,6 @@ return (
 return (
 <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, sans-serif' }}>
 
-{/* HEADER */}
 <header style={{ backgroundColor: info.color, padding: '0 20px', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -184,53 +171,36 @@ return (
 <div style={{ color: '#fff', fontWeight: 900, fontSize: 17 }}>{info.logo} {info.name}</div>
 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-<input
-value={search}
-onChange={(e) => setSearch(e.target.value)}
-placeholder="Search products..."
-style={{ padding: '8px 14px', borderRadius: 8, border: 'none', fontSize: 13, outline: 'none', minWidth: 180 }}
-/>
-<button
-onClick={() => setCartOpen(true)}
-style={{ backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
->
+<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products..." style={{ padding: '8px 14px', borderRadius: 8, border: 'none', fontSize: 13, outline: 'none', minWidth: 180 }} />
+<button onClick={() => setCartOpen(true)} style={{ backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
 🛒 Cart {cartCount > 0 && `(${cartCount})`}
 </button>
 </div>
 </div>
 </header>
 
-{/* WHOLESALER HERO */}
 <div style={{ backgroundColor: info.color, padding: '32px 20px', borderBottom: '4px solid #f4c842' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-<p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, margin: '0 0 8px' }}>
-🇧🇸 Nassau, Bahamas · Local Wholesale · BSC handles pickup & delivery
-</p>
+<p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, margin: '0 0 8px' }}>🇧🇸 Nassau · Local Wholesale · BSC handles pickup & delivery</p>
 <h1 style={{ color: '#fff', fontSize: 30, fontWeight: 900, margin: '0 0 8px' }}>{info.name}</h1>
 <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, margin: 0 }}>{info.tagline}</p>
 </div>
 </div>
 
-{/* PRICING NOTE */}
 <div style={{ backgroundColor: '#fef9e7', borderBottom: '1px solid #fde047', padding: '12px 20px' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8 }}>
 <span style={{ fontSize: 16 }}>💡</span>
 <span style={{ color: '#713f12', fontSize: 13, fontWeight: 600 }}>
-All prices include wholesale cost + BSC 12% service + 10% VAT. Click any product to see the breakdown. Minimum order quantities apply.
+All prices include wholesale cost + BSC 12% service + 10% VAT. Click any product to see the breakdown.
 </span>
 </div>
 </div>
 
-{/* CATEGORY FILTERS */}
 {categories.length > 1 && (
 <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 20px' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 4, overflowX: 'auto' }}>
 {categories.map((cat) => (
-<button
-key={cat}
-onClick={() => setActiveCategory(cat)}
-style={{ padding: '12px 18px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: activeCategory === cat ? `3px solid ${info.color}` : '3px solid transparent', backgroundColor: 'transparent', color: activeCategory === cat ? info.color : '#666', fontWeight: activeCategory === cat ? 800 : 500, fontSize: 13 }}
->
+<button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: '12px 18px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: activeCategory === cat ? `3px solid ${info.color}` : '3px solid transparent', backgroundColor: 'transparent', color: activeCategory === cat ? info.color : '#666', fontWeight: activeCategory === cat ? 800 : 500, fontSize: 13 }}>
 {cat}
 </button>
 ))}
@@ -238,7 +208,6 @@ style={{ padding: '12px 18px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 )}
 
-{/* PRODUCTS */}
 <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px' }}>
 {loading ? (
 <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
@@ -261,11 +230,8 @@ Loading products...
 const finalPrice = product.final_price_bsd > 0 ? product.final_price_bsd : calcPrice(product);
 const inCart = cart.find((i) => i.id === product.id);
 const showingBreakdown = showBreakdown === product.id;
-
 return (
 <div key={product.id} style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: product.featured ? `2px solid ${info.color}` : '1px solid #e5e7eb' }}>
-
-{/* Image */}
 <div style={{ height: 160, backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
 {product.image_url ? (
 <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -273,9 +239,7 @@ return (
 <span style={{ fontSize: 56 }}>{info.logo}</span>
 )}
 {product.featured && (
-<div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: info.color, color: '#fff', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6 }}>
-⭐ Featured
-</div>
+<div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: info.color, color: '#fff', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6 }}>⭐ Featured</div>
 )}
 {product.min_order_qty > 1 && (
 <div style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#d97706', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
@@ -283,31 +247,20 @@ Min {product.min_order_qty} {product.unit}
 </div>
 )}
 </div>
-
 <div style={{ padding: '14px' }}>
-<div style={{ fontSize: 10, color: '#999', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-{product.category} · per {product.unit}
-</div>
+<div style={{ fontSize: 10, color: '#999', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{product.category} · per {product.unit}</div>
 <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 15, margin: '0 0 4px', lineHeight: 1.3 }}>{product.name}</h3>
-{product.description && (
-<p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 8px', lineHeight: 1.4 }}>{product.description}</p>
-)}
-
+{product.description && <p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 8px', lineHeight: 1.4 }}>{product.description}</p>}
 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
 <div>
 <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 20 }}>BSD ${finalPrice.toFixed(2)}</div>
 <div style={{ color: '#94a3b8', fontSize: 11 }}>Wholesale: ${product.wholesale_cost_bsd.toFixed(2)} + BSC + VAT</div>
 </div>
-<button
-onClick={() => setShowBreakdown(showingBreakdown ? null : product.id)}
-style={{ backgroundColor: '#f0f4ff', color: '#1a2e5a', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
->
+<button onClick={() => setShowBreakdown(showingBreakdown ? null : product.id)} style={{ backgroundColor: '#f0f4ff', color: '#1a2e5a', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
 {showingBreakdown ? 'Hide' : '📊 Breakdown'}
 </button>
 </div>
-
 {showingBreakdown && <PriceBreakdown p={product} />}
-
 <div style={{ marginTop: 12 }}>
 {inCart ? (
 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f0f4ff', borderRadius: 10, padding: '6px 10px' }}>
@@ -316,10 +269,7 @@ style={{ backgroundColor: '#f0f4ff', color: '#1a2e5a', border: 'none', borderRad
 <button onClick={() => changeQty(product.id, product.min_order_qty || 1)} style={{ width: 28, height: 28, borderRadius: 8, border: 'none', backgroundColor: '#1a2e5a', color: '#fff', fontWeight: 900, fontSize: 16, cursor: 'pointer' }}>+</button>
 </div>
 ) : (
-<button
-onClick={() => addToCart(product)}
-style={{ width: '100%', backgroundColor: info.color, color: '#fff', border: 'none', borderRadius: 10, padding: '11px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
->
+<button onClick={() => addToCart(product)} style={{ width: '100%', backgroundColor: info.color, color: '#fff', border: 'none', borderRadius: 10, padding: '11px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
 Add to Cart — BSD ${finalPrice.toFixed(2)}
 </button>
 )}
@@ -332,7 +282,6 @@ Add to Cart — BSD ${finalPrice.toFixed(2)}
 )}
 </div>
 
-{/* CART DRAWER */}
 {cartOpen && (
 <>
 <div onClick={() => setCartOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100 }} />
@@ -344,8 +293,7 @@ Add to Cart — BSD ${finalPrice.toFixed(2)}
 <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
 {cart.length === 0 ? (
 <div style={{ textAlign: 'center', padding: 48, color: '#999' }}>
-<div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
-Cart is empty
+<div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>Cart is empty
 </div>
 ) : (
 cart.map((item) => (
@@ -355,7 +303,7 @@ cart.map((item) => (
 <div style={{ color: '#999', fontSize: 12 }}>BSD ${item.price.toFixed(2)} / {item.unit}</div>
 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-<button onClick={() => changeQty(item.id, -(item.min_order_qty))} style={{ width: 26, height: 26, border: '1px solid #e5e7eb', borderRadius: 6, backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900 }}>-</button>
+<button onClick={() => changeQty(item.id, -item.min_order_qty)} style={{ width: 26, height: 26, border: '1px solid #e5e7eb', borderRadius: 6, backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900 }}>-</button>
 <span style={{ fontWeight: 800, minWidth: 30, textAlign: 'center', fontSize: 13 }}>{item.qty}</span>
 <button onClick={() => changeQty(item.id, item.min_order_qty)} style={{ width: 26, height: 26, border: 'none', borderRadius: 6, backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900 }}>+</button>
 </div>
