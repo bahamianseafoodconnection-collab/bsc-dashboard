@@ -66,7 +66,7 @@ const QUICK_ACTIONS = [
   { icon: '🚗', label: 'Vehicles & Parts', href: '/vehicles',        color: '#fff3e8', badge: 0 },
   { icon: '⚡', label: 'Pay Bills',        href: '/utilities',       color: '#e8f8fd', badge: 0 },
   { icon: '📊', label: 'Reports',          href: '/report',          color: '#fde8f0', badge: 0 },
-  { icon: '📦', label: 'Inventory',        href: '/inventory',       color: '#f0fde8', badge: 0 },
+  { icon: '🖼️', label: 'Products',         href: '/products',        color: '#fef9e7', badge: 0 },
 ];
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -107,16 +107,16 @@ function timeAgo(iso: string) {
 }
 
 export default function DashboardPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab]     = useState('overview');
-  const [aiMessages, setAiMessages]   = useState<Message[]>([
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [activeTab, setActiveTab]       = useState('overview');
+  const [aiMessages, setAiMessages]     = useState<Message[]>([
     { role: 'assistant', content: "Good morning, Dedrick! I'm your BSC AI Assistant. Ask me anything about your business — revenue, margins, inventory, pricing, or strategy." },
   ]);
-  const [aiInput, setAiInput]         = useState('');
-  const [aiLoading, setAiLoading]     = useState(false);
-  const [spinyTailsStock]             = useState(9310);
-  const messagesEndRef                = useRef<HTMLDivElement>(null);
-  const [todaySales, setTodaySales]   = useState<SaleRecord[]>([]);
+  const [aiInput, setAiInput]           = useState('');
+  const [aiLoading, setAiLoading]       = useState(false);
+  const [spinyTailsStock]               = useState(9310);
+  const messagesEndRef                  = useRef<HTMLDivElement>(null);
+  const [todaySales, setTodaySales]     = useState<SaleRecord[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
 
   useEffect(() => {
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* INVOICE SCANNER — full multi-page component */}
+              {/* INVOICE SCANNER */}
               <InvoiceScanner />
 
               {/* LOCATION CARDS */}
@@ -401,9 +401,9 @@ export default function DashboardPage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
                   {[
-                    { label: 'In Stock',  value: `${spinyTailsStock.toLocaleString()} lbs`, bg: '#e8f4fd', text: '#1a2e5a' },
-                    { label: 'Capacity',  value: '30,000 lbs',                              bg: '#e8f5e9', text: '#2e7d32' },
-                    { label: 'Used',      value: '31%',                                     bg: '#fef9e7', text: '#d97706' },
+                    { label: 'In Stock', value: `${spinyTailsStock.toLocaleString()} lbs`, bg: '#e8f4fd', text: '#1a2e5a' },
+                    { label: 'Capacity', value: '30,000 lbs',                              bg: '#e8f5e9', text: '#2e7d32' },
+                    { label: 'Used',     value: '31%',                                     bg: '#fef9e7', text: '#d97706' },
                   ].map((s) => (
                     <div key={s.label} style={{ backgroundColor: s.bg, borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
                       <div style={{ color: '#999', fontSize: '10px', marginBottom: '4px' }}>{s.label}</div>
