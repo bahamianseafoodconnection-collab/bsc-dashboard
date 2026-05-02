@@ -5,81 +5,81 @@ import Link from 'next/link';
 
 const WHOLESALERS = [
 {
-key: 'bahamas-food-services',
-name: 'Bahamas Food Services',
-tagline: 'Nassau\'s premier food distributor — meats, seafood, dairy & dry goods',
-color: '#1a5276',
-accent: '#f4c842',
-logo: '🏭',
-badge: 'Local Distributor',
-location: 'Nassau, New Providence',
-categories: ['Meats', 'Seafood', 'Dairy', 'Dry Goods'],
-},
-{
-key: 'burns-house',
-name: 'Burns House',
-tagline: 'Beverages, spirits, tobacco & household wholesale since 1921',
-color: '#7B241C',
-accent: '#F9E79F',
-logo: '🍾',
-badge: 'Est. 1921',
-location: 'Nassau, New Providence',
-categories: ['Beverages', 'Spirits', 'Tobacco', 'Household'],
-},
-{
-key: 'nassau-wholesale',
-name: 'Nassau Wholesale',
-tagline: 'General wholesale goods — groceries, cleaning supplies & more',
-color: '#1E8449',
-accent: '#FDFEFE',
-logo: '🏪',
-badge: 'General Wholesale',
-location: 'Nassau, New Providence',
-categories: ['Groceries', 'Cleaning', 'Paper Goods', 'Essentials'],
-},
-{
-key: 'caribbean-wholesale',
-name: 'Caribbean Wholesale',
-tagline: 'Island-wide wholesale supplier for restaurants & businesses',
-color: '#1A5276',
-accent: '#F5CBA7',
-logo: '🌴',
-badge: 'Island Wide',
-location: 'Nassau, New Providence',
-categories: ['Restaurant Supply', 'Bulk Foods', 'Produce', 'Frozen'],
-},
-{
-key: 'island-foods',
-name: 'Island Foods Ltd',
-tagline: 'Fresh produce, frozen goods and packaged foods in bulk',
-color: '#196F3D',
-accent: '#ABEBC6',
-logo: '🥦',
-badge: 'Fresh & Frozen',
-location: 'Nassau, New Providence',
-categories: ['Produce', 'Frozen Foods', 'Packaged', 'Organic'],
-},
-{
-key: 'atlantic-wholesale',
-name: 'Atlantic Wholesale',
-tagline: 'Hardware, janitorial, paper products and business supplies',
-color: '#2E4057',
+key: 'asa-h-pritchard',
+name: 'Asa H Pritchard',
+tagline: 'One of Nassau\'s most established wholesale distributors — groceries, dry goods & essentials',
+color: '#1B4F72',
 accent: '#F4C842',
-logo: '🔧',
-badge: 'Business Supply',
+logo: '🏪',
+badge: 'Est. Distributor',
 location: 'Nassau, New Providence',
-categories: ['Hardware', 'Janitorial', 'Paper', 'Office'],
+categories: ['Groceries', 'Dry Goods', 'Essentials', 'Beverages'],
 },
 {
-key: 'quality-distributors',
-name: 'Quality Distributors',
-tagline: 'Premium wholesale meats, poultry and seafood for businesses',
+key: 'bahamas-international-food',
+name: 'Bahamas International Food',
+tagline: 'Premium food wholesale — meats, frozen goods, dairy and international products',
+color: '#1E5C2E',
+accent: '#ABEBC6',
+logo: '🍱',
+badge: 'International Foods',
+location: 'Nassau, New Providence',
+categories: ['Meats', 'Frozen', 'Dairy', 'International'],
+},
+{
+key: 'dalbenas',
+name: "D'Albenas",
+tagline: 'Trusted Nassau wholesaler for grocery staples, canned goods and household products',
+color: '#784212',
+accent: '#FAD7A0',
+logo: '🏭',
+badge: 'Nassau Trusted',
+location: 'Nassau, New Providence',
+categories: ['Canned Goods', 'Household', 'Groceries', 'Cleaning'],
+},
+{
+key: 'bahamas-wholesale-agencies',
+name: 'Bahamas Wholesale Agencies',
+tagline: 'Full-service wholesale agency — branded goods, dry goods and bulk supplies',
+color: '#1A5276',
+accent: '#AED6F1',
+logo: '📦',
+badge: 'Full Service',
+location: 'Nassau, New Providence',
+categories: ['Branded Goods', 'Dry Goods', 'Bulk', 'Paper Products'],
+},
+{
+key: 'tpg',
+name: 'TPG',
+tagline: 'The Purchasing Group — competitive wholesale pricing on a wide range of products',
+color: '#2C3E50',
+accent: '#F4C842',
+logo: '🛒',
+badge: 'Best Pricing',
+location: 'Nassau, New Providence',
+categories: ['General', 'Groceries', 'Beverages', 'Essentials'],
+},
+{
+key: 'thompson-trading',
+name: 'Thompson Trading',
+tagline: 'Premium trading company — meats, poultry, seafood and specialty items',
 color: '#922B21',
 accent: '#FADBD8',
-logo: '🥩',
-badge: 'Premium Meats',
+logo: '🤝',
+badge: 'Premium Trading',
 location: 'Nassau, New Providence',
-categories: ['Meats', 'Poultry', 'Seafood', 'Deli'],
+categories: ['Meats', 'Poultry', 'Seafood', 'Specialty'],
+},
+{
+key: 'island-wholesale',
+name: 'Island Wholesale',
+tagline: 'Your local island wholesale source for produce, frozen goods and restaurant supplies',
+color: '#196F3D',
+accent: '#A9DFBF',
+logo: '🌴',
+badge: 'Island Supply',
+location: 'Nassau, New Providence',
+categories: ['Produce', 'Frozen', 'Restaurant Supply', 'Bulk Foods'],
 },
 ];
 
@@ -89,7 +89,6 @@ const router = useRouter();
 return (
 <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, sans-serif' }}>
 
-{/* HEADER */}
 <header style={{ backgroundColor: '#1a2e5a', padding: '0 20px', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
 <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
@@ -104,7 +103,6 @@ return (
 </div>
 </header>
 
-{/* HERO */}
 <div style={{ background: 'linear-gradient(135deg, #1a2e5a 0%, #154360 50%, #1a2e5a 100%)', padding: '60px 20px' }}>
 <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(244,200,66,0.15)', border: '1px solid rgba(244,200,66,0.3)', borderRadius: 20, padding: '6px 16px', marginBottom: 20 }}>
@@ -134,7 +132,6 @@ Access Nassau's top 7 wholesale suppliers through BSC Marketplace. Order in bulk
 </div>
 </div>
 
-{/* PRICING INFO */}
 <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px', display: 'flex', gap: 24, flexWrap: 'wrap', justifyContent: 'center' }}>
 {[
@@ -151,7 +148,6 @@ Access Nassau's top 7 wholesale suppliers through BSC Marketplace. Order in bulk
 </div>
 </div>
 
-{/* WHOLESALER CARDS */}
 <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 20px' }}>
 <div style={{ textAlign: 'center', marginBottom: 40 }}>
 <p style={{ color: '#f4c842', fontWeight: 700, fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', margin: '0 0 8px' }}>7 Local Partners</p>
@@ -163,33 +159,27 @@ Access Nassau's top 7 wholesale suppliers through BSC Marketplace. Order in bulk
 <div
 key={w.key}
 onClick={() => router.push(`/local-wholesale/${w.key}`)}
-style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', border: '1px solid #e5e7eb', cursor: 'pointer' }}
+style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', border: '1px solid #e5e7eb', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.15)'; }}
 onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
 >
-{/* Color banner */}
 <div style={{ backgroundColor: w.color, padding: '28px 24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
 <div>
 <div style={{ fontSize: 44, marginBottom: 8 }}>{w.logo}</div>
 <h3 style={{ color: '#ffffff', fontWeight: 900, fontSize: 20, margin: '0 0 4px' }}>{w.name}</h3>
 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>📍 {w.location}</div>
 </div>
-<div style={{ backgroundColor: w.accent, borderRadius: 8, padding: '5px 10px', textAlign: 'center', maxWidth: 110 }}>
+<div style={{ backgroundColor: w.accent, borderRadius: 8, padding: '5px 10px', textAlign: 'center', maxWidth: 120 }}>
 <span style={{ color: w.color, fontSize: 10, fontWeight: 800 }}>{w.badge}</span>
 </div>
 </div>
-
-{/* Info */}
 <div style={{ padding: '20px 24px' }}>
 <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6, margin: '0 0 14px' }}>{w.tagline}</p>
-
-{/* Categories */}
 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
 {w.categories.map((cat) => (
 <span key={cat} style={{ backgroundColor: '#f0f4ff', color: '#1a2e5a', fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20 }}>{cat}</span>
 ))}
 </div>
-
 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 <div style={{ display: 'flex', gap: 8 }}>
 <span style={{ backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>🇧🇸 Local</span>
@@ -204,13 +194,12 @@ Shop →
 ))}
 </div>
 
-{/* HOW IT WORKS */}
 <div style={{ backgroundColor: '#1a2e5a', borderRadius: 20, padding: '40px 32px', marginTop: 48 }}>
 <h3 style={{ color: '#f4c842', fontWeight: 900, fontSize: 20, textAlign: 'center', margin: '0 0 32px' }}>How Local Wholesale Works</h3>
 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24 }}>
 {[
 { step: '1', icon: '🛒', title: 'Browse & Order', desc: 'Pick bulk items from any local wholesaler. All prices include BSC markup and VAT.' },
-{ step: '2', icon: '📋', title: 'BSC Receives Order', desc: 'Your order goes directly to BSC who coordinates with the wholesaler.' },
+{ step: '2', icon: '📋', title: 'BSC Gets Your List', desc: 'Your order goes directly to BSC who coordinates with the wholesaler.' },
 { step: '3', icon: '🏭', title: 'Picked Up Locally', desc: 'BSC picks up your order from the Nassau warehouse.' },
 { step: '4', icon: '🚚', title: 'Delivered to You', desc: 'BSC delivers to your home or business in Nassau or Andros.' },
 ].map((item) => (
