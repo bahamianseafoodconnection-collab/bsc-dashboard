@@ -1,65 +1,124 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { createBrowserClient } from '@supabase/ssr';
 
-const SUPABASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-const CATEGORIES = ['All', 'Seafood', 'Meats', 'Poultry', 'Groceries', 'Essentials'];
+const CATEGORIES = ['All', 'seafood', 'meats', 'poultry', 'groceries', 'essentials', 'beverages', 'produce', 'other'];
 
-const PRODUCTS = [
-  { id: 1, name: 'Fresh Grouper', category: 'Seafood', price: 14.99, unit: 'per lb', emoji: '🐟', badge: 'Fresh Today', color: '#e8f4fd' },
-  { id: 2, name: 'Spiny Lobster Tails', category: 'Seafood', price: 28.00, unit: 'per lb', emoji: '🦞', badge: 'Local Catch', color: '#fff3e8' },
-  { id: 3, name: 'Conch Meat', category: 'Seafood', price: 12.50, unit: 'per lb', emoji: '🐚', badge: 'Local', color: '#e8f4fd' },
-  { id: 4, name: 'Red Snapper', category: 'Seafood', price: 13.99, unit: 'per lb', emoji: '🐠', badge: 'Fresh Today', color: '#fde8e8' },
-  { id: 5, name: 'Raw Shrimp', category: 'Seafood', price: 16.00, unit: 'per lb', emoji: '🦐', badge: '', color: '#e8f4fd' },
-  { id: 6, name: 'Ribeye Steak', category: 'Meats', price: 22.99, unit: 'per lb', emoji: '🥩', badge: 'Premium', color: '#fde8e8' },
-  { id: 7, name: 'NY Strip Steak', category: 'Meats', price: 19.99, unit: 'per lb', emoji: '🥩', badge: 'Premium', color: '#fde8e8' },
-  { id: 8, name: 'Pork Chops', category: 'Meats', price: 9.99, unit: 'per lb', emoji: '🍖', badge: '', color: '#f5e8fd' },
-  { id: 9, name: 'Beef Short Ribs', category: 'Meats', price: 11.99, unit: 'per lb', emoji: '🍖', badge: '', color: '#fde8e8' },
-  { id: 10, name: 'Whole Chicken', category: 'Poultry', price: 8.99, unit: 'per lb', emoji: '🍗', badge: '', color: '#fdf5e8' },
-  { id: 11, name: 'Chicken Wings', category: 'Poultry', price: 6.99, unit: 'per lb', emoji: '🍗', badge: 'Popular', color: '#fdf5e8' },
-  { id: 12, name: 'Leg Quarters', category: 'Poultry', price: 4.99, unit: 'per lb', emoji: '🍗', badge: '', color: '#fdf5e8' },
-  { id: 13, name: 'White Rice 25lb', category: 'Groceries', price: 24.99, unit: 'per bag', emoji: '🌾', badge: '', color: '#f0fde8' },
-  { id: 14, name: 'Cooking Oil 1gal', category: 'Groceries', price: 12.99, unit: 'each', emoji: '🫙', badge: '', color: '#f0fde8' },
-  { id: 15, name: 'Black Beans 5lb', category: 'Groceries', price: 7.99, unit: 'per bag', emoji: '🫘', badge: '', color: '#f0fde8' },
-  { id: 16, name: 'Bottled Water 24pk', category: 'Essentials', price: 9.99, unit: 'per case', emoji: '💧', badge: '', color: '#e8f8fd' },
-];
+type Product = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  price_online: number;
+  unit: string;
+  image_url: string;
+  in_stock: boolean;
+  featured: boolean;
+  stock_lbs: number;
+};
 
-type CartItem = { id: number; name: string; price: number; unit: string; emoji: string; qty: number };
+type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  unit: string;
+  image_url: string;
+  qty: number;
+};
+
+function categoryEmoji(cat: string) {
+  const map: Record<string, string> = {
+    seafood: '🐟', meats: '🥩', poultry: '🍗',
+    groceries: '🌾', essentials: '💧', beverages: '🥤',
+    produce: '🥦', other: '📦',
+  };
+  return map[cat] || '📦';
+}
+
+function categoryColor(cat: string) {
+  const map: Record<string, string> = {
+    seafood: '#e8f4fd', meats: '#fde8e8', poultry: '#fdf5e8',
+    groceries: '#f0fde8', essentials: '#e8f8fd', beverages: '#f5f0ff',
+    produce: '#f0fde8', other: '#f5f5f5',
+  };
+  return map[cat] || '#f5f5f5';
+}
 
 export default function MarketPage() {
+  const [products, setProducts]         = useState<Product[]>([]);
+  const [loading, setLoading]           = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [cart, setCart]                 = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen]         = useState(false);
+  const [search, setSearch]             = useState('');
 
-  const filtered = PRODUCTS.filter((p) => {
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  async function loadProducts() {
+    setLoading(true);
+    const { data } = await supabase
+      .from('products')
+      .select('*')
+      .eq('in_stock', true)
+      .order('featured', { ascending: false })
+      .order('created_at', { ascending: false });
+    setProducts(data || []);
+    setLoading(false);
+  }
+
+  const filtered = products.filter((p) => {
     const matchCat = activeCategory === 'All' || p.category === activeCategory;
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
 
-  function addToCart(product: typeof PRODUCTS[0]) {
+  function addToCart(product: Product) {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) return prev.map((i) => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { id: product.id, name: product.name, price: product.price, unit: product.unit, emoji: product.emoji, qty: 1 }];
+      return [...prev, {
+        id: product.id,
+        name: product.name,
+        price: product.price_online,
+        unit: product.unit,
+        image_url: product.image_url,
+        qty: 1,
+      }];
     });
   }
 
-  function removeFromCart(id: number) {
+  function removeFromCart(id: string) {
     setCart((prev) => prev.filter((i) => i.id !== id));
   }
 
-  function changeQty(id: number, delta: number) {
+  function changeQty(id: string, delta: number) {
     setCart((prev) =>
       prev.map((i) => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)
     );
   }
+
+  function goCheckout() {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bsc_cart', JSON.stringify(cart.map(i => ({
+        id: i.id, name: i.name, price: i.price, quantity: i.qty, unit: i.unit,
+      }))));
+      window.location.href = '/checkout';
+    }
+  }
+
+  const displayCategories = ['All', ...Array.from(new Set(products.map(p => p.category)))];
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -85,7 +144,6 @@ export default function MarketPage() {
             </div>
           </Link>
 
-          {/* Search bar */}
           <div style={{ flex: 1, maxWidth: '420px', margin: '0 24px', position: 'relative' }}>
             <input
               type="text"
@@ -100,7 +158,6 @@ export default function MarketPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Cart button */}
             <button
               onClick={() => setCartOpen(true)}
               style={{ position: 'relative', backgroundColor: '#1a2e5a', color: '#fff', border: 'none', borderRadius: '10px', padding: '9px 18px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '14px' }}
@@ -151,7 +208,7 @@ export default function MarketPage() {
       {/* CATEGORY FILTERS */}
       <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #ebebeb', padding: '0 20px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', gap: '4px', overflowX: 'auto' }}>
-          {CATEGORIES.map((cat) => (
+          {displayCategories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -165,10 +222,10 @@ export default function MarketPage() {
                 fontSize: '14px',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
-                transition: 'all 0.15s',
+                textTransform: 'capitalize',
               }}
             >
-              {cat}
+              {cat === 'All' ? 'All' : `${categoryEmoji(cat)} ${cat.charAt(0).toUpperCase() + cat.slice(1)}`}
             </button>
           ))}
         </div>
@@ -177,11 +234,10 @@ export default function MarketPage() {
       {/* MAIN CONTENT */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '28px 20px' }}>
 
-        {/* Result count */}
         <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
             <span style={{ color: '#1a2e5a', fontWeight: 800 }}>{filtered.length}</span> products
-            {activeCategory !== 'All' && <span> in <span style={{ color: '#1a2e5a', fontWeight: 700 }}>{activeCategory}</span></span>}
+            {activeCategory !== 'All' && <span> in <span style={{ color: '#1a2e5a', fontWeight: 700, textTransform: 'capitalize' }}>{activeCategory}</span></span>}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '12px', color: '#999' }}>Delivery or Pickup</span>
@@ -189,59 +245,82 @@ export default function MarketPage() {
           </div>
         </div>
 
-        {/* Product Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-          {filtered.map((product) => {
-            const inCart = cart.find((i) => i.id === product.id);
-            return (
-              <div
-                key={product.id}
-                style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.2s' }}
-              >
-                {/* Product image area */}
-                <div style={{ backgroundColor: product.color, height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  <span style={{ fontSize: '56px' }}>{product.emoji}</span>
-                  {product.badge && (
-                    <span style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: '#1a2e5a', color: '#f4c842', fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.5px' }}>
-                      {product.badge}
-                    </span>
-                  )}
-                </div>
-
-                {/* Product info */}
-                <div style={{ padding: '14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '10px', color: '#999', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>{product.category}</div>
-                  <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', margin: '0 0 6px', lineHeight: 1.3 }}>{product.name}</h3>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '14px' }}>
-                    <span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>${product.price.toFixed(2)}</span>
-                    <span style={{ color: '#999', fontSize: '11px' }}>{product.unit}</span>
-                  </div>
-
-                  {inCart ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f0f4ff', borderRadius: '10px', padding: '6px 10px' }}>
-                      <button onClick={() => changeQty(product.id, -1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: '#fff', color: '#1a2e5a', fontWeight: 900, fontSize: '16px', cursor: 'pointer' }}>-</button>
-                      <span style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>{inCart.qty}</span>
-                      <button onClick={() => changeQty(product.id, 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: '#1a2e5a', color: '#fff', fontWeight: 900, fontSize: '16px', cursor: 'pointer' }}>+</button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => addToCart(product)}
-                      style={{ width: '100%', backgroundColor: '#1a2e5a', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
-                    >
-                      Add to Cart
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {filtered.length === 0 && (
+        {/* Loading state */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>🐟</div>
+            <p style={{ color: '#999', fontSize: '14px' }}>Loading fresh products...</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
-            <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '18px' }}>No products found</h3>
-            <p style={{ color: '#999', fontSize: '14px' }}>Try a different search or category</p>
+            <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '18px' }}>
+              {products.length === 0 ? 'No products yet' : 'No products found'}
+            </h3>
+            <p style={{ color: '#999', fontSize: '14px' }}>
+              {products.length === 0
+                ? 'Products added from the dashboard will appear here automatically.'
+                : 'Try a different search or category'}
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+            {filtered.map((product) => {
+              const inCart = cart.find((i) => i.id === product.id);
+              const emoji = categoryEmoji(product.category);
+              const bgColor = categoryColor(product.category);
+
+              return (
+                <div
+                  key={product.id}
+                  style={{ backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: product.featured ? '2px solid #f4c842' : '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' }}
+                >
+                  {/* Product image */}
+                  <div style={{ backgroundColor: bgColor, height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: '56px' }}>{emoji}</span>
+                    )}
+                    {product.featured && (
+                      <span style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>
+                        ⭐ Featured
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Product info */}
+                  <div style={{ padding: '14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ fontSize: '10px', color: '#999', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>{product.category}</div>
+                    <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', margin: '0 0 4px', lineHeight: 1.3 }}>{product.name}</h3>
+                    {product.description && (
+                      <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 8px', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {product.description}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '14px', marginTop: 'auto' }}>
+                      <span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>BSD ${product.price_online.toFixed(2)}</span>
+                      <span style={{ color: '#999', fontSize: '11px' }}>/{product.unit}</span>
+                    </div>
+
+                    {inCart ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f0f4ff', borderRadius: '10px', padding: '6px 10px' }}>
+                        <button onClick={() => changeQty(product.id, -1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: '#fff', color: '#1a2e5a', fontWeight: 900, fontSize: '16px', cursor: 'pointer' }}>-</button>
+                        <span style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>{inCart.qty}</span>
+                        <button onClick={() => changeQty(product.id, 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: '#1a2e5a', color: '#fff', fontWeight: 900, fontSize: '16px', cursor: 'pointer' }}>+</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addToCart(product)}
+                        style={{ width: '100%', backgroundColor: '#1a2e5a', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                      >
+                        Add to Cart
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -252,13 +331,11 @@ export default function MarketPage() {
           <div onClick={() => setCartOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100 }} />
           <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: '100%', maxWidth: '420px', backgroundColor: '#fff', zIndex: 101, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }}>
 
-            {/* Cart header */}
             <div style={{ padding: '20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1a2e5a' }}>
               <h2 style={{ color: '#fff', fontWeight: 900, fontSize: '18px', margin: 0 }}>Your Cart {cartCount > 0 && `(${cartCount})`}</h2>
               <button onClick={() => setCartOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
 
-            {/* Cart items */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
               {cart.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -271,10 +348,16 @@ export default function MarketPage() {
               ) : (
                 cart.map((item) => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 0', borderBottom: '1px solid #f5f5f5' }}>
-                    <div style={{ fontSize: '32px', width: '48px', textAlign: 'center' }}>{item.emoji}</div>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '10px', backgroundColor: '#f8f9fa', overflow: 'hidden', flexShrink: 0 }}>
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🐟</div>
+                      )}
+                    </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '14px' }}>{item.name}</div>
-                      <div style={{ color: '#999', fontSize: '12px' }}>${item.price.toFixed(2)} {item.unit}</div>
+                      <div style={{ color: '#999', fontSize: '12px' }}>BSD ${item.price.toFixed(2)}/{item.unit}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <button onClick={() => changeQty(item.id, -1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: '1px solid #e5e7eb', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900 }}>-</button>
@@ -282,7 +365,7 @@ export default function MarketPage() {
                       <button onClick={() => changeQty(item.id, 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900 }}>+</button>
                     </div>
                     <div style={{ textAlign: 'right', minWidth: '60px' }}>
-                      <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>${(item.price * item.qty).toFixed(2)}</div>
+                      <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>BSD ${(item.price * item.qty).toFixed(2)}</div>
                       <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '11px', cursor: 'pointer', padding: 0 }}>Remove</button>
                     </div>
                   </div>
@@ -290,20 +373,24 @@ export default function MarketPage() {
               )}
             </div>
 
-            {/* Cart footer */}
             {cart.length > 0 && (
               <div style={{ padding: '20px', borderTop: '1px solid #f0f0f0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <span style={{ color: '#666', fontSize: '14px' }}>Subtotal</span>
-                  <span style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '16px' }}>${cartTotal.toFixed(2)}</span>
+                  <span style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '16px' }}>BSD ${cartTotal.toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <span style={{ color: '#666', fontSize: '13px' }}>Delivery fee</span>
-                  <span style={{ color: '#2e7d32', fontSize: '13px', fontWeight: 700 }}>Calculated at checkout</span>
+                  <span style={{ color: '#666', fontSize: '13px' }}>Delivery</span>
+                  <span style={{ color: cartTotal >= 1000 ? '#2e7d32' : '#666', fontSize: '13px', fontWeight: 700 }}>
+                    {cartTotal >= 1000 ? '🚚 FREE' : 'Calculated at checkout'}
+                  </span>
                 </div>
-                <Link href="/login" style={{ display: 'block', backgroundColor: '#f4c842', color: '#1a2e5a', fontWeight: 900, fontSize: '15px', padding: '14px', borderRadius: '12px', textDecoration: 'none', textAlign: 'center', marginBottom: '10px' }}>
-                  Checkout · ${cartTotal.toFixed(2)}
-                </Link>
+                <button
+                  onClick={goCheckout}
+                  style={{ display: 'block', width: '100%', backgroundColor: '#f4c842', color: '#1a2e5a', fontWeight: 900, fontSize: '15px', padding: '14px', borderRadius: '12px', border: 'none', cursor: 'pointer', marginBottom: '10px' }}
+                >
+                  Checkout · BSD ${cartTotal.toFixed(2)}
+                </button>
                 <p style={{ textAlign: 'center', color: '#999', fontSize: '12px', margin: 0 }}>
                   💬 Receipt sent to your WhatsApp
                 </p>
@@ -323,15 +410,19 @@ export default function MarketPage() {
             </div>
             <div>
               <h4 style={{ color: '#f4c842', fontWeight: 900, fontSize: '14px', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Shop</h4>
-              {['Seafood', 'Meats', 'Poultry', 'Groceries', 'Essentials'].map((c) => (
+              {['seafood', 'meats', 'poultry', 'groceries', 'essentials'].map((c) => (
                 <div key={c} style={{ marginBottom: '6px' }}>
-                  <button onClick={() => { setActiveCategory(c); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '13px', cursor: 'pointer', padding: 0 }}>{c}</button>
+                  <button onClick={() => setActiveCategory(c)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: '13px', cursor: 'pointer', padding: 0, textTransform: 'capitalize' }}>{c}</button>
                 </div>
               ))}
             </div>
             <div>
               <h4 style={{ color: '#f4c842', fontWeight: 900, fontSize: '14px', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Services</h4>
-              {[{ label: 'Pay Utility Bills', href: '/utilities' }, { label: 'Vehicles & Parts', href: '/vehicles' }, { label: 'Supplier Portal', href: '/supplier' }].map((l) => (
+              {[
+                { label: 'Pay Utility Bills', href: '/utilities' },
+                { label: 'Vehicles & Parts', href: '/vehicles' },
+                { label: 'Supplier Portal', href: '/supplier' },
+              ].map((l) => (
                 <div key={l.label} style={{ marginBottom: '6px' }}>
                   <Link href={l.href} style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', textDecoration: 'none' }}>{l.label}</Link>
                 </div>
@@ -351,7 +442,6 @@ export default function MarketPage() {
           </div>
         </div>
       </footer>
-
     </div>
   );
 }
