@@ -1,0 +1,387 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createBrowserClient } from '@supabase/ssr';
+
+const supabase = createBrowserClient(
+process.env.NEXT_PUBLIC_SUPABASE_URL!,
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+const WHOLESALER_INFO: Record<string, { name: string; color: string; logo: string; tagline: string }> = {
+'bahamas-food-services': { name: 'Bahamas Food Services', color: '#1a5276', logo: '🏭', tagline: 'Nassau\'s premier food distributor' },
+'burns-house': { name: 'Burns House', color: '#7B241C', logo: '🍾', tagline: 'Beverages, spirits & household wholesale' },
+'nassau-wholesale': { name: 'Nassau Wholesale', color: '#1E8449', logo: '🏪', tagline: 'General wholesale goods' },
+'caribbean-wholesale': { name: 'Caribbean Wholesale', color: '#1A5276', logo: '🌴', tagline: 'Island-wide wholesale supplier' },
+'island-foods': { name: 'Island Foods Ltd', color: '#196F3D', logo: '🥦', tagline: 'Fresh produce & frozen goods in bulk' },
+'atlantic-wholesale': { name: 'Atlantic Wholesale', color: '#2E4057', logo: '🔧', tagline: 'Hardware, janitorial & business supplies' },
+'quality-distributors': { name: 'Quality Distributors', color: '#922B21', logo: '🥩', tagline: 'Premium wholesale meats & seafood' },
+};
+
+type Product = {
+id: string;
+wholesaler: string;
+name: string;
+description: string;
+category: string;
+wholesale_cost_bsd: number;
+bsc_markup_pct: number;
+vat_pct: number;
+final_price_bsd: number;
+unit: string;
+min_order_qty: number;
+image_url: string;
+in_stock: boolean;
+featured: boolean;
+};
+
+type CartItem = {
+id: string;
+name: string;
+price: number;
+qty: number;
+unit: string;
+wholesaler: string;
+min_order_qty: number;
+};
+
+function calcPrice(p: Product): number {
+const withMarkup = p.wholesale_cost_bsd * (1 + p.bsc_markup_pct);
+const withVat = withMarkup * (1 + p.vat_pct);
+return Math.round(withVat * 100) / 100;
+}
+
+function PriceBreakdown({ p }: { p: Product }) {
+const withMarkup = p.wholesale_cost_bsd * (1 + p.bsc_markup_pct);
+const markup = withMarkup - p.wholesale_cost_bsd;
+const vat = withMarkup * p.vat_pct;
+const total = withMarkup + vat;
+
+return (
+<div style={{ backgroundColor: '#f8f9fa', borderRadius: 10, padding: 12, marginTop: 8, fontSize: 11 }}>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+<span style={{ color: '#666' }}>Wholesale Cost</span>
+<span style={{ color: '#1a2e5a', fontWeight: 600 }}>BSD ${p.wholesale_cost_bsd.toFixed(2)}</span>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+<span style={{ color: '#666' }}>BSC Service (12%)</span>
+<span style={{ color: '#1a2e5a', fontWeight: 600 }}>+${markup.toFixed(2)}</span>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+<span style={{ color: '#666' }}>VAT (10%)</span>
+<span style={{ color: '#1a2e5a', fontWeight: 600 }}>+${vat.toFixed(2)}</span>
+</div>
+<div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+<span style={{ color: '#1a2e5a', fontWeight: 800 }}>Your Price (BSD)</span>
+<span style={{ color: '#1a2e5a', fontWeight: 900 }}>BSD ${total.toFixed(2)}</span>
+</div>
+{p.min_order_qty > 1 && (
+<div style={{ marginTop: 6, color: '#d97706', fontSize: 11, fontWeight: 600 }}>
+⚠️ Min order: {p.min_order_qty} {p.unit}
+</div>
+)}
+</div>
+);
+}
+
+export default function WholesalerPage() {
+const params = useParams();
+const router = useRouter();
+const wholesalerKey = params?.wholesaler as string;
+const info = WHOLESALER_INFO[wholesalerKey];
+
+const [products, setProducts] = useState<Product[]>([]);
+const [loading, setLoading] = useState(true);
+const [cart, setCart] = useState<CartItem[]>([]);
+const [cartOpen, setCartOpen] = useState(false);
+const [search, setSearch] = useState('');
+const [activeCategory, setActiveCategory] = useState('All');
+const [showBreakdown, setShowBreakdown] = useState<string | null>(null);
+
+useEffect(() => { if (wholesalerKey) loadProducts(); }, [wholesalerKey]);
+
+async function loadProducts() {
+setLoading(true);
+const { data } = await supabase
+.from('local_wholesale_products')
+.select('*')
+.eq('wholesaler', wholesalerKey)
+.eq('in_stock', true)
+.order('featured', { ascending: false })
+.order('created_at', { ascending: false });
+setProducts(data || []);
+setLoading(false);
+}
+
+const categories = ['All', ...Array.from(new Set(products.map(p => p.category)))];
+
+const filtered = products.filter((p) => {
+const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
+const matchCat = activeCategory === 'All' || p.category === activeCategory;
+return matchSearch && matchCat;
+});
+
+const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+
+function addToCart(product: Product) {
+const price = product.final_price_bsd > 0 ? product.final_price_bsd : calcPrice(product);
+const minQty = product.min_order_qty || 1;
+setCart((prev) => {
+const existing = prev.find((i) => i.id === product.id);
+if (existing) return prev.map((i) => i.id === product.id ? { ...i, qty: i.qty + minQty } : i);
+return [...prev, { id: product.id, name: product.name, price, qty: minQty, unit: product.unit, wholesaler: wholesalerKey, min_order_qty: minQty }];
+});
+}
+
+function changeQty(id: string, delta: number) {
+setCart((prev) => prev.map((i) => {
+if (i.id !== id) return i;
+const newQty = Math.max(i.min_order_qty, i.qty + delta);
+return { ...i, qty: newQty };
+}));
+}
+
+function removeFromCart(id: string) {
+setCart((prev) => prev.filter((i) => i.id !== id));
+}
+
+function goCheckout() {
+if (typeof window !== 'undefined') {
+localStorage.setItem('bsc_cart', JSON.stringify(cart.map(i => ({
+id: i.id,
+name: `[${info?.name}] ${i.name}`,
+price: i.price,
+quantity: i.qty,
+unit: i.unit,
+}))));
+router.push('/checkout');
+}
+}
+
+if (!info) {
+return (
+<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+<div style={{ textAlign: 'center' }}>
+<div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+<h2 style={{ color: '#1a2e5a' }}>Wholesaler not found</h2>
+<Link href="/local-wholesale" style={{ color: '#1a2e5a', fontWeight: 700 }}>← Back to wholesalers</Link>
+</div>
+</div>
+);
+}
+
+return (
+<div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, sans-serif' }}>
+
+{/* HEADER */}
+<header style={{ backgroundColor: info.color, padding: '0 20px', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+<div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+<button onClick={() => router.push('/local-wholesale')} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>← Wholesalers</button>
+<div style={{ color: '#fff', fontWeight: 900, fontSize: 17 }}>{info.logo} {info.name}</div>
+</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+<input
+value={search}
+onChange={(e) => setSearch(e.target.value)}
+placeholder="Search products..."
+style={{ padding: '8px 14px', borderRadius: 8, border: 'none', fontSize: 13, outline: 'none', minWidth: 180 }}
+/>
+<button
+onClick={() => setCartOpen(true)}
+style={{ backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+>
+🛒 Cart {cartCount > 0 && `(${cartCount})`}
+</button>
+</div>
+</div>
+</header>
+
+{/* WHOLESALER HERO */}
+<div style={{ backgroundColor: info.color, padding: '32px 20px', borderBottom: '4px solid #f4c842' }}>
+<div style={{ maxWidth: 1200, margin: '0 auto' }}>
+<p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, margin: '0 0 8px' }}>
+🇧🇸 Nassau, Bahamas · Local Wholesale · BSC handles pickup & delivery
+</p>
+<h1 style={{ color: '#fff', fontSize: 30, fontWeight: 900, margin: '0 0 8px' }}>{info.name}</h1>
+<p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, margin: 0 }}>{info.tagline}</p>
+</div>
+</div>
+
+{/* PRICING NOTE */}
+<div style={{ backgroundColor: '#fef9e7', borderBottom: '1px solid #fde047', padding: '12px 20px' }}>
+<div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+<span style={{ fontSize: 16 }}>💡</span>
+<span style={{ color: '#713f12', fontSize: 13, fontWeight: 600 }}>
+All prices include wholesale cost + BSC 12% service + 10% VAT. Click any product to see the breakdown. Minimum order quantities apply.
+</span>
+</div>
+</div>
+
+{/* CATEGORY FILTERS */}
+{categories.length > 1 && (
+<div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 20px' }}>
+<div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 4, overflowX: 'auto' }}>
+{categories.map((cat) => (
+<button
+key={cat}
+onClick={() => setActiveCategory(cat)}
+style={{ padding: '12px 18px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: activeCategory === cat ? `3px solid ${info.color}` : '3px solid transparent', backgroundColor: 'transparent', color: activeCategory === cat ? info.color : '#666', fontWeight: activeCategory === cat ? 800 : 500, fontSize: 13 }}
+>
+{cat}
+</button>
+))}
+</div>
+</div>
+)}
+
+{/* PRODUCTS */}
+<div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 20px' }}>
+{loading ? (
+<div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
+<div style={{ fontSize: 40, marginBottom: 12 }}>{info.logo}</div>
+Loading products...
+</div>
+) : filtered.length === 0 ? (
+<div style={{ textAlign: 'center', padding: 60 }}>
+<div style={{ fontSize: 48, marginBottom: 16 }}>📦</div>
+<h3 style={{ color: '#1a2e5a', fontWeight: 800 }}>
+{products.length === 0 ? 'No products listed yet' : 'No products match your search'}
+</h3>
+<p style={{ color: '#999', fontSize: 14 }}>
+{products.length === 0 ? 'Products are being added. Check back soon.' : 'Try a different search or category'}
+</p>
+</div>
+) : (
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+{filtered.map((product) => {
+const finalPrice = product.final_price_bsd > 0 ? product.final_price_bsd : calcPrice(product);
+const inCart = cart.find((i) => i.id === product.id);
+const showingBreakdown = showBreakdown === product.id;
+
+return (
+<div key={product.id} style={{ backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: product.featured ? `2px solid ${info.color}` : '1px solid #e5e7eb' }}>
+
+{/* Image */}
+<div style={{ height: 160, backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+{product.image_url ? (
+<img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+) : (
+<span style={{ fontSize: 56 }}>{info.logo}</span>
+)}
+{product.featured && (
+<div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: info.color, color: '#fff', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6 }}>
+⭐ Featured
+</div>
+)}
+{product.min_order_qty > 1 && (
+<div style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#d97706', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>
+Min {product.min_order_qty} {product.unit}
+</div>
+)}
+</div>
+
+<div style={{ padding: '14px' }}>
+<div style={{ fontSize: 10, color: '#999', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+{product.category} · per {product.unit}
+</div>
+<h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 15, margin: '0 0 4px', lineHeight: 1.3 }}>{product.name}</h3>
+{product.description && (
+<p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 8px', lineHeight: 1.4 }}>{product.description}</p>
+)}
+
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+<div>
+<div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 20 }}>BSD ${finalPrice.toFixed(2)}</div>
+<div style={{ color: '#94a3b8', fontSize: 11 }}>Wholesale: ${product.wholesale_cost_bsd.toFixed(2)} + BSC + VAT</div>
+</div>
+<button
+onClick={() => setShowBreakdown(showingBreakdown ? null : product.id)}
+style={{ backgroundColor: '#f0f4ff', color: '#1a2e5a', border: 'none', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+>
+{showingBreakdown ? 'Hide' : '📊 Breakdown'}
+</button>
+</div>
+
+{showingBreakdown && <PriceBreakdown p={product} />}
+
+<div style={{ marginTop: 12 }}>
+{inCart ? (
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f0f4ff', borderRadius: 10, padding: '6px 10px' }}>
+<button onClick={() => changeQty(product.id, -(product.min_order_qty || 1))} style={{ width: 28, height: 28, borderRadius: 8, border: 'none', backgroundColor: '#fff', color: '#1a2e5a', fontWeight: 900, fontSize: 16, cursor: 'pointer' }}>-</button>
+<span style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14 }}>{inCart.qty} {product.unit}</span>
+<button onClick={() => changeQty(product.id, product.min_order_qty || 1)} style={{ width: 28, height: 28, borderRadius: 8, border: 'none', backgroundColor: '#1a2e5a', color: '#fff', fontWeight: 900, fontSize: 16, cursor: 'pointer' }}>+</button>
+</div>
+) : (
+<button
+onClick={() => addToCart(product)}
+style={{ width: '100%', backgroundColor: info.color, color: '#fff', border: 'none', borderRadius: 10, padding: '11px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+>
+Add to Cart — BSD ${finalPrice.toFixed(2)}
+</button>
+)}
+</div>
+</div>
+</div>
+);
+})}
+</div>
+)}
+</div>
+
+{/* CART DRAWER */}
+{cartOpen && (
+<>
+<div onClick={() => setCartOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100 }} />
+<div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: '100%', maxWidth: 400, backgroundColor: '#fff', zIndex: 101, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }}>
+<div style={{ padding: '20px', backgroundColor: info.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+<h2 style={{ color: '#fff', fontWeight: 900, fontSize: 18, margin: 0 }}>Your Cart ({cartCount})</h2>
+<button onClick={() => setCartOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer' }}>×</button>
+</div>
+<div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+{cart.length === 0 ? (
+<div style={{ textAlign: 'center', padding: 48, color: '#999' }}>
+<div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
+Cart is empty
+</div>
+) : (
+cart.map((item) => (
+<div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f5f5f5' }}>
+<div style={{ flex: 1 }}>
+<div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 13 }}>{item.name}</div>
+<div style={{ color: '#999', fontSize: 12 }}>BSD ${item.price.toFixed(2)} / {item.unit}</div>
+</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+<button onClick={() => changeQty(item.id, -(item.min_order_qty))} style={{ width: 26, height: 26, border: '1px solid #e5e7eb', borderRadius: 6, backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900 }}>-</button>
+<span style={{ fontWeight: 800, minWidth: 30, textAlign: 'center', fontSize: 13 }}>{item.qty}</span>
+<button onClick={() => changeQty(item.id, item.min_order_qty)} style={{ width: 26, height: 26, border: 'none', borderRadius: 6, backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900 }}>+</button>
+</div>
+<div style={{ minWidth: 90, textAlign: 'right' }}>
+<div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 13 }}>BSD ${(item.price * item.qty).toFixed(2)}</div>
+<button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer', padding: 0 }}>Remove</button>
+</div>
+</div>
+))
+)}
+</div>
+{cart.length > 0 && (
+<div style={{ padding: 20, borderTop: '1px solid #f0f0f0' }}>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+<span style={{ color: '#666', fontSize: 14 }}>Total</span>
+<span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 18 }}>BSD ${cartTotal.toFixed(2)}</span>
+</div>
+<button onClick={goCheckout} style={{ width: '100%', backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 12, padding: 14, fontWeight: 900, fontSize: 15, cursor: 'pointer', marginBottom: 8 }}>
+Checkout · BSD ${cartTotal.toFixed(2)}
+</button>
+<p style={{ textAlign: 'center', color: '#999', fontSize: 12, margin: 0 }}>All prices include BSC service + VAT</p>
+</div>
+)}
+</div>
+</>
+)}
+</div>
+);
+}
