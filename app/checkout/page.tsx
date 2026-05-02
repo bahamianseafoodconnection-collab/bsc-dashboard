@@ -1,14 +1,8 @@
-// ============================================================
-// BSC MARKETPLACE — CHECKOUT PAGE
-// File: app/checkout/page.tsx
-// Route: /checkout
-// Connects: /market (cart) → /api/payment/charge → confirmation
-// ============================================================
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type CartItem = {
 id: string;
@@ -18,638 +12,332 @@ quantity: number;
 unit: string;
 };
 
-type PaymentMethod = 'card' | 'cash_on_delivery';
-
-type CheckoutState = 'form' | 'processing' | 'success' | 'failed' | 'cod_pending';
-
 export default function CheckoutPage() {
 const router = useRouter();
+
 const [cart, setCart] = useState<CartItem[]>([]);
-const [state, setState] = useState<CheckoutState>('form');
-const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
-const [refNumber, setRefNumber] = useState('');
-const [errorMessage, setErrorMessage] = useState('');
-
-// Customer info
-const [customerName, setCustomerName] = useState('');
-const [customerPhone, setCustomerPhone] = useState('');
-const [customerAddress, setCustomerAddress] = useState('');
-
-// Card info (simulation — real tokenization comes with RBC keys)
-const [cardNumber, setCardNumber] = useState('');
-const [cardExpiry, setCardExpiry] = useState('');
-const [cardCvv, setCardCvv] = useState('');
+const [name, setName] = useState('');
+const [email, setEmail] = useState('');
+const [phone, setPhone] = useState('');
+const [address, setAddress] = useState('');
+const [payMethod, setPayMethod] = useState<'card' | 'cod'>('cod');
+const [notes, setNotes] = useState('');
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState('');
+const [success, setSuccess] = useState('');
+const [orderId, setOrderId] = useState('');
 
 useEffect(() => {
-try {
-const stored = localStorage.getItem('bsc_cart');
-if (stored) {
-const parsed = JSON.parse(stored);
-if (Array.isArray(parsed) && parsed.length > 0) {
-setCart(parsed);
-} else {
-router.push('/market');
+if (typeof window !== 'undefined') {
+const raw = localStorage.getItem('bsc_cart');
+if (raw) {
+try { setCart(JSON.parse(raw)); } catch {}
 }
-} else {
-router.push('/market');
 }
-} catch {
-router.push('/market');
-}
-}, [router]);
+}, []);
 
-const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-const deliveryFee = subtotal >= 1000 ? 0 : 5.00;
+const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+const deliveryFee = subtotal >= 1000 ? 0 : subtotal > 0 ? 15 : 0;
 const total = subtotal + deliveryFee;
 
-function formatBSD(amount: number) {
-return `BSD $${amount.toFixed(2)}`;
-}
+// Detect if any items are wholesale (name contains [Wholesaler])
+const isWholesale = cart.some(i => /^\[.+\]/.test(i.name));
+const wholesalerKey = isWholesale
+? (() => {
+const match = cart[0]?.name?.match(/^\[(.+?)\]/);
+if (!match) return null;
+const name = match[1].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+return name;
+})()
+: null;
 
-function generateSimToken() {
-return `SIM-${cardNumber.slice(-4)}-${Date.now()}`;
-}
+async function placeOrder() {
+if (!name.trim()) { setError('Please enter your name.'); return; }
+if (!phone.trim()) { setError('Please enter your phone number.'); return; }
+if (!address.trim()) { setError('Please enter your delivery address.'); return; }
+if (cart.length === 0) { setError('Your cart is empty.'); return; }
 
-function formatCardNumber(val: string) {
-return val.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
-}
-
-function formatExpiry(val: string) {
-const digits = val.replace(/\D/g, '').slice(0, 4);
-if (digits.length >= 3) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-return digits;
-}
-
-function isFormValid() {
-if (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim()) return false;
-if (paymentMethod === 'card') {
-const digits = cardNumber.replace(/\s/g, '');
-if (digits.length < 16 || cardExpiry.length < 5 || cardCvv.length < 3) return false;
-}
-return true;
-}
-
-async function handleSubmit() {
-if (!isFormValid()) return;
-setState('processing');
-setErrorMessage('');
+setLoading(true);
+setError('');
 
 try {
-if (paymentMethod === 'cash_on_delivery') {
-// COD — create order in holding state, no charge API call
+const payload: Record<string, unknown> = {
+customer_name: name.trim(),
+customer_email: email.trim() || null,
+customer_phone: phone.trim(),
+customer_address: address.trim(),
+items: cart,
+subtotal,
+delivery_fee: deliveryFee,
+total,
+payment_method: payMethod === 'card' ? 'card' : 'cash_on_delivery',
+payment_status: payMethod === 'card' ? 'payment_pending' : 'unpaid',
+order_type: isWholesale ? 'wholesale' : 'retail',
+notes: notes.trim() || null,
+};
+
+if (isWholesale && wholesalerKey) {
+payload.wholesaler = wholesalerKey;
+payload.wholesale_items = cart.map(i => ({
+name: i.name.replace(/^\[.+?\]\s*/, ''),
+quantity: i.quantity,
+unit: i.unit,
+price: i.price,
+wholesale_cost: i.price / 1.232,
+}));
+payload.wholesale_cost_total = cart.reduce((s, i) => s + (i.price / 1.232) * i.quantity, 0);
+}
+
 const res = await fetch('/api/orders/create', {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-items: cart,
-customerName,
-customerPhone,
-customerAddress,
-paymentMethod: 'cash_on_delivery',
-total,
-}),
+body: JSON.stringify(payload),
 });
 
-if (res.ok) {
 const data = await res.json();
-setRefNumber(data.orderId || 'BSC-COD-' + Date.now());
-localStorage.removeItem('bsc_cart');
-setState('cod_pending');
-} else {
-throw new Error('Order creation failed');
-}
+
+if (!res.ok || data.error) {
+setError(data.error || 'Order failed. Please try again.');
+setLoading(false);
 return;
 }
 
-// Card payment — create order first, then charge
-const orderRes = await fetch('/api/orders/create', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-items: cart,
-customerName,
-customerPhone,
-customerAddress,
-paymentMethod: 'card',
-total,
-}),
-});
-
-if (!orderRes.ok) throw new Error('Order creation failed');
-const orderData = await orderRes.json();
-const orderId = orderData.orderId;
-
-// Charge the card
-const chargeRes = await fetch('/api/payment/charge', {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-orderId,
-amount: total,
-cardToken: generateSimToken(),
-customerName,
-}),
-});
-
-const chargeData = await chargeRes.json();
-
-if (chargeData.status === 'approved') {
-setRefNumber(chargeData.ref);
+// Clear cart
+if (typeof window !== 'undefined') {
 localStorage.removeItem('bsc_cart');
-setState('success');
-} else if (chargeData.status === 'pending') {
-setRefNumber(chargeData.ref);
-setState('cod_pending');
-} else {
-setErrorMessage(chargeData.message || 'Card declined. Please try again.');
-setState('failed');
 }
+
+setOrderId(data.order_id);
+setSuccess('Order placed successfully!');
+setCart([]);
+
 } catch (err) {
-console.error('Checkout error:', err);
-setErrorMessage('Something went wrong. Please try again or call +1 (242) 361-3474.');
-setState('failed');
-}
+setError('Connection error. Please try again.');
 }
 
-// ── SUCCESS ──────────────────────────────────────────────
-if (state === 'success') {
+setLoading(false);
+}
+
+// Success screen
+if (success) {
 return (
-<div style={styles.page}>
-<div style={styles.resultCard}>
-<div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-<h2 style={{ color: '#16a34a', marginBottom: 8 }}>Payment Approved</h2>
-<p style={styles.refText}>Ref: {refNumber}</p>
-<p style={styles.mutedText}>
-Your order is confirmed and being prepared. BSC will contact you on{' '}
-<strong>{customerPhone}</strong> with updates.
+<div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+<div style={{ backgroundColor: '#fff', borderRadius: 20, padding: 40, maxWidth: 480, width: '100%', textAlign: 'center', boxShadow: '0 4px 24px rgba(0,0,0,0.1)' }}>
+<div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
+<h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 24, marginBottom: 8 }}>Order Placed!</h2>
+<p style={{ color: '#666', fontSize: 15, lineHeight: 1.6, marginBottom: 8 }}>
+Thank you, {name}! Your order has been received.
 </p>
-{subtotal >= 1000 && (
-<p style={styles.deliveryNote}>
-🚚 Free delivery included — order over BSD $1,000
+{orderId && (
+<p style={{ color: '#999', fontSize: 12, marginBottom: 20 }}>
+Order ID: <strong style={{ color: '#1a2e5a' }}>#{orderId.slice(0, 8).toUpperCase()}</strong>
 </p>
 )}
-<button style={styles.btnPrimary} onClick={() => router.push('/market')}>
+<div style={{ backgroundColor: '#e8f5e9', borderRadius: 12, padding: '14px 20px', marginBottom: 24, textAlign: 'left' }}>
+<div style={{ color: '#2e7d32', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>What happens next:</div>
+{isWholesale ? (
+<>
+<div style={{ color: '#333', fontSize: 13, marginBottom: 4 }}>📋 BSC admin has been notified of your wholesale order</div>
+<div style={{ color: '#333', fontSize: 13, marginBottom: 4 }}>🏭 We will pick up your items from the wholesaler</div>
+<div style={{ color: '#333', fontSize: 13 }}>📱 We will WhatsApp you when your order is ready for delivery</div>
+</>
+) : (
+<>
+<div style={{ color: '#333', fontSize: 13, marginBottom: 4 }}>📱 You will receive a WhatsApp confirmation shortly</div>
+<div style={{ color: '#333', fontSize: 13, marginBottom: 4 }}>🚚 Estimated delivery: 2–4 hours</div>
+<div style={{ color: '#333', fontSize: 13 }}>💬 We will contact you at {phone} to confirm</div>
+</>
+)}
+</div>
+<div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+<Link href="/market" style={{ backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: 10, padding: '12px 24px', fontWeight: 800, fontSize: 14 }}>
 Continue Shopping
-</button>
+</Link>
+<Link href="/" style={{ backgroundColor: '#f0f4ff', color: '#1a2e5a', textDecoration: 'none', borderRadius: 10, padding: '12px 24px', fontWeight: 700, fontSize: 14 }}>
+Go Home
+</Link>
 </div>
-</div>
-);
-}
-
-// ── COD / PENDING ────────────────────────────────────────
-if (state === 'cod_pending') {
-return (
-<div style={styles.page}>
-<div style={styles.resultCard}>
-<div style={{ fontSize: 56, marginBottom: 16 }}>🕐</div>
-<h2 style={{ color: '#d97706', marginBottom: 8 }}>Order Received — Pending Confirmation</h2>
-<p style={styles.refText}>Ref: {refNumber}</p>
-<p style={styles.mutedText}>
-BSC will call <strong>{customerPhone}</strong> to confirm your order before
-it is processed. Cash is due on delivery.
-</p>
-<p style={{ color: '#6b7280', fontSize: 13, marginTop: 8 }}>
-Questions? Call us: +1 (242) 361-3474
-</p>
-<button style={styles.btnPrimary} onClick={() => router.push('/market')}>
-Back to Market
-</button>
 </div>
 </div>
 );
 }
 
-// ── FAILED ───────────────────────────────────────────────
-if (state === 'failed') {
 return (
-<div style={styles.page}>
-<div style={styles.resultCard}>
-<div style={{ fontSize: 56, marginBottom: 16 }}>❌</div>
-<h2 style={{ color: '#dc2626', marginBottom: 8 }}>Payment Failed</h2>
-<p style={styles.mutedText}>{errorMessage}</p>
-<button style={styles.btnPrimary} onClick={() => setState('form')}>
-Try Again
-</button>
-<button style={styles.btnSecondary} onClick={() => router.push('/market')}>
-Back to Market
-</button>
-</div>
-</div>
-);
-}
+<div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, sans-serif' }}>
 
-// ── PROCESSING ───────────────────────────────────────────
-if (state === 'processing') {
-return (
-<div style={styles.page}>
-<div style={styles.resultCard}>
-<div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
-<h2 style={{ color: '#1e40af' }}>Processing Payment...</h2>
-<p style={styles.mutedText}>Please do not close this page.</p>
+{/* HEADER */}
+<header style={{ backgroundColor: '#1a2e5a', padding: '0 20px', position: 'sticky', top: 0, zIndex: 50 }}>
+<div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
+<Link href="/" style={{ color: '#f4c842', fontWeight: 900, fontSize: 18, letterSpacing: 2, textDecoration: 'none' }}>BSC</Link>
+<div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Checkout</div>
+<Link href="/market" style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>← Market</Link>
 </div>
-</div>
-);
-}
+</header>
 
-// ── MAIN FORM ────────────────────────────────────────────
-return (
-<div style={styles.page}>
-{/* Header */}
-<div style={styles.header}>
-<button style={styles.backBtn} onClick={() => router.push('/market')}>
-← Back to Market
-</button>
-<h1 style={styles.headerTitle}>🛒 Checkout</h1>
-</div>
+<div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 40px' }}>
 
-<div style={styles.layout}>
-{/* LEFT — Form */}
-<div style={styles.formCol}>
+{/* EMPTY CART */}
+{cart.length === 0 ? (
+<div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: '#fff', borderRadius: 16 }}>
+<div style={{ fontSize: 48, marginBottom: 16 }}>🛒</div>
+<h3 style={{ color: '#1a2e5a', fontWeight: 800 }}>Your cart is empty</h3>
+<Link href="/market" style={{ display: 'inline-block', marginTop: 16, backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: 10, padding: '12px 24px', fontWeight: 800 }}>
+Shop Now
+</Link>
+</div>
+) : (
+<div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
 
-{/* Customer Info */}
-<div style={styles.section}>
-<h3 style={styles.sectionTitle}>Your Information</h3>
-<input
-style={styles.input}
-placeholder="Full Name *"
-value={customerName}
-onChange={(e) => setCustomerName(e.target.value)}
-/>
-<input
-style={styles.input}
-placeholder="Phone Number * (e.g. 242-555-1234)"
-value={customerPhone}
-onChange={(e) => setCustomerPhone(e.target.value)}
-/>
-<input
-style={styles.input}
-placeholder="Delivery Address *"
-value={customerAddress}
-onChange={(e) => setCustomerAddress(e.target.value)}
-/>
+{/* ORDER SUMMARY */}
+<div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+<h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16, marginBottom: 16 }}>
+🛒 Your Order {isWholesale && <span style={{ backgroundColor: '#f0fde8', color: '#2e7d32', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, marginLeft: 8 }}>Wholesale</span>}
+</h2>
+<div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+{cart.map((item, i) => (
+<div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+<div>
+<div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 14 }}>
+{item.name.replace(/^\[.+?\]\s*/, '')}
 </div>
-
-{/* Payment Method */}
-<div style={styles.section}>
-<h3 style={styles.sectionTitle}>Payment Method</h3>
-<div style={styles.methodRow}>
-<button
-style={{
-...styles.methodBtn,
-...(paymentMethod === 'card' ? styles.methodBtnActive : {}),
-}}
-onClick={() => setPaymentMethod('card')}
->
-💳 Pay by Card
-</button>
-<button
-style={{
-...styles.methodBtn,
-...(paymentMethod === 'cash_on_delivery' ? styles.methodBtnActive : {}),
-}}
-onClick={() => setPaymentMethod('cash_on_delivery')}
->
-💵 Cash on Delivery
-</button>
-</div>
-{paymentMethod === 'cash_on_delivery' && (
-<p style={styles.codNotice}>
-⚠️ BSC will call to confirm before processing your order.
-</p>
-)}
-</div>
-
-{/* Card Form */}
-{paymentMethod === 'card' && (
-<div style={styles.section}>
-<h3 style={styles.sectionTitle}>Card Details</h3>
-<p style={styles.simNotice}>🔒 Simulation mode — no real charge will occur</p>
-<input
-style={styles.input}
-placeholder="Card Number"
-value={cardNumber}
-onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-maxLength={19}
-/>
-<div style={styles.cardRow}>
-<input
-style={{ ...styles.input, flex: 1 }}
-placeholder="MM/YY"
-value={cardExpiry}
-onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-maxLength={5}
-/>
-<input
-style={{ ...styles.input, flex: 1 }}
-placeholder="CVV"
-value={cardCvv}
-onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-maxLength={4}
-type="password"
-/>
+<div style={{ color: '#999', fontSize: 12 }}>
+{item.quantity} × BSD ${item.price.toFixed(2)} / {item.unit}
 </div>
 </div>
-)}
-
-{/* Submit */}
-<button
-style={{
-...styles.submitBtn,
-opacity: isFormValid() ? 1 : 0.5,
-cursor: isFormValid() ? 'pointer' : 'not-allowed',
-}}
-onClick={handleSubmit}
-disabled={!isFormValid()}
->
-{paymentMethod === 'card'
-? `Pay ${formatBSD(total)}`
-: `Place COD Order — ${formatBSD(total)}`}
-</button>
+<div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14 }}>
+BSD ${(item.price * item.quantity).toFixed(2)}
 </div>
-
-{/* RIGHT — Order Summary */}
-<div style={styles.summaryCol}>
-<div style={styles.summaryCard}>
-<h3 style={styles.sectionTitle}>Order Summary</h3>
-{cart.map((item) => (
-<div key={item.id} style={styles.lineItem}>
-<span style={styles.itemName}>
-{item.name}{' '}
-<span style={styles.itemQty}>× {item.quantity} {item.unit}</span>
-</span>
-<span style={styles.itemPrice}>
-{formatBSD(item.price * item.quantity)}
-</span>
 </div>
 ))}
-<div style={styles.divider} />
-<div style={styles.lineItem}>
-<span>Subtotal</span>
-<span>{formatBSD(subtotal)}</span>
 </div>
-<div style={styles.lineItem}>
-<span>Delivery</span>
-<span style={{ color: deliveryFee === 0 ? '#16a34a' : 'inherit' }}>
-{deliveryFee === 0 ? 'FREE' : formatBSD(deliveryFee)}
+<div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+<span style={{ color: '#666', fontSize: 13 }}>Subtotal</span>
+<span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 13 }}>BSD ${subtotal.toFixed(2)}</span>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+<span style={{ color: '#666', fontSize: 13 }}>Delivery</span>
+<span style={{ color: deliveryFee === 0 ? '#2e7d32' : '#1a2e5a', fontWeight: 700, fontSize: 13 }}>
+{deliveryFee === 0 ? '🚚 FREE' : `BSD $${deliveryFee.toFixed(2)}`}
 </span>
 </div>
-{deliveryFee === 0 && (
-<p style={styles.freeDeliveryNote}>🚚 Free delivery on orders over BSD $1,000</p>
+<div style={{ display: 'flex', justifyContent: 'space-between' }}>
+<span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16 }}>Total</span>
+<span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 20 }}>BSD ${total.toFixed(2)}</span>
+</div>
+{subtotal < 1000 && subtotal > 0 && (
+<p style={{ color: '#999', fontSize: 11, marginTop: 8, margin: '8px 0 0' }}>
+Add BSD ${(1000 - subtotal).toFixed(2)} more for free delivery
+</p>
 )}
-<div style={styles.divider} />
-<div style={{ ...styles.lineItem, fontWeight: 700, fontSize: 18 }}>
-<span>Total</span>
-<span style={{ color: '#1e40af' }}>{formatBSD(total)}</span>
 </div>
 </div>
 
-<div style={styles.contactCard}>
-<p style={styles.contactText}>
-Need help? Call us:<br />
-<strong>+1 (242) 361-3474</strong>
+{/* CUSTOMER DETAILS */}
+<div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+<h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16, marginBottom: 16 }}>📋 Your Details</h2>
+
+{error && (
+<div style={{ backgroundColor: '#fde8e8', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+{error}
+</div>
+)}
+
+<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+<div>
+<label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Full Name *</label>
+<input
+value={name}
+onChange={(e) => setName(e.target.value)}
+placeholder="Your full name"
+style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+/>
+</div>
+<div>
+<label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>WhatsApp / Phone *</label>
+<input
+value={phone}
+onChange={(e) => setPhone(e.target.value)}
+placeholder="+1 (242) 000-0000"
+type="tel"
+style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+/>
+</div>
+<div>
+<label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Email (optional)</label>
+<input
+value={email}
+onChange={(e) => setEmail(e.target.value)}
+placeholder="your@email.com"
+type="email"
+style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+/>
+</div>
+<div>
+<label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Delivery Address *</label>
+<textarea
+value={address}
+onChange={(e) => setAddress(e.target.value)}
+placeholder="Street address, area, Nassau or Andros"
+rows={2}
+style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+/>
+</div>
+<div>
+<label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Order Notes (optional)</label>
+<textarea
+value={notes}
+onChange={(e) => setNotes(e.target.value)}
+placeholder="Any special instructions..."
+rows={2}
+style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+/>
+</div>
+</div>
+</div>
+
+{/* PAYMENT METHOD */}
+<div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+<h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16, marginBottom: 16 }}>💳 Payment Method</h2>
+<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+<button
+onClick={() => setPayMethod('cod')}
+style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: payMethod === 'cod' ? '2px solid #1a2e5a' : '1px solid #e5e7eb', backgroundColor: payMethod === 'cod' ? '#f0f4ff' : '#fff', cursor: 'pointer', textAlign: 'left' }}
+>
+<div style={{ width: 20, height: 20, borderRadius: '50%', border: payMethod === 'cod' ? '6px solid #1a2e5a' : '2px solid #ccc', flexShrink: 0 }} />
+<div>
+<div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14 }}>💵 Cash on Delivery</div>
+<div style={{ color: '#666', fontSize: 12 }}>Pay when your order arrives. No card needed.</div>
+</div>
+</button>
+<button
+onClick={() => setPayMethod('card')}
+style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, border: payMethod === 'card' ? '2px solid #1a2e5a' : '1px solid #e5e7eb', backgroundColor: payMethod === 'card' ? '#f0f4ff' : '#fff', cursor: 'pointer', textAlign: 'left' }}
+>
+<div style={{ width: 20, height: 20, borderRadius: '50%', border: payMethod === 'card' ? '6px solid #1a2e5a' : '2px solid #ccc', flexShrink: 0 }} />
+<div>
+<div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14 }}>💳 Pay by Card</div>
+<div style={{ color: '#666', fontSize: 12 }}>Secure card payment via RBC Plug & Pay.</div>
+</div>
+</button>
+</div>
+</div>
+
+{/* PLACE ORDER */}
+<button
+onClick={placeOrder}
+disabled={loading}
+style={{ backgroundColor: loading ? '#94a3b8' : '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 14, padding: '16px', fontWeight: 900, fontSize: 17, cursor: loading ? 'not-allowed' : 'pointer', boxShadow: '0 4px 16px rgba(244,200,66,0.4)' }}
+>
+{loading ? 'Placing Order...' : `Place Order · BSD $${total.toFixed(2)}`}
+</button>
+
+<p style={{ textAlign: 'center', color: '#999', fontSize: 12, margin: 0 }}>
+🔒 Your details are secure · 💬 Receipt sent to WhatsApp · 🇧🇸 Proudly Bahamian
 </p>
 </div>
-</div>
+)}
 </div>
 </div>
 );
 }
-
-// ── STYLES ───────────────────────────────────────────────────
-const styles: Record<string, React.CSSProperties> = {
-page: {
-minHeight: '100vh',
-backgroundColor: '#f8fafc',
-fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-paddingBottom: 60,
-},
-header: {
-backgroundColor: '#1e3a5f',
-padding: '16px 24px',
-display: 'flex',
-alignItems: 'center',
-gap: 20,
-},
-headerTitle: {
-color: '#ffffff',
-fontSize: 22,
-fontWeight: 700,
-margin: 0,
-},
-backBtn: {
-background: 'none',
-border: '1px solid rgba(255,255,255,0.4)',
-color: '#ffffff',
-padding: '6px 14px',
-borderRadius: 6,
-cursor: 'pointer',
-fontSize: 14,
-},
-layout: {
-maxWidth: 1100,
-margin: '32px auto',
-padding: '0 20px',
-display: 'flex',
-gap: 32,
-alignItems: 'flex-start',
-flexWrap: 'wrap',
-},
-formCol: {
-flex: 2,
-minWidth: 300,
-display: 'flex',
-flexDirection: 'column',
-gap: 20,
-},
-summaryCol: {
-flex: 1,
-minWidth: 260,
-display: 'flex',
-flexDirection: 'column',
-gap: 16,
-},
-section: {
-backgroundColor: '#ffffff',
-borderRadius: 12,
-padding: 24,
-boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-display: 'flex',
-flexDirection: 'column',
-gap: 12,
-},
-sectionTitle: {
-fontSize: 16,
-fontWeight: 700,
-color: '#1e3a5f',
-margin: '0 0 4px 0',
-},
-input: {
-padding: '12px 14px',
-borderRadius: 8,
-border: '1px solid #d1d5db',
-fontSize: 15,
-outline: 'none',
-width: '100%',
-boxSizing: 'border-box',
-},
-cardRow: {
-display: 'flex',
-gap: 12,
-},
-methodRow: {
-display: 'flex',
-gap: 12,
-flexWrap: 'wrap',
-},
-methodBtn: {
-flex: 1,
-padding: '12px 16px',
-borderRadius: 8,
-border: '2px solid #d1d5db',
-backgroundColor: '#ffffff',
-fontSize: 15,
-cursor: 'pointer',
-fontWeight: 600,
-color: '#374151',
-minWidth: 140,
-},
-methodBtnActive: {
-borderColor: '#1e40af',
-backgroundColor: '#eff6ff',
-color: '#1e40af',
-},
-codNotice: {
-backgroundColor: '#fef9c3',
-border: '1px solid #fde047',
-borderRadius: 8,
-padding: '10px 14px',
-fontSize: 14,
-color: '#713f12',
-margin: 0,
-},
-simNotice: {
-backgroundColor: '#f0fdf4',
-border: '1px solid #86efac',
-borderRadius: 8,
-padding: '8px 14px',
-fontSize: 13,
-color: '#166534',
-margin: 0,
-},
-submitBtn: {
-backgroundColor: '#1e40af',
-color: '#ffffff',
-border: 'none',
-borderRadius: 10,
-padding: '16px 24px',
-fontSize: 18,
-fontWeight: 700,
-cursor: 'pointer',
-width: '100%',
-},
-summaryCard: {
-backgroundColor: '#ffffff',
-borderRadius: 12,
-padding: 24,
-boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-display: 'flex',
-flexDirection: 'column',
-gap: 10,
-},
-lineItem: {
-display: 'flex',
-justifyContent: 'space-between',
-alignItems: 'center',
-fontSize: 15,
-color: '#374151',
-},
-itemName: {
-flex: 1,
-paddingRight: 8,
-fontSize: 14,
-},
-itemQty: {
-color: '#6b7280',
-fontWeight: 400,
-},
-itemPrice: {
-fontWeight: 600,
-whiteSpace: 'nowrap',
-},
-divider: {
-borderTop: '1px solid #e5e7eb',
-margin: '4px 0',
-},
-freeDeliveryNote: {
-fontSize: 12,
-color: '#16a34a',
-margin: 0,
-},
-contactCard: {
-backgroundColor: '#1e3a5f',
-borderRadius: 12,
-padding: 16,
-textAlign: 'center',
-},
-contactText: {
-color: '#ffffff',
-fontSize: 14,
-margin: 0,
-lineHeight: 1.6,
-},
-resultCard: {
-maxWidth: 480,
-margin: '80px auto',
-backgroundColor: '#ffffff',
-borderRadius: 16,
-padding: 40,
-textAlign: 'center',
-boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-display: 'flex',
-flexDirection: 'column',
-gap: 16,
-alignItems: 'center',
-},
-refText: {
-fontSize: 14,
-color: '#6b7280',
-fontFamily: 'monospace',
-backgroundColor: '#f3f4f6',
-padding: '6px 16px',
-borderRadius: 6,
-margin: 0,
-},
-mutedText: {
-color: '#4b5563',
-fontSize: 15,
-lineHeight: 1.6,
-margin: 0,
-},
-deliveryNote: {
-color: '#16a34a',
-fontSize: 14,
-margin: 0,
-},
-btnPrimary: {
-backgroundColor: '#1e40af',
-color: '#ffffff',
-border: 'none',
-borderRadius: 8,
-padding: '12px 28px',
-fontSize: 16,
-fontWeight: 600,
-cursor: 'pointer',
-width: '100%',
-},
-btnSecondary: {
-backgroundColor: '#f3f4f6',
-color: '#374151',
-border: 'none',
-borderRadius: 8,
-padding: '12px 28px',
-fontSize: 16,
-fontWeight: 600,
-cursor: 'pointer',
-width: '100%',
-},
-};
