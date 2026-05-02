@@ -65,8 +65,8 @@ const QUICK_ACTIONS = [
   { icon: '🧾', label: 'Purchase Orders',  href: '/purchase-orders', color: '#fef9e7', badge: 0 },
   { icon: '🚗', label: 'Vehicles & Parts', href: '/vehicles',        color: '#fff3e8', badge: 0 },
   { icon: '⚡', label: 'Pay Bills',        href: '/utilities',       color: '#e8f8fd', badge: 0 },
-  { icon: '📊', label: 'Reports',          href: '/report',          color: '#fde8f0', badge: 0 },
   { icon: '🖼️', label: 'Products',         href: '/products',        color: '#fef9e7', badge: 0 },
+  { icon: '🇺🇸', label: 'US Products',    href: '/us-products',     color: '#e8f4fd', badge: 0 },
 ];
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -247,11 +247,8 @@ export default function DashboardPage() {
 
         <main style={{ flex: 1, padding: '20px 16px', overflowY: 'auto' }}>
 
-          {/* ── OVERVIEW TAB ── */}
           {activeTab === 'overview' && (
             <div>
-
-              {/* TODAY TOTALS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
                 <div style={{ backgroundColor: '#1a2e5a', borderRadius: '14px', padding: '14px', textAlign: 'center' }}>
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px', marginBottom: '4px' }}>Today Revenue</div>
@@ -267,7 +264,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* LIVE SALES FEED */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>📈 Live Sales Today</h2>
@@ -317,10 +313,8 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* INVOICE SCANNER */}
               <InvoiceScanner />
 
-              {/* LOCATION CARDS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
                 <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '5px solid #f4c842' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -377,7 +371,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* QUICK ACTIONS */}
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', marginBottom: '12px' }}>Quick Actions</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
                 {QUICK_ACTIONS.map((action) => (
@@ -393,7 +386,6 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* SPINY TAILS */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>🧊 Spiny Tails Freezer</h2>
@@ -418,7 +410,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── REVENUE TAB ── */}
           {activeTab === 'revenue' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>All 9 Revenue Streams</h2>
@@ -447,7 +438,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── YIELD TAB ── */}
           {activeTab === 'yield' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>⚖️ Yield Calculator</h2>
@@ -478,7 +468,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── INVENTORY TAB ── */}
           {activeTab === 'inventory' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '20px' }}>🧊 Freezer Inventory</h2>
@@ -507,7 +496,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── AI TAB ── */}
           {activeTab === 'ai' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
               <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px 16px 0 0', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
