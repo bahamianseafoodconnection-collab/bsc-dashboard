@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import HeroSection from '@/components/HeroSection';
+import SiteFooter from '@/components/SiteFooter';
 
 const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
@@ -14,12 +16,6 @@ export default function HomePage() {
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  function scrollDown() {
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
-    }
-  }
 
   return (
     <>
@@ -108,56 +104,8 @@ export default function HomePage() {
           </div>
         </nav>
 
-        {/* ── HERO ── */}
-        <div style={{
-          position: 'relative',
-          height: '100vh',
-          minHeight: 600,
-          backgroundImage: `url(${BASE}/hero.jpg)`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed',
-        }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,0,0,0.84) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.1) 100%)' }} />
-
-          <div style={{ position: 'absolute', top: '50%', left: '8%', transform: 'translateY(-50%)', maxWidth: 560, zIndex: 2 }}>
-            <p className="fade-up" style={{ color: '#f5a623', fontSize: 12, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 14 }}>
-              Nassau · Bahamas 🇧🇸
-            </p>
-            <h1 className="fade-up-2" style={{ color: '#ffffff', fontSize: 58, fontWeight: 900, lineHeight: 1.05, marginBottom: 14 }}>
-              BSC<br />Marketplace
-            </h1>
-            <p className="fade-up-3" style={{ color: '#f5a623', fontSize: 22, fontWeight: 700, marginBottom: 10 }}>
-              Seafood. Meats. Essentials. Services.
-            </p>
-            <p className="fade-up-3" style={{ color: '#e2e8f0', fontSize: 16, marginBottom: 38, lineHeight: 1.7 }}>
-              Shop locally, shop wholesale, or shop the USA —<br />
-              we bring it all to your door in Nassau & Andros.
-            </p>
-            <div className="fade-up-4" style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              <button className="btn-gold" onClick={() => router.push('/market')} style={{ backgroundColor: '#f5a623', color: '#1a2e4a', border: 'none', padding: '15px 32px', borderRadius: 10, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>
-                Shop Local
-              </button>
-              <button className="btn-ghost" onClick={() => router.push('/local-wholesale')} style={{ backgroundColor: 'transparent', color: '#fff', border: '2px solid rgba(255,255,255,0.65)', padding: '13px 32px', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
-                🇧🇸 Wholesale
-              </button>
-              <button className="btn-ghost" onClick={() => router.push('/us-shopping')} style={{ backgroundColor: 'transparent', color: '#fff', border: '2px solid rgba(255,255,255,0.65)', padding: '13px 32px', borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>
-                🇺🇸 Shop USA
-              </button>
-            </div>
-          </div>
-
-          <div
-            className="bobble"
-            onClick={scrollDown}
-            style={{ position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', zIndex: 2 }}
-          >
-            <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' }}>Scroll</span>
-            <div style={{ width: 26, height: 42, border: '2px solid rgba(255,255,255,0.35)', borderRadius: 13, display: 'flex', justifyContent: 'center', paddingTop: 7 }}>
-              <div style={{ width: 4, height: 8, backgroundColor: '#f5a623', borderRadius: 2 }} />
-            </div>
-          </div>
-        </div>
+        {/* ── HERO — replaced with new component ── */}
+        <HeroSection />
 
         {/* ── TRUST BAR ── */}
         <div style={{ backgroundColor: '#1a2e4a', borderTop: '3px solid #f5a623' }}>
@@ -400,20 +348,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── FOOTER ── */}
-        <footer style={{ backgroundColor: '#1a2e4a', padding: '40px 24px', textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 20 }}>
-            <img src={`${BASE}/logo.jpg`} alt="BSC" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid #f5a623' }} />
-            <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 16, letterSpacing: 2 }}>BSC MARKETPLACE</div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 4, marginBottom: 18 }}>
-            {['About Us', 'How it Works', 'FAQs', 'Contact Us', 'Terms & Conditions', 'Privacy Policy'].map((link) => (
-              <button key={link} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', padding: '4px 10px' }}>{link}</button>
-            ))}
-          </div>
-          <p style={{ color: '#475569', fontSize: 12, marginBottom: 4 }}>© 2025 BSC Marketplace. All Rights Reserved.</p>
-          <p style={{ color: '#64748b', fontSize: 12 }}>Proudly Bahamian 🇧🇸</p>
-        </footer>
+        {/* ── FOOTER — replaced with new component ── */}
+        <SiteFooter />
+
       </div>
     </>
   );
