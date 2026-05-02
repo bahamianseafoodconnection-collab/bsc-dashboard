@@ -18,6 +18,7 @@ const NAV_GROUPS = [
       { icon: '🟡', label: 'Nassau POS',       href: '/pos' },
       { icon: '🟣', label: 'Andros POS',       href: '/pos-andros' },
       { icon: '📦', label: 'Orders',           href: '/orders' },
+      { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders' },
     ],
   },
   {
@@ -58,46 +59,38 @@ const REVENUE_STREAMS = [
   { label: 'Supplier Fees',     icon: '🚢', value: '$0.00', profit: 'Varies',   color: '#f0fde8' },
 ];
 
-const QUICK_ACTIONS = [
-  { icon: '📦', label: 'Orders',           href: '/orders',          color: '#e8f4fd', badge: 0 },
-  { icon: '🚢', label: 'Suppliers',        href: '/supplier',        color: '#f0fde8', badge: 3 },
-  { icon: '⚖️', label: 'Yield Calculator', href: '/yield',           color: '#fef9e7', badge: 0 },
-  { icon: '🧾', label: 'Purchase Orders',  href: '/purchase-orders', color: '#fef9e7', badge: 0 },
-  { icon: '🚗', label: 'Vehicles & Parts', href: '/vehicles',        color: '#fff3e8', badge: 0 },
-  { icon: '⚡', label: 'Pay Bills',        href: '/utilities',       color: '#e8f8fd', badge: 0 },
-  { icon: '🖼️', label: 'Products',         href: '/products',        color: '#fef9e7', badge: 0 },
-  { icon: '🇺🇸', label: 'US Products',    href: '/us-products',     color: '#e8f4fd', badge: 0 },
+const WHOLESALERS = [
+  { key: 'bahamas-food-services', name: 'Bahamas Food Services', color: '#1a5276', logo: '🏭' },
+  { key: 'burns-house',           name: 'Burns House',           color: '#7B241C', logo: '🍾' },
+  { key: 'nassau-wholesale',      name: 'Nassau Wholesale',      color: '#1E8449', logo: '🏪' },
+  { key: 'caribbean-wholesale',   name: 'Caribbean Wholesale',   color: '#1A5276', logo: '🌴' },
+  { key: 'island-foods',          name: 'Island Foods Ltd',      color: '#196F3D', logo: '🥦' },
+  { key: 'atlantic-wholesale',    name: 'Atlantic Wholesale',    color: '#2E4057', logo: '🔧' },
+  { key: 'quality-distributors',  name: 'Quality Distributors',  color: '#922B21', logo: '🥩' },
 ];
 
-type Message = { role: 'user' | 'assistant'; content: string };
-
+type Message  = { role: 'user' | 'assistant'; content: string };
 type SaleRecord = {
-  id: string;
-  created_at: string;
-  total: number;
-  status: string;
-  payment_method: string;
-  channel?: string;
+  id: string; created_at: string; total: number;
+  status: string; payment_method: string; channel?: string;
+};
+type WholesaleOrder = {
+  id: string; created_at: string; total: number;
+  wholesaler: string; customer_name?: string;
+  wholesale_cost_total: number; wholesale_items: {name: string; quantity: number; unit: string; price: number}[];
+  payment_status: string; admin_purchased: boolean;
 };
 
 const MARGIN: Record<string, number> = {
-  nassau: 0.38,
-  andros: 0.43,
-  online: 0.25,
-  wholesale: 0.12,
+  nassau: 0.38, andros: 0.43, online: 0.25, wholesale: 0.12,
 };
 
 function calcSplit(sale: SaleRecord) {
-  const channel = sale.channel || 'nassau';
-  const margin = MARGIN[channel] ?? 0.38;
-  const bscProfit = sale.total * margin;
-  const supplierCOGS = sale.total - bscProfit;
-  return { bscProfit, supplierCOGS, margin };
+  const margin = MARGIN[sale.channel || 'nassau'] ?? 0.38;
+  return { bscProfit: sale.total * margin, supplierCOGS: sale.total * (1 - margin), margin };
 }
 
-function fmtBSD(n: number) {
-  return `BSD $${n.toFixed(2)}`;
-}
+function fmtBSD(n: number) { return `BSD $${n.toFixed(2)}`; }
 
 function timeAgo(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -107,24 +100,29 @@ function timeAgo(iso: string) {
 }
 
 export default function DashboardPage() {
-  const [sidebarOpen, setSidebarOpen]   = useState(false);
-  const [activeTab, setActiveTab]       = useState('overview');
-  const [aiMessages, setAiMessages]     = useState<Message[]>([
+  const [sidebarOpen, setSidebarOpen]       = useState(false);
+  const [activeTab, setActiveTab]           = useState('overview');
+  const [aiMessages, setAiMessages]         = useState<Message[]>([
     { role: 'assistant', content: "Good morning, Dedrick! I'm your BSC AI Assistant. Ask me anything about your business — revenue, margins, inventory, pricing, or strategy." },
   ]);
-  const [aiInput, setAiInput]           = useState('');
-  const [aiLoading, setAiLoading]       = useState(false);
-  const [spinyTailsStock]               = useState(9310);
-  const messagesEndRef                  = useRef<HTMLDivElement>(null);
-  const [todaySales, setTodaySales]     = useState<SaleRecord[]>([]);
-  const [salesLoading, setSalesLoading] = useState(true);
+  const [aiInput, setAiInput]               = useState('');
+  const [aiLoading, setAiLoading]           = useState(false);
+  const [spinyTailsStock]                   = useState(9310);
+  const messagesEndRef                      = useRef<HTMLDivElement>(null);
+  const [todaySales, setTodaySales]         = useState<SaleRecord[]>([]);
+  const [salesLoading, setSalesLoading]     = useState(true);
+  const [wholesaleOrders, setWholesaleOrders] = useState<WholesaleOrder[]>([]);
+  const [wholesaleLoading, setWholesaleLoading] = useState(true);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [aiMessages]);
 
   useEffect(() => {
-    if (activeTab === 'overview') loadTodaySales();
+    if (activeTab === 'overview') {
+      loadTodaySales();
+      loadWholesaleOrders();
+    }
   }, [activeTab]);
 
   async function loadTodaySales() {
@@ -141,9 +139,38 @@ export default function DashboardPage() {
     setSalesLoading(false);
   }
 
+  async function loadWholesaleOrders() {
+    setWholesaleLoading(true);
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('order_type', 'wholesale')
+      .eq('admin_purchased', false)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    setWholesaleOrders(data || []);
+    setWholesaleLoading(false);
+  }
+
   const todayRevenue  = todaySales.reduce((s, o) => s + (o.total || 0), 0);
   const todayProfit   = todaySales.reduce((s, o) => s + calcSplit(o).bscProfit, 0);
   const todaySupplier = todaySales.reduce((s, o) => s + calcSplit(o).supplierCOGS, 0);
+  const pendingWholesale = wholesaleOrders.length;
+
+  const QUICK_ACTIONS = [
+    { icon: '📦', label: 'Orders',           href: '/orders',             color: '#e8f4fd', badge: 0 },
+    { icon: '🚢', label: 'Suppliers',        href: '/supplier',           color: '#f0fde8', badge: 3 },
+    { icon: '🇧🇸', label: 'Wholesale',      href: '/wholesale-orders',   color: '#f0fde8', badge: pendingWholesale },
+    { icon: '⚖️', label: 'Yield Calc',      href: '/yield',              color: '#fef9e7', badge: 0 },
+    { icon: '🧾', label: 'Purchase Orders', href: '/purchase-orders',    color: '#fef9e7', badge: 0 },
+    { icon: '🚗', label: 'Vehicles',        href: '/vehicles',           color: '#fff3e8', badge: 0 },
+    { icon: '🖼️', label: 'Products',        href: '/products',           color: '#fef9e7', badge: 0 },
+    { icon: '🇺🇸', label: 'US Products',   href: '/us-products',        color: '#e8f4fd', badge: 0 },
+    { icon: '🏭', label: 'Wholesale Prod', href: '/wholesale-products', color: '#f0fde8', badge: 0 },
+    { icon: '⚡', label: 'Pay Bills',       href: '/utilities',          color: '#e8f8fd', badge: 0 },
+    { icon: '📊', label: 'Reports',         href: '/report',             color: '#fde8f0', badge: 0 },
+    { icon: '📦', label: 'Inventory',       href: '/inventory',          color: '#f0fde8', badge: 0 },
+  ];
 
   async function sendAiMessage() {
     if (!aiInput.trim() || aiLoading) return;
@@ -196,6 +223,9 @@ export default function DashboardPage() {
                   {item.label === 'Suppliers' && (
                     <span style={{ marginLeft: 'auto', backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>3</span>
                   )}
+                  {item.label === 'Wholesale Orders' && pendingWholesale > 0 && (
+                    <span style={{ marginLeft: 'auto', backgroundColor: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>{pendingWholesale}</span>
+                  )}
                 </Link>
               ))}
             </div>
@@ -224,6 +254,11 @@ export default function DashboardPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {pendingWholesale > 0 && (
+                <Link href="/wholesale-orders" style={{ backgroundColor: '#fde8e8', color: '#dc2626', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', textDecoration: 'none' }}>
+                  🇧🇸 {pendingWholesale} wholesale pending
+                </Link>
+              )}
               <span style={{ backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px' }}>● System Live</span>
               <Link href="/market" style={{ fontSize: '12px', color: '#1a2e5a', fontWeight: 700, textDecoration: 'none', backgroundColor: '#f0f4ff', padding: '6px 12px', borderRadius: '8px' }}>
                 Market →
@@ -247,8 +282,11 @@ export default function DashboardPage() {
 
         <main style={{ flex: 1, padding: '20px 16px', overflowY: 'auto' }}>
 
+          {/* ── OVERVIEW TAB ── */}
           {activeTab === 'overview' && (
             <div>
+
+              {/* TODAY TOTALS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
                 <div style={{ backgroundColor: '#1a2e5a', borderRadius: '14px', padding: '14px', textAlign: 'center' }}>
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px', marginBottom: '4px' }}>Today Revenue</div>
@@ -264,6 +302,75 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* WHOLESALE ORDERS PENDING */}
+              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px', borderLeft: pendingWholesale > 0 ? '5px solid #ef4444' : '5px solid #e5e7eb' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>🇧🇸 Wholesale Orders — Action Required</h2>
+                    {pendingWholesale > 0 && (
+                      <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: 900, padding: '3px 8px', borderRadius: '20px' }}>
+                        {pendingWholesale} pending
+                      </span>
+                    )}
+                  </div>
+                  <Link href="/wholesale-orders" style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, textDecoration: 'none', backgroundColor: '#f0f4ff', padding: '6px 12px', borderRadius: '8px' }}>
+                    View All →
+                  </Link>
+                </div>
+
+                {wholesaleLoading ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#999', fontSize: '13px' }}>Loading...</div>
+                ) : wholesaleOrders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#999', fontSize: '13px' }}>
+                    ✅ No pending wholesale orders. All caught up!
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {wholesaleOrders.map((order) => {
+                      const wInfo = WHOLESALERS.find(w => w.key === order.wholesaler) || { name: order.wholesaler || 'Unknown', color: '#1a2e5a', logo: '🏪' };
+                      const items = order.wholesale_items || [];
+                      const bscProfit = (order.total || 0) - (order.wholesale_cost_total || 0);
+
+                      return (
+                        <div key={order.id} style={{ backgroundColor: '#f8f9fa', borderRadius: '12px', padding: '14px', borderLeft: `4px solid ${wInfo.color}` }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 22 }}>{wInfo.logo}</span>
+                              <div>
+                                <div style={{ fontWeight: 800, color: '#1a2e5a', fontSize: '14px' }}>{wInfo.name}</div>
+                                <div style={{ color: '#999', fontSize: '11px' }}>{order.customer_name || 'Customer'} · {timeAgo(order.created_at)}</div>
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#2e7d32', fontWeight: 800, fontSize: '13px' }}>+{fmtBSD(bscProfit)} profit</div>
+                              <div style={{ color: '#dc2626', fontSize: '11px' }}>{fmtBSD(order.wholesale_cost_total)} to buy</div>
+                            </div>
+                          </div>
+
+                          {/* Items to buy */}
+                          {items.length > 0 && (
+                            <div style={{ backgroundColor: '#fff', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
+                              <div style={{ color: '#666', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Buy from {wInfo.name}:</div>
+                              {items.map((item, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#1a2e5a', padding: '3px 0', borderBottom: i < items.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                                  <span style={{ fontWeight: 600 }}>{item.name}</span>
+                                  <span style={{ color: '#666' }}>{item.quantity} {item.unit}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <Link href="/wholesale-orders" style={{ display: 'block', backgroundColor: wInfo.color, color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                            View Full Order & Mark Purchased →
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* LIVE SALES FEED */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>📈 Live Sales Today</h2>
@@ -313,8 +420,10 @@ export default function DashboardPage() {
                 )}
               </div>
 
+              {/* INVOICE SCANNER */}
               <InvoiceScanner />
 
+              {/* LOCATION CARDS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
                 <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '5px solid #f4c842' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -371,6 +480,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* QUICK ACTIONS */}
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', marginBottom: '12px' }}>Quick Actions</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
                 {QUICK_ACTIONS.map((action) => (
@@ -386,6 +496,7 @@ export default function DashboardPage() {
                 ))}
               </div>
 
+              {/* SPINY TAILS */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>🧊 Spiny Tails Freezer</h2>
@@ -410,6 +521,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ── REVENUE TAB ── */}
           {activeTab === 'revenue' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>All 9 Revenue Streams</h2>
@@ -438,6 +550,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ── YIELD TAB ── */}
           {activeTab === 'yield' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>⚖️ Yield Calculator</h2>
@@ -468,6 +581,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ── INVENTORY TAB ── */}
           {activeTab === 'inventory' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '20px' }}>🧊 Freezer Inventory</h2>
@@ -496,6 +610,7 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ── AI TAB ── */}
           {activeTab === 'ai' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
               <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px 16px 0 0', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
