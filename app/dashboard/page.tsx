@@ -14,10 +14,10 @@ const NAV_GROUPS = [
   {
     label: 'Operations',
     items: [
-      { icon: '🏠', label: 'Overview',        href: '/dashboard' },
-      { icon: '🟡', label: 'Nassau POS',       href: '/pos' },
-      { icon: '🟣', label: 'Andros POS',       href: '/pos-andros' },
-      { icon: '📦', label: 'Orders',           href: '/orders' },
+      { icon: '🏠', label: 'Overview',         href: '/dashboard' },
+      { icon: '🟡', label: 'Nassau POS',        href: '/pos' },
+      { icon: '🟣', label: 'Andros POS',        href: '/pos-andros' },
+      { icon: '📦', label: 'Orders',            href: '/orders' },
       { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders' },
     ],
   },
@@ -48,37 +48,48 @@ const NAV_GROUPS = [
 ];
 
 const REVENUE_STREAMS = [
-  { label: 'Nassau POS Sales',  icon: '🟡', value: '$0.00', profit: '38%',      color: '#fef9e7' },
-  { label: 'Andros POS Sales',  icon: '🟣', value: '$0.00', profit: '43%',      color: '#f5f0ff' },
-  { label: 'Online Market',     icon: '🛒', value: '$0.00', profit: '25%',      color: '#e8f4fd' },
-  { label: 'Wholesale',         icon: '📦', value: '$0.00', profit: '12%',      color: '#f0fde8' },
-  { label: 'Vehicle Sales',     icon: '🚗', value: '$0.00', profit: '$650/car', color: '#fff3e8' },
-  { label: 'Vehicle Rentals',   icon: '🔑', value: '$0.00', profit: '$10/day',  color: '#fff3e8' },
-  { label: 'Auto Parts',        icon: '🔧', value: '$0.00', profit: '10%',      color: '#fde8e8' },
-  { label: 'Bill Payments',     icon: '⚡', value: '$0.00', profit: '4.5%',     color: '#e8f8fd' },
-  { label: 'Supplier Fees',     icon: '🚢', value: '$0.00', profit: 'Varies',   color: '#f0fde8' },
+  { label: 'Nassau POS Sales', icon: '🟡', value: '$0.00', profit: '38%',      color: '#fef9e7' },
+  { label: 'Andros POS Sales', icon: '🟣', value: '$0.00', profit: '43%',      color: '#f5f0ff' },
+  { label: 'Online Market',    icon: '🛒', value: '$0.00', profit: '25%',      color: '#e8f4fd' },
+  { label: 'Wholesale',        icon: '📦', value: '$0.00', profit: '12%',      color: '#f0fde8' },
+  { label: 'Vehicle Sales',    icon: '🚗', value: '$0.00', profit: '$650/car', color: '#fff3e8' },
+  { label: 'Vehicle Rentals',  icon: '🔑', value: '$0.00', profit: '$10/day',  color: '#fff3e8' },
+  { label: 'Auto Parts',       icon: '🔧', value: '$0.00', profit: '10%',      color: '#fde8e8' },
+  { label: 'Bill Payments',    icon: '⚡', value: '$0.00', profit: '4.5%',     color: '#e8f8fd' },
+  { label: 'Supplier Fees',    icon: '🚢', value: '$0.00', profit: 'Varies',   color: '#f0fde8' },
 ];
 
 const WHOLESALERS = [
-  { key: 'bahamas-food-services', name: 'Bahamas Food Services', color: '#1a5276', logo: '🏭' },
-  { key: 'burns-house',           name: 'Burns House',           color: '#7B241C', logo: '🍾' },
-  { key: 'nassau-wholesale',      name: 'Nassau Wholesale',      color: '#1E8449', logo: '🏪' },
-  { key: 'caribbean-wholesale',   name: 'Caribbean Wholesale',   color: '#1A5276', logo: '🌴' },
-  { key: 'island-foods',          name: 'Island Foods Ltd',      color: '#196F3D', logo: '🥦' },
-  { key: 'atlantic-wholesale',    name: 'Atlantic Wholesale',    color: '#2E4057', logo: '🔧' },
-  { key: 'quality-distributors',  name: 'Quality Distributors',  color: '#922B21', logo: '🥩' },
+  { key: 'asa-h-pritchard',           name: 'Asa H Pritchard',           color: '#1B4F72', logo: '🏪' },
+  { key: 'bahamas-international-food', name: 'Bahamas International Food', color: '#1E5C2E', logo: '🍱' },
+  { key: 'dalbenas',                  name: "D'Albenas",                  color: '#784212', logo: '🏭' },
+  { key: 'bahamas-wholesale-agencies', name: 'Bahamas Wholesale Agencies', color: '#1A5276', logo: '📦' },
+  { key: 'tpg',                       name: 'TPG',                        color: '#2C3E50', logo: '🛒' },
+  { key: 'thompson-trading',          name: 'Thompson Trading',           color: '#922B21', logo: '🤝' },
+  { key: 'island-wholesale',          name: 'Island Wholesale',           color: '#196F3D', logo: '🌴' },
 ];
 
-type Message  = { role: 'user' | 'assistant'; content: string };
+type Message = { role: 'user' | 'assistant'; content: string };
+
 type SaleRecord = {
-  id: string; created_at: string; total: number;
-  status: string; payment_method: string; channel?: string;
+  id: string;
+  created_at: string;
+  total: number;
+  status: string;
+  payment_method: string;
+  channel?: string;
 };
+
 type WholesaleOrder = {
-  id: string; created_at: string; total: number;
-  wholesaler: string; customer_name?: string;
-  wholesale_cost_total: number; wholesale_items: {name: string; quantity: number; unit: string; price: number}[];
-  payment_status: string; admin_purchased: boolean;
+  id: string;
+  created_at: string;
+  total: number;
+  wholesaler: string;
+  customer_name?: string;
+  wholesale_cost_total: number;
+  wholesale_items: { name: string; quantity: number; unit: string; price: number }[];
+  payment_status: string;
+  admin_purchased: boolean;
 };
 
 const MARGIN: Record<string, number> = {
@@ -90,7 +101,7 @@ function calcSplit(sale: SaleRecord) {
   return { bscProfit: sale.total * margin, supplierCOGS: sale.total * (1 - margin), margin };
 }
 
-function fmtBSD(n: number) { return `BSD $${n.toFixed(2)}`; }
+function fmtBSD(n: number) { return `BSD $${Number(n || 0).toFixed(2)}`; }
 
 function timeAgo(iso: string) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -100,18 +111,18 @@ function timeAgo(iso: string) {
 }
 
 export default function DashboardPage() {
-  const [sidebarOpen, setSidebarOpen]       = useState(false);
-  const [activeTab, setActiveTab]           = useState('overview');
-  const [aiMessages, setAiMessages]         = useState<Message[]>([
+  const [sidebarOpen, setSidebarOpen]           = useState(false);
+  const [activeTab, setActiveTab]               = useState('overview');
+  const [aiMessages, setAiMessages]             = useState<Message[]>([
     { role: 'assistant', content: "Good morning, Dedrick! I'm your BSC AI Assistant. Ask me anything about your business — revenue, margins, inventory, pricing, or strategy." },
   ]);
-  const [aiInput, setAiInput]               = useState('');
-  const [aiLoading, setAiLoading]           = useState(false);
-  const [spinyTailsStock]                   = useState(9310);
-  const messagesEndRef                      = useRef<HTMLDivElement>(null);
-  const [todaySales, setTodaySales]         = useState<SaleRecord[]>([]);
-  const [salesLoading, setSalesLoading]     = useState(true);
-  const [wholesaleOrders, setWholesaleOrders] = useState<WholesaleOrder[]>([]);
+  const [aiInput, setAiInput]                   = useState('');
+  const [aiLoading, setAiLoading]               = useState(false);
+  const [spinyTailsStock]                       = useState(9310);
+  const messagesEndRef                          = useRef<HTMLDivElement>(null);
+  const [todaySales, setTodaySales]             = useState<SaleRecord[]>([]);
+  const [salesLoading, setSalesLoading]         = useState(true);
+  const [wholesaleOrders, setWholesaleOrders]   = useState<WholesaleOrder[]>([]);
   const [wholesaleLoading, setWholesaleLoading] = useState(true);
 
   useEffect(() => {
@@ -152,20 +163,20 @@ export default function DashboardPage() {
     setWholesaleLoading(false);
   }
 
-  const todayRevenue  = todaySales.reduce((s, o) => s + (o.total || 0), 0);
-  const todayProfit   = todaySales.reduce((s, o) => s + calcSplit(o).bscProfit, 0);
-  const todaySupplier = todaySales.reduce((s, o) => s + calcSplit(o).supplierCOGS, 0);
+  const todayRevenue     = todaySales.reduce((s, o) => s + (o.total || 0), 0);
+  const todayProfit      = todaySales.reduce((s, o) => s + calcSplit(o).bscProfit, 0);
+  const todaySupplier    = todaySales.reduce((s, o) => s + calcSplit(o).supplierCOGS, 0);
   const pendingWholesale = wholesaleOrders.length;
 
   const QUICK_ACTIONS = [
-    { icon: '📦', label: 'Orders',           href: '/orders',             color: '#e8f4fd', badge: 0 },
-    { icon: '🚢', label: 'Suppliers',        href: '/supplier',           color: '#f0fde8', badge: 3 },
-    { icon: '🇧🇸', label: 'Wholesale',      href: '/wholesale-orders',   color: '#f0fde8', badge: pendingWholesale },
-    { icon: '⚖️', label: 'Yield Calc',      href: '/yield',              color: '#fef9e7', badge: 0 },
-    { icon: '🧾', label: 'Purchase Orders', href: '/purchase-orders',    color: '#fef9e7', badge: 0 },
+    { icon: '📦', label: 'Orders',          href: '/orders',             color: '#e8f4fd', badge: 0 },
+    { icon: '🚢', label: 'Suppliers',       href: '/supplier',           color: '#f0fde8', badge: 3 },
+    { icon: '🇧🇸', label: 'Wholesale',     href: '/wholesale-orders',   color: '#f0fde8', badge: pendingWholesale },
+    { icon: '⚖️', label: 'Yield Calc',     href: '/yield',              color: '#fef9e7', badge: 0 },
+    { icon: '🧾', label: 'Purchase Orders', href: '/purchase-orders',   color: '#fef9e7', badge: 0 },
     { icon: '🚗', label: 'Vehicles',        href: '/vehicles',           color: '#fff3e8', badge: 0 },
-    { icon: '🖼️', label: 'Products',        href: '/products',           color: '#fef9e7', badge: 0 },
-    { icon: '🇺🇸', label: 'US Products',   href: '/us-products',        color: '#e8f4fd', badge: 0 },
+    { icon: '🖼️', label: 'Products',       href: '/products',           color: '#fef9e7', badge: 0 },
+    { icon: '🇺🇸', label: 'US Products',  href: '/us-products',        color: '#e8f4fd', badge: 0 },
     { icon: '🏭', label: 'Wholesale Prod', href: '/wholesale-products', color: '#f0fde8', badge: 0 },
     { icon: '⚡', label: 'Pay Bills',       href: '/utilities',          color: '#e8f8fd', badge: 0 },
     { icon: '📊', label: 'Reports',         href: '/report',             color: '#fde8f0', badge: 0 },
@@ -200,6 +211,7 @@ export default function DashboardPage() {
         <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 40 }} />
       )}
 
+      {/* ── SIDEBAR ── */}
       <aside style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '240px', backgroundColor: '#1a2e5a', zIndex: 50, display: 'flex', flexDirection: 'column', transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: '4px 0 24px rgba(0,0,0,0.15)' }}>
         <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -217,7 +229,12 @@ export default function DashboardPage() {
                 {group.label}
               </div>
               {group.items.map((item) => (
-                <Link key={item.label} href={item.href} onClick={() => { setSidebarOpen(false); if (item.href === '#ai') setActiveTab('ai'); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: 'rgba(255,255,255,0.75)', fontSize: '14px', fontWeight: 500, textDecoration: 'none' }}>
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => { setSidebarOpen(false); if (item.href === '#ai') setActiveTab('ai'); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: 'rgba(255,255,255,0.75)', fontSize: '14px', fontWeight: 500, textDecoration: 'none' }}
+                >
                   <span style={{ fontSize: '16px' }}>{item.icon}</span>
                   {item.label}
                   {item.label === 'Suppliers' && (
@@ -240,6 +257,7 @@ export default function DashboardPage() {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
+        {/* ── HEADER ── */}
         <header style={{ backgroundColor: '#fff', borderBottom: '1px solid #ebebeb', padding: '0 16px', position: 'sticky', top: 0, zIndex: 30 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -273,7 +291,11 @@ export default function DashboardPage() {
               { key: 'inventory', label: '🧊 Freezer' },
               { key: 'ai',        label: '🤖 AI' },
             ].map((tab) => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{ padding: '10px 14px', border: 'none', borderBottom: activeTab === tab.key ? '3px solid #f4c842' : '3px solid transparent', backgroundColor: 'transparent', color: activeTab === tab.key ? '#1a2e5a' : '#888', fontWeight: activeTab === tab.key ? 800 : 500, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{ padding: '10px 14px', border: 'none', borderBottom: activeTab === tab.key ? '3px solid #f4c842' : '3px solid transparent', backgroundColor: 'transparent', color: activeTab === tab.key ? '#1a2e5a' : '#888', fontWeight: activeTab === tab.key ? 800 : 500, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
                 {tab.label}
               </button>
             ))}
@@ -282,7 +304,9 @@ export default function DashboardPage() {
 
         <main style={{ flex: 1, padding: '20px 16px', overflowY: 'auto' }}>
 
-          {/* ── OVERVIEW TAB ── */}
+          {/* ══════════════════════════════════════
+              OVERVIEW TAB
+          ══════════════════════════════════════ */}
           {activeTab === 'overview' && (
             <div>
 
@@ -302,7 +326,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* WHOLESALE ORDERS PENDING */}
+              {/* WHOLESALE ORDERS — ACTION REQUIRED */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px', borderLeft: pendingWholesale > 0 ? '5px solid #ef4444' : '5px solid #e5e7eb' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -327,8 +351,8 @@ export default function DashboardPage() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {wholesaleOrders.map((order) => {
-                      const wInfo = WHOLESALERS.find(w => w.key === order.wholesaler) || { name: order.wholesaler || 'Unknown', color: '#1a2e5a', logo: '🏪' };
-                      const items = order.wholesale_items || [];
+                      const wInfo     = WHOLESALERS.find(w => w.key === order.wholesaler) || { name: order.wholesaler || 'Unknown', color: '#1a2e5a', logo: '🏪' };
+                      const items     = order.wholesale_items || [];
                       const bscProfit = (order.total || 0) - (order.wholesale_cost_total || 0);
 
                       return (
@@ -347,10 +371,11 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* Items to buy */}
                           {items.length > 0 && (
                             <div style={{ backgroundColor: '#fff', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
-                              <div style={{ color: '#666', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Buy from {wInfo.name}:</div>
+                              <div style={{ color: '#666', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                                Buy from {wInfo.name}:
+                              </div>
                               {items.map((item, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#1a2e5a', padding: '3px 0', borderBottom: i < items.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                                   <span style={{ fontWeight: 600 }}>{item.name}</span>
@@ -360,7 +385,10 @@ export default function DashboardPage() {
                             </div>
                           )}
 
-                          <Link href="/wholesale-orders" style={{ display: 'block', backgroundColor: wInfo.color, color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                          <Link
+                            href="/wholesale-orders"
+                            style={{ display: 'block', backgroundColor: wInfo.color, color: '#fff', textDecoration: 'none', borderRadius: 8, padding: '8px 14px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}
+                          >
                             View Full Order & Mark Purchased →
                           </Link>
                         </div>
@@ -425,6 +453,8 @@ export default function DashboardPage() {
 
               {/* LOCATION CARDS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+
+                {/* Nassau */}
                 <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '5px solid #f4c842' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                     <div>
@@ -452,6 +482,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
 
+                {/* Andros */}
                 <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '5px solid #7c3aed' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                     <div>
@@ -484,19 +515,25 @@ export default function DashboardPage() {
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', marginBottom: '12px' }}>Quick Actions</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
                 {QUICK_ACTIONS.map((action) => (
-                  <Link key={action.label} href={action.href} style={{ backgroundColor: '#fff', border: '1px solid #ebebeb', borderRadius: '14px', padding: '14px 8px', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)', position: 'relative' }}>
+                  <Link
+                    key={action.label}
+                    href={action.href}
+                    style={{ backgroundColor: '#fff', border: '1px solid #ebebeb', borderRadius: '14px', padding: '14px 8px', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)', position: 'relative' }}
+                  >
                     <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: action.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
                       {action.icon}
                     </div>
                     <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '11px', lineHeight: 1.3 }}>{action.label}</span>
                     {action.badge > 0 && (
-                      <span style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 900, padding: '2px 5px', borderRadius: '20px' }}>{action.badge}</span>
+                      <span style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 900, padding: '2px 5px', borderRadius: '20px' }}>
+                        {action.badge}
+                      </span>
                     )}
                   </Link>
                 ))}
               </div>
 
-              {/* SPINY TAILS */}
+              {/* SPINY TAILS FREEZER */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>🧊 Spiny Tails Freezer</h2>
@@ -521,7 +558,9 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── REVENUE TAB ── */}
+          {/* ══════════════════════════════════════
+              REVENUE TAB
+          ══════════════════════════════════════ */}
           {activeTab === 'revenue' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>All 9 Revenue Streams</h2>
@@ -550,7 +589,9 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── YIELD TAB ── */}
+          {/* ══════════════════════════════════════
+              YIELD TAB
+          ══════════════════════════════════════ */}
           {activeTab === 'yield' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>⚖️ Yield Calculator</h2>
@@ -581,7 +622,9 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── INVENTORY TAB ── */}
+          {/* ══════════════════════════════════════
+              INVENTORY TAB
+          ══════════════════════════════════════ */}
           {activeTab === 'inventory' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '20px' }}>🧊 Freezer Inventory</h2>
@@ -610,7 +653,9 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── AI TAB ── */}
+          {/* ══════════════════════════════════════
+              AI TAB
+          ══════════════════════════════════════ */}
           {activeTab === 'ai' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
               <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px 16px 0 0', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -637,14 +682,29 @@ export default function DashboardPage() {
               </div>
               <div style={{ backgroundColor: '#f8f9fa', padding: '8px 14px', display: 'flex', gap: '6px', overflowX: 'auto' }}>
                 {['Nassau profit today', 'Andros 43% margin', 'Spiny Tails stock', 'Monthly expenses', 'Yield formula'].map((prompt) => (
-                  <button key={prompt} onClick={() => setAiInput(prompt)} style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '20px', padding: '5px 12px', fontSize: '11px', color: '#1a2e5a', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <button
+                    key={prompt}
+                    onClick={() => setAiInput(prompt)}
+                    style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '20px', padding: '5px 12px', fontSize: '11px', color: '#1a2e5a', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
                     {prompt}
                   </button>
                 ))}
               </div>
               <div style={{ backgroundColor: '#fff', borderRadius: '0 0 16px 16px', padding: '12px 14px', borderTop: '1px solid #ebebeb', display: 'flex', gap: '8px' }}>
-                <input type="text" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendAiMessage()} placeholder="Ask about your business..." style={{ flex: 1, padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '14px', outline: 'none' }} />
-                <button onClick={sendAiMessage} disabled={aiLoading || !aiInput.trim()} style={{ backgroundColor: aiLoading || !aiInput.trim() ? '#94a3b8' : '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: '10px', padding: '10px 16px', fontWeight: 800, fontSize: '13px', cursor: aiLoading ? 'not-allowed' : 'pointer' }}>
+                <input
+                  type="text"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && sendAiMessage()}
+                  placeholder="Ask about your business..."
+                  style={{ flex: 1, padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '14px', outline: 'none' }}
+                />
+                <button
+                  onClick={sendAiMessage}
+                  disabled={aiLoading || !aiInput.trim()}
+                  style={{ backgroundColor: aiLoading || !aiInput.trim() ? '#94a3b8' : '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: '10px', padding: '10px 16px', fontWeight: 800, fontSize: '13px', cursor: aiLoading ? 'not-allowed' : 'pointer' }}
+                >
                   Send
                 </button>
               </div>
@@ -652,6 +712,7 @@ export default function DashboardPage() {
           )}
         </main>
 
+        {/* ── BOTTOM NAV ── */}
         <nav style={{ backgroundColor: '#fff', borderTop: '1px solid #ebebeb', display: 'flex', position: 'sticky', bottom: 0, zIndex: 30 }}>
           {[
             { icon: '🏠', label: 'Overview', tab: 'overview' },
@@ -660,15 +721,25 @@ export default function DashboardPage() {
             { icon: '⚖️', label: 'Yield',    tab: 'yield' },
             { icon: '🤖', label: 'AI',       tab: 'ai' },
           ].map((item) => (
-            item.href ? (
-              <Link key={item.label} href={item.href} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', textDecoration: 'none', gap: '2px' }}>
+            'href' in item ? (
+              <Link
+                key={item.label}
+                href={item.href!}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', textDecoration: 'none', gap: '2px' }}
+              >
                 <span style={{ fontSize: '20px' }}>{item.icon}</span>
                 <span style={{ color: '#999', fontSize: '10px', fontWeight: 600 }}>{item.label}</span>
               </Link>
             ) : (
-              <button key={item.label} onClick={() => setActiveTab(item.tab!)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer', gap: '2px', borderTop: activeTab === item.tab ? '3px solid #f4c842' : '3px solid transparent' }}>
+              <button
+                key={item.label}
+                onClick={() => setActiveTab(item.tab!)}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer', gap: '2px', borderTop: activeTab === item.tab ? '3px solid #f4c842' : '3px solid transparent' }}
+              >
                 <span style={{ fontSize: '20px' }}>{item.icon}</span>
-                <span style={{ color: activeTab === item.tab ? '#1a2e5a' : '#999', fontSize: '10px', fontWeight: activeTab === item.tab ? 800 : 600 }}>{item.label}</span>
+                <span style={{ color: activeTab === item.tab ? '#1a2e5a' : '#999', fontSize: '10px', fontWeight: activeTab === item.tab ? 800 : 600 }}>
+                  {item.label}
+                </span>
               </button>
             )
           ))}
