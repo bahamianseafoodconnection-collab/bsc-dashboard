@@ -12,50 +12,31 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 const WHOLESALERS = [
-{ key: 'bahamas-food-services', name: 'Bahamas Food Services', color: '#1a5276', logo: '🏭' },
-{ key: 'burns-house', name: 'Burns House', color: '#7B241C', logo: '🍾' },
-{ key: 'nassau-wholesale', name: 'Nassau Wholesale', color: '#1E8449', logo: '🏪' },
-{ key: 'caribbean-wholesale', name: 'Caribbean Wholesale', color: '#1A5276', logo: '🌴' },
-{ key: 'island-foods', name: 'Island Foods Ltd', color: '#196F3D', logo: '🥦' },
-{ key: 'atlantic-wholesale', name: 'Atlantic Wholesale', color: '#2E4057', logo: '🔧' },
-{ key: 'quality-distributors', name: 'Quality Distributors', color: '#922B21', logo: '🥩' },
+{ key: 'asa-h-pritchard', name: 'Asa H Pritchard', color: '#1B4F72', logo: '🏪' },
+{ key: 'bahamas-international-food', name: 'Bahamas International Food', color: '#1E5C2E', logo: '🍱' },
+{ key: 'dalbenas', name: "D'Albenas", color: '#784212', logo: '🏭' },
+{ key: 'bahamas-wholesale-agencies', name: 'Bahamas Wholesale Agencies', color: '#1A5276', logo: '📦' },
+{ key: 'tpg', name: 'TPG', color: '#2C3E50', logo: '🛒' },
+{ key: 'thompson-trading', name: 'Thompson Trading', color: '#922B21', logo: '🤝' },
+{ key: 'island-wholesale', name: 'Island Wholesale', color: '#196F3D', logo: '🌴' },
 ];
 
-const CATEGORIES = ['meats', 'seafood', 'poultry', 'produce', 'dairy', 'dry-goods', 'beverages', 'frozen', 'cleaning', 'paper-goods', 'hardware', 'general'];
+const CATEGORIES = ['meats', 'seafood', 'poultry', 'produce', 'dairy', 'dry-goods', 'beverages', 'frozen', 'cleaning', 'paper-goods', 'hardware', 'general', 'canned-goods', 'international', 'specialty'];
 
 type Product = {
-id: string;
-wholesaler: string;
-name: string;
-description: string;
-category: string;
-wholesale_cost_bsd: number;
-bsc_markup_pct: number;
-vat_pct: number;
-final_price_bsd: number;
-unit: string;
-min_order_qty: number;
-image_url: string;
-in_stock: boolean;
-featured: boolean;
+id: string; wholesaler: string; name: string; description: string;
+category: string; wholesale_cost_bsd: number; bsc_markup_pct: number;
+vat_pct: number; final_price_bsd: number; unit: string;
+min_order_qty: number; image_url: string; in_stock: boolean; featured: boolean;
 };
 
 type FormData = Omit<Product, 'id'>;
 
 const EMPTY: FormData = {
-wholesaler: 'bahamas-food-services',
-name: '',
-description: '',
-category: 'general',
-wholesale_cost_bsd: 0,
-bsc_markup_pct: 0.12,
-vat_pct: 0.10,
-final_price_bsd: 0,
-unit: 'each',
-min_order_qty: 1,
-image_url: '',
-in_stock: true,
-featured: false,
+wholesaler: 'asa-h-pritchard', name: '', description: '', category: 'general',
+wholesale_cost_bsd: 0, bsc_markup_pct: 0.12, vat_pct: 0.10,
+final_price_bsd: 0, unit: 'each', min_order_qty: 1,
+image_url: '', in_stock: true, featured: false,
 };
 
 function calcFinalPrice(form: FormData): number {
@@ -65,7 +46,7 @@ return Math.round(withVat * 100) / 100;
 }
 
 export default function WholesaleProductsAdminPage() {
-const [activeWholesaler, setActiveWholesaler] = useState('bahamas-food-services');
+const [activeWholesaler, setActiveWholesaler] = useState('asa-h-pritchard');
 const [products, setProducts] = useState<Product[]>([]);
 const [loading, setLoading] = useState(true);
 const [modal, setModal] = useState<'add' | 'edit' | null>(null);
@@ -97,10 +78,7 @@ const wholesalerInfo = WHOLESALERS.find(w => w.key === activeWholesaler)!;
 
 function openAdd() {
 setForm({ ...EMPTY, wholesaler: activeWholesaler });
-setEditId(null);
-setImageFile(null);
-setImagePreview('');
-setError('');
+setEditId(null); setImageFile(null); setImagePreview(''); setError('');
 setModal('add');
 }
 
@@ -113,10 +91,7 @@ final_price_bsd: p.final_price_bsd, unit: p.unit,
 min_order_qty: p.min_order_qty, image_url: p.image_url || '',
 in_stock: p.in_stock, featured: p.featured,
 });
-setEditId(p.id);
-setImageFile(null);
-setImagePreview(p.image_url || '');
-setError('');
+setEditId(p.id); setImageFile(null); setImagePreview(p.image_url || ''); setError('');
 setModal('edit');
 }
 
@@ -149,18 +124,12 @@ return updated;
 async function saveProduct() {
 if (!form.name.trim()) { setError('Product name is required.'); return; }
 if (form.wholesale_cost_bsd <= 0) { setError('Wholesale cost is required.'); return; }
-setSaving(true);
-setError('');
+setSaving(true); setError('');
 try {
 let imageUrl = form.image_url;
-if (imageFile) {
-setUploading(true);
-imageUrl = await uploadImage(imageFile);
-setUploading(false);
-}
+if (imageFile) { setUploading(true); imageUrl = await uploadImage(imageFile); setUploading(false); }
 const finalPrice = calcFinalPrice(form);
 const payload = { ...form, image_url: imageUrl, final_price_bsd: finalPrice, updated_at: new Date().toISOString() };
-
 if (modal === 'edit' && editId) {
 const { error } = await supabase.from('local_wholesale_products').update(payload).eq('id', editId);
 if (error) throw error;
@@ -170,12 +139,8 @@ const { error } = await supabase.from('local_wholesale_products').insert([{ ...p
 if (error) throw error;
 setSuccess('Product added.');
 }
-setModal(null);
-await loadProducts();
-setTimeout(() => setSuccess(''), 3000);
-} catch (err: unknown) {
-setError(err instanceof Error ? err.message : 'Save failed.');
-}
+setModal(null); await loadProducts(); setTimeout(() => setSuccess(''), 3000);
+} catch (err: unknown) { setError(err instanceof Error ? err.message : 'Save failed.'); }
 setSaving(false);
 }
 
@@ -190,7 +155,6 @@ const previewPrice = calcFinalPrice(form);
 return (
 <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, sans-serif' }}>
 
-{/* HEADER */}
 <div style={{ backgroundColor: '#1a2e5a', padding: '0 20px', position: 'sticky', top: 0, zIndex: 50 }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -214,14 +178,13 @@ return (
 </div>
 )}
 
-{/* WHOLESALER TABS */}
 <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 20px' }}>
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 4, overflowX: 'auto' }}>
 {WHOLESALERS.map((w) => (
 <button
 key={w.key}
 onClick={() => setActiveWholesaler(w.key)}
-style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: activeWholesaler === w.key ? `3px solid ${w.color}` : '3px solid transparent', backgroundColor: 'transparent', color: activeWholesaler === w.key ? w.color : '#666', fontWeight: activeWholesaler === w.key ? 800 : 500, fontSize: 13 }}
+style={{ padding: '14px 14px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', borderBottom: activeWholesaler === w.key ? `3px solid ${w.color}` : '3px solid transparent', backgroundColor: 'transparent', color: activeWholesaler === w.key ? w.color : '#666', fontWeight: activeWholesaler === w.key ? 800 : 500, fontSize: 13 }}
 >
 {w.logo} {w.name}
 </button>
@@ -229,7 +192,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 </div>
 
-{/* STATS */}
 <div style={{ maxWidth: 1200, margin: '16px auto 0', padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
 {[
 { label: 'Products', value: products.length, color: '#e8f4fd', text: '#1a2e5a' },
@@ -243,7 +205,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 ))}
 </div>
 
-{/* PRODUCT LIST */}
 <div style={{ maxWidth: 1200, margin: '20px auto', padding: '0 20px 40px' }}>
 {loading ? (
 <div style={{ textAlign: 'center', padding: 48, color: '#999' }}>Loading...</div>
@@ -274,9 +235,7 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 </div>
 <div style={{ padding: '12px 14px' }}>
-<div style={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>
-{p.category} · min {p.min_order_qty} {p.unit}
-</div>
+<div style={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>{p.category} · min {p.min_order_qty} {p.unit}</div>
 <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14, marginBottom: 4 }}>{p.name}</div>
 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
 <div>
@@ -284,8 +243,7 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16 }}>BSD ${p.final_price_bsd.toFixed(2)}</div>
 </div>
 <div style={{ textAlign: 'right', fontSize: 11, color: '#94a3b8' }}>
-<div>BSC: 12%</div>
-<div>VAT: 10%</div>
+<div>BSC: 12%</div><div>VAT: 10%</div>
 </div>
 </div>
 <div style={{ display: 'flex', gap: 8 }}>
@@ -299,11 +257,9 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 )}
 </div>
 
-{/* MODAL */}
 {modal && (
 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '20px 16px' }}>
 <div style={{ backgroundColor: '#fff', borderRadius: 18, width: '100%', maxWidth: 520, padding: 24 }}>
-
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
 <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 17, margin: 0 }}>
 {modal === 'add' ? '+ Add Product' : '✏️ Edit Product'}
@@ -313,7 +269,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 
 {error && <div style={{ backgroundColor: '#fde8e8', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 13, fontWeight: 600, marginBottom: 16 }}>{error}</div>}
 
-{/* LIVE PRICE PREVIEW */}
 <div style={{ backgroundColor: '#1a2e5a', borderRadius: 12, padding: '14px 18px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 <div>
 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>Customer Pays</div>
@@ -326,7 +281,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 </div>
 
-{/* WHOLESALER */}
 <div style={{ marginBottom: 14 }}>
 <label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Wholesaler</label>
 <select value={form.wholesaler} onChange={(e) => updateForm('wholesaler', e.target.value)} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', backgroundColor: '#fff' }}>
@@ -334,7 +288,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </select>
 </div>
 
-{/* IMAGE */}
 <div style={{ marginBottom: 14 }}>
 <label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Product Photo</label>
 <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleImageFile} style={{ display: 'none' }} />
@@ -356,19 +309,16 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 </div>
 
-{/* NAME */}
 <div style={{ marginBottom: 14 }}>
 <label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Product Name *</label>
 <input value={form.name} onChange={(e) => updateForm('name', e.target.value)} placeholder="e.g. Chicken Wings 40lb Case" style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
 </div>
 
-{/* DESCRIPTION */}
 <div style={{ marginBottom: 14 }}>
 <label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Description</label>
-<textarea value={form.description} onChange={(e) => updateForm('description', e.target.value)} rows={2} placeholder="Short product description..." style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
+<textarea value={form.description} onChange={(e) => updateForm('description', e.target.value)} rows={2} placeholder="Short description..." style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
 </div>
 
-{/* CATEGORY + UNIT */}
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
 <div>
 <label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Category</label>
@@ -384,7 +334,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 </div>
 
-{/* WHOLESALE COST + MIN QTY */}
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
 <div>
 <label style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, display: 'block', marginBottom: 6 }}>Wholesale Cost (BSD $) *</label>
@@ -396,7 +345,6 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 </div>
 
-{/* TOGGLES */}
 <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
 <button onClick={() => updateForm('in_stock', !form.in_stock)} style={{ flex: 1, backgroundColor: form.in_stock ? '#e8f5e9' : '#fde8e8', color: form.in_stock ? '#2e7d32' : '#dc2626', border: 'none', borderRadius: 10, padding: 11, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
 {form.in_stock ? '✅ Available' : '❌ Not Available'}
@@ -407,7 +355,7 @@ style={{ padding: '14px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'n
 </div>
 
 <button onClick={saveProduct} disabled={saving} style={{ width: '100%', backgroundColor: saving ? '#94a3b8' : wholesalerInfo.color, color: '#fff', border: 'none', borderRadius: 12, padding: 15, fontWeight: 900, fontSize: 15, cursor: saving ? 'not-allowed' : 'pointer', marginBottom: 10 }}>
-{uploading ? '⬆️ Uploading Photo...' : saving ? 'Saving...' : modal === 'add' ? '+ Add Product' : '✅ Save Changes'}
+{uploading ? '⬆️ Uploading...' : saving ? 'Saving...' : modal === 'add' ? '+ Add Product' : '✅ Save Changes'}
 </button>
 
 {modal === 'edit' && editId && (
