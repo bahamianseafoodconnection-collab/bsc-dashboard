@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import HeroSection from '@/components/HeroSection';
 import SiteFooter from '@/components/SiteFooter';
 
-const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
+// ── YOUR ACTUAL FILE IN SUPABASE ──────────────────────────────────────────────
+const HERO_IMG = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/94C94225-7A21-4E0F-BA00-79CA6E108385.jpg';
 
 const WHOLESALERS = [
   {key:'asa-h-pritchard',           name:'Asa H Pritchard',           color:'#1B4F72', emoji:'🏪'},
@@ -43,40 +44,25 @@ export default function HomePage() {
 
         *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
-        /* ── SCROLL FIX — explicit html/body behaviour ── */
-        html {
-          scroll-behavior: smooth;
-          overflow-x: hidden;
-          overflow-y: auto;
-          height: auto;
-          width: 100%;
-        }
-        body {
-          font-family: 'DM Sans', sans-serif;
-          background: #fff;
-          color: #0f2137;
-          -webkit-font-smoothing: antialiased;
-          overflow-x: hidden;
-          overflow-y: auto;
-          height: auto;
-          min-height: 100vh;
-          width: 100%;
-          touch-action: pan-y;
-        }
+        html { scroll-behavior:smooth; overflow-x:hidden; overflow-y:auto; height:auto; width:100%; }
+        body { font-family:'DM Sans',sans-serif; background:#fff; color:#0f2137; -webkit-font-smoothing:antialiased; overflow-x:hidden; overflow-y:auto; height:auto; min-height:100vh; width:100%; touch-action:pan-y; }
 
         /* ── NAV ── */
         .bsc-nav { position:fixed; top:0; left:0; right:0; z-index:200; height:72px; display:flex; align-items:center; transition:all .35s ease; }
         .bsc-nav.scrolled { background:rgba(6,14,28,.94); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid rgba(212,168,67,.15); box-shadow:0 4px 32px rgba(0,0,0,.4); }
-        .bsc-nav.top { background:transparent; }
+        .bsc-nav.top { background:linear-gradient(to bottom, rgba(0,0,0,.45), transparent); }
         .bsc-nav-inner { max-width:1280px; width:100%; margin:0 auto; padding:0 5%; display:flex; align-items:center; justify-content:space-between; }
-        .bsc-nav-logo { display:flex; align-items:center; gap:10px; cursor:pointer; text-decoration:none; flex-shrink:0; }
-        .bsc-nav-logo-img { width:42px; height:42px; border-radius:50%; object-fit:cover; border:2px solid #d4a843; transition:border-color .2s; }
-        .bsc-nav-logo:hover .bsc-nav-logo-img { border-color:#f5c842; }
+
+        /* CSS-only logo — no image dependency */
+        .bsc-nav-logo { display:flex; align-items:center; gap:12px; cursor:pointer; flex-shrink:0; }
+        .bsc-nav-logo-mark { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#0a1520 0%,#1a2e4a 100%); border:2px solid #d4a843; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(212,168,67,.3); transition:all .25s ease; }
+        .bsc-nav-logo:hover .bsc-nav-logo-mark { border-color:#f5c842; transform:scale(1.05); }
+        .bsc-nav-logo-mark-text { font-family:'Playfair Display',serif; font-size:14px; font-weight:900; color:#f5c842; letter-spacing:.5px; }
         .bsc-nav-logo-name { color:#f5a623; font-weight:900; font-size:17px; letter-spacing:2px; line-height:1; font-family:'DM Sans',sans-serif; }
         .bsc-nav-logo-sub { color:rgba(255,255,255,.55); font-size:9px; font-weight:600; letter-spacing:1.8px; margin-top:2px; text-transform:uppercase; }
 
         .bsc-nav-links { display:flex; align-items:center; gap:2px; }
-        .bsc-nav-link { background:none; border:none; color:rgba(255,255,255,.75); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; letter-spacing:.04em; cursor:pointer; padding:8px 14px; border-radius:6px; transition:all .2s ease; position:relative; }
+        .bsc-nav-link { background:none; border:none; color:rgba(255,255,255,.85); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; letter-spacing:.04em; cursor:pointer; padding:8px 14px; border-radius:6px; transition:all .2s ease; position:relative; }
         .bsc-nav-link::after { content:''; position:absolute; bottom:4px; left:14px; right:14px; height:1.5px; background:#d4a843; transform:scaleX(0); transition:transform .2s ease; transform-origin:center; }
         .bsc-nav-link:hover { color:#fff; }
         .bsc-nav-link:hover::after { transform:scaleX(1); }
@@ -118,7 +104,7 @@ export default function HomePage() {
         .bsc-cat-content { position:absolute; bottom:0; left:0; right:0; padding:20px 18px; pointer-events:none; }
         .bsc-cat-name { font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:#fff; margin-bottom:6px; }
         .bsc-cat-desc { font-size:11px; color:rgba(255,255,255,.65); margin-bottom:12px; line-height:1.4; }
-        .bsc-cat-link { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; letter-spacing:.08em; color:#f5c842; text-transform:uppercase; text-decoration:none; transition:gap .2s ease; }
+        .bsc-cat-link { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; letter-spacing:.08em; color:#f5c842; text-transform:uppercase; transition:gap .2s ease; }
         .bsc-cat-card:hover .bsc-cat-link { gap:10px; }
         .bsc-cat-bar { position:absolute; bottom:0; left:0; right:0; height:3px; background:linear-gradient(to right, #d4a843, #f5c842); transform:scaleX(0); transition:transform .28s ease; transform-origin:left; pointer-events:none; }
         .bsc-cat-card:hover .bsc-cat-bar { transform:scaleX(1); }
@@ -177,22 +163,23 @@ export default function HomePage() {
         .bsc-why-card-title { font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:#0a1520; }
         .bsc-why-card-desc { font-size:13px; color:#64748b; text-align:center; line-height:1.6; font-weight:300; }
 
-        /* ── BANNERS ── */
+        /* ── BANNERS — both use the hero image, different overlays ── */
         .bsc-banners { display:grid; grid-template-columns:1fr 1fr; min-height:420px; }
         .bsc-banner { position:relative; overflow:hidden; cursor:pointer; }
         .bsc-banner-bg { position:absolute; inset:0; background-size:cover; background-position:center; transition:transform .55s cubic-bezier(.25,.46,.45,.94); pointer-events:none; }
         .bsc-banner:hover .bsc-banner-bg { transform:scale(1.06); }
-        .bsc-banner-ov { position:absolute; inset:0; background:linear-gradient(to right, rgba(0,0,0,.78) 0%, rgba(0,0,0,.18) 100%); pointer-events:none; }
+        .bsc-banner-ov { position:absolute; inset:0; pointer-events:none; }
+        .bsc-banner-ov-blue { background:linear-gradient(135deg, rgba(10,61,98,.85) 0%, rgba(26,107,154,.5) 60%, rgba(0,0,0,.3) 100%); }
+        .bsc-banner-ov-red { background:linear-gradient(135deg, rgba(122,30,30,.85) 0%, rgba(159,59,54,.5) 60%, rgba(0,0,0,.3) 100%); }
         .bsc-banner-content { position:absolute; top:50%; left:10%; transform:translateY(-50%); z-index:2; }
         .bsc-banner-label { font-size:10px; font-weight:700; letter-spacing:.22em; color:#d4a843; text-transform:uppercase; margin-bottom:8px; }
         .bsc-banner-h3 { font-family:'Playfair Display',serif; font-size:clamp(22px,3vw,36px); font-weight:900; color:#fff; line-height:1.1; margin-bottom:8px; }
-        .bsc-banner-desc { font-size:13px; color:rgba(255,255,255,.65); margin-bottom:22px; font-weight:300; }
+        .bsc-banner-desc { font-size:13px; color:rgba(255,255,255,.75); margin-bottom:22px; font-weight:300; }
         .bsc-banner-btn { display:inline-flex; align-items:center; gap:8px; padding:12px 24px; background:linear-gradient(130deg,#f5c842,#c8860f); color:#060e1c; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; border:none; border-radius:6px; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .22s ease; box-shadow:0 4px 20px rgba(212,160,21,.35); }
         .bsc-banner-btn:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(212,160,21,.5); }
 
         /* ── CTA STRIP ── */
         .bsc-cta-strip { background:linear-gradient(135deg,#d4a843 0%,#f5c842 35%,#d4a015 65%,#c8860f 100%); padding:80px 5%; text-align:center; position:relative; overflow:hidden; }
-        .bsc-cta-strip::before { content:''; position:absolute; inset:0; background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); pointer-events:none; }
         .bsc-cta-strip-inner { max-width:700px; margin:0 auto; position:relative; }
         .bsc-cta-strip-h2 { font-family:'Playfair Display',serif; font-size:clamp(26px,4vw,44px); font-weight:900; color:#060e1c; margin-bottom:12px; }
         .bsc-cta-strip-sub { font-size:15px; color:rgba(6,14,28,.7); margin-bottom:36px; font-weight:400; line-height:1.65; }
@@ -224,9 +211,7 @@ export default function HomePage() {
           .bsc-nav-ham{display:flex;}
           .bsc-cats{padding:64px 5%;}
           .bsc-cats-grid{grid-template-columns:1fr 1fr;}
-          .bsc-wholesale{padding:64px 5%;}
-          .bsc-us{padding:64px 5%;}
-          .bsc-why{padding:64px 5%;}
+          .bsc-wholesale,.bsc-us,.bsc-why{padding:64px 5%;}
           .bsc-why-grid{grid-template-columns:1fr 1fr;}
           .bsc-btrust-inner{grid-template-columns:1fr 1fr;}
           .bsc-partners-grid{grid-template-columns:1fr;}
@@ -240,11 +225,13 @@ export default function HomePage() {
 
       <div style={{backgroundColor:'#fff'}}>
 
-        {/* ══════════════════ STICKY NAV ══════════════════ */}
+        {/* STICKY NAV */}
         <nav className={`bsc-nav ${scrolled ? 'scrolled' : 'top'}`}>
           <div className="bsc-nav-inner">
             <div className="bsc-nav-logo" onClick={() => router.push('/')}>
-              <img src={`${BASE}/logo.jpg`} alt="BSC" className="bsc-nav-logo-img" />
+              <div className="bsc-nav-logo-mark">
+                <span className="bsc-nav-logo-mark-text">BSC</span>
+              </div>
               <div>
                 <div className="bsc-nav-logo-name">BSC</div>
                 <div className="bsc-nav-logo-sub">Marketplace</div>
@@ -358,8 +345,8 @@ export default function HomePage() {
 
             <div className="bsc-partners-grid">
               {WHOLESALERS.map(w => (
-                <div key={w.key} className="bsc-partner-card" onClick={() => router.push(`/local-wholesale/${w.key}`)} style={{['--accent' as never]:w.color} as React.CSSProperties}>
-                  <style>{`.bsc-partner-card[style*="${w.color}"]::before { background:${w.color}; }`}</style>
+                <div key={w.key} className="bsc-partner-card" onClick={() => router.push(`/local-wholesale/${w.key}`)}>
+                  <style>{`.bsc-partner-card[data-c="${w.key}"]::before { background:${w.color}; }`}</style>
                   <span className="bsc-partner-emoji">{w.emoji}</span>
                   <div className="bsc-partner-info">
                     <div className="bsc-partner-name">{w.name}</div>
@@ -463,11 +450,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* DUAL BANNER */}
+        {/* DUAL BANNER — both use the same hero image with different colored overlays */}
         <div className="bsc-banners">
           <div className="bsc-banner" onClick={() => router.push('/market')}>
-            <div className="bsc-banner-bg" style={{backgroundImage:`url(${BASE}/seafood-banner.jpg)`}} />
-            <div className="bsc-banner-ov" />
+            <div className="bsc-banner-bg" style={{backgroundImage:`url(${HERO_IMG})`}} />
+            <div className="bsc-banner-ov bsc-banner-ov-blue" />
             <div className="bsc-banner-content">
               <div className="bsc-banner-label">Fresh Daily</div>
               <h3 className="bsc-banner-h3">Premium Seafood<br />Delivered Daily</h3>
@@ -476,8 +463,8 @@ export default function HomePage() {
             </div>
           </div>
           <div className="bsc-banner" onClick={() => router.push('/market')}>
-            <div className="bsc-banner-bg" style={{backgroundImage:`url(${BASE}/meats-banner.jpg)`}} />
-            <div className="bsc-banner-ov" />
+            <div className="bsc-banner-bg" style={{backgroundImage:`url(${HERO_IMG})`}} />
+            <div className="bsc-banner-ov bsc-banner-ov-red" />
             <div className="bsc-banner-content">
               <div className="bsc-banner-label">Premium Quality</div>
               <h3 className="bsc-banner-h3">Premium Meats<br />Cut Fresh</h3>
