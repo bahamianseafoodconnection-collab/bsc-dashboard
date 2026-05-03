@@ -2,8 +2,6 @@
 
 import Link from 'next/link';
 
-const SUPABASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
-
 const SVG_PAT = encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'>
 <g stroke='%23c8a84b' stroke-width='1' fill='none' opacity='0.28'>
   <ellipse cx='18' cy='12' rx='13' ry='6' transform='translate(2,2)'/>
@@ -37,19 +35,21 @@ export default function SiteFooter() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 
         .bsc-footer { position:relative; background:#060e1c; font-family:'DM Sans',sans-serif; overflow:hidden; }
         .bsc-footer-pat { position:absolute; inset:0; background-image:url("data:image/svg+xml,${SVG_PAT}"); background-size:110px 110px; opacity:.9; pointer-events:none; }
-        .bsc-footer-top-glow { position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent 0%,#c8a84b 25%,#f5c842 50%,#c8a84b 75%,transparent 100%); opacity:.55; }
+        .bsc-footer-top-glow { position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent 0%,#c8a84b 25%,#f5c842 50%,#c8a84b 75%,transparent 100%); opacity:.55; pointer-events:none; }
         .bsc-footer-fade { position:absolute; top:0; left:0; right:0; height:180px; background:linear-gradient(to bottom,rgba(6,14,28,.85),transparent); pointer-events:none; }
 
         .bsc-footer-main { position:relative; z-index:2; max-width:1280px; margin:0 auto; padding:64px 5% 48px; display:grid; grid-template-columns:1.6fr 1fr 1fr 1fr; gap:48px; }
 
-        /* Brand column */
-        .bsc-footer-brand { display:flex; flex-direction:column; gap:0; }
-        .bsc-footer-logo { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
-        .bsc-footer-logo-img { width:48px; height:48px; border-radius:50%; object-fit:cover; border:2px solid #d4a843; }
+        .bsc-footer-brand { display:flex; flex-direction:column; }
+
+        /* CSS-only logo — no image dependency */
+        .bsc-footer-logo { display:flex; align-items:center; gap:14px; margin-bottom:20px; }
+        .bsc-footer-logo-mark { width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,#0a1520 0%,#1a2e4a 100%); border:2px solid #d4a843; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 4px 14px rgba(212,168,67,.25); }
+        .bsc-footer-logo-mark-text { font-family:'Playfair Display',serif; font-size:18px; font-weight:900; color:#f5c842; letter-spacing:1px; line-height:1; }
         .bsc-footer-logo-text { display:flex; flex-direction:column; }
         .bsc-footer-logo-name { font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:#f5c842; letter-spacing:.04em; line-height:1.1; }
         .bsc-footer-logo-sub { font-size:9px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:rgba(212,168,67,.6); margin-top:3px; }
@@ -59,8 +59,6 @@ export default function SiteFooter() {
         .bsc-footer-contact a { font-size:12px; color:rgba(255,255,255,.5); text-decoration:none; transition:color .2s; display:flex; align-items:center; gap:8px; }
         .bsc-footer-contact a:hover { color:#d4a843; }
 
-        /* Nav columns */
-        .bsc-footer-col { }
         .bsc-footer-col-title { font-size:10px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:#d4a843; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid rgba(212,168,67,.2); }
         .bsc-footer-col-links { display:flex; flex-direction:column; gap:10px; }
         .bsc-footer-col-links a { font-size:13px; color:rgba(255,255,255,.5); text-decoration:none; transition:all .2s ease; display:flex; align-items:center; gap:6px; font-weight:400; }
@@ -68,18 +66,15 @@ export default function SiteFooter() {
         .bsc-footer-col-links a:hover { color:#e8d5a3; transform:translateX(4px); }
         .bsc-footer-col-links a:hover::before { width:12px; }
 
-        /* Bottom bar */
         .bsc-footer-bottom { position:relative; z-index:2; border-top:1px solid rgba(212,168,67,.1); }
         .bsc-footer-bottom-inner { max-width:1280px; margin:0 auto; padding:20px 5%; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
         .bsc-footer-copy { font-size:11px; color:rgba(255,255,255,.25); letter-spacing:.04em; }
         .bsc-footer-badges { display:flex; gap:8px; }
         .bsc-footer-badge { font-size:9px; font-weight:700; letter-spacing:.1em; color:rgba(212,168,67,.5); border:1px solid rgba(212,168,67,.2); padding:3px 10px; border-radius:3px; text-transform:uppercase; }
 
-        /* Trust strip */
         .bsc-footer-trust { position:relative; z-index:2; border-top:1px solid rgba(255,255,255,.04); padding:28px 5%; max-width:1280px; margin:0 auto; display:flex; justify-content:center; gap:40px; flex-wrap:wrap; }
         .bsc-footer-trust-item { display:flex; align-items:center; gap:10px; }
         .bsc-footer-trust-icon { font-size:18px; }
-        .bsc-footer-trust-text { }
         .bsc-footer-trust-title { font-size:12px; font-weight:600; color:rgba(255,255,255,.6); }
         .bsc-footer-trust-sub { font-size:10px; color:rgba(255,255,255,.3); margin-top:1px; }
 
@@ -102,7 +97,9 @@ export default function SiteFooter() {
           {/* Brand */}
           <div className="bsc-footer-brand">
             <div className="bsc-footer-logo">
-              <img src={`${SUPABASE}/logo.jpg`} alt="BSC" className="bsc-footer-logo-img" />
+              <div className="bsc-footer-logo-mark">
+                <span className="bsc-footer-logo-mark-text">BSC</span>
+              </div>
               <div className="bsc-footer-logo-text">
                 <span className="bsc-footer-logo-name">Bahamian Seafood<br />Connection</span>
                 <span className="bsc-footer-logo-sub">BSC Marketplace</span>
@@ -119,24 +116,21 @@ export default function SiteFooter() {
             </div>
           </div>
 
-          {/* Shop links */}
-          <div className="bsc-footer-col">
+          <div>
             <div className="bsc-footer-col-title">Shop</div>
             <div className="bsc-footer-col-links">
               {LINKS.shop.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
             </div>
           </div>
 
-          {/* Services */}
-          <div className="bsc-footer-col">
+          <div>
             <div className="bsc-footer-col-title">Services</div>
             <div className="bsc-footer-col-links">
               {LINKS.services.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
             </div>
           </div>
 
-          {/* Company */}
-          <div className="bsc-footer-col">
+          <div>
             <div className="bsc-footer-col-title">Company</div>
             <div className="bsc-footer-col-links">
               {LINKS.company.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
@@ -144,7 +138,6 @@ export default function SiteFooter() {
           </div>
         </div>
 
-        {/* Trust strip */}
         <div className="bsc-footer-trust">
           {[
             {icon:'❄️', title:'Fresh Daily',         sub:'Sourced and delivered fresh'},
@@ -154,7 +147,7 @@ export default function SiteFooter() {
           ].map(t => (
             <div key={t.title} className="bsc-footer-trust-item">
               <span className="bsc-footer-trust-icon">{t.icon}</span>
-              <div className="bsc-footer-trust-text">
+              <div>
                 <div className="bsc-footer-trust-title">{t.title}</div>
                 <div className="bsc-footer-trust-sub">{t.sub}</div>
               </div>
@@ -162,7 +155,6 @@ export default function SiteFooter() {
           ))}
         </div>
 
-        {/* Bottom bar */}
         <div className="bsc-footer-bottom">
           <div className="bsc-footer-bottom-inner">
             <span className="bsc-footer-copy">© {year} BSC Marketplace · Dedrick Tamico Storr Snr & Jaquel Rolle-Storr & Family · Nassau, Bahamas</span>
