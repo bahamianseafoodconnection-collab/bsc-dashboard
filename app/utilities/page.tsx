@@ -1,18 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
 
 const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
-const SERVICE_FEE    = 6.00;
-const BSC_RATE_PCT   = 4.5;
+const SERVICE_FEE  = 6.00;
+const BSC_RATE_PCT = 4.5;
 
 const BILL_TYPES = [
   { key: 'bec',      label: 'BEC – Electricity',       icon: '⚡', color: '#f59e0b' },
@@ -22,19 +17,12 @@ const BILL_TYPES = [
   { key: 'internet', label: 'Internet / Cable',         icon: '🌐', color: '#06b6d4' },
   { key: 'cable',    label: 'Cable Bahamas',            icon: '📺', color: '#ef4444' },
   { key: 'nis',      label: 'NIS – National Insurance', icon: '🏛️', color: '#6366f1' },
-  { key: 'other',    label: 'Other',                    icon: '📄', color: '#64748b' },
+  { key: 'other',    label: 'Other Bill',               icon: '📄', color: '#64748b' },
 ];
 
-type Step = 'details' | 'invoice' | 'card' | 'processing' | 'approved' | 'declined';
+type View = 'details' | 'invoice' | 'payment' | 'done';
 
-interface CardData {
-  number:  string;
-  name:    string;
-  expiry:  string;
-  cvv:     string;
-}
-
-function fmtMoney(n: number) {
+function fmt(n: number) {
   return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
@@ -47,511 +35,57 @@ function calcFees(amount: number) {
 
 export default function UtilitiesPage() {
   const router = useRouter();
-
-  // ── Form state ─────────────────────────────────────────────────────────────
-  const [step, setStep]           = useState<Step>('details');
-  const [billType, setBillType]   = useState('');
-  const [accountNo, setAccountNo] = useState('');
+  const [view, setView]               = useState<View>('details');
+  const [billType, setBillType]       = useState('');
+  const [accountNo, setAccountNo]     = useState('');
   const [accountName, setAccountName] = useState('');
-  const [amountStr, setAmountStr] = useState('');
-  const [card, setCard]           = useState<CardData>({ number: '', name: '', expiry: '', cvv: '' });
-  const [cardError, setCardError] = useState('');
-  const [refNo, setRefNo]         = useState('');
-  const [showCvv, setShowCvv]     = useState(false);
-  const amountInputRef            = useRef<HTMLInputElement>(null);
+  const [amountStr, setAmountStr]     = useState('');
+  const [refNo, setRefNo]             = useState('');
+  const [last4, setLast4]             = useState('');
 
-  const amount  = parseFloat(amountStr.replace(/,/g, '')) || 0;
+  const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
   const { bscFee, serviceFee, total } = calcFees(amount);
-  const billConfig = BILL_TYPES.find(b => b.key === billType);
+  const bill = BILL_TYPES.find(b => b.key === billType);
 
-  // ── Card formatting ─────────────────────────────────────────────────────────
-  function handleCardNumber(raw: string) {
-    const digits = raw.replace(/\D/g, '').slice(0, 16);
-    const formatted = digits.replace(/(.{4})/g, '$1 ').trim();
-    setCard(c => ({ ...c, number: formatted }));
-  }
-
-  function handleExpiry(raw: string) {
-    const digits = raw.replace(/\D/g, '').slice(0, 4);
-    const formatted = digits.length > 2 ? `${digits.slice(0,2)}/${digits.slice(2)}` : digits;
-    setCard(c => ({ ...c, expiry: formatted }));
-  }
-
-  function handleAmount(raw: string) {
-    const clean = raw.replace(/[^0-9.]/g, '');
-    setAmountStr(clean);
-  }
-
-  // ── Card type detection ──────────────────────────────────────────────────────
-  function cardType() {
-    const n = card.number.replace(/\s/g, '');
-    if (n.startsWith('4'))                   return { label: 'VISA',       icon: '💳' };
-    if (/^5[1-5]/.test(n))                   return { label: 'MASTERCARD', icon: '💳' };
-    if (/^3[47]/.test(n))                    return { label: 'AMEX',       icon: '💳' };
-    if (n.startsWith('6011'))                return { label: 'DISCOVER',   icon: '💳' };
-    return null;
-  }
-
-  // ── Validation ──────────────────────────────────────────────────────────────
-  function canProceedToInvoice() {
-    return billType && accountNo.trim() && amount >= 1;
-  }
-
-  function validateCard() {
-    const n = card.number.replace(/\s/g, '');
-    if (n.length < 16)      return 'Please enter a valid 16-digit card number.';
-    if (!card.name.trim())  return 'Please enter the name on the card.';
-    const [mm, yy] = card.expiry.split('/');
-    if (!mm || !yy || parseInt(mm) > 12 || parseInt(mm) < 1) return 'Please enter a valid expiry date (MM/YY).';
-    const now = new Date();
-    const exp = new Date(2000 + parseInt(yy), parseInt(mm) - 1);
-    if (exp < now)          return 'This card has expired.';
-    if (card.cvv.length < 3) return 'Please enter a valid CVV.';
-    return '';
-  }
-
-  // ── Pay Now ─────────────────────────────────────────────────────────────────
-  async function handlePayNow() {
-    const err = validateCard();
-    if (err) { setCardError(err); return; }
-    setCardError('');
-    setStep('processing');
-
-    // Simulate RBC gateway call (replace with real RBC_GATEWAY_URL when keys arrive)
-    await new Promise(r => setTimeout(r, 2800));
-
-    // Generate reference
-    const ref = `BSC-${Date.now().toString(36).toUpperCase()}`;
-    setRefNo(ref);
-
-    // Save to Supabase
-    const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('utility_payments').insert({
-      bill_type:    billType,
-      account_no:   accountNo,
-      account_name: accountName || null,
-      amount_bsd:   amount,
-      bsc_fee:      bscFee,
-      service_fee:  serviceFee,
-      total_bsd:    total,
-      payment_method: 'card',
-      payment_status: 'approved',
-      reference_no:   ref,
-      user_id:        session?.user.id || null,
-    });
-
-    setStep('approved');
-  }
-
-  // ── Step: Payment Details ────────────────────────────────────────────────────
-  const StepDetails = () => (
-    <div style={{ animation: 'fadeUp 0.4s ease both' }}>
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>Select Bill Type</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-          {BILL_TYPES.map(b => (
-            <button
-              key={b.key}
-              onClick={() => setBillType(b.key)}
-              style={{
-                padding: '12px 14px', borderRadius: 10, border: billType === b.key ? `2px solid ${b.color}` : '2px solid #e2e8f0',
-                backgroundColor: billType === b.key ? `${b.color}12` : '#fff',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
-                transition: 'all 0.18s', fontFamily: 'inherit',
-                boxShadow: billType === b.key ? `0 0 0 4px ${b.color}18` : 'none',
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{b.icon}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: billType === b.key ? b.color : '#475569', textAlign: 'left', lineHeight: 1.3 }}>{b.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <div>
-          <label style={labelStyle}>Account Number *</label>
-          <input
-            value={accountNo}
-            onChange={e => setAccountNo(e.target.value)}
-            placeholder="e.g. 123456789"
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>Account Holder Name</label>
-          <input
-            value={accountName}
-            onChange={e => setAccountName(e.target.value)}
-            placeholder="Optional"
-            style={inputStyle}
-          />
-        </div>
-      </div>
-
-      {/* Amount */}
-      <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>Payment Amount (BSD) *</label>
-        <div style={{ position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#1a2e4a' }}>$</span>
-          <input
-            ref={amountInputRef}
-            value={amountStr}
-            onChange={e => handleAmount(e.target.value)}
-            placeholder="0.00"
-            inputMode="decimal"
-            style={{ ...inputStyle, paddingLeft: 30, fontSize: 24, fontWeight: 800, color: '#1a2e4a', letterSpacing: 0.5 }}
-          />
-        </div>
-      </div>
-
-      {/* Live fee preview */}
-      {amount >= 1 && (
-        <div style={{ backgroundColor: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px 20px', marginBottom: 24, animation: 'fadeUp 0.3s ease both' }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12 }}>Fee Preview</div>
-          <FeeRow label="Payment Amount" value={amount} />
-          <FeeRow label={`Cost of Doing Business (${BSC_RATE_PCT}%)`} value={bscFee} sub />
-          <FeeRow label="Service Fee" value={serviceFee} sub />
-          <div style={{ borderTop: '2px solid #e2e8f0', marginTop: 10, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 900, fontSize: 15, color: '#1a2e4a' }}>Total Due</span>
-            <span style={{ fontWeight: 900, fontSize: 22, color: '#1a2e4a' }}>BSD ${fmtMoney(total)}</span>
-          </div>
-        </div>
-      )}
-
-      <button
-        onClick={() => setStep('invoice')}
-        disabled={!canProceedToInvoice()}
-        style={{ ...primaryBtn, opacity: canProceedToInvoice() ? 1 : 0.4, cursor: canProceedToInvoice() ? 'pointer' : 'not-allowed' }}
-      >
-        Review Invoice →
-      </button>
-    </div>
-  );
-
-  // ── Step: Invoice ────────────────────────────────────────────────────────────
-  const StepInvoice = () => (
-    <div style={{ animation: 'fadeUp 0.4s ease both' }}>
-
-      {/* Invoice document */}
-      <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', marginBottom: 20, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-
-        {/* Invoice header */}
-        <div style={{ backgroundColor: '#1a2e4a', padding: '24px 28px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 18, letterSpacing: 1, marginBottom: 2 }}>BSC MARKETPLACE</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>Nassau, Bahamas 🇧🇸</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>bscbahamas.com</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 22, letterSpacing: 2 }}>INVOICE</div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 4 }}>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 2 }}>Bill Payment Service</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bill details */}
-        <div style={{ padding: '20px 28px', borderBottom: '1px solid #f1f5f9', backgroundColor: '#fafbfc' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>Bill To</div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2e4a' }}>{accountName || 'Account Holder'}</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Account No: {accountNo}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>Bill Type</div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2e4a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>{billConfig?.icon}</span>
-                <span>{billConfig?.label}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Line items */}
-        <div style={{ padding: '0 28px' }}>
-          {/* Header row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, padding: '14px 0 10px', borderBottom: '2px solid #1a2e4a' }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#1a2e4a', letterSpacing: 1, textTransform: 'uppercase' }}>Description</span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#1a2e4a', letterSpacing: 1, textTransform: 'uppercase', textAlign: 'right' }}>Amount (BSD)</span>
-          </div>
-
-          {/* Line 1 — Payment amount */}
-          <InvoiceLine
-            label={`${billConfig?.label} — Payment`}
-            sub={`Account: ${accountNo}`}
-            amount={amount}
-            color="#1a2e4a"
-          />
-
-          {/* Line 2 — 4.5% fee */}
-          <InvoiceLine
-            label={`Cost of Doing Business — ${BSC_RATE_PCT}%`}
-            sub={`${BSC_RATE_PCT}% × BSD $${fmtMoney(amount)}`}
-            amount={bscFee}
-            color="#64748b"
-            small
-          />
-
-          {/* Line 3 — $6 service fee */}
-          <InvoiceLine
-            label="Service Fee — BSC Bill Payment"
-            sub="Flat rate per transaction"
-            amount={serviceFee}
-            color="#64748b"
-            small
-          />
-
-          {/* Subtotal spacer */}
-          <div style={{ borderTop: '1px dashed #e2e8f0', margin: '4px 0' }} />
-
-          {/* Total */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, padding: '16px 0', borderTop: '3px solid #1a2e4a', marginTop: 4 }}>
-            <div>
-              <div style={{ fontWeight: 900, fontSize: 16, color: '#1a2e4a' }}>TOTAL DUE</div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Payment Amount + Fees</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 900, fontSize: 26, color: '#1a2e4a' }}>BSD ${fmtMoney(total)}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer note */}
-        <div style={{ backgroundColor: '#fff8e7', borderTop: '1px solid #fde68a', padding: '12px 28px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>ℹ️</span>
-          <div style={{ fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
-            Fees cover BSC's cost of processing and delivering your payment to <strong>{billConfig?.label}</strong>. Payments are processed securely via RBC Plug & Pay. Your bill provider receives the exact payment amount of BSD ${fmtMoney(amount)}.
-          </div>
-        </div>
-      </div>
-
-      {/* Only card payment — no wire transfer */}
-      <div style={{ backgroundColor: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 12, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 22 }}>💳</span>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 13, color: '#0c4a6e' }}>Card Payment Only</div>
-          <div style={{ fontSize: 12, color: '#075985' }}>BSC accepts card payments for bill services. No wire transfers.</div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={() => setStep('details')} style={{ ...ghostBtn, flex: '0 0 auto' }}>← Back</button>
-        <button onClick={() => setStep('card')} style={{ ...primaryBtn, flex: 1 }}>
-          Continue to Pay via Card →
-        </button>
-      </div>
-    </div>
-  );
-
-  // ── Step: Card Input ─────────────────────────────────────────────────────────
-  const StepCard = () => {
-    const ct = cardType();
-    return (
-      <div style={{ animation: 'fadeUp 0.4s ease both' }}>
-
-        {/* Amount reminder */}
-        <div style={{ backgroundColor: '#1a2e4a', borderRadius: 12, padding: '16px 20px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Total Due</div>
-            <div style={{ color: '#f5a623', fontSize: 26, fontWeight: 900 }}>BSD ${fmtMoney(total)}</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{billConfig?.icon} {billConfig?.label}</div>
-            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Acct: {accountNo}</div>
-          </div>
-        </div>
-
-        {/* Visual card */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1a2e4a 0%, #0f2137 60%, #1B4F72 100%)',
-          borderRadius: 16, padding: '24px 28px', marginBottom: 24,
-          boxShadow: '0 8px 32px rgba(26,46,74,0.4)',
-          position: 'relative', overflow: 'hidden', minHeight: 180,
-        }}>
-          {/* Card shimmer */}
-          <div style={{ position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: '50%', background: 'rgba(245,166,35,0.08)' }} />
-          <div style={{ position: 'absolute', bottom: -60, left: -30, width: 180, height: 180, borderRadius: '50%', background: 'rgba(245,166,35,0.05)' }} />
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, position: 'relative' }}>
-            <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 14, letterSpacing: 2 }}>BSC PAY</div>
-            {ct && <div style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: 12, letterSpacing: 1 }}>{ct.label}</div>}
-          </div>
-          <div style={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: 4, marginBottom: 20, fontFamily: 'monospace', position: 'relative' }}>
-            {(card.number || '•••• •••• •••• ••••').padEnd(19, '•')}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
-            <div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>Card Holder</div>
-              <div style={{ color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>{card.name || 'YOUR NAME'}</div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>Expires</div>
-              <div style={{ color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>{card.expiry || 'MM/YY'}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card fields */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-          <div>
-            <label style={labelStyle}>Card Number *</label>
-            <input
-              value={card.number}
-              onChange={e => handleCardNumber(e.target.value)}
-              placeholder="1234 5678 9012 3456"
-              inputMode="numeric"
-              maxLength={19}
-              style={{ ...inputStyle, fontFamily: 'monospace', fontSize: 16, letterSpacing: 2 }}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>Name on Card *</label>
-            <input
-              value={card.name}
-              onChange={e => setCard(c => ({ ...c, name: e.target.value.toUpperCase() }))}
-              placeholder="JOHN SMITH"
-              style={{ ...inputStyle, textTransform: 'uppercase', letterSpacing: 1 }}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <div>
-              <label style={labelStyle}>Expiry Date *</label>
-              <input
-                value={card.expiry}
-                onChange={e => handleExpiry(e.target.value)}
-                placeholder="MM/YY"
-                inputMode="numeric"
-                maxLength={5}
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: 16, letterSpacing: 2 }}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>CVV *</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  value={card.cvv}
-                  onChange={e => setCard(c => ({ ...c, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
-                  placeholder="•••"
-                  type={showCvv ? 'text' : 'password'}
-                  inputMode="numeric"
-                  maxLength={4}
-                  style={{ ...inputStyle, fontFamily: 'monospace', fontSize: 16, letterSpacing: 3, paddingRight: 44 }}
-                />
-                <button
-                  onClick={() => setShowCvv(v => !v)}
-                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}
-                >
-                  {showCvv ? '🙈' : '👁️'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Security notice */}
-        <div style={{ backgroundColor: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span style={{ fontSize: 18 }}>🔒</span>
-          <div style={{ fontSize: 11, color: '#166534', lineHeight: 1.5 }}>
-            Your card details are encrypted and processed securely via <strong>RBC Plug & Pay</strong>. BSC does not store your card number, CVV, or expiry date.
-          </div>
-        </div>
-
-        {cardError && (
-          <div style={{ backgroundColor: '#fee2e2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#991b1b', fontWeight: 600 }}>
-            ⚠️ {cardError}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => setStep('invoice')} style={{ ...ghostBtn, flex: '0 0 auto' }}>← Invoice</button>
-          <button onClick={handlePayNow} style={{ ...primaryBtn, flex: 1, fontSize: 16, padding: '16px' }}>
-            🔒 Pay Now — BSD ${fmtMoney(total)}
-          </button>
-        </div>
-
-        {/* Accepted cards */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>Accepted:</span>
-          {['VISA', 'MASTERCARD', 'DISCOVER'].map(c => (
-            <span key={c} style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: 5, fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: 0.5 }}>{c}</span>
-          ))}
-        </div>
-      </div>
-    );
+  const payload: PaymentPayload = {
+    amount,
+    fees:        bscFee + serviceFee,
+    total,
+    description: `${bill?.label || 'Bill'} — Acct ${accountNo}`,
+    receiptType: 'utility',
+    metadata:    { bill_type: billType, account_no: accountNo, account_name: accountName, bsc_fee: bscFee, service_fee: serviceFee },
   };
 
-  // ── Step: Processing ─────────────────────────────────────────────────────────
-  const StepProcessing = () => (
-    <div style={{ textAlign: 'center', padding: '60px 0', animation: 'fadeUp 0.4s ease both' }}>
-      <div style={{ width: 80, height: 80, borderRadius: '50%', border: '5px solid #e2e8f0', borderTopColor: '#1a2e4a', margin: '0 auto 24px', animation: 'spin 0.8s linear infinite' }} />
-      <div style={{ fontWeight: 900, fontSize: 20, color: '#1a2e4a', marginBottom: 8 }}>Processing Payment…</div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>Contacting RBC Plug & Pay</div>
-      <div style={{ fontSize: 13, color: '#64748b' }}>BSD ${fmtMoney(total)} · {billConfig?.label}</div>
-    </div>
-  );
+  function reset() {
+    setBillType(''); setAccountNo(''); setAccountName('');
+    setAmountStr(''); setRefNo(''); setLast4(''); setView('details');
+  }
 
-  // ── Step: Approved ───────────────────────────────────────────────────────────
-  const StepApproved = () => (
-    <div style={{ textAlign: 'center', animation: 'fadeUp 0.5s ease both' }}>
-      <div style={{ width: 90, height: 90, borderRadius: '50%', backgroundColor: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44, margin: '0 auto 20px' }}>✅</div>
-      <div style={{ fontWeight: 900, fontSize: 24, color: '#065f46', marginBottom: 6 }}>Payment Approved!</div>
-      <div style={{ fontSize: 14, color: '#047857', marginBottom: 24 }}>Your {billConfig?.label} payment has been processed.</div>
+  const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: '2px solid #e2e8f0', borderRadius: 10, fontSize: 14, color: '#1a2e4a', backgroundColor: '#fff', fontFamily: 'inherit', outline: 'none' };
+  const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 800 as const, color: '#475569', letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 7 };
 
-      {/* Receipt summary */}
-      <div style={{ backgroundColor: '#fff', border: '1px solid #d1fae5', borderRadius: 16, padding: '24px', marginBottom: 24, textAlign: 'left', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16 }}>Receipt</div>
-        <ReceiptRow label="Reference No."     value={refNo} mono />
-        <ReceiptRow label="Bill Type"         value={`${billConfig?.icon} ${billConfig?.label}`} />
-        <ReceiptRow label="Account No."       value={accountNo} />
-        <ReceiptRow label="Payment Amount"    value={`BSD $${fmtMoney(amount)}`} />
-        <ReceiptRow label="BSC Fee (4.5%)"    value={`BSD $${fmtMoney(bscFee)}`} light />
-        <ReceiptRow label="Service Fee"       value={`BSD $${fmtMoney(serviceFee)}`} light />
-        <div style={{ borderTop: '2px solid #1a2e4a', marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 900, fontSize: 15, color: '#1a2e4a' }}>Total Charged</span>
-          <span style={{ fontWeight: 900, fontSize: 18, color: '#1a2e4a' }}>BSD ${fmtMoney(total)}</span>
-        </div>
-        <div style={{ marginTop: 12, padding: '10px 14px', backgroundColor: '#f0fdf4', borderRadius: 8, fontSize: 11, color: '#166534', textAlign: 'center', fontWeight: 600 }}>
-          {new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })} · Card Payment · RBC Approved
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={() => { setStep('details'); setBillType(''); setAccountNo(''); setAccountName(''); setAmountStr(''); setCard({ number: '', name: '', expiry: '', cvv: '' }); }} style={{ ...ghostBtn, flex: 1 }}>Pay Another Bill</button>
-        <button onClick={() => router.push('/')} style={{ ...primaryBtn, flex: 1 }}>Back to Home</button>
-      </div>
-    </div>
-  );
-
-  // ── Progress bar ─────────────────────────────────────────────────────────────
   const STEPS = [
-    { key: 'details',    label: 'Details'  },
-    { key: 'invoice',    label: 'Invoice'  },
-    { key: 'card',       label: 'Payment'  },
-    { key: 'processing', label: 'Process'  },
-    { key: 'approved',   label: 'Done'     },
+    { key: 'details', label: 'Details'  },
+    { key: 'invoice', label: 'Invoice'  },
+    { key: 'payment', label: 'Payment'  },
   ];
-  const stepIndex = STEPS.findIndex(s => s.key === step);
+  const stepIdx = STEPS.findIndex(s => s.key === view);
 
   return (
     <>
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        input:focus { border-color: #1a2e4a !important; box-shadow: 0 0 0 3px rgba(26,46,74,0.12); outline: none; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        input:focus { border-color: #1a2e4a !important; box-shadow: 0 0 0 3px rgba(26,46,74,0.1) !important; outline: none; }
         input::placeholder { color: #cbd5e1; }
+        .bill-btn { transition: all 0.18s; font-family: inherit; }
+        .bill-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+        .bsc-btn { transition: opacity 0.15s, transform 0.15s; }
+        .bsc-btn:hover { opacity: 0.9; transform: translateY(-1px); }
       `}</style>
 
       <div style={{ minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-
-        {/* ── Nav ── */}
         <nav style={{ backgroundColor: '#1a2e4a', padding: '0 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
           <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -563,50 +97,229 @@ export default function UtilitiesPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.08)', padding: '5px 12px', borderRadius: 20 }}>
               <span style={{ fontSize: 12 }}>🔒</span>
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 600 }}>Secured by RBC</span>
+              <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, fontWeight: 600 }}>Secured by RBC</span>
             </div>
           </div>
         </nav>
 
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '32px 20px 60px' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 60px' }}>
 
-          {/* ── Progress steps ── */}
-          {step !== 'processing' && step !== 'approved' && (
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 32 }}>
-              {STEPS.slice(0, 3).map((s, i) => (
-                <div key={s.key} style={{ display: 'flex', alignItems: 'center', flex: i < 2 ? 1 : 'none' }}>
+          {/* Progress */}
+          {view !== 'done' && (
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28 }}>
+              {STEPS.map((s, i) => (
+                <div key={s.key} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? 1 : 'none' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      backgroundColor: i < stepIndex ? '#22c55e' : i === stepIndex ? '#1a2e4a' : '#e2e8f0',
-                      color: i <= stepIndex ? '#fff' : '#94a3b8',
-                      fontWeight: 800, fontSize: 13, flexShrink: 0,
-                      transition: 'all 0.3s',
-                    }}>
-                      {i < stepIndex ? '✓' : i + 1}
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: i < stepIdx ? '#22c55e' : i === stepIdx ? '#1a2e4a' : '#e2e8f0', color: i <= stepIdx ? '#fff' : '#94a3b8', fontWeight: 800, fontSize: 12, flexShrink: 0, transition: 'all 0.3s' }}>
+                      {i < stepIdx ? '✓' : i + 1}
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: i === stepIndex ? '#1a2e4a' : '#94a3b8', whiteSpace: 'nowrap' }}>{s.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: i === stepIdx ? '#1a2e4a' : '#94a3b8', whiteSpace: 'nowrap' }}>{s.label}</span>
                   </div>
-                  {i < 2 && <div style={{ flex: 1, height: 2, backgroundColor: i < stepIndex ? '#22c55e' : '#e2e8f0', margin: '0 10px', transition: 'background 0.3s' }} />}
+                  {i < STEPS.length - 1 && <div style={{ flex: 1, height: 2, backgroundColor: i < stepIdx ? '#22c55e' : '#e2e8f0', margin: '0 10px', transition: 'background 0.3s' }} />}
                 </div>
               ))}
             </div>
           )}
 
-          {/* ── Main card ── */}
-          <div style={{ backgroundColor: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-            {step === 'details'    && <><PageTitle title="Bill Payment" sub="Enter your payment details below" /><StepDetails /></>}
-            {step === 'invoice'    && <><PageTitle title="Review Invoice" sub="Confirm the details before paying" /><StepInvoice /></>}
-            {step === 'card'       && <><PageTitle title="Card Payment" sub="Enter your card details to complete payment" /><StepCard /></>}
-            {step === 'processing' && <StepProcessing />}
-            {step === 'approved'   && <StepApproved />}
+          <div style={{ backgroundColor: '#fff', borderRadius: 20, padding: '28px', boxShadow: '0 4px 24px rgba(0,0,0,0.07)' }}>
+
+            {/* ── DETAILS ── */}
+            {view === 'details' && (
+              <div style={{ animation: 'fadeUp 0.35s ease both' }}>
+                <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1a2e4a', marginBottom: 4 }}>Bill Payment</h1>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Select your bill and enter the payment amount.</p>
+
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>Select Bill Type</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 9, marginBottom: 24 }}>
+                  {BILL_TYPES.map(b => (
+                    <button key={b.key} className="bill-btn" onClick={() => setBillType(b.key)} style={{ padding: '11px 13px', borderRadius: 10, border: billType === b.key ? `2px solid ${b.color}` : '2px solid #e2e8f0', backgroundColor: billType === b.key ? `${b.color}12` : '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, boxShadow: billType === b.key ? `0 0 0 3px ${b.color}1a` : 'none' }}>
+                      <span style={{ fontSize: 19 }}>{b.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: billType === b.key ? b.color : '#475569', textAlign: 'left', lineHeight: 1.3 }}>{b.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+                  <div><label style={lbl}>Account Number *</label><input value={accountNo} onChange={e => setAccountNo(e.target.value)} placeholder="e.g. 123456789" style={inp} /></div>
+                  <div><label style={lbl}>Account Holder Name</label><input value={accountName} onChange={e => setAccountName(e.target.value)} placeholder="Optional" style={inp} /></div>
+                </div>
+
+                <div style={{ marginBottom: 22 }}>
+                  <label style={lbl}>Payment Amount (BSD) *</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 18, fontWeight: 700, color: '#1a2e4a' }}>$</span>
+                    <input value={amountStr} onChange={e => setAmountStr(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" style={{ ...inp, paddingLeft: 30, fontSize: 24, fontWeight: 800 }} />
+                  </div>
+                </div>
+
+                {amount >= 1 && (
+                  <div style={{ backgroundColor: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '16px 18px', marginBottom: 22 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 }}>Fee Preview</div>
+                    {[
+                      { label: 'Payment Amount',                            value: amount,     main: true },
+                      { label: `Cost of Doing Business (${BSC_RATE_PCT}%)`, value: bscFee               },
+                      { label: 'Service Fee',                               value: serviceFee            },
+                    ].map(r => (
+                      <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: r.main ? 13 : 12, color: r.main ? '#1a2e4a' : '#64748b', fontWeight: r.main ? 800 : 500 }}>{r.label}</span>
+                        <span style={{ fontSize: r.main ? 13 : 12, color: r.main ? '#1a2e4a' : '#64748b', fontWeight: 700 }}>{r.main ? '' : '+'}BSD ${fmt(r.value)}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 10, marginTop: 6, borderTop: '2px solid #1a2e4a' }}>
+                      <span style={{ fontWeight: 900, fontSize: 14, color: '#1a2e4a' }}>Total Due</span>
+                      <span style={{ fontWeight: 900, fontSize: 22, color: '#1a2e4a' }}>BSD ${fmt(total)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <button className="bsc-btn" onClick={() => setView('invoice')} disabled={!billType || !accountNo.trim() || amount < 1} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 15, fontWeight: 900, cursor: billType && accountNo.trim() && amount >= 1 ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: billType && accountNo.trim() && amount >= 1 ? 1 : 0.4 }}>
+                  Review Invoice →
+                </button>
+              </div>
+            )}
+
+            {/* ── INVOICE ── */}
+            {view === 'invoice' && (
+              <div style={{ animation: 'fadeUp 0.35s ease both' }}>
+                <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1a2e4a', marginBottom: 4 }}>Review Invoice</h1>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Confirm line-by-line before paying.</p>
+
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', marginBottom: 20, boxShadow: '0 4px 16px rgba(0,0,0,0.07)' }}>
+                  {/* Header */}
+                  <div style={{ backgroundColor: '#1a2e4a', padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 15, letterSpacing: 1 }}>BSC MARKETPLACE</div>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 2 }}>Nassau, Bahamas · bscbahamas.com</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 18, letterSpacing: 2 }}>INVOICE</div>
+                      <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, marginTop: 2 }}>{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                    </div>
+                  </div>
+
+                  {/* Bill to */}
+                  <div style={{ padding: '14px 22px', backgroundColor: '#fafbfc', borderBottom: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 3 }}>Bill To</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2e4a' }}>{accountName || 'Account Holder'}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Account: {accountNo}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 3 }}>Bill Type</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2e4a' }}>{bill?.icon} {bill?.label}</div>
+                    </div>
+                  </div>
+
+                  {/* Lines */}
+                  <div style={{ padding: '0 22px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 0 8px', borderBottom: '2px solid #1a2e4a' }}>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: '#1a2e4a', letterSpacing: 1, textTransform: 'uppercase' }}>Description</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: '#1a2e4a', letterSpacing: 1, textTransform: 'uppercase' }}>Amount (BSD)</span>
+                    </div>
+
+                    {[
+                      { label: `${bill?.label} — Payment`, sub: `Account: ${accountNo}`,                           amount: amount,     main: true  },
+                      { label: `Cost of Doing Business — ${BSC_RATE_PCT}%`, sub: `${BSC_RATE_PCT}% × BSD $${fmt(amount)}`, amount: bscFee,     main: false },
+                      { label: 'Service Fee — BSC Bill Payment', sub: 'Flat rate per transaction',                  amount: serviceFee, main: false },
+                    ].map((row, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: `${row.main ? 14 : 11}px 0`, borderBottom: '1px solid #f8fafc', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: row.main ? 700 : 600, fontSize: row.main ? 14 : 13, color: row.main ? '#1a2e4a' : '#64748b' }}>{row.label}</div>
+                          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{row.sub}</div>
+                        </div>
+                        <div style={{ fontWeight: row.main ? 800 : 700, fontSize: row.main ? 15 : 13, color: row.main ? '#1a2e4a' : '#64748b' }}>BSD ${fmt(row.amount)}</div>
+                      </div>
+                    ))}
+
+                    {/* Total */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: '14px 0', borderTop: '3px solid #1a2e4a', marginTop: 2, alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 900, fontSize: 15, color: '#1a2e4a' }}>TOTAL DUE</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>Payment Amount + All Fees</div>
+                      </div>
+                      <div style={{ fontWeight: 900, fontSize: 24, color: '#1a2e4a' }}>BSD ${fmt(total)}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#fff8e7', borderTop: '1px solid #fde68a', padding: '9px 22px', fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
+                    ℹ️ Your bill provider receives exactly BSD ${fmt(amount)}. Fees cover BSC's cost of processing.
+                  </div>
+                </div>
+
+                {/* Card only */}
+                <div style={{ backgroundColor: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 10, padding: '11px 15px', marginBottom: 18, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 20 }}>💳</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 12, color: '#0c4a6e' }}>Card Payment Only</div>
+                    <div style={{ fontSize: 11, color: '#075985' }}>Debit & credit cards accepted. No wire transfer.</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setView('details')} style={{ padding: '13px 16px', borderRadius: 12, border: '2px solid #e2e8f0', backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+                  <button className="bsc-btn" onClick={() => setView('payment')} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 14, fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Continue to Pay via Card →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── PAYMENT — shared CardPaymentModal ── */}
+            {view === 'payment' && (
+              <div style={{ animation: 'fadeUp 0.35s ease both' }}>
+                <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1a2e4a', marginBottom: 4 }}>Card Payment</h1>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Enter your debit or credit card details.</p>
+                <CardPaymentModal
+                  payload={payload}
+                  onApproved={(ref, l4) => { setRefNo(ref); setLast4(l4); setView('done'); }}
+                  onDeclined={() => {}}
+                  onCancel={() => setView('invoice')}
+                />
+              </div>
+            )}
+
+            {/* ── DONE ── */}
+            {view === 'done' && (
+              <div style={{ textAlign: 'center', animation: 'fadeUp 0.4s ease both' }}>
+                <div style={{ width: 88, height: 88, borderRadius: '50%', backgroundColor: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42, margin: '0 auto 16px' }}>✅</div>
+                <div style={{ fontWeight: 900, fontSize: 22, color: '#065f46', marginBottom: 6 }}>Payment Successful!</div>
+                <div style={{ fontSize: 13, color: '#047857', marginBottom: 24 }}>Your {bill?.label} payment of <strong>BSD ${fmt(amount)}</strong> has been processed.</div>
+
+                <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px', textAlign: 'left', marginBottom: 22 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 14 }}>Official Receipt</div>
+                  {[
+                    { label: 'Reference No.',    value: refNo, mono: true },
+                    { label: 'Bill Type',        value: `${bill?.icon} ${bill?.label}` },
+                    { label: 'Account No.',      value: accountNo },
+                    { label: 'Amount Paid',      value: `BSD $${fmt(amount)}` },
+                    { label: `BSC Fee (${BSC_RATE_PCT}%)`, value: `BSD $${fmt(bscFee)}` },
+                    { label: 'Service Fee',      value: `BSD $${fmt(serviceFee)}` },
+                    { label: 'Total Charged',    value: `BSD $${fmt(total)}`, bold: true },
+                    { label: 'Card',             value: `•••• •••• •••• ${last4}` },
+                    { label: 'Date',             value: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) },
+                  ].map(row => (
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{row.label}</span>
+                      <span style={{ fontSize: 12, color: '#1a2e4a', fontWeight: (row as any).bold ? 900 : 700, fontFamily: (row as any).mono ? 'monospace' : 'inherit' }}>{row.value}</span>
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 12, backgroundColor: '#d1fae5', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#065f46', fontWeight: 700, textAlign: 'center' }}>
+                    ✅ Approved by RBC · Saved to your history & BSC dashboard
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={reset} style={{ flex: 1, padding: '13px', borderRadius: 12, border: '2px solid #e2e8f0', backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Pay Another Bill</button>
+                  <button className="bsc-btn" onClick={() => router.push('/')} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 13, fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit' }}>Back to Home</button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── BSC note ── */}
-          {step === 'details' && (
-            <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
-              A {BSC_RATE_PCT}% fee + BSD ${SERVICE_FEE.toFixed(2)} service fee applies to each transaction.<br />
-              Subscribe for $60/yr to waive all fees on every payment.
+          {view === 'details' && (
+            <div style={{ textAlign: 'center', marginTop: 18, fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
+              {BSC_RATE_PCT}% fee + BSD ${fmt(SERVICE_FEE)} service fee per transaction.<br />
+              Subscribe for $60/yr to waive all fees.
             </div>
           )}
         </div>
@@ -614,76 +327,3 @@ export default function UtilitiesPage() {
     </>
   );
 }
-
-// ── Small reusable components ─────────────────────────────────────────────────
-function PageTitle({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#1a2e4a', marginBottom: 4 }}>{title}</h1>
-      <p style={{ fontSize: 13, color: '#64748b' }}>{sub}</p>
-    </div>
-  );
-}
-
-function FeeRow({ label, value, sub, color }: { label: string; value: number; sub?: boolean; color?: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
-      <span style={{ fontSize: sub ? 12 : 14, color: sub ? '#64748b' : '#1a2e4a', fontWeight: sub ? 500 : 700 }}>{label}</span>
-      <span style={{ fontSize: sub ? 12 : 14, color: color || (sub ? '#64748b' : '#1a2e4a'), fontWeight: 700 }}>
-        {sub ? '+' : ''}BSD ${fmtMoney(value)}
-      </span>
-    </div>
-  );
-}
-
-function InvoiceLine({ label, sub, amount, color, small }: { label: string; sub: string; amount: number; color: string; small?: boolean }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, padding: '14px 0', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}>
-      <div>
-        <div style={{ fontWeight: small ? 600 : 700, fontSize: small ? 13 : 14, color }}>{label}</div>
-        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{sub}</div>
-      </div>
-      <div style={{ fontWeight: 800, fontSize: small ? 13 : 15, color, textAlign: 'right' }}>
-        BSD ${fmtMoney(amount)}
-      </div>
-    </div>
-  );
-}
-
-function ReceiptRow({ label, value, mono, light }: { label: string; value: string; mono?: boolean; light?: boolean }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #f8fafc' }}>
-      <span style={{ fontSize: 12, color: light ? '#94a3b8' : '#64748b', fontWeight: 600 }}>{label}</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: light ? '#94a3b8' : '#1a2e4a', fontFamily: mono ? 'monospace' : 'inherit', letterSpacing: mono ? 0.5 : 0 }}>{value}</span>
-    </div>
-  );
-}
-
-// ── Shared styles ─────────────────────────────────────────────────────────────
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 11, fontWeight: 800, color: '#475569',
-  letterSpacing: 1, textTransform: 'uppercase', marginBottom: 7,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '12px 14px',
-  border: '2px solid #e2e8f0', borderRadius: 10,
-  fontSize: 14, color: '#1a2e4a', backgroundColor: '#fff',
-  transition: 'border-color 0.15s, box-shadow 0.15s',
-};
-
-const primaryBtn: React.CSSProperties = {
-  width: '100%', padding: '14px', borderRadius: 12, border: 'none',
-  backgroundColor: '#1a2e4a', color: '#f5a623',
-  fontSize: 15, fontWeight: 900, cursor: 'pointer',
-  letterSpacing: 0.5, transition: 'opacity 0.15s, transform 0.15s',
-  fontFamily: 'inherit',
-};
-
-const ghostBtn: React.CSSProperties = {
-  padding: '14px 20px', borderRadius: 12,
-  border: '2px solid #e2e8f0', backgroundColor: '#fff',
-  color: '#475569', fontSize: 14, fontWeight: 700,
-  cursor: 'pointer', fontFamily: 'inherit',
-  transition: 'all 0.15s',
-};
