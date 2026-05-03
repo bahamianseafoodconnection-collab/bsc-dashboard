@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import HeroSection from '@/components/HeroSection';
 import SiteFooter from '@/components/SiteFooter';
 
-// ── YOUR ACTUAL FILE IN SUPABASE ──────────────────────────────────────────────
+// ── YOUR ACTUAL FILES IN SUPABASE ────────────────────────────────────────────
 const HERO_IMG = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/94C94225-7A21-4E0F-BA00-79CA6E108385.jpg';
+const LOGO     = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/A0EF44D5-D0F6-4D15-9826-4FED851A2719.png';
 
 const WHOLESALERS = [
   {key:'asa-h-pritchard',           name:'Asa H Pritchard',           color:'#1B4F72', emoji:'🏪'},
@@ -43,23 +44,22 @@ export default function HomePage() {
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 
         *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-
         html { scroll-behavior:smooth; overflow-x:hidden; overflow-y:auto; height:auto; width:100%; }
         body { font-family:'DM Sans',sans-serif; background:#fff; color:#0f2137; -webkit-font-smoothing:antialiased; overflow-x:hidden; overflow-y:auto; height:auto; min-height:100vh; width:100%; touch-action:pan-y; }
 
         /* ── NAV ── */
-        .bsc-nav { position:fixed; top:0; left:0; right:0; z-index:200; height:72px; display:flex; align-items:center; transition:all .35s ease; }
-        .bsc-nav.scrolled { background:rgba(6,14,28,.94); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid rgba(212,168,67,.15); box-shadow:0 4px 32px rgba(0,0,0,.4); }
-        .bsc-nav.top { background:linear-gradient(to bottom, rgba(0,0,0,.45), transparent); }
+        .bsc-nav { position:fixed; top:0; left:0; right:0; z-index:200; height:80px; display:flex; align-items:center; transition:all .35s ease; }
+        .bsc-nav.scrolled { background:rgba(6,14,28,.95); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border-bottom:1px solid rgba(212,168,67,.2); box-shadow:0 4px 32px rgba(0,0,0,.4); height:72px; }
+        .bsc-nav.top { background:linear-gradient(to bottom, rgba(0,0,0,.55), transparent); }
         .bsc-nav-inner { max-width:1280px; width:100%; margin:0 auto; padding:0 5%; display:flex; align-items:center; justify-content:space-between; }
 
-        /* CSS-only logo — no image dependency */
-        .bsc-nav-logo { display:flex; align-items:center; gap:12px; cursor:pointer; flex-shrink:0; }
-        .bsc-nav-logo-mark { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#0a1520 0%,#1a2e4a 100%); border:2px solid #d4a843; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(212,168,67,.3); transition:all .25s ease; }
-        .bsc-nav-logo:hover .bsc-nav-logo-mark { border-color:#f5c842; transform:scale(1.05); }
-        .bsc-nav-logo-mark-text { font-family:'Playfair Display',serif; font-size:14px; font-weight:900; color:#f5c842; letter-spacing:.5px; }
-        .bsc-nav-logo-name { color:#f5a623; font-weight:900; font-size:17px; letter-spacing:2px; line-height:1; font-family:'DM Sans',sans-serif; }
-        .bsc-nav-logo-sub { color:rgba(255,255,255,.55); font-size:9px; font-weight:600; letter-spacing:1.8px; margin-top:2px; text-transform:uppercase; }
+        /* ── REAL LOGO IN NAV — sits in a soft cream pill so the dark logo art reads ── */
+        .bsc-nav-logo { display:flex; align-items:center; cursor:pointer; flex-shrink:0; transition:transform .25s ease; }
+        .bsc-nav-logo:hover { transform:translateY(-1px); }
+        .bsc-nav-logo-pill { background:rgba(250,250,246,.97); border-radius:12px; padding:6px 14px 6px 8px; display:flex; align-items:center; gap:10px; box-shadow:0 4px 18px rgba(212,168,67,.28), inset 0 1px 0 rgba(255,255,255,.6); border:1px solid rgba(212,168,67,.35); transition:all .25s ease; }
+        .bsc-nav-logo:hover .bsc-nav-logo-pill { box-shadow:0 6px 24px rgba(212,168,67,.4); border-color:rgba(212,168,67,.55); }
+        .bsc-nav-logo-img { height:48px; width:auto; object-fit:contain; display:block; }
+        .bsc-nav.scrolled .bsc-nav-logo-img { height:42px; }
 
         .bsc-nav-links { display:flex; align-items:center; gap:2px; }
         .bsc-nav-link { background:none; border:none; color:rgba(255,255,255,.85); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; letter-spacing:.04em; cursor:pointer; padding:8px 14px; border-radius:6px; transition:all .2s ease; position:relative; }
@@ -118,7 +118,7 @@ export default function HomePage() {
 
         .bsc-partners-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; margin-bottom:40px; }
         .bsc-partner-card { border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:all .25s cubic-bezier(.25,.46,.45,.94); border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,.04); backdrop-filter:blur(4px); position:relative; overflow:hidden; }
-        .bsc-partner-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; transition:width .25s ease; pointer-events:none; }
+        .bsc-partner-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:#d4a843; transition:width .25s ease; pointer-events:none; }
         .bsc-partner-card:hover { background:rgba(255,255,255,.08); transform:translateX(4px); border-color:rgba(255,255,255,.12); }
         .bsc-partner-card:hover::before { width:6px; }
         .bsc-partner-emoji { font-size:24px; flex-shrink:0; }
@@ -163,7 +163,7 @@ export default function HomePage() {
         .bsc-why-card-title { font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:#0a1520; }
         .bsc-why-card-desc { font-size:13px; color:#64748b; text-align:center; line-height:1.6; font-weight:300; }
 
-        /* ── BANNERS — both use the hero image, different overlays ── */
+        /* ── BANNERS ── */
         .bsc-banners { display:grid; grid-template-columns:1fr 1fr; min-height:420px; }
         .bsc-banner { position:relative; overflow:hidden; cursor:pointer; }
         .bsc-banner-bg { position:absolute; inset:0; background-size:cover; background-position:center; transition:transform .55s cubic-bezier(.25,.46,.45,.94); pointer-events:none; }
@@ -209,6 +209,8 @@ export default function HomePage() {
         @media(max-width:640px){
           .bsc-nav-links{display:none;}
           .bsc-nav-ham{display:flex;}
+          .bsc-nav-logo-img{height:42px;}
+          .bsc-nav.scrolled .bsc-nav-logo-img{height:38px;}
           .bsc-cats{padding:64px 5%;}
           .bsc-cats-grid{grid-template-columns:1fr 1fr;}
           .bsc-wholesale,.bsc-us,.bsc-why{padding:64px 5%;}
@@ -225,16 +227,12 @@ export default function HomePage() {
 
       <div style={{backgroundColor:'#fff'}}>
 
-        {/* STICKY NAV */}
+        {/* STICKY NAV with REAL LOGO */}
         <nav className={`bsc-nav ${scrolled ? 'scrolled' : 'top'}`}>
           <div className="bsc-nav-inner">
             <div className="bsc-nav-logo" onClick={() => router.push('/')}>
-              <div className="bsc-nav-logo-mark">
-                <span className="bsc-nav-logo-mark-text">BSC</span>
-              </div>
-              <div>
-                <div className="bsc-nav-logo-name">BSC</div>
-                <div className="bsc-nav-logo-sub">Marketplace</div>
+              <div className="bsc-nav-logo-pill">
+                <img src={LOGO} alt="BSC Marketplace" className="bsc-nav-logo-img" />
               </div>
             </div>
 
@@ -280,7 +278,6 @@ export default function HomePage() {
           )}
         </nav>
 
-        {/* HERO */}
         <HeroSection />
 
         {/* TRUST BAR */}
@@ -346,7 +343,6 @@ export default function HomePage() {
             <div className="bsc-partners-grid">
               {WHOLESALERS.map(w => (
                 <div key={w.key} className="bsc-partner-card" onClick={() => router.push(`/local-wholesale/${w.key}`)}>
-                  <style>{`.bsc-partner-card[data-c="${w.key}"]::before { background:${w.color}; }`}</style>
                   <span className="bsc-partner-emoji">{w.emoji}</span>
                   <div className="bsc-partner-info">
                     <div className="bsc-partner-name">{w.name}</div>
@@ -450,7 +446,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* DUAL BANNER — both use the same hero image with different colored overlays */}
+        {/* DUAL BANNER */}
         <div className="bsc-banners">
           <div className="bsc-banner" onClick={() => router.push('/market')}>
             <div className="bsc-banner-bg" style={{backgroundImage:`url(${HERO_IMG})`}} />
