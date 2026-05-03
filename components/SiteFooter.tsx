@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 
+// ── YOUR REAL LOGO ────────────────────────────────────────────────────────────
+const LOGO = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/A0EF44D5-D0F6-4D15-9826-4FED851A2719.png';
+
 const SVG_PAT = encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'>
 <g stroke='%23c8a84b' stroke-width='1' fill='none' opacity='0.28'>
   <ellipse cx='18' cy='12' rx='13' ry='6' transform='translate(2,2)'/>
@@ -46,13 +49,12 @@ export default function SiteFooter() {
 
         .bsc-footer-brand { display:flex; flex-direction:column; }
 
-        /* CSS-only logo — no image dependency */
-        .bsc-footer-logo { display:flex; align-items:center; gap:14px; margin-bottom:20px; }
-        .bsc-footer-logo-mark { width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,#0a1520 0%,#1a2e4a 100%); border:2px solid #d4a843; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 4px 14px rgba(212,168,67,.25); }
-        .bsc-footer-logo-mark-text { font-family:'Playfair Display',serif; font-size:18px; font-weight:900; color:#f5c842; letter-spacing:1px; line-height:1; }
+        /* Real logo on cream/white card so the logo's dark text reads cleanly */
+        .bsc-footer-logo-card { background:#fafaf6; border-radius:14px; padding:14px 18px; display:inline-flex; align-items:center; gap:14px; margin-bottom:20px; box-shadow:0 4px 20px rgba(212,168,67,.18); border:1px solid rgba(212,168,67,.25); }
+        .bsc-footer-logo-img { width:64px; height:64px; object-fit:contain; flex-shrink:0; }
         .bsc-footer-logo-text { display:flex; flex-direction:column; }
-        .bsc-footer-logo-name { font-family:'Playfair Display',serif; font-size:17px; font-weight:700; color:#f5c842; letter-spacing:.04em; line-height:1.1; }
-        .bsc-footer-logo-sub { font-size:9px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:rgba(212,168,67,.6); margin-top:3px; }
+        .bsc-footer-logo-name { font-family:'Playfair Display',serif; font-size:14px; font-weight:700; color:#0a1520; letter-spacing:.04em; line-height:1.2; }
+        .bsc-footer-logo-sub { font-size:9px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:#8a6a1f; margin-top:4px; }
 
         .bsc-footer-tagline { font-size:13px; color:rgba(255,255,255,.45); line-height:1.65; max-width:240px; margin-bottom:24px; font-weight:300; }
         .bsc-footer-contact { display:flex; flex-direction:column; gap:8px; margin-bottom:24px; }
@@ -78,9 +80,7 @@ export default function SiteFooter() {
         .bsc-footer-trust-title { font-size:12px; font-weight:600; color:rgba(255,255,255,.6); }
         .bsc-footer-trust-sub { font-size:10px; color:rgba(255,255,255,.3); margin-top:1px; }
 
-        @media(max-width:900px){
-          .bsc-footer-main{grid-template-columns:1fr 1fr;gap:36px;}
-        }
+        @media(max-width:900px){ .bsc-footer-main{grid-template-columns:1fr 1fr;gap:36px;} }
         @media(max-width:580px){
           .bsc-footer-main{grid-template-columns:1fr;gap:32px;padding:48px 5% 36px;}
           .bsc-footer-trust{gap:24px;}
@@ -94,15 +94,12 @@ export default function SiteFooter() {
         <div className="bsc-footer-fade" />
 
         <div className="bsc-footer-main">
-          {/* Brand */}
           <div className="bsc-footer-brand">
-            <div className="bsc-footer-logo">
-              <div className="bsc-footer-logo-mark">
-                <span className="bsc-footer-logo-mark-text">BSC</span>
-              </div>
+            <div className="bsc-footer-logo-card">
+              <img src={LOGO} alt="BSC Marketplace" className="bsc-footer-logo-img" />
               <div className="bsc-footer-logo-text">
                 <span className="bsc-footer-logo-name">Bahamian Seafood<br />Connection</span>
-                <span className="bsc-footer-logo-sub">BSC Marketplace</span>
+                <span className="bsc-footer-logo-sub">Marketplace</span>
               </div>
             </div>
             <p className="bsc-footer-tagline">
