@@ -88,7 +88,7 @@ BSC shops Florida wholesale clubs and delivers to Nassau/Andros.
 - Framework: Next.js 15.5.15
 - Database: Supabase (project: qgcaxkyuhwmpvpbooaqw)
 - Hosting: Vercel
-- AI: Anthropic Claude Sonnet 4 (this assistant)
+- AI: Anthropic Claude (this assistant)
 - Payments: RBC Plug & Pay (in setup — keys pending)
 - GitHub: bahamianseafoodconnection-collab/bsc-dashboard
 
@@ -215,7 +215,7 @@ ${dbContext}`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 2048,
         system: systemPrompt,
         messages,
