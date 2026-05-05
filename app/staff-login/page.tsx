@@ -34,41 +34,35 @@ export default function StaffLoginPage() {
         return;
       }
 
-      // Look up role from users table (staff lives here, NOT profiles).
-      const { data: userRow, error: userErr } = await supabase
-        .from('users')
-        .select('role, is_active')
-        .eq('email', cleanEmail)
-        .maybeSingle();
+      // Brief pause so the auth cookie/session syncs before RPC.
+      await new Promise((r) => setTimeout(r, 400));
 
-      if (userErr || !userRow) {
+      // Use the get_my_role RPC helper — runs SECURITY DEFINER, bypasses RLS.
+      const { data: roleData, error: roleErr } = await supabase.rpc('get_my_role');
+
+      if (roleErr) {
+        await supabase.auth.signOut();
+        setError('Could not verify your staff role. Contact Dedrick or Jaquel.');
+        setLoading(false);
+        return;
+      }
+
+      const role = roleData as string | null;
+
+      if (!role) {
         await supabase.auth.signOut();
         setError('This sign-in is for BSC staff only. Customers: use the customer sign-in page.');
         setLoading(false);
         return;
       }
 
-      if (userRow.is_active === false) {
-        await supabase.auth.signOut();
-        setError('Your account is deactivated. Contact Dedrick or Jaquel.');
-        setLoading(false);
-        return;
-      }
-
-      // Fire-and-forget last_login_at update (doesn't block sign-in).
-      supabase
-        .from('users')
-        .update({ last_login_at: new Date().toISOString() })
-        .eq('email', cleanEmail)
-        .then(() => {});
-
       // Route by BSC role:
-      //   processor → /processor (purpose-built scanner + yield)
+      //   processor → /processor
       //   supplier  → /supplier
       //   everyone else → /dashboard
-      if (userRow.role === 'processor') {
+      if (role === 'processor') {
         window.location.href = '/processor';
-      } else if (userRow.role === 'supplier') {
+      } else if (role === 'supplier') {
         window.location.href = '/supplier';
       } else {
         window.location.href = '/dashboard';
@@ -167,7 +161,6 @@ export default function StaffLoginPage() {
                 </button>
               </form>
 
-              {/* Role hints — actual BSC roles */}
               <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '14px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
                   Role → Lands At
