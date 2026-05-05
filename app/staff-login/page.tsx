@@ -15,34 +15,64 @@ export default function StaffLoginPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const ROLE_ROUTES: Record<string, string> = {
-    control_admin: '/dashboard',
-    basic_admin: '/dashboard',
-    manager: '/ashley',
-    cashier: '/pos',
-    andros_staff: '/pos-andros',
-    supplier: '/supplier',
-    customer: '/market',
-  };
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
+
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) { setError('Invalid email or password.'); setLoading(false); return; }
-      await new Promise((r) => setTimeout(r, 400));
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) { setError('Session error. Please try again.'); setLoading(false); return; }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', sessionData.session.user.id)
-        .single();
-      const role = profile?.role || 'customer';
-      const route = ROLE_ROUTES[role] || '/dashboard';
-      window.location.href = route;
+      const cleanEmail = email.trim().toLowerCase();
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (signInError) {
+        setError('Invalid email or password.');
+        setLoading(false);
+        return;
+      }
+
+      // Look up role from users table (staff lives here, NOT profiles).
+      const { data: userRow, error: userErr } = await supabase
+        .from('users')
+        .select('role, is_active')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      if (userErr || !userRow) {
+        await supabase.auth.signOut();
+        setError('This sign-in is for BSC staff only. Customers: use the customer sign-in page.');
+        setLoading(false);
+        return;
+      }
+
+      if (userRow.is_active === false) {
+        await supabase.auth.signOut();
+        setError('Your account is deactivated. Contact Dedrick or Jaquel.');
+        setLoading(false);
+        return;
+      }
+
+      // Fire-and-forget last_login_at update (doesn't block sign-in).
+      supabase
+        .from('users')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('email', cleanEmail)
+        .then(() => {});
+
+      // Route by BSC role:
+      //   processor → /processor (purpose-built scanner + yield)
+      //   supplier  → /supplier
+      //   everyone else → /dashboard
+      if (userRow.role === 'processor') {
+        window.location.href = '/processor';
+      } else if (userRow.role === 'supplier') {
+        window.location.href = '/supplier';
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch {
       setError('Something went wrong. Please try again.');
       setLoading(false);
@@ -79,10 +109,8 @@ export default function StaffLoginPage() {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 20px' }}>
         <div style={{ width: '100%', maxWidth: '400px' }}>
 
-          {/* Card */}
           <div style={{ backgroundColor: '#0f1a2e', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' }}>
 
-            {/* Card top */}
             <div style={{ padding: '32px 32px 24px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: '#f4c842', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '26px' }}>
                 🔐
@@ -91,7 +119,6 @@ export default function StaffLoginPage() {
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', margin: 0 }}>BSC Control · Authorized Personnel Only</p>
             </div>
 
-            {/* Form */}
             <div style={{ padding: '28px 32px' }}>
               {error && (
                 <div style={{ backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', color: '#f87171', fontSize: '13px', fontWeight: 600 }}>
@@ -110,6 +137,8 @@ export default function StaffLoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@bahamianseafoodconnection.com"
                     required
+                    autoComplete="email"
+                    inputMode="email"
                     style={{ width: '100%', padding: '13px 16px', borderRadius: '10px', border: '1.5px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
                   />
                 </div>
@@ -124,6 +153,7 @@ export default function StaffLoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
+                    autoComplete="current-password"
                     style={{ width: '100%', padding: '13px 16px', borderRadius: '10px', border: '1.5px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
                   />
                 </div>
@@ -137,16 +167,15 @@ export default function StaffLoginPage() {
                 </button>
               </form>
 
-              {/* Role hints */}
+              {/* Role hints — actual BSC roles */}
               <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '14px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
-                  Role → Dashboard
+                  Role → Lands At
                 </div>
                 {[
-                  { role: 'Control Admin', route: '/dashboard', color: '#f4c842' },
-                  { role: 'Manager', route: '/ashley', color: '#38bdf8' },
-                  { role: 'Cashier', route: '/pos', color: '#4ade80' },
-                  { role: 'Andros Staff', route: '/pos-andros', color: '#a78bfa' },
+                  { role: 'Founder · Manager · Cashier', route: '/dashboard', color: '#f4c842' },
+                  { role: 'Processor', route: '/processor', color: '#38bdf8' },
+                  { role: 'Supplier', route: '/supplier', color: '#a78bfa' },
                 ].map((r) => (
                   <div key={r.role} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{r.role}</span>
