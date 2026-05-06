@@ -1,7 +1,8 @@
 // ============================================================
 // BSC MARKETPLACE — INVOICE SAVE API
 // File: app/api/invoice-save/route.ts
-// Saves invoice to DB, updates inventory, tracks balance
+// Saves invoice to DB, tracks balance owed
+// Inventory insertion handled separately (see processing_batches workflow)
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { items, location, summary, totalAmount, supplierOwed, imageCount } = await req.json();
+    const { items, location, summary, totalAmount, supplierOwed } = await req.json();
 
     if (!items || !location) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -58,43 +59,6 @@ export async function POST(req: NextRequest) {
     if (invoiceError) {
       console.error('Invoice save error:', invoiceError);
       return NextResponse.json({ error: 'Failed to save invoice' }, { status: 500 });
-    }
-
-    // Auto-update inventory — insert each item as a yield_lot entry
-    const yieldInserts = items.map((item: {
-      item: string;
-      qty: string;
-      price: string;
-      wholesale: boolean;
-    }) => {
-      const qtyNum = parseFloat(item.qty.replace(/[^0-9.]/g, '')) || 0;
-      const priceNum = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
-      const today = new Date();
-      const lotNum = `BSC-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 999).toString().padStart(3, '0')}`;
-
-      return {
-        lot_number: lotNum,
-        product_name: item.item,
-        weight_in: qtyNum,
-        weight_out: qtyNum,
-        total_cost: priceNum,
-        location: location,
-        channel: item.wholesale ? 'wholesale' : location.toLowerCase().replace(' pos', '').replace(' market', ''),
-        invoice_id: invoice.id,
-        created_at: new Date().toISOString(),
-      };
-    });
-
-    // Insert into yield_lots (inventory)
-    if (yieldInserts.length > 0) {
-      const { error: yieldError } = await supabase
-        .from('yield_lots')
-        .insert(yieldInserts);
-
-      if (yieldError) {
-        console.error('Yield lot insert error:', yieldError);
-        // Don't fail — invoice is saved, inventory update is secondary
-      }
     }
 
     return NextResponse.json({
