@@ -4,6 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 
+export const dynamic = 'force-dynamic';
+
 export default function LoginPage() {
   const [mode, setMode] = useState<'customer' | 'register'>('customer');
   const [email, setEmail] = useState('');
@@ -13,22 +15,27 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  function getSupabase() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      throw new Error('Supabase environment variables not configured.');
+    }
+    return createBrowserClient(url, key);
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      const supabase = getSupabase();
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) { setError(error.message); setLoading(false); return; }
       await new Promise((r) => setTimeout(r, 400));
       window.location.href = '/market';
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setLoading(false);
     }
   }
@@ -38,6 +45,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
+      const supabase = getSupabase();
       const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name, phone } } });
       if (error) { setError(error.message); setLoading(false); return; }
       if (data.user) {
@@ -45,8 +53,8 @@ export default function LoginPage() {
       }
       await new Promise((r) => setTimeout(r, 400));
       window.location.href = '/market';
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setLoading(false);
     }
   }
