@@ -1,14 +1,6 @@
 // app/inventory/scan/page.tsx
 // BSC Day 6 (Path A) — server-side auth gate for the scanner.
 // Uses Day 5 helper function is_staff() to gate access cleanly.
-// - Not signed in → redirect to /staff/login (Day 6.7 builds the actual page;
-//                  for now this still works because /staff/login will exist as a
-//                  Path B follow-up. Until then, customer sign-in catches the
-//                  redirect, which is the same behavior as before — just
-//                  documented in one place now.)
-// - Signed in but not staff → show locked screen (no info leak about scanner)
-// - Signed in as staff (founder, co_founder, manager, cashier, strategist,
-//   right_hand, partner_us) → render the client scanner
 
 import { redirect } from 'next/navigation';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -46,9 +38,7 @@ export default async function ScanPage() {
   // Step 1 — must be signed in
   const { data: auth } = await supa.auth.getUser();
   if (!auth?.user) {
-    // Day 6.7 builds the staff sign-in. For now redirect to a placeholder path
-    // that the dashboard will route correctly once it exists.
-    redirect('/staff/login?next=/inventory/scan');
+    redirect('/staff-login?next=/inventory/scan');
   }
 
   // Step 2 — must be staff (uses the Day 5 SQL helper)
@@ -59,7 +49,6 @@ export default async function ScanPage() {
   const isStaff = Boolean(isStaffData);
 
   if (!isStaff) {
-    // Locked screen — same navy/gold aesthetic, no scanner info leak
     return (
       <div
         style={{
