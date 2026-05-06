@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+// Routes requiring ANY signed-in user (staff or customer-with-account).
+// Customer-only routes like /market are NOT in here (public browsing allowed).
 const PROTECTED = [
   '/dashboard',
   '/pos',
@@ -19,20 +21,33 @@ const PROTECTED = [
   '/bills',
   '/customers',
   '/staff',
+  '/processor',
 ];
 
+// Routes requiring elevated staff (founder, co_founder, manager, supervisor,
+// strategist, right_hand). Cashiers/processors do NOT see these.
 const ADMIN_ONLY = [
   '/dashboard',
   '/purchase-orders',
   '/report',
-  '/inventory',
   '/cash',
   '/staff',
 ];
 
+// BSC user_role enum values that count as "admin-tier" for ADMIN_ONLY routes.
+const ADMIN_ROLES = new Set([
+  'founder',
+  'co_founder',
+  'manager',
+  'supervisor',
+  'strategist',
+  'right_hand',
+]);
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Public + auth pages — never gate.
   if (
     pathname === '/' ||
     pathname.startsWith('/login') ||
@@ -40,6 +55,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/market') ||
     pathname.startsWith('/utilities') ||
     pathname.startsWith('/legal') ||
+    pathname.startsWith('/onboarding') ||
     pathname.startsWith('/api') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
@@ -72,21 +88,21 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
+    // Send to staff sign-in for protected routes (staff door, not customer door).
+    const loginUrl = new URL('/staff-login', request.url);
+    loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   const needsAdmin = ADMIN_ONLY.some(route => pathname.startsWith(route));
   if (needsAdmin) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
+    // Use the get_my_role RPC (SECURITY DEFINER → bypasses RLS).
+    // Returns the BSC user_role for the authed user, or null for non-staff.
+    const { data: roleData } = await supabase.rpc('get_my_role');
+    const role = (roleData as string | null) || '';
 
-    if (profile?.role !== 'control_admin') {
-      return NextResponse.redirect(new URL('/login', request.url));
+    if (!ADMIN_ROLES.has(role)) {
+      return NextResponse.redirect(new URL('/staff-login', request.url));
     }
   }
 
