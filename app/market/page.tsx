@@ -2,12 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+export const dynamic = 'force-dynamic';
 
 const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
@@ -47,6 +44,15 @@ interface MarketProduct {
 
 interface CartItem extends MarketProduct { qty: number; }
 
+function getSupabase(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    return null;
+  }
+  return createClient(url, key);
+}
+
 export default function MarketPage() {
   const router = useRouter();
 
@@ -64,6 +70,12 @@ export default function MarketPage() {
   // ── Fetch from both tables ────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
+      const supabase = getSupabase();
+      if (!supabase) {
+        setLoading(false);
+        return;
+      }
+
       const [{ data: mp }, { data: wp }] = await Promise.all([
         supabase.from('products').select('*').eq('in_stock', true),
         supabase.from('local_wholesale_products').select('*').eq('in_stock', true),
@@ -142,6 +154,11 @@ export default function MarketPage() {
 
   async function placeOrder() {
     setPlacing(true);
+    const supabase = getSupabase();
+    if (!supabase) {
+      setPlacing(false);
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     await supabase.from('orders').insert({
       order_type: 'online_market',
