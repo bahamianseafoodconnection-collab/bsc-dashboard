@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const BSC_CONTEXT = `
 # BAHAMIAN SEAFOOD CONNECTION (BSC MARKETPLACE)
@@ -134,19 +132,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    let dbContext = '';
-    try {
-      const { data: docs } = await supabase
-        .from('founder_documents')
-        .select('title, content')
-        .order('created_at', { ascending: false })
-        .limit(20);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-      if (docs && docs.length > 0) {
-        dbContext = '\n\n## Additional Founder Documents\n' +
-          docs.map(d => `### ${d.title}\n${d.content}`).join('\n\n');
+    let dbContext = '';
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { data: docs } = await supabase
+          .from('founder_documents')
+          .select('title, content')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (docs && docs.length > 0) {
+          dbContext =
+            '\n\n## Additional Founder Documents\n' +
+            docs.map((d) => `### ${d.title}\n${d.content}`).join('\n\n');
+        }
+      } catch (e) {
+        console.error('Founder docs fetch failed:', e);
       }
-    } catch {}
+    }
 
     const systemPrompt = `You are Founder AI — Dedrick Storr's private business assistant for Bahamian Seafood Connection (BSC Marketplace).
 
