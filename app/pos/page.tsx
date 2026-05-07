@@ -75,6 +75,14 @@ type CompletedSale = {
   card_ref: string | null;
 };
 
+type UserRecord = {
+  id: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  primary_location: string;
+};
+
 // ============================================================
 // CATEGORY EMOJI MAP
 // ============================================================
@@ -173,8 +181,7 @@ export default function NassauPOSPage() {
   const [whatsappOpen, setWhatsappOpen] = useState(false);
 
   // ──────────────────────────────────────────────────────────
-  // AUTH CHECK — uses getSession() with retries to handle
-  // iOS Safari cookie hydration timing issues
+  // AUTH CHECK
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -182,10 +189,8 @@ export default function NassauPOSPage() {
 
     async function checkAuth() {
       try {
-        // Try getSession() first — works with cookies, doesn't validate against server
         let { data: { session } } = await supabase.auth.getSession();
 
-        // If null, retry up to 3 times with delays — handles iOS Safari hydration race
         let attempts = 0;
         while (!session && attempts < 3) {
           await new Promise((r) => setTimeout(r, 300));
@@ -200,17 +205,22 @@ export default function NassauPOSPage() {
           return;
         }
 
-        // Have a session — look up the role
+        // Use SECURITY DEFINER RPC to bypass RLS recursion on users table
         const { data: row, error: roleErr } = await supabase
-          .from('users')
-          .select('role, email, is_active')
-          .eq('id', session.user.id)
-          .single();
+          .rpc('get_my_user_record')
+          .single<UserRecord>();
 
         if (cancelled) return;
 
-        if (roleErr || !row) {
-          setAuthError('Could not look up your account. Please contact Dedrick.');
+        if (roleErr) {
+          console.error('Role lookup error:', roleErr);
+          setAuthError(`Could not look up your account: ${roleErr.message}`);
+          setAuthChecking(false);
+          return;
+        }
+
+        if (!row) {
+          setAuthError('Your staff record was not found. Please contact Dedrick.');
           setAuthChecking(false);
           return;
         }
@@ -242,8 +252,7 @@ export default function NassauPOSPage() {
 
     checkAuth();
 
-    // Subscribe to auth state changes — if user signs out elsewhere we react
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT' && !cancelled) {
         router.replace('/staff-login?next=/pos');
       }
@@ -462,7 +471,7 @@ export default function NassauPOSPage() {
   }
 
   // ──────────────────────────────────────────────────────────
-  // RENDER — auth checking
+  // RENDER
   // ──────────────────────────────────────────────────────────
   if (authChecking) {
     return (
