@@ -96,18 +96,6 @@ if (p.manual_unit_price != null) return Number(p.manual_unit_price);
 return 0;
 }
 
-// BarcodeDetector typing for browsers that support it
-declare global {
-interface Window {
-BarcodeDetector?: {
-new (config?: { formats: string[] }): {
-detect: (source: HTMLVideoElement | ImageBitmap) => Promise<Array<{ rawValue: string }>>;
-};
-getSupportedFormats?: () => Promise<string[]>;
-};
-}
-}
-
 // ============================================================
 // COMPONENT
 // ============================================================
@@ -117,30 +105,25 @@ const [user, setUser] = useState<UserRecord | null>(null);
 const [authLoading, setAuthLoading] = useState(true);
 
 const videoRef = useRef<HTMLVideoElement>(null);
-const streamRef = useRef<MediaStream | null>(null);
-const detectIntervalRef = useRef<number | null>(null);
+// ZXing reader instance ref (typed as unknown to avoid SSR import)
+const readerRef = useRef<unknown>(null);
 
 const [scanning, setScanning] = useState(false);
 const [scannerError, setScannerError] = useState<string | null>(null);
-const [scannerSupported, setScannerSupported] = useState<boolean | null>(null);
 const [scannedCode, setScannedCode] = useState<string | null>(null);
 const [manualBarcode, setManualBarcode] = useState('');
 const [lookingUp, setLookingUp] = useState(false);
 const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
 const [lookupError, setLookupError] = useState<string | null>(null);
 
-// Photo state (for both edit + onboard)
 const [photoUploading, setPhotoUploading] = useState(false);
 const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
-// Edit modal
 const [editing, setEditing] = useState(false);
-
-// Onboard modal
 const [onboarding, setOnboarding] = useState(false);
 
 // ============================================================
-// AUTH (just to know role)
+// AUTH
 // ============================================================
 useEffect(() => {
 const supabase = getSupabase();
@@ -155,26 +138,17 @@ setAuthLoading(false);
 }, []);
 
 // ============================================================
-// CHECK BARCODE DETECTOR SUPPORT
-// ============================================================
-useEffect(() => {
-if (typeof window === 'undefined') return;
-setScannerSupported(typeof window.BarcodeDetector === 'function');
-}, []);
-
-// ============================================================
-// CAMERA SCAN (native BarcodeDetector)
+// CAMERA SCAN (ZXing)
 // ============================================================
 const stopCamera = useCallback(() => {
-if (detectIntervalRef.current) {
-window.clearInterval(detectIntervalRef.current);
-detectIntervalRef.current = null;
+const reader = readerRef.current as { reset?: () => void } | null;
+if (reader?.reset) {
+try { reader.reset(); } catch { /* ignore */ }
 }
-if (streamRef.current) {
-streamRef.current.getTracks().forEach((t) => t.stop());
-streamRef.current = null;
-}
-if (videoRef.current) {
+readerRef.current = null;
+if (videoRef.current?.srcObject) {
+const stream = videoRef.current.srcObject as MediaStream;
+stream.getTracks().forEach((t) => t.stop());
 videoRef.current.srcObject = null;
 }
 setScanning(false);
@@ -236,51 +210,40 @@ setScannerError(null);
 setScannedCode(null);
 setLookupResult(null);
 
-if (!window.BarcodeDetector) {
-setScannerError('Barcode scanning not supported on this browser. Use manual entry or update iOS to 16.4+.');
-return;
-}
-
 try {
-const stream = await navigator.mediaDevices.getUserMedia({
-video: { facingMode: 'environment' },
-audio: false,
-});
-streamRef.current = stream;
+// Dynamic import to avoid SSR issues
+const { BrowserMultiFormatReader } = await import('@zxing/browser');
+
+const reader = new BrowserMultiFormatReader();
+readerRef.current = reader;
 
 if (!videoRef.current) {
-stream.getTracks().forEach((t) => t.stop());
+setScannerError('Scanner not ready. Try again.');
 return;
 }
-
-videoRef.current.srcObject = stream;
-videoRef.current.setAttribute('playsinline', 'true');
-await videoRef.current.play();
 
 setScanning(true);
 
-const detector = new window.BarcodeDetector({
-formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
-});
-
-detectIntervalRef.current = window.setInterval(async () => {
-if (!videoRef.current || videoRef.current.readyState < 2) return;
-try {
-const codes = await detector.detect(videoRef.current);
-if (codes.length > 0) {
-const code = codes[0].rawValue;
+// decodeFromVideoDevice handles permission, stream, and continuous decoding
+await reader.decodeFromVideoDevice(
+undefined, // undefined = default rear camera on mobile
+videoRef.current,
+(result, err) => {
+if (result) {
+const code = result.getText();
 setScannedCode(code);
 stopCamera();
-await lookupProduct(code);
+lookupProduct(code);
 }
-} catch {
-// Per-frame errors are noisy; ignore
+// err on every frame is normal; ignore
 }
-}, 250);
+);
 } catch (e) {
-const msg = e instanceof Error ? e.message : 'Camera access failed';
-setScannerError(`${msg}. Make sure you allowed camera permission in Safari settings.`);
+console.error('ZXing camera failed:', e);
+const msg = e instanceof Error ? e.message : 'Camera failed';
+setScannerError(`${msg}. Make sure camera permission is allowed in Safari settings.`);
 setScanning(false);
+stopCamera();
 }
 }, [lookupProduct, stopCamera]);
 
@@ -289,7 +252,7 @@ return () => stopCamera();
 }, [stopCamera]);
 
 // ============================================================
-// PHOTO UPLOAD (Supabase Storage)
+// PHOTO UPLOAD
 // ============================================================
 async function handlePhotoUpload(file: File) {
 if (!user) return;
@@ -302,7 +265,6 @@ const { error: upErr } = await supabase.storage
 .from('bsc-uploads')
 .upload(path, file, { contentType: file.type, upsert: false });
 if (upErr) throw upErr;
-
 const { data: pubData } = supabase.storage.from('bsc-uploads').getPublicUrl(path);
 setPhotoUrl(pubData.publicUrl);
 } catch (e) {
@@ -329,9 +291,6 @@ setEditing(false);
 setOnboarding(false);
 }
 
-// ============================================================
-// PERMISSIONS
-// ============================================================
 const canEditCostPrice = user && ['founder', 'co_founder', 'manager'].includes(user.role);
 const canOnboard = user && ['founder', 'co_founder', 'manager', 'cashier', 'right_hand', 'supervisor', 'processor', 'andros_staff', 'supplier'].includes(user.role);
 
@@ -343,9 +302,6 @@ Loading…
 );
 }
 
-// ============================================================
-// RENDER
-// ============================================================
 return (
 <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
 
@@ -367,11 +323,9 @@ return (
 
 <div style={{ maxWidth: 600, margin: '0 auto', padding: 16 }}>
 
-{/* INITIAL SCANNER UI */}
 {!scannedCode && !lookingUp && !lookupResult && (
 <div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
 
-{/* Camera area */}
 <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', backgroundColor: scanning ? '#000' : '#e2e8f0', borderRadius: 12, marginBottom: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
 <video
 ref={videoRef}
@@ -396,17 +350,10 @@ playsInline
 </div>
 )}
 
-{scannerSupported === false && (
-<div style={{ backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: 12, color: '#92400e', fontSize: 12, marginBottom: 12 }}>
-⚠️ Native barcode scanning needs iOS 16.4+ or Chrome/Edge desktop. Manual entry below works on any device.
-</div>
-)}
-
 {!scanning ? (
 <button
 onClick={startCamera}
-disabled={scannerSupported === false}
-style={{ width: '100%', backgroundColor: scannerSupported === false ? '#e5e7eb' : '#1a2e5a', color: scannerSupported === false ? '#999' : '#f4c842', border: 'none', borderRadius: 12, padding: 14, fontWeight: 900, fontSize: 14, cursor: scannerSupported === false ? 'not-allowed' : 'pointer', marginBottom: 10 }}
+style={{ width: '100%', backgroundColor: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 12, padding: 14, fontWeight: 900, fontSize: 14, cursor: 'pointer', marginBottom: 10 }}
 >
 📷 Start Camera Scan
 </button>
@@ -419,7 +366,6 @@ style={{ width: '100%', backgroundColor: '#ef4444', color: '#fff', border: 'none
 </button>
 )}
 
-{/* Manual entry */}
 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12, marginTop: 12 }}>
 <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
 Or enter barcode / SKU manually
@@ -444,7 +390,6 @@ Look up
 </div>
 )}
 
-{/* LOOKING UP */}
 {lookingUp && (
 <div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 32, textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
 <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
@@ -452,7 +397,6 @@ Look up
 </div>
 )}
 
-{/* LOOKUP ERROR */}
 {lookupError && !lookingUp && (
 <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 16, padding: 20, marginBottom: 16 }}>
 <div style={{ fontWeight: 800, color: '#991b1b', marginBottom: 6 }}>Lookup failed</div>
@@ -463,7 +407,6 @@ Look up
 </div>
 )}
 
-{/* PRODUCT FOUND — show + inline edit */}
 {lookupResult && lookupResult.product && !lookingUp && !editing && (
 <ProductView
 product={lookupResult.product}
@@ -478,15 +421,11 @@ canEdit={!!canEditCostPrice}
 />
 )}
 
-{/* INLINE EDIT */}
 {lookupResult && lookupResult.product && editing && (
 <ProductEdit
 product={lookupResult.product}
 cost={lookupResult.cost}
 pricing={lookupResult.pricing}
-photoUrl={photoUrl}
-photoUploading={photoUploading}
-onPhotoUpload={handlePhotoUpload}
 onCancel={() => setEditing(false)}
 onSaved={() => {
 if (scannedCode) lookupProduct(scannedCode);
@@ -495,7 +434,6 @@ setEditing(false);
 />
 )}
 
-{/* PRODUCT NOT FOUND — show onboard CTA */}
 {lookupResult && !lookupResult.product && !lookingUp && !onboarding && (
 <div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', textAlign: 'center' }}>
 <div style={{ fontSize: 40, marginBottom: 12 }}>🆕</div>
@@ -524,7 +462,6 @@ style={{ width: '100%', backgroundColor: '#1a2e5a', color: '#f4c842', border: 'n
 </div>
 )}
 
-{/* INLINE ONBOARD */}
 {lookupResult && !lookupResult.product && onboarding && scannedCode && (
 <ProductOnboard
 barcode={scannedCode}
@@ -542,7 +479,7 @@ onSaved={() => { reset(); }}
 }
 
 // ============================================================
-// PRODUCT VIEW (read mode)
+// PRODUCT VIEW
 // ============================================================
 function ProductView({ product, cost, pricing, photoUrl, photoUploading, onPhotoUpload, onEditClick, onReset, canEdit }: {
 product: Product;
@@ -604,10 +541,8 @@ return (
 )}
 </div>
 
-{/* Photo upload — anyone can update product photo */}
 <PhotoUploadButton uploading={photoUploading} onFile={onPhotoUpload} hasPhoto={!!photoUrl} />
 
-{/* Edit button — only managers+ */}
 {canEdit ? (
 <button
 onClick={onEditClick}
@@ -629,7 +564,7 @@ Cost & price editing requires manager role.
 }
 
 // ============================================================
-// PHOTO UPLOAD BUTTON (camera or file)
+// PHOTO UPLOAD BUTTON
 // ============================================================
 function PhotoUploadButton({ uploading, onFile, hasPhoto }: { uploading: boolean; onFile: (f: File) => void; hasPhoto: boolean }) {
 const cameraRef = useRef<HTMLInputElement>(null);
@@ -659,15 +594,12 @@ style={{ backgroundColor: '#fff', color: '#1a2e5a', border: '1.5px solid #e5e7eb
 }
 
 // ============================================================
-// PRODUCT EDIT (inline)
+// PRODUCT EDIT
 // ============================================================
-function ProductEdit({ product, cost, pricing, photoUrl, photoUploading, onPhotoUpload, onCancel, onSaved }: {
+function ProductEdit({ product, cost, onCancel, onSaved }: {
 product: Product;
 cost: CostInfo;
 pricing: PricingInfo[];
-photoUrl: string | null;
-photoUploading: boolean;
-onPhotoUpload: (f: File) => void;
 onCancel: () => void;
 onSaved: () => void;
 }) {
@@ -703,9 +635,6 @@ setSaving(false);
 }
 }
 
-// If photo changed, save it as part of any edit (handled by image_url update — but our update API doesn't have a photo action yet).
-// For now: photo persists in scanner state; editing cost/price doesn't touch the photo. Photo updates from the view screen.
-
 return (
 <div style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -716,7 +645,6 @@ return (
 <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 22, color: '#64748b', cursor: 'pointer' }}>×</button>
 </div>
 
-{/* Cost */}
 <div style={{ marginBottom: 14 }}>
 <label style={lbl}>Cost per {product.unit_of_measure} ($)</label>
 <div style={{ display: 'flex', gap: 8 }}>
@@ -731,7 +659,6 @@ Save Cost
 </div>
 </div>
 
-{/* Pricing per channel */}
 <div style={{ marginBottom: 14, padding: 14, backgroundColor: '#f8fafc', borderRadius: 10 }}>
 <label style={lbl}>Channel</label>
 <select value={channel} onChange={(e) => setChannel(e.target.value)} style={input}>
@@ -773,7 +700,6 @@ style={primaryBtn(saving)}
 </button>
 </div>
 
-{/* Channels */}
 <ChannelToggle product={product} onSave={callEdit} saving={saving} />
 
 {savedMsg && <div style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: 10, fontSize: 12, color: '#166534', textAlign: 'center', marginTop: 10 }}>{savedMsg}</div>}
@@ -818,7 +744,7 @@ Save Channels
 }
 
 // ============================================================
-// PRODUCT ONBOARD (new product form)
+// PRODUCT ONBOARD
 // ============================================================
 function ProductOnboard({ barcode, photoUrl, photoUploading, onPhotoUpload, userRole, onCancel, onSaved }: {
 barcode: string;
