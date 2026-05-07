@@ -12,11 +12,11 @@ value: string;
 options?: CookieOptions;
 }
 
-const ALLOWED_ROLES = ['founder', 'co_founder', 'manager'];
+const ALLOWED_ROLES_FULL = ['founder', 'co_founder', 'manager'];
+const ALLOWED_ROLES_PHOTO = ['founder', 'co_founder', 'manager', 'cashier', 'right_hand', 'supervisor', 'processor', 'andros_staff'];
 
 export async function POST(req: Request) {
 try {
-// 1. AUTH GATE
 const cookieStore = await cookies();
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -49,11 +49,10 @@ const { data: userRow } = await admin
 .eq('id', user.id)
 .single();
 
-if (!userRow || !userRow.is_active || !ALLOWED_ROLES.includes(userRow.role)) {
-return NextResponse.json({ error: 'Your role does not have permission to edit inventory.' }, { status: 403 });
+if (!userRow || !userRow.is_active) {
+return NextResponse.json({ error: 'Account inactive.' }, { status: 403 });
 }
 
-// 2. PARSE
 const body = await req.json();
 const { action, product_id } = body;
 
@@ -61,7 +60,35 @@ if (!action || !product_id) {
 return NextResponse.json({ error: 'action and product_id are required' }, { status: 400 });
 }
 
-// 3. ACTIONS
+// ============================================================
+// UPDATE IMAGE — broader role access (any staff can take photos)
+// ============================================================
+if (action === 'update_image') {
+if (!ALLOWED_ROLES_PHOTO.includes(userRow.role)) {
+return NextResponse.json({ error: 'Your role cannot update product photos.' }, { status: 403 });
+}
+const { image_url } = body;
+if (!image_url || typeof image_url !== 'string') {
+return NextResponse.json({ error: 'image_url is required' }, { status: 400 });
+}
+const { error } = await admin
+.from('products')
+.update({ image_url, updated_at: new Date().toISOString() })
+.eq('id', product_id);
+
+if (error) {
+return NextResponse.json({ error: `Failed to update image: ${error.message}` }, { status: 500 });
+}
+return NextResponse.json({ success: true });
+}
+
+// ============================================================
+// ALL OTHER ACTIONS — manager+ only
+// ============================================================
+if (!ALLOWED_ROLES_FULL.includes(userRow.role)) {
+return NextResponse.json({ error: 'Your role does not have permission to edit cost or pricing.' }, { status: 403 });
+}
+
 if (action === 'update_cost') {
 const { cost_per_unit, unit_of_measure, supplier_id, source_invoice_number, notes, cost_type } = body;
 
@@ -69,7 +96,6 @@ if (cost_per_unit == null || cost_per_unit < 0) {
 return NextResponse.json({ error: 'cost_per_unit must be >= 0' }, { status: 400 });
 }
 
-// Mark all prior costs as not current
 const { error: e1 } = await admin
 .from('product_costs')
 .update({ is_current: false, effective_to: new Date().toISOString() })
@@ -80,7 +106,6 @@ if (e1) {
 return NextResponse.json({ error: `Failed to retire previous cost: ${e1.message}` }, { status: 500 });
 }
 
-// Insert new current cost
 const { data, error } = await admin
 .from('product_costs')
 .insert({
@@ -105,7 +130,6 @@ recorded_by: user.id,
 if (error) {
 return NextResponse.json({ error: `Failed to insert cost: ${error.message}` }, { status: 500 });
 }
-
 return NextResponse.json({ success: true, cost: data });
 }
 
@@ -119,7 +143,6 @@ if (!pricing_mode || !['formula', 'manual_override', 'tiered_quantity'].includes
 return NextResponse.json({ error: 'pricing_mode must be formula, manual_override, or tiered_quantity' }, { status: 400 });
 }
 
-// Retire previous current pricing for this channel
 const { error: e1 } = await admin
 .from('product_pricing')
 .update({ is_current: false, effective_to: new Date().toISOString() })
@@ -160,7 +183,6 @@ const { data, error } = await admin
 if (error) {
 return NextResponse.json({ error: `Failed to insert pricing: ${error.message}` }, { status: 500 });
 }
-
 return NextResponse.json({ success: true, pricing: data });
 }
 
@@ -179,7 +201,6 @@ const { error } = await admin
 if (error) {
 return NextResponse.json({ error: `Failed to update status: ${error.message}` }, { status: 500 });
 }
-
 return NextResponse.json({ success: true });
 }
 
@@ -205,7 +226,6 @@ const { error } = await admin
 if (error) {
 return NextResponse.json({ error: `Failed to update channels: ${error.message}` }, { status: 500 });
 }
-
 return NextResponse.json({ success: true });
 }
 
