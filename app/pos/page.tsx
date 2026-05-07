@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 // TYPES
 // ============================================================
 
-type ProductRow = {
+type CatalogRow = {
   id: string;
   sku: string;
   barcode: string | null;
@@ -22,19 +22,11 @@ type ProductRow = {
   pack_size: string | null;
   image_url: string | null;
   is_bsc_processed: boolean;
-};
-
-type PricingRow = {
-  product_id: string;
-  pricing_mode: string;
-  margin_multiplier: number;
-  vat_multiplier: number;
+  pricing_mode: string | null;
+  margin_multiplier: number | null;
+  vat_multiplier: number | null;
   manual_unit_price: number | null;
-};
-
-type CostRow = {
-  product_id: string;
-  cost_per_unit: number;
+  cost_per_unit: number | null;
 };
 
 type SellableProduct = {
@@ -84,7 +76,7 @@ type UserRecord = {
 };
 
 // ============================================================
-// CATEGORY EMOJI MAP
+// CATEGORY EMOJI
 // ============================================================
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -130,18 +122,15 @@ function getSupabase() {
   return createBrowserClient(url, key);
 }
 
-function computePrice(
-  pricing: PricingRow,
-  cost: CostRow | undefined,
-): number {
-  if (pricing.pricing_mode === 'manual_override' && pricing.manual_unit_price != null) {
-    return Number(pricing.manual_unit_price);
+function computePriceFromRow(r: CatalogRow): number {
+  if (r.pricing_mode === 'manual_override' && r.manual_unit_price != null) {
+    return Number(r.manual_unit_price);
   }
-  if (cost) {
-    return Number(cost.cost_per_unit) * Number(pricing.margin_multiplier) * Number(pricing.vat_multiplier);
+  if (r.pricing_mode === 'formula' && r.cost_per_unit != null && r.margin_multiplier != null && r.vat_multiplier != null) {
+    return Number(r.cost_per_unit) * Number(r.margin_multiplier) * Number(r.vat_multiplier);
   }
-  if (pricing.manual_unit_price != null) {
-    return Number(pricing.manual_unit_price);
+  if (r.manual_unit_price != null) {
+    return Number(r.manual_unit_price);
   }
   return 0;
 }
@@ -168,6 +157,7 @@ export default function NassauPOSPage() {
   const [products, setProducts] = useState<SellableProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
+  const [unsellableCount, setUnsellableCount] = useState(0);
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [category, setCategory] = useState<string>('all');
@@ -190,7 +180,6 @@ export default function NassauPOSPage() {
     async function checkAuth() {
       try {
         let { data: { session } } = await supabase.auth.getSession();
-
         let attempts = 0;
         while (!session && attempts < 3) {
           await new Promise((r) => setTimeout(r, 300));
@@ -205,7 +194,6 @@ export default function NassauPOSPage() {
           return;
         }
 
-        // Use SECURITY DEFINER RPC to bypass RLS recursion on users table
         const { data: row, error: roleErr } = await supabase
           .rpc('get_my_user_record')
           .single<UserRecord>();
@@ -213,24 +201,20 @@ export default function NassauPOSPage() {
         if (cancelled) return;
 
         if (roleErr) {
-          console.error('Role lookup error:', roleErr);
           setAuthError(`Could not look up your account: ${roleErr.message}`);
           setAuthChecking(false);
           return;
         }
-
         if (!row) {
           setAuthError('Your staff record was not found. Please contact Dedrick.');
           setAuthChecking(false);
           return;
         }
-
         if (!row.is_active) {
           setAuthError('Your account is inactive. Please contact Dedrick.');
           setAuthChecking(false);
           return;
         }
-
         if (!ALLOWED_ROLES.includes(row.role)) {
           setAuthError(`Your role (${row.role}) does not have POS access.`);
           setAuthChecking(false);
@@ -265,7 +249,7 @@ export default function NassauPOSPage() {
   }, [router]);
 
   // ──────────────────────────────────────────────────────────
-  // CATALOG LOAD
+  // CATALOG LOAD via RPC (bypasses RLS recursion)
   // ──────────────────────────────────────────────────────────
   const loadCatalog = useCallback(async () => {
     setProductsLoading(true);
@@ -273,71 +257,38 @@ export default function NassauPOSPage() {
     try {
       const supabase = getSupabase();
 
-      const { data: prodRows, error: prodErr } = await supabase
-        .from('products')
-        .select('id, sku, barcode, name, description, category, unit_of_measure, pack_size, image_url, is_bsc_processed')
-        .eq('status', 'active')
-        .eq('sell_nassau', true)
-        .order('category')
-        .order('name');
+      const { data: rows, error } = await supabase
+        .rpc('get_pos_catalog', { p_channel: 'nassau_pos' });
 
-      if (prodErr) throw prodErr;
-      if (!prodRows || prodRows.length === 0) {
-        setProducts([]);
-        setProductsLoading(false);
-        return;
-      }
-
-      const productIds = prodRows.map((p) => p.id);
-
-      const { data: priceRows, error: priceErr } = await supabase
-        .from('product_pricing')
-        .select('product_id, pricing_mode, margin_multiplier, vat_multiplier, manual_unit_price')
-        .eq('channel', 'nassau_pos')
-        .eq('is_current', true)
-        .eq('is_active', true)
-        .in('product_id', productIds);
-
-      if (priceErr) throw priceErr;
-
-      const { data: costRows, error: costErr } = await supabase
-        .from('product_costs')
-        .select('product_id, cost_per_unit')
-        .eq('is_current', true)
-        .in('product_id', productIds);
-
-      if (costErr) throw costErr;
-
-      const priceMap = new Map<string, PricingRow>();
-      (priceRows || []).forEach((r) => priceMap.set(r.product_id, r as PricingRow));
-
-      const costMap = new Map<string, CostRow>();
-      (costRows || []).forEach((r) => costMap.set(r.product_id, r as CostRow));
+      if (error) throw error;
 
       const sellable: SellableProduct[] = [];
-      (prodRows as ProductRow[]).forEach((p) => {
-        const pricing = priceMap.get(p.id);
-        if (!pricing) return;
-        const cost = costMap.get(p.id);
-        const unit_price = computePrice(pricing, cost);
-        if (unit_price <= 0) return;
+      let unsellable = 0;
+
+      (rows as CatalogRow[] || []).forEach((r) => {
+        const unit_price = computePriceFromRow(r);
+        if (unit_price <= 0) {
+          unsellable++;
+          return;
+        }
         sellable.push({
-          id: p.id,
-          sku: p.sku,
-          barcode: p.barcode,
-          name: p.name,
-          category: p.category,
-          unit_of_measure: p.unit_of_measure,
-          pack_size: p.pack_size,
-          image_url: p.image_url,
-          is_bsc_processed: p.is_bsc_processed,
+          id: r.id,
+          sku: r.sku,
+          barcode: r.barcode,
+          name: r.name,
+          category: r.category,
+          unit_of_measure: r.unit_of_measure,
+          pack_size: r.pack_size,
+          image_url: r.image_url,
+          is_bsc_processed: r.is_bsc_processed,
           unit_price,
-          cost_per_unit: cost ? Number(cost.cost_per_unit) : 0,
-          pricing_mode: pricing.pricing_mode,
+          cost_per_unit: r.cost_per_unit ? Number(r.cost_per_unit) : 0,
+          pricing_mode: r.pricing_mode || 'unconfigured',
         });
       });
 
       setProducts(sellable);
+      setUnsellableCount(unsellable);
       setProductsLoading(false);
     } catch (e) {
       console.error('Catalog load failed:', e);
@@ -439,7 +390,7 @@ export default function NassauPOSPage() {
 
       if (insertError) {
         console.error('Order insert failed:', insertError);
-        alert('Sale could not be saved: ' + insertError.message + '\n\nPlease take a photo of this screen and contact Dedrick.');
+        alert('Sale could not be saved: ' + insertError.message);
         setCompleting(false);
         return;
       }
@@ -516,12 +467,12 @@ export default function NassauPOSPage() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Link href="/pos/scan" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', textDecoration: 'none', borderRadius: 8, padding: '7px 12px', fontSize: 13, fontWeight: 800 }}>
+              📷 Scan
+            </Link>
             <button onClick={() => setWhatsappOpen(true)} style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              💬 WhatsApp
+              💬
             </button>
-            <span style={{ backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: 11, fontWeight: 900, padding: '4px 10px', borderRadius: 20 }}>
-              🟡 NASSAU
-            </span>
           </div>
         </div>
       </header>
@@ -576,13 +527,29 @@ export default function NassauPOSPage() {
                 </button>
               </div>
             )}
-            {!productsLoading && !productsError && filtered.length === 0 && (
+            {!productsLoading && !productsError && unsellableCount > 0 && products.length > 0 && (
+              <div style={{ backgroundColor: '#fffbea', border: '1px solid #fde68a', borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 12, color: '#92400e' }}>
+                ⚠️ {unsellableCount} product{unsellableCount !== 1 ? 's' : ''} hidden — missing cost or pricing. Use the <Link href="/pos/scan" style={{ color: '#92400e', textDecoration: 'underline', fontWeight: 700 }}>scanner</Link> to update.
+              </div>
+            )}
+            {!productsLoading && !productsError && filtered.length === 0 && products.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🆕</div>
+                <div style={{ fontWeight: 700 }}>No sellable products yet</div>
+                <div style={{ fontSize: 12, marginTop: 8, marginBottom: 16 }}>
+                  {unsellableCount > 0
+                    ? `${unsellableCount} products in catalog — none have full cost + pricing yet.`
+                    : 'Catalog is empty. Add products via the scanner.'}
+                </div>
+                <Link href="/pos/scan" style={{ display: 'inline-block', backgroundColor: '#1a2e5a', color: '#f4c842', padding: '10px 20px', borderRadius: 10, textDecoration: 'none', fontWeight: 800, fontSize: 13 }}>
+                  📷 Open Scanner
+                </Link>
+              </div>
+            )}
+            {!productsLoading && !productsError && filtered.length === 0 && products.length > 0 && (
               <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontWeight: 700 }}>No sellable products found</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>
-                  Products need a current Nassau POS price entry to appear here.
-                </div>
+                <div style={{ fontWeight: 700 }}>No matches for current filter</div>
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
@@ -713,8 +680,6 @@ export default function NassauPOSPage() {
               <a href="https://wa.me/12425584495" target="_blank" rel="noreferrer" style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: 12, padding: 14, fontWeight: 800, fontSize: 14, marginBottom: 20 }}>
                 Open BSC WhatsApp Chat
               </a>
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://wa.me/12425584495" alt="WhatsApp QR Code" style={{ borderRadius: 12, border: '4px solid #f0f0f0' }} />
-              <p style={{ color: '#666', fontSize: 12, marginTop: 10 }}>Scan to open WhatsApp</p>
               <p style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14 }}>📱 +1 (242) 558-4495</p>
             </div>
           </div>
