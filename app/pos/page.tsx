@@ -76,7 +76,7 @@ type CompletedSale = {
 };
 
 // ============================================================
-// CATEGORY EMOJI MAP (visual helper, not business logic)
+// CATEGORY EMOJI MAP
 // ============================================================
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -126,15 +126,12 @@ function computePrice(
   pricing: PricingRow,
   cost: CostRow | undefined,
 ): number {
-  // Manual override mode
   if (pricing.pricing_mode === 'manual_override' && pricing.manual_unit_price != null) {
     return Number(pricing.manual_unit_price);
   }
-  // Formula mode: cost * margin_multiplier * vat_multiplier
   if (cost) {
     return Number(cost.cost_per_unit) * Number(pricing.margin_multiplier) * Number(pricing.vat_multiplier);
   }
-  // Tiered or unconfigured — fallback to manual if present
   if (pricing.manual_unit_price != null) {
     return Number(pricing.manual_unit_price);
   }
@@ -154,18 +151,16 @@ const ALLOWED_ROLES = ['founder', 'co_founder', 'manager', 'cashier', 'right_han
 export default function NassauPOSPage() {
   const router = useRouter();
 
-  // Auth state
   const [authChecking, setAuthChecking] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
 
-  // Catalog state
   const [products, setProducts] = useState<SellableProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState<string | null>(null);
 
-  // POS state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -173,44 +168,91 @@ export default function NassauPOSPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cardRef, setCardRef] = useState('');
 
-  // Receipt state
   const [completing, setCompleting] = useState(false);
   const [lastSale, setLastSale] = useState<CompletedSale | null>(null);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
 
   // ──────────────────────────────────────────────────────────
-  // AUTH CHECK
+  // AUTH CHECK — uses getSession() with retries to handle
+  // iOS Safari cookie hydration timing issues
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const supabase = getSupabase();
+
+    async function checkAuth() {
       try {
-        const supabase = getSupabase();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          router.replace('/staff-login?next=/pos');
+        // Try getSession() first — works with cookies, doesn't validate against server
+        let { data: { session } } = await supabase.auth.getSession();
+
+        // If null, retry up to 3 times with delays — handles iOS Safari hydration race
+        let attempts = 0;
+        while (!session && attempts < 3) {
+          await new Promise((r) => setTimeout(r, 300));
+          if (cancelled) return;
+          const result = await supabase.auth.getSession();
+          session = result.data.session;
+          attempts++;
+        }
+
+        if (!session?.user) {
+          if (!cancelled) router.replace('/staff-login?next=/pos');
           return;
         }
-        const { data: row } = await supabase
+
+        // Have a session — look up the role
+        const { data: row, error: roleErr } = await supabase
           .from('users')
-          .select('role, email')
-          .eq('id', user.id)
+          .select('role, email, is_active')
+          .eq('id', session.user.id)
           .single();
+
         if (cancelled) return;
-        if (!row?.role || !ALLOWED_ROLES.includes(row.role)) {
-          router.replace('/staff-login?error=role');
+
+        if (roleErr || !row) {
+          setAuthError('Could not look up your account. Please contact Dedrick.');
+          setAuthChecking(false);
           return;
         }
-        setUserId(user.id);
+
+        if (!row.is_active) {
+          setAuthError('Your account is inactive. Please contact Dedrick.');
+          setAuthChecking(false);
+          return;
+        }
+
+        if (!ALLOWED_ROLES.includes(row.role)) {
+          setAuthError(`Your role (${row.role}) does not have POS access.`);
+          setAuthChecking(false);
+          return;
+        }
+
+        setUserId(session.user.id);
         setUserRole(row.role);
-        setUserEmail(row.email || user.email || '');
+        setUserEmail(row.email || session.user.email || '');
         setAuthChecking(false);
       } catch (e) {
-        console.error('Auth check failed:', e);
-        if (!cancelled) router.replace('/staff-login?next=/pos');
+        console.error('Auth check error:', e);
+        if (!cancelled) {
+          setAuthError(e instanceof Error ? e.message : 'Authentication failed');
+          setAuthChecking(false);
+        }
       }
-    })();
-    return () => { cancelled = true; };
+    }
+
+    checkAuth();
+
+    // Subscribe to auth state changes — if user signs out elsewhere we react
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' && !cancelled) {
+        router.replace('/staff-login?next=/pos');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   // ──────────────────────────────────────────────────────────
@@ -222,7 +264,6 @@ export default function NassauPOSPage() {
     try {
       const supabase = getSupabase();
 
-      // 1. Pull active products sellable at Nassau POS
       const { data: prodRows, error: prodErr } = await supabase
         .from('products')
         .select('id, sku, barcode, name, description, category, unit_of_measure, pack_size, image_url, is_bsc_processed')
@@ -240,7 +281,6 @@ export default function NassauPOSPage() {
 
       const productIds = prodRows.map((p) => p.id);
 
-      // 2. Pull current Nassau pricing
       const { data: priceRows, error: priceErr } = await supabase
         .from('product_pricing')
         .select('product_id, pricing_mode, margin_multiplier, vat_multiplier, manual_unit_price')
@@ -251,7 +291,6 @@ export default function NassauPOSPage() {
 
       if (priceErr) throw priceErr;
 
-      // 3. Pull current costs
       const { data: costRows, error: costErr } = await supabase
         .from('product_costs')
         .select('product_id, cost_per_unit')
@@ -266,14 +305,13 @@ export default function NassauPOSPage() {
       const costMap = new Map<string, CostRow>();
       (costRows || []).forEach((r) => costMap.set(r.product_id, r as CostRow));
 
-      // 4. Build sellable list — only products with valid pricing
       const sellable: SellableProduct[] = [];
       (prodRows as ProductRow[]).forEach((p) => {
         const pricing = priceMap.get(p.id);
-        if (!pricing) return; // No Nassau price = not sellable on Nassau POS
+        if (!pricing) return;
         const cost = costMap.get(p.id);
         const unit_price = computePrice(pricing, cost);
-        if (unit_price <= 0) return; // Computed zero = unsellable
+        if (unit_price <= 0) return;
         sellable.push({
           id: p.id,
           sku: p.sku,
@@ -437,10 +475,24 @@ export default function NassauPOSPage() {
     );
   }
 
+  if (authError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, -apple-system, sans-serif', padding: 24 }}>
+        <div style={{ textAlign: 'center', color: '#1a2e5a', maxWidth: 400 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+          <div style={{ fontWeight: 800, marginBottom: 12 }}>Access Issue</div>
+          <div style={{ fontSize: 14, color: '#64748b', marginBottom: 20 }}>{authError}</div>
+          <Link href="/dashboard" style={{ color: '#f4c842', backgroundColor: '#1a2e5a', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontWeight: 700 }}>
+            ← Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
-      {/* HEADER */}
       <header style={{ backgroundColor: '#1a2e5a', padding: '0 16px', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -465,10 +517,8 @@ export default function NassauPOSPage() {
         </div>
       </header>
 
-      {/* BODY */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-        {/* LEFT — PRODUCT GRID */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #ebebeb', padding: '10px 16px' }}>
@@ -552,7 +602,6 @@ export default function NassauPOSPage() {
           </div>
         </div>
 
-        {/* RIGHT — CART PANEL */}
         <div style={{ width: 340, backgroundColor: '#fff', borderLeft: '1px solid #ebebeb', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
 
           <div style={{ padding: '14px 16px', borderBottom: '1px solid #ebebeb', backgroundColor: '#1a2e5a' }}>
@@ -643,7 +692,6 @@ export default function NassauPOSPage() {
         </div>
       </div>
 
-      {/* WHATSAPP SIDEBAR */}
       {whatsappOpen && (
         <>
           <div onClick={() => setWhatsappOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 50 }} />
@@ -664,7 +712,6 @@ export default function NassauPOSPage() {
         </>
       )}
 
-      {/* RECEIPT MODAL */}
       {lastSale && (
         <>
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
