@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react"
 import { createClientInstance } from "../../lib/supabase/browser"
 
+// Skip prerendering. Cash dashboard is per-user, runtime only.
+export const dynamic = 'force-dynamic'
+
 type BillRow = {
   id: number
   bill_type: string
@@ -26,8 +29,6 @@ type FeedItem = {
 }
 
 export default function CashPage() {
-  const supabase = createClientInstance()
-
   const [cashIn, setCashIn] = useState(0)
   const [cashOut, setCashOut] = useState(0)
   const [status, setStatus] = useState("Loading")
@@ -35,58 +36,65 @@ export default function CashPage() {
 
   useEffect(() => {
     async function loadCashData() {
-      const { data: salesData, error: salesError } = await supabase
-        .from("sales")
-        .select("id, item, amount, created_at")
-        .order("created_at", { ascending: false })
+      try {
+        const supabase = createClientInstance()
 
-      const { data: billsData, error: billsError } = await supabase
-        .from("bills")
-        .select("id, bill_type, amount, created_at")
-        .order("created_at", { ascending: false })
+        const { data: salesData, error: salesError } = await supabase
+          .from("sales")
+          .select("id, item, amount, created_at")
+          .order("created_at", { ascending: false })
 
-      if (salesError || billsError) {
-        console.error("Sales error:", salesError)
-        console.error("Bills error:", billsError)
-        setStatus("Error loading cash")
-        return
+        const { data: billsData, error: billsError } = await supabase
+          .from("bills")
+          .select("id, bill_type, amount, created_at")
+          .order("created_at", { ascending: false })
+
+        if (salesError || billsError) {
+          console.error("Sales error:", salesError)
+          console.error("Bills error:", billsError)
+          setStatus("Error loading cash")
+          return
+        }
+
+        const sales: SaleRow[] = salesData || []
+        const bills: BillRow[] = billsData || []
+
+        const totalIn = sales.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+        const totalOut = bills.reduce((sum, row) => sum + Number(row.amount || 0), 0)
+
+        setCashIn(totalIn)
+        setCashOut(totalOut)
+
+        const salesFeed: FeedItem[] = sales.map((row) => ({
+          id: `sale-${row.id}`,
+          label: `Sale: ${row.item}`,
+          amount: Number(row.amount || 0),
+          kind: "in",
+          created_at: row.created_at,
+        }))
+
+        const billsFeed: FeedItem[] = bills.map((row) => ({
+          id: `bill-${row.id}`,
+          label: `Bill: ${row.bill_type}`,
+          amount: Number(row.amount || 0),
+          kind: "out",
+          created_at: row.created_at,
+        }))
+
+        const combinedFeed = [...salesFeed, ...billsFeed].sort((a, b) => {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        })
+
+        setFeed(combinedFeed)
+        setStatus("Ready")
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "init failed"
+        setStatus("Error: " + msg)
       }
-
-      const sales: SaleRow[] = salesData || []
-      const bills: BillRow[] = billsData || []
-
-      const totalIn = sales.reduce((sum, row) => sum + Number(row.amount || 0), 0)
-      const totalOut = bills.reduce((sum, row) => sum + Number(row.amount || 0), 0)
-
-      setCashIn(totalIn)
-      setCashOut(totalOut)
-
-      const salesFeed: FeedItem[] = sales.map((row) => ({
-        id: `sale-${row.id}`,
-        label: `Sale: ${row.item}`,
-        amount: Number(row.amount || 0),
-        kind: "in",
-        created_at: row.created_at,
-      }))
-
-      const billsFeed: FeedItem[] = bills.map((row) => ({
-        id: `bill-${row.id}`,
-        label: `Bill: ${row.bill_type}`,
-        amount: Number(row.amount || 0),
-        kind: "out",
-        created_at: row.created_at,
-      }))
-
-      const combinedFeed = [...salesFeed, ...billsFeed].sort((a, b) => {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      })
-
-      setFeed(combinedFeed)
-      setStatus("Ready")
     }
 
     loadCashData()
-  }, [supabase])
+  }, [])
 
   const netCash = cashIn - cashOut
 
