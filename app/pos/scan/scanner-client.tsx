@@ -1,11 +1,8 @@
 'use client';
 
 // app/pos/scan/scanner-client.tsx
-// BSC POS Scanner - v4.1 photo-first, manual entry, full 4-channel onboard
-// Camera = product PHOTOS (native iOS, no library)
-// Manual barcode/SKU entry = lookup hero
-// Onboard sets all 4 channel prices in one flow (manager+ only)
-// Non-managers submit as pending_approval; Dedrick reviews
+// BSC POS Scanner - v4.2 hardened: ASCII-clean inputs, decimal sanitizers,
+// diagnostic error reporting. iOS Safari-safe.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
@@ -144,6 +141,29 @@ function computePrice(p: PricingInfo, cost: number | null): number {
 
 function fmt(n: number): string {
   return n.toFixed(2);
+}
+
+// Strip everything that isn't a digit or a decimal point. Keep one decimal max.
+function sanitizeDecimal(input: string): string {
+  let cleaned = input.replace(/[^0-9.]/g, '');
+  const firstDot = cleaned.indexOf('.');
+  if (firstDot !== -1) {
+    cleaned =
+      cleaned.slice(0, firstDot + 1) +
+      cleaned.slice(firstDot + 1).replace(/\./g, '');
+  }
+  return cleaned;
+}
+
+// Allow letters, digits, hyphens, underscores. Strip everything else.
+function sanitizeBarcode(input: string): string {
+  return input.replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+// Strip control characters and lone surrogates that break iOS Safari fetch.
+function sanitizeText(input: string): string {
+  // eslint-disable-next-line no-control-regex
+  return input.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
 }
 
 // -------------------------------------------------------------
@@ -297,7 +317,7 @@ export default function ScannerClient() {
   );
 
   function manualLookup() {
-    const code = barcode.trim();
+    const code = sanitizeBarcode(barcode);
     if (!code) return;
     setScannedCode(code);
     lookupProduct(code);
@@ -454,12 +474,16 @@ export default function ScannerClient() {
             <input
               type="text"
               value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
+              onChange={(e) => setBarcode(sanitizeBarcode(e.target.value))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') manualLookup();
               }}
               placeholder="e.g. TROPIC-MAHI-79 or 8901234567890"
               autoFocus
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              autoCapitalize="characters"
               style={{
                 width: '100%',
                 padding: '14px 16px',
@@ -1263,12 +1287,20 @@ function ProductEdit({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Save failed');
+      let json: { error?: string; message?: string } = {};
+      try {
+        json = await res.json();
+      } catch {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Server returned status ${res.status}: ${txt.slice(0, 200) || 'empty response'}`);
+      }
+      if (!res.ok) throw new Error(json.error || `Server returned status ${res.status}`);
       setSavedMsg(json.message || 'Saved');
       setTimeout(onSaved, 800);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Save failed');
+      const errName = e instanceof Error ? e.name : 'Error';
+      const msg = e instanceof Error ? e.message : 'Save failed';
+      setErr(`${errName}: ${msg}`);
     } finally {
       setSaving(false);
     }
@@ -1328,11 +1360,12 @@ function ProductEdit({
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
-            type="number"
-            step="0.0001"
+            type="text"
+            inputMode="decimal"
             value={costInput}
-            onChange={(e) => setCostInput(e.target.value)}
+            onChange={(e) => setCostInput(sanitizeDecimal(e.target.value))}
             style={{ ...input, flex: 1 }}
+            autoComplete="off"
           />
           <button
             onClick={() =>
@@ -1417,30 +1450,30 @@ function ProductEdit({
             <div>
               <label style={lbl}>Margin</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={margin}
-                onChange={(e) => setMargin(e.target.value)}
+                onChange={(e) => setMargin(sanitizeDecimal(e.target.value))}
                 style={input}
               />
             </div>
             <div>
               <label style={lbl}>VAT</label>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={vat}
-                onChange={(e) => setVat(e.target.value)}
+                onChange={(e) => setVat(sanitizeDecimal(e.target.value))}
                 style={input}
               />
             </div>
           </div>
         ) : (
           <input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={manualPrice}
-            onChange={(e) => setManualPrice(e.target.value)}
+            onChange={(e) => setManualPrice(sanitizeDecimal(e.target.value))}
             placeholder="$ price per unit"
             style={input}
           />
@@ -1643,10 +1676,7 @@ function ProductOnboard({
 }) {
   const isManager = MANAGER_ROLES.includes(userRole);
 
-  // Barcode/SKU - editable when barcodeEditable is true
   const [barcode, setBarcode] = useState(initialBarcode);
-
-  // Basic product fields
   const [name, setName] = useState('');
   const [category, setCategory] = useState('frozen_seafood');
   const [unit, setUnit] = useState('lb');
@@ -1654,13 +1684,11 @@ function ProductOnboard({
   const [description, setDescription] = useState('');
   const [cost, setCost] = useState('');
 
-  // Channel visibility (all 4) - user explicitly tags
   const [sellNassau, setSellNassau] = useState(true);
   const [sellAndros, setSellAndros] = useState(false);
   const [sellOnline, setSellOnline] = useState(false);
   const [sellWholesale, setSellWholesale] = useState(false);
 
-  // Per-channel pricing (manager only)
   const [channelPricing, setChannelPricing] = useState<
     Record<ChannelKey, OnboardChannelState>
   >({
@@ -1674,7 +1702,6 @@ function ProductOnboard({
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  // Auto-enable pricing for a channel when user toggles its visibility ON
   useEffect(() => {
     if (!isManager) return;
     setChannelPricing((prev) => ({
@@ -1698,7 +1725,8 @@ function ProductOnboard({
   }
 
   async function submit() {
-    if (!name.trim() || !category || !unit) {
+    const cleanName = sanitizeText(name);
+    if (!cleanName || !category || !unit) {
       setErr('Name, category, and unit are required');
       return;
     }
@@ -1712,8 +1740,17 @@ function ProductOnboard({
       return;
     }
 
-    // Auto-generate a BSC SKU/barcode if the field is empty
-    let finalBarcode = barcode.trim();
+    let costValue: number | null = null;
+    if (cost) {
+      const parsed = parseFloat(cost);
+      if (isNaN(parsed) || parsed < 0) {
+        setErr('Cost must be a positive number like 5.50 (digits and one decimal point only)');
+        return;
+      }
+      costValue = parsed;
+    }
+
+    let finalBarcode = sanitizeBarcode(barcode);
     if (!finalBarcode) {
       const stamp = Date.now().toString().slice(-8);
       finalBarcode = `BSC-${stamp}`;
@@ -1730,7 +1767,7 @@ function ProductOnboard({
         vat_multiplier: number;
       }> = [];
 
-      if (isManager && cost) {
+      if (isManager && costValue !== null) {
         for (const ch of ALL_CHANNELS) {
           const cp = channelPricing[ch];
           if (!cp.enabled) continue;
@@ -1748,13 +1785,13 @@ function ProductOnboard({
 
       const payload = {
         barcode: finalBarcode,
-        name: name.trim(),
+        name: cleanName,
         category,
         unit_of_measure: unit,
-        pack_size: packSize.trim() || null,
-        description: description.trim() || null,
+        pack_size: sanitizeText(packSize) || null,
+        description: sanitizeText(description) || null,
         image_url: photoUrl || null,
-        cost_per_unit: cost ? parseFloat(cost) : null,
+        cost_per_unit: costValue,
         sell_nassau: sellNassau,
         sell_andros: sellAndros,
         sell_online: sellOnline,
@@ -1762,17 +1799,36 @@ function ProductOnboard({
         pricing,
       };
 
-      const res = await fetch(ONBOARD_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Onboard failed');
+      let res: Response;
+      try {
+        res = await fetch(ONBOARD_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch (netErr) {
+        const msg = netErr instanceof Error ? netErr.message : 'Network error';
+        throw new Error(`Network: ${msg}`);
+      }
+
+      let json: { error?: string; message?: string } = {};
+      try {
+        json = await res.json();
+      } catch {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Server returned status ${res.status}: ${txt.slice(0, 200) || 'empty response'}`);
+      }
+
+      if (!res.ok) {
+        throw new Error(json.error || `Server returned status ${res.status}`);
+      }
+
       setDone(json.message || 'Saved.');
       setTimeout(onSaved, 1500);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Onboard failed');
+      const errName = e instanceof Error ? e.name : 'Error';
+      const msg = e instanceof Error ? e.message : 'Onboard failed';
+      setErr(`${errName}: ${msg}`);
     } finally {
       setSaving(false);
     }
@@ -1904,9 +1960,12 @@ function ProductOnboard({
             <label style={lbl}>Barcode / SKU</label>
             <input
               value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
+              onChange={(e) => setBarcode(sanitizeBarcode(e.target.value))}
               placeholder="Leave blank to auto-generate (BSC-xxxxxxxx)"
               style={{ ...input, fontFamily: 'monospace' }}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <div
               style={{
@@ -1986,12 +2045,15 @@ function ProductOnboard({
 
         <label style={lbl}>Initial Cost ($ per {unit})</label>
         <input
-          type="number"
-          step="0.0001"
+          type="text"
+          inputMode="decimal"
           value={cost}
-          onChange={(e) => setCost(e.target.value)}
-          placeholder="e.g. 4.5000"
+          onChange={(e) => setCost(sanitizeDecimal(e.target.value))}
+          placeholder="e.g. 4.50"
           style={input}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
         />
       </div>
 
@@ -2156,14 +2218,14 @@ function ProductOnboard({
                       <div>
                         <label style={lbl}>Margin</label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={cp.margin}
                           onChange={(e) =>
                             updateChannelPricing(
                               ch,
                               'margin',
-                              e.target.value
+                              sanitizeDecimal(e.target.value)
                             )
                           }
                           style={input}
@@ -2172,14 +2234,14 @@ function ProductOnboard({
                       <div>
                         <label style={lbl}>VAT</label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={cp.vat}
                           onChange={(e) =>
                             updateChannelPricing(
                               ch,
                               'vat',
-                              e.target.value
+                              sanitizeDecimal(e.target.value)
                             )
                           }
                           style={input}
