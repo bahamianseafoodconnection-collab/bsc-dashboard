@@ -166,6 +166,7 @@ export default function ScannerClient() {
 
   const [editing, setEditing] = useState(false);
   const [onboarding, setOnboarding] = useState(false);
+  const [directOnboarding, setDirectOnboarding] = useState(false);
 
   // Auth bootstrap
   useEffect(() => {
@@ -311,6 +312,7 @@ export default function ScannerClient() {
     setPhotoMsg(null);
     setEditing(false);
     setOnboarding(false);
+    setDirectOnboarding(false);
   }
 
   const canEditCostPrice = !!user && MANAGER_ROLES.includes(user.role);
@@ -417,7 +419,7 @@ export default function ScannerClient() {
       </header>
 
       <div style={{ maxWidth: 600, margin: '0 auto', padding: 16 }}>
-        {!scannedCode && !lookingUp && !lookupResult && (
+        {!scannedCode && !lookingUp && !lookupResult && !directOnboarding && (
           <div
             style={{
               backgroundColor: '#fff',
@@ -486,6 +488,46 @@ export default function ScannerClient() {
               }}
             >
               Look up
+            </button>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 16,
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#94a3b8',
+                  letterSpacing: 1,
+                }}
+              >
+                OR
+              </span>
+              <div style={{ flex: 1, height: 1, backgroundColor: '#e5e7eb' }} />
+            </div>
+
+            <button
+              onClick={() => setDirectOnboarding(true)}
+              style={{
+                width: '100%',
+                backgroundColor: '#fff',
+                color: '#1a2e5a',
+                border: '2px solid #1a2e5a',
+                borderRadius: 10,
+                padding: '14px',
+                fontSize: 15,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              + Add New Product (Take Photo)
             </button>
 
             <div
@@ -689,7 +731,8 @@ export default function ScannerClient() {
           onboarding &&
           scannedCode && (
             <ProductOnboard
-              barcode={scannedCode}
+              initialBarcode={scannedCode}
+              barcodeEditable={false}
               photoUrl={photoUrl}
               photoUploading={photoUploading}
               photoMsg={photoMsg}
@@ -701,6 +744,26 @@ export default function ScannerClient() {
               }}
             />
           )}
+
+        {directOnboarding && (
+          <ProductOnboard
+            initialBarcode=""
+            barcodeEditable={true}
+            photoUrl={photoUrl}
+            photoUploading={photoUploading}
+            photoMsg={photoMsg}
+            onPhotoUpload={(f) => handlePhotoUpload(f)}
+            userRole={user.role}
+            onCancel={() => {
+              setDirectOnboarding(false);
+              setPhotoUrl(null);
+              setPhotoMsg(null);
+            }}
+            onSaved={() => {
+              reset();
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -1558,7 +1621,8 @@ function ChannelToggle({
 // -------------------------------------------------------------
 
 function ProductOnboard({
-  barcode,
+  initialBarcode,
+  barcodeEditable,
   photoUrl,
   photoUploading,
   photoMsg,
@@ -1567,7 +1631,8 @@ function ProductOnboard({
   onCancel,
   onSaved,
 }: {
-  barcode: string;
+  initialBarcode: string;
+  barcodeEditable: boolean;
   photoUrl: string | null;
   photoUploading: boolean;
   photoMsg: string | null;
@@ -1577,6 +1642,9 @@ function ProductOnboard({
   onSaved: () => void;
 }) {
   const isManager = MANAGER_ROLES.includes(userRole);
+
+  // Barcode/SKU - editable when barcodeEditable is true
+  const [barcode, setBarcode] = useState(initialBarcode);
 
   // Basic product fields
   const [name, setName] = useState('');
@@ -1607,7 +1675,6 @@ function ProductOnboard({
   const [done, setDone] = useState<string | null>(null);
 
   // Auto-enable pricing for a channel when user toggles its visibility ON
-  // (manager flow only - keeps the two concepts in sync without locking them)
   useEffect(() => {
     if (!isManager) return;
     setChannelPricing((prev) => ({
@@ -1644,6 +1711,14 @@ function ProductOnboard({
       setErr('Pick at least one channel where this product sells');
       return;
     }
+
+    // Auto-generate a BSC SKU/barcode if the field is empty
+    let finalBarcode = barcode.trim();
+    if (!finalBarcode) {
+      const stamp = Date.now().toString().slice(-8);
+      finalBarcode = `BSC-${stamp}`;
+    }
+
     setSaving(true);
     setErr(null);
 
@@ -1672,7 +1747,7 @@ function ProductOnboard({
       }
 
       const payload = {
-        barcode,
+        barcode: finalBarcode,
         name: name.trim(),
         category,
         unit_of_measure: unit,
@@ -1733,15 +1808,17 @@ function ProductOnboard({
           >
             Onboard Product
           </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: '#94a3b8',
-              fontFamily: 'monospace',
-            }}
-          >
-            Barcode: {barcode}
-          </div>
+          {!barcodeEditable && (
+            <div
+              style={{
+                fontSize: 11,
+                color: '#94a3b8',
+                fontFamily: 'monospace',
+              }}
+            >
+              Barcode: {barcode}
+            </div>
+          )}
         </div>
         <button
           onClick={onCancel}
@@ -1822,6 +1899,30 @@ function ProductOnboard({
           paddingTop: 12,
         }}
       >
+        {barcodeEditable && (
+          <>
+            <label style={lbl}>Barcode / SKU</label>
+            <input
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              placeholder="Leave blank to auto-generate (BSC-xxxxxxxx)"
+              style={{ ...input, fontFamily: 'monospace' }}
+            />
+            <div
+              style={{
+                fontSize: 10,
+                color: '#94a3b8',
+                marginTop: -2,
+                marginBottom: 8,
+                lineHeight: 1.4,
+              }}
+            >
+              Type a manufacturer UPC, your own SKU, or leave blank for an
+              auto-generated BSC code.
+            </div>
+          </>
+        )}
+
         <label style={lbl}>Product Name *</label>
         <input
           value={name}
@@ -1894,7 +1995,6 @@ function ProductOnboard({
         />
       </div>
 
-      {/* Channel visibility toggles - everyone */}
       <div
         style={{
           marginTop: 14,
@@ -1963,7 +2063,6 @@ function ProductOnboard({
         ))}
       </div>
 
-      {/* Per-channel pricing - manager only, only visible if cost provided */}
       {isManager && cost && costNum > 0 && (
         <div
           style={{
