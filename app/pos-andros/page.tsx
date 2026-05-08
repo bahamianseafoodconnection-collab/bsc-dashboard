@@ -4,34 +4,41 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Skip prerendering. POS is per-staff, runtime only.
+export const dynamic = 'force-dynamic';
+
+// Lazy-init Supabase. Module-scope createBrowserClient crashes the build
+// at static prerender because env vars are not loaded yet.
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error('Supabase env not configured');
+  return createBrowserClient(url, key);
+}
 
 const BSC_MARGIN  = 0.43;
 const ANDROS_PIN  = 'CETA2024';
 const CATEGORIES  = ['All', 'Seafood', 'Meats', 'Poultry', 'Groceries', 'Essentials'];
 
 const PRODUCTS = [
-  { id: 1,  name: 'Fresh Grouper',       price: 15.99, category: 'Seafood',    emoji: '🐟' },
-  { id: 2,  name: 'Spiny Lobster Tails', price: 30.00, category: 'Seafood',    emoji: '🦞' },
-  { id: 3,  name: 'Conch Meat',          price: 13.50, category: 'Seafood',    emoji: '🐚' },
-  { id: 4,  name: 'Red Snapper',         price: 14.99, category: 'Seafood',    emoji: '🐠' },
-  { id: 5,  name: 'Raw Shrimp',          price: 17.00, category: 'Seafood',    emoji: '🦐' },
-  { id: 6,  name: 'Lane Snapper',        price: 12.99, category: 'Seafood',    emoji: '🐟' },
-  { id: 7,  name: 'Ribeye Steak',        price: 24.99, category: 'Meats',      emoji: '🥩' },
-  { id: 8,  name: 'Pork Chops',          price: 10.99, category: 'Meats',      emoji: '🍖' },
-  { id: 9,  name: 'Whole Chicken',       price: 9.99,  category: 'Poultry',    emoji: '🍗' },
-  { id: 10, name: 'Chicken Wings',       price: 7.99,  category: 'Poultry',    emoji: '🍗' },
-  { id: 11, name: 'Leg Quarters',        price: 5.99,  category: 'Poultry',    emoji: '🍗' },
-  { id: 12, name: 'White Rice 25lb',     price: 26.99, category: 'Groceries',  emoji: '🌾' },
-  { id: 13, name: 'Cooking Oil 1gal',    price: 13.99, category: 'Groceries',  emoji: '🫙' },
-  { id: 14, name: 'Black Beans 5lb',     price: 8.99,  category: 'Groceries',  emoji: '🫘' },
-  { id: 15, name: 'Bottled Water 24pk',  price: 10.99, category: 'Essentials', emoji: '💧' },
+  { id: 1,  name: 'Fresh Grouper',       price: 15.99, category: 'Seafood'    },
+  { id: 2,  name: 'Spiny Lobster Tails', price: 30.00, category: 'Seafood'    },
+  { id: 3,  name: 'Conch Meat',          price: 13.50, category: 'Seafood'    },
+  { id: 4,  name: 'Red Snapper',         price: 14.99, category: 'Seafood'    },
+  { id: 5,  name: 'Raw Shrimp',          price: 17.00, category: 'Seafood'    },
+  { id: 6,  name: 'Lane Snapper',        price: 12.99, category: 'Seafood'    },
+  { id: 7,  name: 'Ribeye Steak',        price: 24.99, category: 'Meats'      },
+  { id: 8,  name: 'Pork Chops',          price: 10.99, category: 'Meats'      },
+  { id: 9,  name: 'Whole Chicken',       price: 9.99,  category: 'Poultry'    },
+  { id: 10, name: 'Chicken Wings',       price: 7.99,  category: 'Poultry'    },
+  { id: 11, name: 'Leg Quarters',        price: 5.99,  category: 'Poultry'    },
+  { id: 12, name: 'White Rice 25lb',     price: 26.99, category: 'Groceries'  },
+  { id: 13, name: 'Cooking Oil 1gal',    price: 13.99, category: 'Groceries'  },
+  { id: 14, name: 'Black Beans 5lb',     price: 8.99,  category: 'Groceries'  },
+  { id: 15, name: 'Bottled Water 24pk',  price: 10.99, category: 'Essentials' },
 ];
 
-type CartItem = { id: number; name: string; price: number; emoji: string; qty: number };
+type CartItem = { id: number; name: string; price: number; qty: number };
 type Sale     = { total: number; profit: number; items: CartItem[]; customer: string; ref: string };
 
 export default function AndrosPOSPage() {
@@ -62,7 +69,7 @@ export default function AndrosPOSPage() {
     setCart((prev) => {
       const ex = prev.find((i) => i.id === product.id);
       if (ex) return prev.map((i) => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { id: product.id, name: product.name, price: product.price, emoji: product.emoji, qty: 1 }];
+      return [...prev, { id: product.id, name: product.name, price: product.price, qty: 1 }];
     });
   }
 
@@ -76,6 +83,7 @@ export default function AndrosPOSPage() {
     if (cart.length === 0) return;
     const ref = 'BSC-AND-' + Date.now().toString().slice(-6);
     try {
+      const supabase = getSupabase();
       await supabase.from('invoices').insert([{
         customer_name:  customerName || 'Walk-in',
         items:          cart,
@@ -86,7 +94,7 @@ export default function AndrosPOSPage() {
         reference:      ref,
         margin_pct:     43,
       }]);
-    } catch { /* continue */ }
+    } catch { /* continue, still show receipt */ }
     setLastSale({ total: subtotal, profit: bscProfit, items: [...cart], customer: customerName || 'Walk-in', ref });
     setReceiptVisible(true);
     setCart([]);
@@ -95,16 +103,16 @@ export default function AndrosPOSPage() {
 
   function newSale() { setReceiptVisible(false); setLastSale(null); }
 
-  /* ── PIN SCREEN ── */
+  /* PIN SCREEN */
   if (!unlocked) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#1a0a2e', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <div style={{ width: '100%', maxWidth: '340px' }}>
 
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <div style={{ width: '64px', height: '64px', borderRadius: '20px', backgroundColor: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', fontSize: '28px' }}>🟣</div>
+            <div style={{ width: '64px', height: '64px', borderRadius: '20px', backgroundColor: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', fontSize: '20px', fontWeight: 900, color: '#fff' }}>POS</div>
             <h1 style={{ color: '#fff', fontWeight: 900, fontSize: '22px', margin: '0 0 4px' }}>Andros POS</h1>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', margin: '0 0 4px' }}>{"Ceta's Variety Store · Mastic Point"}</p>
+            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', margin: '0 0 4px' }}>{"Ceta's Variety Store - Mastic Point"}</p>
             <p style={{ color: '#a78bfa', fontSize: '12px', fontWeight: 700, margin: 0 }}>43% BSC Margin</p>
           </div>
 
@@ -119,15 +127,15 @@ export default function AndrosPOSPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
-            {['1','2','3','4','5','6','7','8','9','C','0','✓'].map((key) => (
+            {['1','2','3','4','5','6','7','8','9','C','0','OK'].map((key) => (
               <button
                 key={key}
                 onClick={() => {
                   if (key === 'C') { setPinInput(''); setPinError(''); }
-                  else if (key === '✓') tryPin();
+                  else if (key === 'OK') tryPin();
                   else addPinDigit(key);
                 }}
-                style={{ height: '58px', borderRadius: '14px', border: 'none', backgroundColor: key === '✓' ? '#7c3aed' : key === 'C' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.08)', color: key === 'C' ? '#f87171' : '#fff', fontSize: '20px', fontWeight: 900, cursor: 'pointer' }}
+                style={{ height: '58px', borderRadius: '14px', border: 'none', backgroundColor: key === 'OK' ? '#7c3aed' : key === 'C' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.08)', color: key === 'C' ? '#f87171' : '#fff', fontSize: key === 'OK' ? '15px' : '20px', fontWeight: 900, cursor: 'pointer' }}
               >
                 {key}
               </button>
@@ -135,41 +143,39 @@ export default function AndrosPOSPage() {
           </div>
 
           <Link href="/dashboard" style={{ display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px', textDecoration: 'none' }}>
-            ← Back to BSC Control
+            &larr; Back to BSC Control
           </Link>
         </div>
       </div>
     );
   }
 
-  /* ── MAIN POS ── */
+  /* MAIN POS */
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f0ff', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
-      {/* HEADER */}
       <header style={{ backgroundColor: '#7c3aed', padding: '0 16px', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Link href="/dashboard" style={{ color: '#c4b5fd', fontSize: '13px', fontWeight: 700, textDecoration: 'none', backgroundColor: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
-              ← BSC Control
+              &larr; BSC Control
             </Link>
             <div>
               <div style={{ color: '#fff', fontWeight: 900, fontSize: '15px' }}>Andros POS</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>{"Ceta's Variety · 43% Margin"}</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>{"Ceta's Variety - 43% Margin"}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button onClick={() => setWhatsappOpen(true)} style={{ backgroundColor: '#25D366', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-              💬 WhatsApp
+              WhatsApp
             </button>
-            <span style={{ backgroundColor: '#c4b5fd', color: '#4c1d95', fontSize: '11px', fontWeight: 900, padding: '4px 10px', borderRadius: '20px' }}>🟣 ANDROS</span>
+            <span style={{ backgroundColor: '#c4b5fd', color: '#4c1d95', fontSize: '11px', fontWeight: 900, padding: '4px 10px', borderRadius: '20px' }}>ANDROS</span>
           </div>
         </div>
       </header>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-        {/* LEFT — PRODUCTS */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #ebebeb', padding: '10px 16px' }}>
             <input
@@ -192,7 +198,6 @@ export default function AndrosPOSPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
               {filtered.map((product) => (
                 <button key={product.id} onClick={() => addToCart(product)} style={{ backgroundColor: '#fff', border: '1.5px solid #ede9fe', borderRadius: '14px', padding: '14px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(124,58,237,0.06)' }}>
-                  <span style={{ fontSize: '32px' }}>{product.emoji}</span>
                   <span style={{ color: '#4c1d95', fontWeight: 700, fontSize: '12px', textAlign: 'center', lineHeight: 1.3 }}>{product.name}</span>
                   <span style={{ color: '#7c3aed', fontWeight: 900, fontSize: '15px' }}>${product.price.toFixed(2)}</span>
                   <span style={{ color: '#a78bfa', fontSize: '10px' }}>tap to add</span>
@@ -202,11 +207,10 @@ export default function AndrosPOSPage() {
           </div>
         </div>
 
-        {/* RIGHT — CART */}
         <div style={{ width: '320px', backgroundColor: '#fff', borderLeft: '1px solid #ede9fe', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
           <div style={{ padding: '14px 16px', borderBottom: '1px solid #ede9fe', backgroundColor: '#7c3aed' }}>
             <div style={{ color: '#c4b5fd', fontWeight: 900, fontSize: '15px' }}>Current Sale</div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>{cart.length} item{cart.length !== 1 ? 's' : ''} · Andros POS</div>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>{cart.length} item{cart.length !== 1 ? 's' : ''} - Andros POS</div>
           </div>
 
           <div style={{ padding: '10px 16px', borderBottom: '1px solid #f5f3ff' }}>
@@ -216,13 +220,11 @@ export default function AndrosPOSPage() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
             {cart.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#c4b5fd' }}>
-                <div style={{ fontSize: '40px', marginBottom: '10px' }}>🛒</div>
                 <div style={{ fontSize: '13px' }}>Tap a product to add</div>
               </div>
             )}
             {cart.map((item) => (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #f5f3ff' }}>
-                <span style={{ fontSize: '22px' }}>{item.emoji}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: '#4c1d95', fontWeight: 700, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
                   <div style={{ color: '#999', fontSize: '11px' }}>${item.price.toFixed(2)} each</div>
@@ -251,31 +253,31 @@ export default function AndrosPOSPage() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '12px' }}>
               {(['cash', 'card', 'transfer'] as const).map((method) => (
-                <button key={method} onClick={() => setPaymentMethod(method)} style={{ padding: '7px', borderRadius: '8px', border: '2px solid', borderColor: paymentMethod === method ? '#7c3aed' : '#e5e7eb', backgroundColor: paymentMethod === method ? '#7c3aed' : '#fff', color: paymentMethod === method ? '#fff' : '#666', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
-                  {method === 'cash' ? '💵' : method === 'card' ? '💳' : '🏦'} {method}
+                <button key={method} onClick={() => setPaymentMethod(method)} style={{ padding: '7px', borderRadius: '8px', border: '2px solid', borderColor: paymentMethod === method ? '#7c3aed' : '#e5e7eb', backgroundColor: paymentMethod === method ? '#7c3aed' : '#fff', color: paymentMethod === method ? '#fff' : '#666', fontSize: '11px', fontWeight: 700, cursor: 'pointer', textTransform: 'capitalize' }}>
+                  {method}
                 </button>
               ))}
             </div>
             <button onClick={completeSale} disabled={cart.length === 0} style={{ width: '100%', backgroundColor: cart.length === 0 ? '#e5e7eb' : '#7c3aed', color: cart.length === 0 ? '#999' : '#fff', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: 900, fontSize: '15px', cursor: cart.length === 0 ? 'not-allowed' : 'pointer' }}>
-              {cart.length === 0 ? 'Add Items to Sell' : `Complete Sale · $${subtotal.toFixed(2)}`}
+              {cart.length === 0 ? 'Add Items to Sell' : `Complete Sale - $${subtotal.toFixed(2)}`}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── WHATSAPP PANEL ── */}
       {whatsappOpen && (
         <>
           <div onClick={() => setWhatsappOpen(false)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 50 }} />
           <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: '300px', backgroundColor: '#fff', zIndex: 51, boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ backgroundColor: '#25D366', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: '#fff', fontWeight: 900, fontSize: '16px' }}>💬 WhatsApp</span>
-              <button onClick={() => setWhatsappOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer', lineHeight: 1 }}>×</button>
+              <span style={{ color: '#fff', fontWeight: 900, fontSize: '16px' }}>WhatsApp</span>
+              <button onClick={() => setWhatsappOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer', lineHeight: 1 }}>x</button>
             </div>
             <div style={{ padding: '20px', textAlign: 'center' }}>
               <a href="https://wa.me/12425584495" target="_blank" rel="noreferrer" style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '14px', fontWeight: 800, fontSize: '14px', marginBottom: '20px' }}>
                 Open BSC WhatsApp
               </a>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://wa.me/12425584495" alt="WhatsApp QR Code" style={{ borderRadius: '10px', border: '4px solid #f0f0f0' }} />
               <p style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginTop: '10px' }}>+1 (242) 558-4495 (WhatsApp)</p>
             </div>
@@ -283,14 +285,12 @@ export default function AndrosPOSPage() {
         </>
       )}
 
-      {/* ── RECEIPT MODAL ── */}
       {receiptVisible && lastSale && (
         <>
           <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 60 }} />
           <div style={{ position: 'fixed', inset: '20px', maxWidth: '400px', margin: '0 auto', backgroundColor: '#fff', borderRadius: '20px', zIndex: 61, overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
 
             <div style={{ backgroundColor: '#7c3aed', padding: '24px', textAlign: 'center', borderRadius: '20px 20px 0 0' }}>
-              <div style={{ fontSize: '36px', marginBottom: '8px' }}>✅</div>
               <div style={{ color: '#c4b5fd', fontWeight: 900, fontSize: '20px' }}>Sale Complete!</div>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', marginTop: '4px' }}>Ref: {lastSale.ref}</div>
             </div>
@@ -303,7 +303,7 @@ export default function AndrosPOSPage() {
 
               {lastSale.items.map((item) => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f5f3ff' }}>
-                  <span style={{ color: '#444', fontSize: '13px' }}>{item.emoji} {item.name} × {item.qty}</span>
+                  <span style={{ color: '#444', fontSize: '13px' }}>{item.name} x {item.qty}</span>
                   <span style={{ color: '#4c1d95', fontWeight: 700, fontSize: '13px' }}>${(item.price * item.qty).toFixed(2)}</span>
                 </div>
               ))}
@@ -320,12 +320,12 @@ export default function AndrosPOSPage() {
               </div>
 
               <a
-                href={`https://wa.me/12425584495?text=BSC Andros Receipt ${lastSale.ref} — Total: $${lastSale.total.toFixed(2)} — Thank you ${lastSale.customer}!`}
+                href={`https://wa.me/12425584495?text=BSC Andros Receipt ${lastSale.ref} - Total: $${lastSale.total.toFixed(2)} - Thank you ${lastSale.customer}!`}
                 target="_blank"
                 rel="noreferrer"
                 style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: '12px', padding: '12px', textAlign: 'center', fontWeight: 800, fontSize: '14px', marginBottom: '10px' }}
               >
-                💬 Send Receipt via WhatsApp
+                Send Receipt via WhatsApp
               </a>
 
               <button onClick={newSale} style={{ width: '100%', backgroundColor: '#7c3aed', color: '#fff', border: 'none', borderRadius: '12px', padding: '13px', fontWeight: 900, fontSize: '14px', cursor: 'pointer' }}>
