@@ -1,13 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from '@/lib/supabase';
 
 type Screen = 'home' | 'apply' | 'supplier-login' | 'portal' | 'admin' | 'spiny-tails';
 
@@ -32,12 +27,20 @@ type Product = {
   emoji: string;
 };
 
-const MOCK_PRODUCTS: Product[] = [
-  { id: 'SP001', name: 'Fresh Grouper', category: 'Seafood', case_cost: 120, weight_lbs: 20, price_per_lb: 14.99, status: 'live', supplier_name: 'Nassau Fish Co.', emoji: '🐟' },
-  { id: 'SP002', name: 'Spiny Lobster Tails', category: 'Seafood', case_cost: 280, weight_lbs: 10, price_per_lb: 28.00, status: 'live', supplier_name: 'Spiny Tails BSC', emoji: '🦞' },
-  { id: 'SP003', name: 'Conch Meat', category: 'Seafood', case_cost: 100, weight_lbs: 8, price_per_lb: 12.50, status: 'pending', supplier_name: 'Andros Seafood', emoji: '🐚' },
-  { id: 'SP004', name: 'Ribeye Steak', category: 'Meats', case_cost: 200, weight_lbs: 10, price_per_lb: 22.99, status: 'live', supplier_name: 'Prime Meats', emoji: '🥩' },
-];
+function mapProduct(row: Record<string, unknown>): Product {
+  const status = String(row.status ?? 'pending') as Product['status'];
+  return {
+    id: String(row.id ?? ''),
+    name: String(row.name ?? ''),
+    category: String(row.category ?? ''),
+    case_cost: Number(row.case_cost ?? 0),
+    weight_lbs: Number(row.weight_lbs ?? 0),
+    price_per_lb: Number(row.price_per_lb ?? 0),
+    status: status === 'approved' || status === 'live' ? status : 'pending',
+    supplier_name: String(row.supplier_name ?? ''),
+    emoji: String(row.emoji ?? '📦'),
+  };
+}
 
 const STATUS_COLORS = {
   pending:  { bg: '#fef9e7', text: '#d97706' },
@@ -47,9 +50,32 @@ const STATUS_COLORS = {
 
 export default function SupplierPage() {
   const [screen, setScreen]   = useState<Screen>('home');
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  async function loadProducts() {
+    setFetching(true);
+    setFetchError(null);
+    const { data, error } = await supabase
+      .from('supplier_products')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) {
+      setFetchError(error.message);
+      setProducts([]);
+    } else {
+      setProducts((data || []).map((row) => mapProduct(row as Record<string, unknown>)));
+    }
+    setFetching(false);
+  }
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
 
   // Application form
   const [app, setApp] = useState<Application>({ business_name: '', contact_name: '', phone: '', email: '', product_types: '', message: '' });
@@ -82,24 +108,38 @@ export default function SupplierPage() {
   async function submitProduct(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const id = 'SP' + Date.now().toString().slice(-4);
-    const product: Product = {
-      id, name: pName, category: pCategory,
-      case_cost: caseCost, weight_lbs: weight,
+    const payload = {
+      name: pName,
+      category: pCategory,
+      case_cost: caseCost,
+      weight_lbs: weight,
       price_per_lb: parseFloat(nassauPrice.toFixed(2)),
-      status: 'pending', supplier_name: 'My Business', emoji: pEmoji,
+      status: 'pending' as const,
+      supplier_name: 'My Business',
+      emoji: pEmoji,
+      created_at: new Date().toISOString(),
     };
-    try {
-      await supabase.from('supplier_products').insert([{ ...product }]);
-    } catch { /* continue */ }
-    setProducts((prev) => [product, ...prev]);
+    const { error } = await supabase.from('supplier_products').insert([payload]);
+    if (error) {
+      alert(`Could not save product: ${error.message}`);
+      setLoading(false);
+      return;
+    }
     setPName(''); setPCaseCost(''); setPWeight('');
     setScreen('portal');
     setLoading(false);
+    await loadProducts();
   }
 
   async function approveProduct(id: string) {
-    await supabase.from('supplier_products').update({ status: 'live' }).eq('id', id);
+    const { error } = await supabase
+      .from('supplier_products')
+      .update({ status: 'live' })
+      .eq('id', id);
+    if (error) {
+      alert(`Could not approve: ${error.message}`);
+      return;
+    }
     setProducts((prev) => prev.map((p) => p.id === id ? { ...p, status: 'live' } : p));
   }
 
@@ -359,6 +399,26 @@ export default function SupplierPage() {
 
         {/* Product list */}
         <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '15px', marginBottom: '12px' }}>All Products</h3>
+        {fetching && (
+          <div style={{ color: '#999', fontSize: '13px', padding: '12px 0' }}>Loading products...</div>
+        )}
+        {!fetching && fetchError && (
+          <div style={{
+            backgroundColor: '#fde8e8', border: '1px solid #f5b5b5', borderRadius: '12px',
+            padding: '14px', color: '#dc2626', fontSize: '13px', fontWeight: 600,
+          }}>
+            ⚠️ Could not load products: {fetchError}
+          </div>
+        )}
+        {!fetching && !fetchError && products.length === 0 && (
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '14px', padding: '24px',
+            textAlign: 'center', color: '#999', fontSize: '13px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+          }}>
+            No products uploaded yet. Add your first one above.
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {products.map((p) => {
             const sc = STATUS_COLORS[p.status];
@@ -396,6 +456,28 @@ export default function SupplierPage() {
         </div>
       </header>
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {fetching && (
+          <div style={{ color: '#999', fontSize: '13px', textAlign: 'center', padding: '40px 0' }}>
+            Loading supplier products...
+          </div>
+        )}
+        {!fetching && fetchError && (
+          <div style={{
+            backgroundColor: '#fde8e8', border: '1px solid #f5b5b5', borderRadius: '12px',
+            padding: '16px', color: '#dc2626', fontSize: '13px', fontWeight: 600,
+          }}>
+            ⚠️ Could not load products: {fetchError}
+          </div>
+        )}
+        {!fetching && !fetchError && products.length === 0 && (
+          <div style={{
+            backgroundColor: '#fff', borderRadius: '14px', padding: '40px 20px',
+            textAlign: 'center', color: '#999', fontSize: '13px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+          }}>
+            No supplier products in the system yet.
+          </div>
+        )}
         {products.map((p) => {
           const sc = STATUS_COLORS[p.status];
           return (

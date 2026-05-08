@@ -2,19 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 
 // Skip prerendering. Orders page is per-user, runtime-only.
 export const dynamic = 'force-dynamic';
-
-// Lazy-init Supabase. Calling createBrowserClient at module scope
-// crashes the build at static prerender (env vars unavailable).
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Supabase env not configured');
-  return createBrowserClient(url, key);
-}
 
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Delivered'];
 const PICKUP_FLOW = ['Pending', 'Confirmed', 'Ready for Pickup', 'Delivered'];
@@ -27,49 +18,131 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   'Ready for Pickup':  { bg: '#e8f8fd', text: '#0891b2' },
   'Delivered':         { bg: '#e8f5e9', text: '#2e7d32' },
   'Cancelled':         { bg: '#fde8e8', text: '#dc2626' },
+  'paid':              { bg: '#e8f5e9', text: '#2e7d32' },
+  'pending':           { bg: '#fef9e7', text: '#d97706' },
+  'processing':        { bg: '#e8f4fd', text: '#1a6fb5' },
 };
+
+type OrderItem = { name: string; qty: number; price: number; emoji: string };
 
 type Order = {
   id: string;
   customer_name: string;
   customer_phone: string;
-  items: { name: string; qty: number; price: number; emoji: string }[];
+  items: OrderItem[];
   total: number;
   status: string;
   type: 'delivery' | 'pickup';
   address?: string;
   created_at: string;
-  delivery_photo?: string;
+  order_type?: string;
 };
 
-const MOCK_ORDERS: Order[] = [
-  { id: 'ORD-001', customer_name: 'Maria Johnson', customer_phone: '2421234567', items: [{ name: 'Fresh Grouper', qty: 2, price: 14.99, emoji: '' }, { name: 'Conch Meat', qty: 1, price: 12.50, emoji: '' }], total: 42.48, status: 'Pending', type: 'delivery', address: '12 Bay St, Nassau', created_at: new Date().toISOString() },
-  { id: 'ORD-002', customer_name: 'David Smith', customer_phone: '2429876543', items: [{ name: 'Ribeye Steak', qty: 3, price: 22.99, emoji: '' }], total: 68.97, status: 'Confirmed', type: 'pickup', created_at: new Date(Date.now() - 3600000).toISOString() },
-  { id: 'ORD-003', customer_name: 'Kezia Williams', customer_phone: '2425554321', items: [{ name: 'Spiny Lobster Tails', qty: 2, price: 28.00, emoji: '' }, { name: 'Raw Shrimp', qty: 1, price: 16.00, emoji: '' }], total: 72.00, status: 'Packing', type: 'delivery', address: '45 Village Rd, Nassau', created_at: new Date(Date.now() - 7200000).toISOString() },
-  { id: 'ORD-004', customer_name: 'Tom Brown', customer_phone: '2421112233', items: [{ name: 'Whole Chicken', qty: 2, price: 8.99, emoji: '' }], total: 17.98, status: 'Delivered', type: 'pickup', created_at: new Date(Date.now() - 86400000).toISOString() },
-];
+// Map an `orders` row from Supabase into the shape the UI expects.
+// Different writers (POS, checkout, wholesale, /api/orders/create) use
+// slightly different column sets, so we coalesce the common ones.
+function mapOrder(row: Record<string, unknown>): Order {
+  const id = String(row.id ?? '');
+  const orderType = (row.order_type as string) || '';
+
+  // Items: prefer wholesale_items, fall back to items column.
+  const rawItems = row.wholesale_items ?? row.items ?? [];
+  const itemsArr = (typeof rawItems === 'string' ? safeParse(rawItems) : rawItems) as
+    | unknown[]
+    | null;
+  const items: OrderItem[] = Array.isArray(itemsArr)
+    ? itemsArr.map((it) => {
+        const i = it as Record<string, unknown>;
+        const qty = Number(i.qty ?? i.quantity ?? 0);
+        const price = Number(i.unit_price ?? i.price ?? 0);
+        return {
+          name: String(i.name ?? i.sku ?? 'Item'),
+          qty,
+          price,
+          emoji: String(i.emoji ?? ''),
+        };
+      })
+    : [];
+
+  // Total: orders table sometimes has `total`, sometimes only `wholesale_cost_total`.
+  const total = Number(
+    row.total ??
+      row.wholesale_cost_total ??
+      items.reduce((s, it) => s + it.qty * it.price, 0)
+  );
+
+  // Customer: explicit columns, then wholesaler key, then walk-in.
+  const customerName =
+    (row.customer_name as string) ||
+    (row.wholesaler as string) ||
+    (orderType.startsWith('pos_') ? 'Walk-in' : '—');
+
+  // Type: prefer explicit delivery_type, infer from order_type / address otherwise.
+  const explicitType = String(row.delivery_type ?? '').toLowerCase();
+  const type: 'delivery' | 'pickup' =
+    explicitType === 'pickup'
+      ? 'pickup'
+      : explicitType === 'delivery'
+        ? 'delivery'
+        : orderType.startsWith('pos_')
+          ? 'pickup'
+          : row.customer_address
+            ? 'delivery'
+            : 'pickup';
+
+  return {
+    id,
+    customer_name: customerName,
+    customer_phone: String(row.customer_phone ?? ''),
+    items,
+    total,
+    status: String(row.status ?? 'Pending'),
+    type,
+    address: (row.customer_address as string) || undefined,
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    order_type: orderType || undefined,
+  };
+}
+
+function safeParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
 
 export default function OrdersPage() {
-  const [orders, setOrders]           = useState<Order[]>(MOCK_ORDERS);
+  const [orders, setOrders]           = useState<Order[]>([]);
   const [selected, setSelected]       = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterType, setFilterType]   = useState('All');
   const [loading, setLoading]         = useState(false);
+  const [fetching, setFetching]       = useState(true);
+  const [fetchError, setFetchError]   = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchOrders() {
-      try {
-        const supabase = getSupabase();
-        const { data } = await supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (data && data.length > 0) setOrders(data);
-      } catch {
-        // Keep mock data on failure (preserves dev UX)
+    let cancelled = false;
+    (async () => {
+      setFetching(true);
+      setFetchError(null);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (cancelled) return;
+      if (error) {
+        setFetchError(error.message);
+        setOrders([]);
+      } else {
+        setOrders((data || []).map((row) => mapOrder(row as Record<string, unknown>)));
       }
-    }
-    fetchOrders();
+      setFetching(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = orders.filter((o) => {
@@ -84,20 +157,29 @@ export default function OrdersPage() {
     if (idx === -1 || idx === flow.length - 1) return;
     const next = flow[idx + 1];
     setLoading(true);
-    try {
-      const supabase = getSupabase();
-      await supabase.from('orders').update({ status: next }).eq('id', order.id);
-    } catch {}
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: next })
+      .eq('id', order.id);
+    if (error) {
+      alert(`Could not advance status: ${error.message}`);
+      setLoading(false);
+      return;
+    }
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: next } : o));
     if (selected?.id === order.id) setSelected({ ...order, status: next });
     setLoading(false);
   }
 
   async function cancelOrder(order: Order) {
-    try {
-      const supabase = getSupabase();
-      await supabase.from('orders').update({ status: 'Cancelled' }).eq('id', order.id);
-    } catch {}
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'Cancelled' })
+      .eq('id', order.id);
+    if (error) {
+      alert(`Could not cancel order: ${error.message}`);
+      return;
+    }
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: 'Cancelled' } : o));
     if (selected?.id === order.id) setSelected({ ...order, status: 'Cancelled' });
   }
@@ -159,9 +241,24 @@ export default function OrdersPage() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-          {filtered.length === 0 && (
+          {fetching && (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-              <div style={{ color: '#999', fontSize: '14px' }}>No orders match this filter</div>
+              <div style={{ color: '#999', fontSize: '14px' }}>Loading orders...</div>
+            </div>
+          )}
+          {!fetching && fetchError && (
+            <div style={{
+              backgroundColor: '#fde8e8', border: '1px solid #f5b5b5', borderRadius: '12px',
+              padding: '16px', color: '#dc2626', fontSize: '13px', fontWeight: 600,
+            }}>
+              ⚠️ Could not load orders: {fetchError}
+            </div>
+          )}
+          {!fetching && !fetchError && filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ color: '#999', fontSize: '14px' }}>
+                {orders.length === 0 ? 'No orders yet.' : 'No orders match this filter.'}
+              </div>
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
