@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import AppShell from './AppShell';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'BSC Marketplace — Fresh. Local. Bahamian.',

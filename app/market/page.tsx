@@ -1,172 +1,189 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+// /market — public storefront
+//
+// Design: Amazon-style dense product grid, mobile-first, navy + gold brand.
+// Built with Tailwind. All product/cart/order logic preserved from the prior
+// implementation; only the presentation layer was rebuilt.
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
+const STORAGE_BASE =
+  'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
-// ── Wholesaler brand config ───────────────────────────────────────────────────
-const BRANDS: Record<string, { name: string; color: string; light: string; prefix: string; emoji: string }> = {
-  'asa-h-pritchard':           { name: 'Asa H Pritchard',           color: '#1B4F72', light: '#d6eaf8', prefix: 'AHP', emoji: '🏪' },
-  'bahamas-international-food': { name: 'Bahamas Intl Food',         color: '#1E5C2E', light: '#d5f5e3', prefix: 'BIF', emoji: '🍱' },
-  'dalbenas':                   { name: "D'Albenas",                  color: '#784212', light: '#fdebd0', prefix: 'DAL', emoji: '🏭' },
-  'bahamas-wholesale-agencies': { name: 'Bahamas Wholesale',          color: '#1A5276', light: '#d6eaf8', prefix: 'BWA', emoji: '📦' },
-  'tpg':                        { name: 'TPG',                        color: '#2C3E50', light: '#d5d8dc', prefix: 'TPG', emoji: '🛒' },
-  'thompson-trading':           { name: 'Thompson Trading',           color: '#922B21', light: '#fadbd8', prefix: 'TTR', emoji: '🤝' },
-  'island-wholesale':           { name: 'Island Wholesale',           color: '#196F3D', light: '#d5f5e3', prefix: 'ISW', emoji: '🌴' },
+const BRANDS: Record<
+  string,
+  { name: string; color: string; light: string; emoji: string }
+> = {
+  'asa-h-pritchard':            { name: 'Asa H Pritchard',   color: '#1B4F72', light: '#d6eaf8', emoji: '🏪' },
+  'bahamas-international-food': { name: 'Bahamas Intl Food', color: '#1E5C2E', light: '#d5f5e3', emoji: '🍱' },
+  'dalbenas':                   { name: "D'Albenas",         color: '#784212', light: '#fdebd0', emoji: '🏭' },
+  'bahamas-wholesale-agencies': { name: 'Bahamas Wholesale', color: '#1A5276', light: '#d6eaf8', emoji: '📦' },
+  'tpg':                        { name: 'TPG',               color: '#2C3E50', light: '#d5d8dc', emoji: '🛒' },
+  'thompson-trading':           { name: 'Thompson Trading',  color: '#922B21', light: '#fadbd8', emoji: '🤝' },
+  'island-wholesale':           { name: 'Island Wholesale',  color: '#196F3D', light: '#d5f5e3', emoji: '🌴' },
 };
-
 const BRAND_KEYS = Object.keys(BRANDS);
 
 const CATEGORIES = ['All', 'Seafood', 'Meat', 'Produce', 'Dry Goods', 'Beverages', 'Dairy', 'Frozen', 'Other'];
 
 type SortOption = 'featured' | 'price-asc' | 'price-desc' | 'name';
 
-// Unified product shape
 interface MarketProduct {
-  id:          string;
-  source:      'market' | 'wholesale';
-  sku?:        string;
+  id: string;
+  source: 'market' | 'wholesale';
+  sku?: string;
   wholesaler?: string;
-  name:        string;
+  name: string;
   description: string;
-  category:    string;
-  price:       number;
-  unit:        string;
-  min_qty:     number;
-  image_url:   string;
-  in_stock:    boolean;
-  featured:    boolean;
+  category: string;
+  price: number;
+  unit: string;
+  min_qty: number;
+  image_url: string;
+  in_stock: boolean;
+  featured: boolean;
 }
 
-interface CartItem extends MarketProduct { qty: number; }
-
-function getSupabase(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    return null;
-  }
-  return createClient(url, key);
+interface CartItem extends MarketProduct {
+  qty: number;
 }
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  Seafood: '🦐',
+  Meat: '🥩',
+  Produce: '🥦',
+  Beverages: '🥤',
+  Dairy: '🥛',
+  Frozen: '🧊',
+  'Dry Goods': '🌾',
+  Other: '📦',
+};
 
 export default function MarketPage() {
   const router = useRouter();
 
-  const [products, setProducts]       = useState<MarketProduct[]>([]);
-  const [loading, setLoading]         = useState(true);
+  const [products, setProducts] = useState<MarketProduct[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeCategory, setCategory] = useState('All');
-  const [activeBrand, setBrand]       = useState('all');
-  const [search, setSearch]           = useState('');
-  const [sort, setSort]               = useState<SortOption>('featured');
-  const [cart, setCart]               = useState<CartItem[]>([]);
-  const [showCart, setShowCart]       = useState(false);
-  const [placing, setPlacing]         = useState(false);
-  const [orderDone, setOrderDone]     = useState(false);
+  const [activeBrand, setBrand] = useState('all');
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortOption>('featured');
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [showCart, setShowCart] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [orderDone, setOrderDone] = useState(false);
 
-  // ── Fetch from both tables ────────────────────────────────────────────────
   useEffect(() => {
-    async function load() {
-      const supabase = getSupabase();
-      if (!supabase) {
-        setLoading(false);
-        return;
-      }
-
+    (async () => {
       const [{ data: mp }, { data: wp }] = await Promise.all([
         supabase.from('products').select('*').eq('in_stock', true),
         supabase.from('local_wholesale_products').select('*').eq('in_stock', true),
       ]);
-
-      const market: MarketProduct[] = (mp || []).map(p => ({
-        id:          p.id,
-        source:      'market',
-        name:        p.name,
+      const market: MarketProduct[] = (mp || []).map((p) => ({
+        id: p.id,
+        source: 'market',
+        name: p.name,
         description: p.description || '',
-        category:    p.category || 'Other',
-        price:       p.price || 0,
-        unit:        p.unit || 'each',
-        min_qty:     1,
-        image_url:   p.image_url || '',
-        in_stock:    p.in_stock,
-        featured:    p.featured || false,
+        category: p.category || 'Other',
+        price: p.price || 0,
+        unit: p.unit || 'each',
+        min_qty: 1,
+        image_url: p.image_url || '',
+        in_stock: p.in_stock,
+        featured: p.featured || false,
       }));
-
-      const wholesale: MarketProduct[] = (wp || []).map(p => ({
-        id:          p.id,
-        source:      'wholesale',
-        sku:         p.sku,
-        wholesaler:  p.wholesaler,
-        name:        p.name,
+      const wholesale: MarketProduct[] = (wp || []).map((p) => ({
+        id: p.id,
+        source: 'wholesale',
+        sku: p.sku,
+        wholesaler: p.wholesaler,
+        name: p.name,
         description: p.description || '',
-        category:    p.category || 'Other',
-        price:       p.final_price_bsd || 0,
-        unit:        p.unit || 'each',
-        min_qty:     p.min_order_qty || 1,
-        image_url:   p.image_url || '',
-        in_stock:    p.in_stock,
-        featured:    p.featured || false,
+        category: p.category || 'Other',
+        price: p.final_price_bsd || 0,
+        unit: p.unit || 'each',
+        min_qty: p.min_order_qty || 1,
+        image_url: p.image_url || '',
+        in_stock: p.in_stock,
+        featured: p.featured || false,
       }));
-
       setProducts([...market, ...wholesale]);
       setLoading(false);
-    }
-    load();
+    })();
   }, []);
 
-  // ── Filter + sort ─────────────────────────────────────────────────────────
-  const filtered = products
-    .filter(p => {
-      const matchCat    = activeCategory === 'All' || p.category === activeCategory;
-      const matchBrand  = activeBrand === 'all' || (activeBrand === 'bsc' ? p.source === 'market' : p.wholesaler === activeBrand);
-      const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.description?.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchBrand && matchSearch;
-    })
-    .sort((a, b) => {
-      if (sort === 'price-asc')  return a.price - b.price;
-      if (sort === 'price-desc') return b.price - a.price;
-      if (sort === 'name')       return a.name.localeCompare(b.name);
-      // featured: featured first, then by name
-      if (a.featured && !b.featured) return -1;
-      if (!a.featured && b.featured) return 1;
-      return a.name.localeCompare(b.name);
-    });
+  const filtered = useMemo(() => {
+    return products
+      .filter((p) => {
+        const matchCat = activeCategory === 'All' || p.category === activeCategory;
+        const matchBrand =
+          activeBrand === 'all' ||
+          (activeBrand === 'bsc' ? p.source === 'market' : p.wholesaler === activeBrand);
+        const q = search.trim().toLowerCase();
+        const matchSearch =
+          !q ||
+          p.name.toLowerCase().includes(q) ||
+          p.sku?.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q);
+        return matchCat && matchBrand && matchSearch;
+      })
+      .sort((a, b) => {
+        if (sort === 'price-asc') return a.price - b.price;
+        if (sort === 'price-desc') return b.price - a.price;
+        if (sort === 'name') return a.name.localeCompare(b.name);
+        if (a.featured && !b.featured) return -1;
+        if (!a.featured && b.featured) return 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [products, activeCategory, activeBrand, search, sort]);
 
-  // ── Cart ──────────────────────────────────────────────────────────────────
   const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   function addToCart(p: MarketProduct) {
-    setCart(prev => {
-      const exists = prev.find(i => i.id === p.id && i.source === p.source);
-      if (exists) return prev.map(i => (i.id === p.id && i.source === p.source) ? { ...i, qty: i.qty + p.min_qty } : i);
+    setCart((prev) => {
+      const ex = prev.find((i) => i.id === p.id && i.source === p.source);
+      if (ex)
+        return prev.map((i) =>
+          i.id === p.id && i.source === p.source ? { ...i, qty: i.qty + p.min_qty } : i
+        );
       return [...prev, { ...p, qty: p.min_qty }];
     });
   }
 
   function updateQty(id: string, source: string, qty: number) {
-    if (qty < 1) { setCart(prev => prev.filter(i => !(i.id === id && i.source === source))); return; }
-    setCart(prev => prev.map(i => (i.id === id && i.source === source) ? { ...i, qty } : i));
+    if (qty < 1) {
+      setCart((prev) => prev.filter((i) => !(i.id === id && i.source === source)));
+      return;
+    }
+    setCart((prev) =>
+      prev.map((i) => (i.id === id && i.source === source ? { ...i, qty } : i))
+    );
   }
 
   async function placeOrder() {
     setPlacing(true);
-    const supabase = getSupabase();
-    if (!supabase) {
-      setPlacing(false);
-      return;
-    }
     const { data: { session } } = await supabase.auth.getSession();
     await supabase.from('orders').insert({
       order_type: 'online_market',
       payment_method: 'cod',
       payment_status: 'pending',
-      wholesale_items: cart.map(i => ({
-        id: i.id, source: i.source, sku: i.sku || null, wholesaler: i.wholesaler || null,
-        name: i.name, qty: i.qty, unit: i.unit, unit_price: i.price,
+      wholesale_items: cart.map((i) => ({
+        id: i.id,
+        source: i.source,
+        sku: i.sku || null,
+        wholesaler: i.wholesaler || null,
+        name: i.name,
+        qty: i.qty,
+        unit: i.unit,
+        unit_price: i.price,
         line_total: +(i.price * i.qty).toFixed(2),
       })),
       wholesale_cost_total: +cartTotal.toFixed(2),
@@ -178,319 +195,702 @@ export default function MarketPage() {
     setShowCart(false);
   }
 
-  // ── Brand pills ───────────────────────────────────────────────────────────
-  const brandCounts: Record<string, number> = { all: products.length, bsc: products.filter(p => p.source === 'market').length };
-  BRAND_KEYS.forEach(k => { brandCounts[k] = products.filter(p => p.wholesaler === k).length; });
+  const brandCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: products.length,
+      bsc: products.filter((p) => p.source === 'market').length,
+    };
+    BRAND_KEYS.forEach((k) => {
+      counts[k] = products.filter((p) => p.wholesaler === k).length;
+    });
+    return counts;
+  }, [products]);
 
   return (
-    <>
-      <style>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; }
-        .btn { border: none; cursor: pointer; border-radius: 8px; font-weight: 700; transition: opacity 0.15s, transform 0.15s; font-family: inherit; }
-        .btn:hover { opacity: 0.88; transform: translateY(-1px); }
-        .pill { border: none; cursor: pointer; transition: all 0.18s; font-family: inherit; border-radius: 20px; }
-        .product-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
-        .product-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.13) !important; }
-        .sku-badge { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; display: flex; justify-content: flex-end; }
-        .cart-panel { background: #fff; width: 420px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
-        @media (max-width: 480px) { .cart-panel { width: 100%; } }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #1a2e4a; border-radius: 3px; }
-      `}</style>
-
-      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-
-        {/* ── Sticky nav ── */}
-        <nav style={{ backgroundColor: '#1a2e4a', padding: '0 24px', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-          <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <img src={`${BASE}/logo.jpg`} alt="BSC" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', border: '2px solid #f5a623', cursor: 'pointer' }} onClick={() => router.push('/')} />
-              <div>
-                <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 15, letterSpacing: 1 }}>BSC Marketplace</div>
-                <div style={{ color: '#94a3b8', fontSize: 10 }}>Nassau · Bahamas 🇧🇸</div>
-              </div>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
+      {/* ─── Header ─── */}
+      <header className="sticky top-0 z-40 bg-navy shadow-md">
+        <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-3 px-3 sm:h-16 sm:gap-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <img
+              src={`${STORAGE_BASE}/logo.jpg`}
+              alt="BSC"
+              className="h-9 w-9 rounded-full border-2 border-gold object-cover sm:h-10 sm:w-10"
+            />
+            <div className="hidden text-white sm:block">
+              <div className="text-sm font-extrabold tracking-wide text-gold">BSC Marketplace</div>
+              <div className="text-[10px] text-slate-300">Nassau · Bahamas 🇧🇸</div>
             </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <button onClick={() => router.push('/')} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>← Home</button>
-              <button
-                className="btn"
-                onClick={() => setShowCart(true)}
-                style={{ backgroundColor: cartCount > 0 ? '#f5a623' : 'rgba(255,255,255,0.1)', color: cartCount > 0 ? '#1a2e4a' : '#fff', padding: '8px 18px', fontSize: 13 }}
-              >
-                🛒 {cartCount > 0 ? `${cartCount} · BSD $${cartTotal.toFixed(2)}` : 'Cart'}
-              </button>
-            </div>
-          </div>
-        </nav>
+          </Link>
 
-        {/* ── Page header ── */}
-        <div style={{ backgroundColor: '#1a2e4a', padding: '36px 24px 28px' }}>
-          <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-            <p style={{ color: '#f5a623', fontSize: 11, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 6 }}>Shop Local</p>
-            <h1 style={{ color: '#fff', fontSize: 30, fontWeight: 900, marginBottom: 6 }}>BSC Online Market</h1>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, marginBottom: 20 }}>
-              Shop BSC products and items from Nassau's top wholesale brands — all delivered to your door.
-            </p>
-
-            {/* Search bar */}
-            <div style={{ display: 'flex', gap: 10, maxWidth: 600 }}>
+          <div className="flex flex-1 items-center">
+            <div className="relative w-full">
               <input
+                type="search"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search products, brands, or SKU numbers…"
-                style={{ flex: 1, padding: '11px 16px', border: 'none', borderRadius: 10, fontSize: 14, outline: 'none', backgroundColor: 'rgba(255,255,255,0.95)' }}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search seafood, meats, brands…"
+                className="h-10 w-full rounded-lg border-0 bg-white px-4 pr-10 text-sm text-slate-900 shadow-sm outline-none ring-1 ring-transparent placeholder:text-slate-400 focus:ring-2 focus:ring-gold sm:h-11 sm:text-base"
               />
-              {search && (
-                <button className="btn" onClick={() => setSearch('')} style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff', padding: '10px 16px', fontSize: 13 }}>Clear</button>
-              )}
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                🔍
+              </span>
             </div>
           </div>
+
+          <button
+            onClick={() => setShowCart(true)}
+            className="relative flex h-10 shrink-0 items-center gap-2 rounded-lg bg-gold px-3 text-sm font-bold text-navy transition hover:bg-gold-300 sm:h-11 sm:px-4"
+            aria-label={`Open cart — ${cartCount} items`}
+          >
+            <span className="text-lg">🛒</span>
+            <span className="hidden sm:inline">
+              {cartCount > 0 ? `BSD $${cartTotal.toFixed(2)}` : 'Cart'}
+            </span>
+            {cartCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                {cartCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* ── Brand filter strip ── */}
-        <div style={{ backgroundColor: '#0f2137', padding: '14px 24px', overflowX: 'auto' }}>
-          <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', gap: 8, flexWrap: 'nowrap', minWidth: 'max-content' }}>
-            {/* All */}
-            <button className="pill" onClick={() => setBrand('all')} style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, backgroundColor: activeBrand === 'all' ? '#f5a623' : 'rgba(255,255,255,0.08)', color: activeBrand === 'all' ? '#1a2e4a' : 'rgba(255,255,255,0.7)' }}>
-              🛒 All Products ({brandCounts.all})
-            </button>
-            {/* BSC Direct */}
-            <button className="pill" onClick={() => setBrand('bsc')} style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, backgroundColor: activeBrand === 'bsc' ? '#1a2e4a' : 'rgba(255,255,255,0.08)', color: activeBrand === 'bsc' ? '#f5a623' : 'rgba(255,255,255,0.7)', border: activeBrand === 'bsc' ? '2px solid #f5a623' : '2px solid transparent' }}>
-              🇧🇸 BSC Direct ({brandCounts.bsc})
-            </button>
-            {/* Wholesaler brands */}
-            {BRAND_KEYS.filter(k => brandCounts[k] > 0).map(k => {
+        {/* Brand strip — horizontal scroll on mobile, wraps on desktop */}
+        <div className="border-t border-white/5 bg-navy-700">
+          <div className="mx-auto flex max-w-screen-2xl gap-2 overflow-x-auto px-3 py-2 sm:px-6 [&::-webkit-scrollbar]:hidden">
+            <BrandPill
+              active={activeBrand === 'all'}
+              onClick={() => setBrand('all')}
+              label={`All (${brandCounts.all})`}
+              activeBg="#f4c842"
+              activeFg="#1a2e5a"
+            />
+            <BrandPill
+              active={activeBrand === 'bsc'}
+              onClick={() => setBrand('bsc')}
+              label={`🇧🇸 BSC Direct (${brandCounts.bsc})`}
+              activeBg="#1a2e5a"
+              activeFg="#f4c842"
+              withBorder
+            />
+            {BRAND_KEYS.filter((k) => brandCounts[k] > 0).map((k) => {
               const b = BRANDS[k];
-              const active = activeBrand === k;
               return (
-                <button key={k} className="pill" onClick={() => setBrand(active ? 'all' : k)} style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, backgroundColor: active ? b.color : 'rgba(255,255,255,0.08)', color: active ? '#fff' : 'rgba(255,255,255,0.7)', border: active ? 'none' : '2px solid transparent', boxShadow: active ? `0 2px 10px ${b.color}66` : 'none' }}>
-                  {b.emoji} {b.name} ({brandCounts[k]})
-                </button>
+                <BrandPill
+                  key={k}
+                  active={activeBrand === k}
+                  onClick={() => setBrand(activeBrand === k ? 'all' : k)}
+                  label={`${b.emoji} ${b.name} (${brandCounts[k]})`}
+                  activeBg={b.color}
+                  activeFg="#fff"
+                />
               );
             })}
           </div>
         </div>
+      </header>
 
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '24px' }}>
-
-          {/* ── Category + sort row ── */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {CATEGORIES.map(cat => {
-                const count = cat === 'All' ? filtered.length : filtered.filter(p => p.category === cat).length;
-                if (count === 0 && cat !== 'All') return null;
-                return (
-                  <button key={cat} className="pill" onClick={() => setCategory(cat)} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, backgroundColor: activeCategory === cat ? '#1a2e4a' : '#fff', color: activeCategory === cat ? '#f5a623' : '#475569', border: activeCategory === cat ? 'none' : '1.5px solid #e2e8f0' }}>
-                    {cat} {count > 0 && `(${count})`}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Sort:</span>
-              <select value={sort} onChange={e => setSort(e.target.value as SortOption)} style={{ padding: '7px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}>
-                <option value="featured">Featured First</option>
-                <option value="price-asc">Price: Low → High</option>
-                <option value="price-desc">Price: High → Low</option>
-                <option value="name">Name A–Z</option>
-              </select>
-            </div>
-          </div>
-
-          {/* ── Results count ── */}
-          <div style={{ marginBottom: 20, fontSize: 13, color: '#64748b', fontWeight: 600 }}>
-            {loading ? 'Loading…' : `${filtered.length} product${filtered.length !== 1 ? 's' : ''} found`}
-            {activeBrand !== 'all' && !loading && (
-              <span style={{ marginLeft: 8, color: activeBrand === 'bsc' ? '#1a2e4a' : BRANDS[activeBrand]?.color }}>
-                · {activeBrand === 'bsc' ? '🇧🇸 BSC Direct' : `${BRANDS[activeBrand]?.emoji} ${BRANDS[activeBrand]?.name}`}
-              </span>
-            )}
-          </div>
-
-          {/* ── Order success ── */}
-          {orderDone && (
-            <div style={{ backgroundColor: '#d1fae5', border: '1.5px solid #34d399', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 24 }}>✅</span>
-              <div>
-                <div style={{ fontWeight: 800, color: '#065f46', fontSize: 15 }}>Order placed!</div>
-                <div style={{ color: '#047857', fontSize: 13 }}>BSC will confirm your order and arrange delivery.</div>
-              </div>
-              <button onClick={() => setOrderDone(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#065f46' }}>×</button>
-            </div>
-          )}
-
-          {/* ── Product grid ── */}
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
-              Loading market products…
-            </div>
-          ) : filtered.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8', backgroundColor: '#fff', borderRadius: 16 }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>No products found</div>
-              <div style={{ fontSize: 13 }}>Try a different search or brand filter</div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 16 }}>
-              {filtered.map(p => {
-                const brand = p.wholesaler ? BRANDS[p.wholesaler] : null;
-                const inCart = cart.find(i => i.id === p.id && i.source === p.source);
-
-                return (
-                  <div key={`${p.source}-${p.id}`} className="product-card" style={{ backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: p.featured ? '2px solid #f5a623' : '1.5px solid #f1f5f9' }}>
-
-                    {/* Image */}
-                    <div style={{ height: 155, position: 'relative', overflow: 'hidden', backgroundColor: brand ? brand.light : '#f0f9ff' }}>
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44 }}>
-                          {p.category === 'Seafood' ? '🦐' : p.category === 'Meat' ? '🥩' : p.category === 'Produce' ? '🥦' : p.category === 'Beverages' ? '🥤' : '📦'}
-                        </div>
-                      )}
-
-                      {/* Brand badge */}
-                      {brand && (
-                        <div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: brand.color, color: '#fff', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {brand.emoji} {brand.name}
-                        </div>
-                      )}
-                      {!brand && (
-                        <div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6 }}>
-                          🇧🇸 BSC Direct
-                        </div>
-                      )}
-
-                      {p.featured && (
-                        <div style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#f5a623', color: '#1a2e4a', fontSize: 9, fontWeight: 800, padding: '3px 7px', borderRadius: 5 }}>
-                          ⭐ FEATURED
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ padding: '12px 14px' }}>
-                      {/* SKU + category */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                        {p.sku && brand ? (
-                          <span className="sku-badge" style={{ backgroundColor: brand.light, color: brand.color }}>{p.sku}</span>
-                        ) : null}
-                        <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>{p.category}</span>
-                      </div>
-
-                      <div style={{ fontWeight: 800, fontSize: 14, color: '#1a2e4a', marginBottom: 3, lineHeight: 1.3 }}>{p.name}</div>
-                      {p.description && <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.description}</div>}
-
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 10 }}>
-                        <span style={{ fontSize: 19, fontWeight: 900, color: '#1a2e4a' }}>BSD ${p.price.toFixed(2)}</span>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>/{p.unit}</span>
-                      </div>
-
-                      {/* View brand / Add to cart */}
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {brand && (
-                          <button className="btn" onClick={() => router.push(`/local-wholesale/${p.wholesaler}`)} style={{ backgroundColor: brand.light, color: brand.color, padding: '8px 10px', fontSize: 11, flex: '0 0 auto' }}>
-                            {brand.emoji}
-                          </button>
-                        )}
-                        <button
-                          className="btn"
-                          onClick={() => addToCart(p)}
-                          style={{ flex: 1, backgroundColor: inCart ? '#d1fae5' : '#1a2e4a', color: inCart ? '#065f46' : '#f5a623', padding: '8px', fontSize: 12 }}
-                        >
-                          {inCart ? `✅ In Cart (${inCart.qty})` : '+ Add to Cart'}
-                        </button>
-                      </div>
-
-                      {p.min_qty > 1 && (
-                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 5, textAlign: 'center' }}>Min order: {p.min_qty} {p.unit}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {/* ─── Hero strip ─── */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-screen-2xl flex-col gap-1 px-4 py-4 sm:px-6 sm:py-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600">
+            Shop Local · Delivered Fresh
+          </p>
+          <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">
+            BSC Online Market
+          </h1>
+          <p className="text-sm text-slate-600 sm:text-base">
+            Fresh Bahamian seafood + Nassau&rsquo;s top wholesale brands, delivered to your door.
+          </p>
         </div>
-      </div>
+      </section>
 
-      {/* ── Cart slide-out ── */}
-      {showCart && (
-        <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setShowCart(false); }}>
-          <div className="cart-panel">
-            {/* Cart header */}
-            <div style={{ backgroundColor: '#1a2e4a', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <div>
-                <div style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>Your Cart</div>
-                <div style={{ color: '#94a3b8', fontSize: 12 }}>{cartCount} item{cartCount !== 1 ? 's' : ''} · BSD ${cartTotal.toFixed(2)}</div>
-              </div>
-              <button onClick={() => setShowCart(false)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: 18, fontWeight: 700 }}>×</button>
-            </div>
+      <div className="mx-auto flex max-w-screen-2xl gap-6 px-3 py-5 sm:px-6">
+        {/* ─── Sidebar (desktop) ─── */}
+        <aside className="hidden w-56 shrink-0 lg:block">
+          <FilterPanel
+            activeCategory={activeCategory}
+            setCategory={setCategory}
+            sort={sort}
+            setSort={setSort}
+            products={filtered}
+          />
+        </aside>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-              {cart.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
-                  <div style={{ fontWeight: 600 }}>Your cart is empty</div>
-                </div>
+        {/* ─── Main column ─── */}
+        <main className="min-w-0 flex-1">
+          {/* Toolbar */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-600">
+              {loading ? (
+                <span>Loading…</span>
               ) : (
-                <>
-                  {/* Group by source/brand */}
-                  {['market', ...BRAND_KEYS].map(source => {
-                    const items = source === 'market'
-                      ? cart.filter(i => i.source === 'market')
-                      : cart.filter(i => i.wholesaler === source);
-                    if (items.length === 0) return null;
-                    const brand = source !== 'market' ? BRANDS[source] : null;
-
-                    return (
-                      <div key={source} style={{ marginBottom: 20 }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: brand ? brand.color : '#1a2e4a', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10, paddingBottom: 6, borderBottom: `2px solid ${brand ? brand.color + '33' : '#f1f5f9'}` }}>
-                          {brand ? `${brand.emoji} ${brand.name}` : '🇧🇸 BSC Direct'}
-                        </div>
-                        {items.map(item => (
-                          <div key={`${item.source}-${item.id}`} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid #f8fafc', alignItems: 'flex-start' }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 700, fontSize: 13, color: '#1a2e4a', marginBottom: 2 }}>{item.name}</div>
-                              {item.sku && brand && (
-                                <span className="sku-badge" style={{ backgroundColor: brand.light, color: brand.color, marginBottom: 4, display: 'inline-block' }}>{item.sku}</span>
-                              )}
-                              <div style={{ fontSize: 12, color: '#64748b' }}>BSD ${item.price.toFixed(2)} × {item.qty} = <strong style={{ color: '#1a2e4a' }}>BSD ${(item.price * item.qty).toFixed(2)}</strong></div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                              <button onClick={() => updateQty(item.id, item.source, item.qty - item.min_qty)} style={{ width: 26, height: 26, borderRadius: 5, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: 700 }}>−</button>
-                              <span style={{ fontSize: 13, fontWeight: 700, minWidth: 20, textAlign: 'center' }}>{item.qty}</span>
-                              <button onClick={() => updateQty(item.id, item.source, item.qty + item.min_qty)} style={{ width: 26, height: 26, borderRadius: 5, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: 700 }}>+</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </>
+                <span>
+                  <span className="font-bold text-navy">{filtered.length}</span>{' '}
+                  product{filtered.length !== 1 ? 's' : ''}
+                  {activeBrand !== 'all' && (
+                    <span className="ml-2 text-slate-500">
+                      · {activeBrand === 'bsc' ? '🇧🇸 BSC Direct' : `${BRANDS[activeBrand]?.emoji} ${BRANDS[activeBrand]?.name}`}
+                    </span>
+                  )}
+                </span>
               )}
             </div>
+            <button
+              onClick={() => setShowFilters(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 lg:hidden"
+            >
+              <span>≡</span> Filters
+            </button>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-navy lg:block"
+            >
+              <option value="featured">Featured first</option>
+              <option value="price-asc">Price: Low → High</option>
+              <option value="price-desc">Price: High → Low</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
 
-            {cart.length > 0 && (
-              <div style={{ borderTop: '1px solid #e2e8f0', padding: '16px 20px', flexShrink: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <span style={{ fontSize: 14, color: '#64748b', fontWeight: 600 }}>Total</span>
-                  <span style={{ fontSize: 20, fontWeight: 900, color: '#1a2e4a' }}>BSD ${cartTotal.toFixed(2)}</span>
+          {/* Order success */}
+          {orderDone && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+              <span className="text-xl">✅</span>
+              <div className="flex-1">
+                <div className="font-bold">Order placed!</div>
+                <div className="text-xs text-emerald-700">
+                  BSC will confirm your order and arrange delivery.
                 </div>
-                <button className="btn" onClick={() => { setShowCart(false); router.push('/checkout'); }} style={{ width: '100%', backgroundColor: '#f5a623', color: '#1a2e4a', padding: '13px', fontSize: 14, marginBottom: 8 }}>
-                  Proceed to Checkout →
-                </button>
-                <button className="btn" onClick={placeOrder} disabled={placing} style={{ width: '100%', backgroundColor: '#1a2e4a', color: '#fff', padding: '12px', fontSize: 13 }}>
-                  {placing ? 'Placing…' : '✅ Quick Order (COD)'}
-                </button>
-                <p style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', marginTop: 8 }}>Cart is grouped by supplier for BSC to source correctly.</p>
               </div>
-            )}
+              <button
+                onClick={() => setOrderDone(false)}
+                className="text-emerald-900 hover:text-emerald-700"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* Grid */}
+          {loading ? (
+            <ProductGridSkeleton />
+          ) : filtered.length === 0 ? (
+            <EmptyState onReset={() => { setSearch(''); setBrand('all'); setCategory('All'); }} />
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {filtered.map((p) => {
+                const inCart = cart.find((i) => i.id === p.id && i.source === p.source);
+                return (
+                  <ProductCard
+                    key={`${p.source}-${p.id}`}
+                    product={p}
+                    inCartQty={inCart?.qty ?? 0}
+                    onAdd={() => addToCart(p)}
+                    onBrandClick={() =>
+                      p.wholesaler && router.push(`/local-wholesale/${p.wholesaler}`)
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* Trust bar */}
+          {!loading && filtered.length > 0 && <TrustBar />}
+        </main>
+      </div>
+
+      {/* ─── Mobile filter drawer ─── */}
+      {showFilters && (
+        <div
+          className="fixed inset-0 z-50 flex bg-black/50 lg:hidden"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowFilters(false);
+          }}
+        >
+          <div className="flex h-full w-72 max-w-[80%] flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div className="font-display text-lg font-bold text-navy">Filters</div>
+              <button
+                onClick={() => setShowFilters(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-700"
+                aria-label="Close filters"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <FilterPanel
+                activeCategory={activeCategory}
+                setCategory={(c) => {
+                  setCategory(c);
+                  setShowFilters(false);
+                }}
+                sort={sort}
+                setSort={(s) => setSort(s)}
+                products={filtered}
+              />
+            </div>
           </div>
         </div>
       )}
+
+      {/* ─── Cart drawer ─── */}
+      {showCart && (
+        <CartDrawer
+          cart={cart}
+          cartCount={cartCount}
+          cartTotal={cartTotal}
+          onClose={() => setShowCart(false)}
+          onUpdateQty={updateQty}
+          onPlaceOrder={placeOrder}
+          placing={placing}
+          onCheckout={() => {
+            setShowCart(false);
+            router.push('/checkout');
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── Subcomponents ─────────────────────── */
+
+function BrandPill({
+  active,
+  onClick,
+  label,
+  activeBg,
+  activeFg,
+  withBorder,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  activeBg: string;
+  activeFg: string;
+  withBorder?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+        active ? '' : 'bg-white/10 text-slate-200 hover:bg-white/15'
+      } ${withBorder && active ? 'ring-2 ring-gold' : ''}`}
+      style={
+        active
+          ? { backgroundColor: activeBg, color: activeFg }
+          : undefined
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+function FilterPanel({
+  activeCategory,
+  setCategory,
+  sort,
+  setSort,
+  products,
+}: {
+  activeCategory: string;
+  setCategory: (c: string) => void;
+  sort: SortOption;
+  setSort: (s: SortOption) => void;
+  products: MarketProduct[];
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+          Category
+        </div>
+        <div className="space-y-1">
+          {CATEGORIES.map((cat) => {
+            const count =
+              cat === 'All'
+                ? products.length
+                : products.filter((p) => p.category === cat).length;
+            if (count === 0 && cat !== 'All') return null;
+            const active = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition ${
+                  active
+                    ? 'bg-navy text-gold font-bold'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span>{cat}</span>
+                <span className={`text-xs ${active ? 'text-gold-200' : 'text-slate-400'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+          Sort
+        </div>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortOption)}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-navy"
+        >
+          <option value="featured">Featured first</option>
+          <option value="price-asc">Price: Low → High</option>
+          <option value="price-desc">Price: High → Low</option>
+          <option value="name">Name A–Z</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function ProductCard({
+  product,
+  inCartQty,
+  onAdd,
+  onBrandClick,
+}: {
+  product: MarketProduct;
+  inCartQty: number;
+  onAdd: () => void;
+  onBrandClick: () => void;
+}) {
+  const brand = product.wholesaler ? BRANDS[product.wholesaler] : null;
+  const inCart = inCartQty > 0;
+
+  return (
+    <article className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100 transition hover:shadow-card-hover">
+      {/* Image */}
+      <div
+        className="relative aspect-square cursor-pointer overflow-hidden"
+        style={{ backgroundColor: brand?.light ?? '#f0f9ff' }}
+        onClick={onBrandClick}
+      >
+        {product.image_url ? (
+          <img
+            src={product.image_url}
+            alt={product.name}
+            loading="lazy"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-5xl">
+            {CATEGORY_EMOJI[product.category] || '📦'}
+          </div>
+        )}
+
+        {brand ? (
+          <div
+            className="absolute left-2 top-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white shadow-sm"
+            style={{ backgroundColor: brand.color }}
+          >
+            <span>{brand.emoji}</span>
+            <span className="hidden xs:inline">{brand.name}</span>
+          </div>
+        ) : (
+          <div className="absolute left-2 top-2 rounded-md bg-navy px-2 py-0.5 text-[10px] font-bold text-gold shadow-sm">
+            🇧🇸 BSC Direct
+          </div>
+        )}
+
+        {product.featured && (
+          <div className="absolute right-2 top-2 rounded-md bg-gold px-2 py-0.5 text-[10px] font-extrabold text-navy shadow-sm">
+            ★ FEATURED
+          </div>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-1 flex-col gap-1.5 p-3">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {product.sku && (
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+              {product.sku}
+            </span>
+          )}
+          <span>{product.category}</span>
+        </div>
+
+        <h3 className="clamp-2 text-sm font-bold leading-snug text-navy sm:text-base">
+          {product.name}
+        </h3>
+
+        {product.description && (
+          <p className="clamp-2 text-xs text-slate-500">{product.description}</p>
+        )}
+
+        <div className="mt-auto flex items-baseline gap-1 pt-1">
+          <span className="text-lg font-extrabold text-navy sm:text-xl">
+            BSD ${product.price.toFixed(2)}
+          </span>
+          <span className="text-xs text-slate-400">/ {product.unit}</span>
+        </div>
+
+        {product.min_qty > 1 && (
+          <div className="text-[10px] text-slate-400">
+            Min order: {product.min_qty} {product.unit}
+          </div>
+        )}
+
+        <button
+          onClick={onAdd}
+          className={`mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition sm:text-sm ${
+            inCart
+              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+              : 'bg-navy text-gold hover:bg-navy-600'
+          }`}
+        >
+          {inCart ? `✓ In cart (${inCartQty})` : '+ Add to cart'}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ProductGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div
+          key={i}
+          className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100"
+        >
+          <div className="aspect-square animate-pulse bg-slate-200" />
+          <div className="space-y-2 p-3">
+            <div className="h-3 w-1/3 animate-pulse rounded bg-slate-200" />
+            <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-slate-200" />
+            <div className="h-8 w-full animate-pulse rounded bg-slate-200" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="flex flex-col items-center rounded-xl bg-white px-6 py-16 text-center shadow-card">
+      <div className="mb-3 text-5xl">🔍</div>
+      <h3 className="mb-1 text-base font-bold text-navy">No products found</h3>
+      <p className="mb-4 text-sm text-slate-500">
+        Try a different search, brand, or category.
+      </p>
+      <button
+        onClick={onReset}
+        className="rounded-lg bg-navy px-4 py-2 text-sm font-bold text-gold transition hover:bg-navy-600"
+      >
+        Clear all filters
+      </button>
+    </div>
+  );
+}
+
+function TrustBar() {
+  const items = [
+    { icon: '🇧🇸', title: 'Bahamian-owned', sub: 'Family-run from Nassau' },
+    { icon: '🚚', title: 'Fast delivery', sub: 'Nassau & Andros, same-day' },
+    { icon: '❄️', title: 'Cold-chain fresh', sub: 'Spiny Tail processing' },
+    { icon: '💬', title: 'WhatsApp support', sub: '+1 (242) 558-4495' },
+  ];
+  return (
+    <div className="mt-10 grid grid-cols-2 gap-3 rounded-2xl bg-white p-5 shadow-card sm:grid-cols-4">
+      {items.map((it) => (
+        <div key={it.title} className="flex items-center gap-3">
+          <div className="text-2xl">{it.icon}</div>
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-navy">{it.title}</div>
+            <div className="truncate text-[11px] text-slate-500">{it.sub}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CartDrawer({
+  cart,
+  cartCount,
+  cartTotal,
+  onClose,
+  onUpdateQty,
+  onPlaceOrder,
+  placing,
+  onCheckout,
+}: {
+  cart: CartItem[];
+  cartCount: number;
+  cartTotal: number;
+  onClose: () => void;
+  onUpdateQty: (id: string, source: string, qty: number) => void;
+  onPlaceOrder: () => void;
+  placing: boolean;
+  onCheckout: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        <div className="flex items-center justify-between bg-navy px-5 py-4">
+          <div>
+            <div className="font-display text-lg font-bold text-white">Your Cart</div>
+            <div className="text-xs text-slate-300">
+              {cartCount} item{cartCount !== 1 ? 's' : ''} · BSD ${cartTotal.toFixed(2)}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25"
+            aria-label="Close cart"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {cart.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="mb-3 text-5xl">🛒</div>
+              <div className="text-sm font-bold text-slate-700">Your cart is empty</div>
+              <div className="mt-1 text-xs text-slate-500">
+                Browse the market and add some products.
+              </div>
+            </div>
+          ) : (
+            <CartGroups cart={cart} onUpdateQty={onUpdateQty} />
+          )}
+        </div>
+
+        {cart.length > 0 && (
+          <div className="border-t border-slate-200 p-4">
+            <div className="mb-3 flex items-baseline justify-between">
+              <span className="text-sm font-semibold text-slate-600">Total</span>
+              <span className="text-2xl font-extrabold text-navy">
+                BSD ${cartTotal.toFixed(2)}
+              </span>
+            </div>
+            <button
+              onClick={onCheckout}
+              className="mb-2 w-full rounded-lg bg-gold py-3 text-sm font-bold text-navy transition hover:bg-gold-300"
+            >
+              Proceed to checkout →
+            </button>
+            <button
+              onClick={onPlaceOrder}
+              disabled={placing}
+              className="w-full rounded-lg bg-navy py-3 text-sm font-bold text-white transition hover:bg-navy-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              {placing ? 'Placing…' : '✅ Quick order (cash on delivery)'}
+            </button>
+            <p className="mt-2 text-center text-[10px] text-slate-400">
+              Cart is grouped by supplier for sourcing.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CartGroups({
+  cart,
+  onUpdateQty,
+}: {
+  cart: CartItem[];
+  onUpdateQty: (id: string, source: string, qty: number) => void;
+}) {
+  const groups = ['market', ...BRAND_KEYS];
+  return (
+    <>
+      {groups.map((group) => {
+        const items =
+          group === 'market'
+            ? cart.filter((i) => i.source === 'market')
+            : cart.filter((i) => i.wholesaler === group);
+        if (items.length === 0) return null;
+        const brand = group !== 'market' ? BRANDS[group] : null;
+        return (
+          <div key={group} className="mb-5">
+            <div
+              className="mb-2 border-b pb-1.5 text-[11px] font-bold uppercase tracking-wider"
+              style={{
+                color: brand?.color ?? '#1a2e5a',
+                borderBottomColor: brand ? `${brand.color}33` : '#e2e8f0',
+              }}
+            >
+              {brand ? `${brand.emoji} ${brand.name}` : '🇧🇸 BSC Direct'}
+            </div>
+            {items.map((item) => (
+              <div
+                key={`${item.source}-${item.id}`}
+                className="flex items-start gap-3 border-b border-slate-100 py-3 last:border-b-0"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-navy">{item.name}</div>
+                  {item.sku && brand && (
+                    <span
+                      className="mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px]"
+                      style={{ backgroundColor: brand.light, color: brand.color }}
+                    >
+                      {item.sku}
+                    </span>
+                  )}
+                  <div className="mt-1 text-xs text-slate-500">
+                    BSD ${item.price.toFixed(2)} × {item.qty}{' '}
+                    <span className="font-bold text-navy">
+                      = ${(item.price * item.qty).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <QtyButton
+                    onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}
+                  >
+                    −
+                  </QtyButton>
+                  <span className="min-w-6 text-center text-sm font-bold text-navy">
+                    {item.qty}
+                  </span>
+                  <QtyButton
+                    onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}
+                  >
+                    +
+                  </QtyButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
     </>
+  );
+}
+
+function QtyButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-base font-bold text-navy transition hover:border-navy hover:bg-slate-50"
+    >
+      {children}
+    </button>
   );
 }
