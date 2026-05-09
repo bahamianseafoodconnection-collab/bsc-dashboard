@@ -42,6 +42,7 @@ const NAV_GROUPS = [
       { icon: '💼', label: 'Payroll',           href: '/payroll' },
       { icon: '👥', label: 'Customers',         href: '/customers' },
       { icon: '📈', label: 'Reports + CSV',     href: '/reports' },
+      { icon: '🔔', label: 'Notifications',     href: '/notifications' },
     ],
   },
   {

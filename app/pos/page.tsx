@@ -287,6 +287,23 @@ recordSaleFinancials({
     console.warn('Inventory decrement failed:', err);
   }
 })();
+
+// Queue an order confirmation if we have a phone. Fire-and-forget.
+if (customerPhoneClean && customerNameClean && customerNameClean !== 'Walk-in') {
+  fetch('/api/notifications/queue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel: 'whatsapp',
+      recipient_phone: customerPhoneClean,
+      recipient_name: customerNameClean,
+      template_key: 'order_confirmation_pos_nassau',
+      body: `Hi ${customerNameClean}, thanks for shopping at BSC Marketplace Nassau. Your receipt: BSD $${subtotal.toFixed(2)} (${ref}). — BSC`,
+      related_order_id: orderId,
+      related_customer_id: customerIdLinked,
+    }),
+  }).catch((err) => console.warn('Notification queue failed:', err));
+}
 setLastSale({
 ref, total: subtotal, cost_total: costTotal, profit: realProfit,
 items: [...cart], customer: customerName.trim() || 'Walk-in',

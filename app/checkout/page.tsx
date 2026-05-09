@@ -182,6 +182,33 @@ export default function CheckoutPage() {
       })();
     }
 
+    // Queue an order confirmation. WhatsApp first if we have a phone,
+    // email otherwise. Fire-and-forget.
+    if (name.trim() && (phone.trim() || (await supabase.auth.getUser()).data?.user?.email)) {
+      const userEmail = (await supabase.auth.getUser()).data?.user?.email ?? null;
+      const channel = phone.trim() ? 'whatsapp' : 'email';
+      const body = `Hi ${name.trim()}, thanks for ordering from BSC Marketplace. Total: BSD $${total.toFixed(2)}. ${
+        payMethod === 'cod'
+          ? "We'll confirm pickup or delivery shortly. Pay cash on arrival."
+          : 'Your payment is being processed.'
+      } Order #${orderIdInserted ? orderIdInserted.slice(0, 8) : 'pending'}. — BSC`;
+      fetch('/api/notifications/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel,
+          recipient_phone: phone.trim() || null,
+          recipient_email: channel === 'email' ? userEmail : null,
+          recipient_name: name.trim(),
+          template_key: 'order_confirmation_online',
+          subject: 'Your BSC Marketplace order',
+          body,
+          related_order_id: orderIdInserted || null,
+          related_customer_id: customerIdLinked,
+        }),
+      }).catch((err) => console.warn('Notification queue failed:', err));
+    }
+
     return orderIdInserted;
   }
 
