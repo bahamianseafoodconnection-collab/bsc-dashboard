@@ -22,6 +22,10 @@ const PROTECTED = [
   '/processor',
   '/expenses',
   '/accounts-payable',
+  '/captains',
+  '/labels',
+  '/reports',
+  '/payroll',
 ];
 
 export async function middleware(request: NextRequest) {
