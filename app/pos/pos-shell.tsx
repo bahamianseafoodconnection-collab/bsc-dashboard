@@ -19,11 +19,14 @@ const NAV_ITEMS = [
   { href: '/pos',                  icon: '$',  label: 'Register',         section: 'Sell' },
   { href: '/pos/scan',             icon: 'C',  label: 'Scanner',          section: 'Sell' },
   { href: '/pos/inventory',        icon: 'B',  label: 'Inventory',        section: 'Stock' },
-  { href: '/pos/purchase-orders',  icon: 'P',  label: 'Purchase Orders',  section: 'Stock' },
-  { href: '/pos/customers',        icon: 'U',  label: 'Customers',        section: 'Customers' },
+  // Stock / Customers / Reports / Money tabs share the global pages —
+  // the POS shell still owns Register, Scanner, and Inventory which need
+  // POS-scoped behavior.
+  { href: '/purchase-orders',      icon: 'P',  label: 'Purchase Orders',  section: 'Stock' },
+  { href: '/customers',            icon: 'U',  label: 'Customers',        section: 'Customers' },
   { href: '/pos/sales-history',    icon: 'H',  label: 'Sales History',    section: 'Reports' },
-  { href: '/pos/reports',          icon: 'R',  label: 'Reports',          section: 'Reports' },
-  { href: '/pos/expenses',         icon: 'E',  label: 'Expenses',         section: 'Money' },
+  { href: '/reports',              icon: 'R',  label: 'Reports',          section: 'Reports' },
+  { href: '/expenses',             icon: 'E',  label: 'Expenses',         section: 'Money' },
 ];
 
 function getSupabase() {
