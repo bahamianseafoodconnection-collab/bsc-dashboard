@@ -3,6 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import {
+  CHANNEL_MARGIN,
+  VAT_RATE,
+  splitSale,
+  recordSaleFinancials,
+} from '@/lib/finance';
 
 // Skip prerendering. POS is per-staff, runtime only.
 export const dynamic = 'force-dynamic';
@@ -16,7 +22,11 @@ function getSupabase() {
   return createBrowserClient(url, key);
 }
 
-const BSC_MARGIN  = 0.43;
+// Andros sell prices follow the sacred rule: cost × (1 + 0.43) × (1 + 0.10).
+// Back out the cost basis from a posted sell price so we can run a proper
+// channel-aware split.
+const ANDROS_SELL_TO_COST = 1 / ((1 + CHANNEL_MARGIN.andros_pos) * (1 + VAT_RATE));
+
 const ANDROS_PIN  = 'CETA2024';
 const CATEGORIES  = ['All', 'Seafood', 'Meats', 'Poultry', 'Groceries', 'Essentials'];
 
@@ -56,7 +66,11 @@ export default function AndrosPOSPage() {
 
   const filtered  = PRODUCTS.filter((p) => (category === 'All' || p.category === category) && p.name.toLowerCase().includes(search.toLowerCase()));
   const subtotal  = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
-  const bscProfit = subtotal * BSC_MARGIN;
+  // Back-compute cost basis assuming items follow the sacred Andros pricing.
+  // The previous `subtotal * 0.43` overstated profit by ~43% — it applied the
+  // margin rate to the sell price instead of to the cost basis.
+  const costBasis = subtotal * ANDROS_SELL_TO_COST;
+  const bscProfit = splitSale(subtotal, costBasis, 'andros_pos').bsc_profit;
 
   function tryPin() {
     if (pinInput === ANDROS_PIN) { setUnlocked(true); setPinError(''); }
@@ -95,6 +109,13 @@ export default function AndrosPOSPage() {
         margin_pct:     43,
       }]);
     } catch { /* continue, still show receipt */ }
+    // Persist channel-correct financial split. Fire-and-forget so a missing
+    // financials table can't block the sale.
+    recordSaleFinancials({
+      saleAmount: subtotal,
+      costBasis,
+      channel: 'andros_pos',
+    }).catch((err) => console.warn('Financials log failed:', err));
     setLastSale({ total: subtotal, profit: bscProfit, items: [...cart], customer: customerName || 'Walk-in', ref });
     setReceiptVisible(true);
     setCart([]);

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { splitSale, recordSaleFinancials } from '@/lib/finance';
 
 export const dynamic = 'force-dynamic';
 
@@ -182,7 +183,9 @@ function removeItem(id: string) { setCart((prev) => prev.filter((i) => i.product
 
 const subtotal = cart.reduce((s, i) => s + i.unit_price * i.qty, 0);
 const costTotal = cart.reduce((s, i) => s + i.cost_per_unit * i.qty, 0);
-const realProfit = subtotal - costTotal;
+// splitSale strips VAT before computing BSC profit, which is the correct
+// number — the prior `subtotal - costTotal` overstated profit by the 10% VAT.
+const realProfit = splitSale(subtotal, costTotal, 'nassau_pos').bsc_profit;
 
 async function completeSale() {
 if (cart.length === 0 || completing) return;
@@ -216,6 +219,13 @@ alert('Sale could not be saved: ' + insertError.message);
 setCompleting(false);
 return;
 }
+// Persist channel-correct financial split. Fire-and-forget — a missing
+// financials table or RLS issue must not block the sale.
+recordSaleFinancials({
+  saleAmount: subtotal,
+  costBasis: costTotal,
+  channel: 'nassau_pos',
+}).catch((err) => console.warn('Financials log failed:', err));
 setLastSale({
 ref, total: subtotal, cost_total: costTotal, profit: realProfit,
 items: [...cart], customer: customerName.trim() || 'Walk-in',

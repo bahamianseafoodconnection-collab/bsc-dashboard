@@ -7,6 +7,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import {
+  CHANNEL_MARGIN,
+  VAT_RATE,
+  recordSaleFinancials,
+} from '@/lib/finance';
 import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
 
 export const dynamic = 'force-dynamic';
@@ -97,6 +102,21 @@ export default function CheckoutPage() {
       })
       .select('id')
       .single();
+
+    // Persist a channel-correct financial split. We don't carry per-item cost
+    // through to checkout, so we back-compute the cost basis from the cart
+    // total assuming online_market sacred pricing. Mathematically exact when
+    // the items follow the rule (cost × 1.25 × 1.10), an approximation when
+    // wholesale items (different margin) sneak in. Fire-and-forget so a
+    // missing financials table can't block the order.
+    const onlineToCost =
+      1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
+    recordSaleFinancials({
+      saleAmount: total,
+      costBasis: total * onlineToCost,
+      channel: 'online_market',
+    }).catch((err) => console.warn('Financials log failed:', err));
+
     return data?.id || '';
   }
 
