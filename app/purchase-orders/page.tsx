@@ -60,6 +60,12 @@ type SupplierProduct = {
   status: string;
 };
 
+type SupplierOption = {
+  id: string;
+  business_name: string | null;
+  contact_name: string | null;
+};
+
 export default function PurchaseOrdersPage() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>('list');
@@ -84,6 +90,8 @@ export default function PurchaseOrdersPage() {
   });
   const [allocatedBy, setAllocatedBy] = useState('Dedrick Storr');
 
+  const [allSuppliers, setAllSuppliers] = useState<SupplierOption[]>([]);
+
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [weightIn, setWeightIn] = useState('');
   const [weightOut, setWeightOut] = useState('');
@@ -92,7 +100,32 @@ export default function PurchaseOrdersPage() {
   const [processingNote, setProcessingNote] = useState('');
   const [savingProcessing, setSavingProcessing] = useState(false);
 
-  useEffect(() => { loadOrders(); loadSpinyProducts(); }, []);
+  useEffect(() => { loadOrders(); loadSpinyProducts(); loadAllSuppliers(); }, []);
+
+  async function loadAllSuppliers() {
+    try {
+      const { data } = await supabase
+        .from('suppliers')
+        .select('id, business_name, contact_name')
+        .order('business_name', { ascending: true })
+        .limit(500);
+      setAllSuppliers((data || []) as SupplierOption[]);
+    } catch { /* non-fatal — falls back to free text */ }
+  }
+
+  // Resolve whatever the user typed to the canonical supplier business_name
+  // if it matches an existing row (case-insensitive, trimmed). Otherwise
+  // returns the trimmed input as-is so brand-new suppliers still work.
+  function normalizeSupplierName(typed: string): string {
+    const q = typed.trim().toLowerCase();
+    if (!q) return '';
+    const match = allSuppliers.find((s) => {
+      const bn = (s.business_name || '').trim().toLowerCase();
+      const cn = (s.contact_name || '').trim().toLowerCase();
+      return bn === q || cn === q;
+    });
+    return match?.business_name?.trim() || typed.trim();
+  }
 
   async function loadOrders() {
     setLoading(true);
@@ -208,7 +241,8 @@ export default function PurchaseOrdersPage() {
   const unallocated    = totalCases - allocatedCases;
 
   async function handleSubmit() {
-    if (!supplierName) { setError('Supplier name required'); return; }
+    const supplierNameNormalized = normalizeSupplierName(supplierName);
+    if (!supplierNameNormalized) { setError('Supplier name required'); return; }
     if (activeItems.length === 0 || !activeItems[0].name) { setError('At least one item required'); return; }
     setProcessing(true); setError('');
     let photoUrl = '';
@@ -221,7 +255,7 @@ export default function PurchaseOrdersPage() {
       }
     }
     const { error: insertErr } = await supabase.from('purchase_orders').insert({
-      supplier_name:      supplierName,
+      supplier_name:      supplierNameNormalized,
       invoice_photo_url:  photoUrl,
       ai_summary:         aiSummary || 'Manual entry',
       items:              JSON.stringify(activeItems),
@@ -706,7 +740,35 @@ export default function PurchaseOrdersPage() {
 
       <div style={card}>
         <label style={lbl}>Supplier / Fisherman Name</label>
-        <input placeholder="e.g. Captain Roy, Nassau Fish Market..." value={supplierName} onChange={(e) => setSupplierName(e.target.value)} style={inp} />
+        <input
+          list="po-supplier-list"
+          placeholder="Pick existing supplier or type new (e.g. Captain Roy)"
+          value={supplierName}
+          onChange={(e) => setSupplierName(e.target.value)}
+          onBlur={() => {
+            // Snap to canonical name when the typed value matches an
+            // existing supplier (case-insensitive). Keeps PO supplier_name
+            // values consistent so /supplier-portal can find them.
+            const normalized = normalizeSupplierName(supplierName);
+            if (normalized && normalized !== supplierName) setSupplierName(normalized);
+          }}
+          style={inp}
+        />
+        <datalist id="po-supplier-list">
+          {allSuppliers.map((s) => (
+            <option key={s.id} value={s.business_name || s.contact_name || ''} />
+          ))}
+        </datalist>
+        {supplierName.trim() &&
+          !allSuppliers.some((s) =>
+            (s.business_name || '').trim().toLowerCase() === supplierName.trim().toLowerCase() ||
+            (s.contact_name  || '').trim().toLowerCase() === supplierName.trim().toLowerCase()
+          ) && (
+            <p style={{ fontSize: 11, color: '#f5c518', margin: '4px 0 8px' }}>
+              ⚠ &ldquo;{supplierName}&rdquo; isn&rsquo;t in the suppliers list yet — this will save as a new supplier name.
+              Tip: add the supplier in /supplier first so the supplier portal can match it.
+            </p>
+          )}
         <label style={lbl}>Recorded By</label>
         <select value={allocatedBy} onChange={(e) => setAllocatedBy(e.target.value)} style={inp}>
           <option>Dedrick Storr</option>
