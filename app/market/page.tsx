@@ -50,6 +50,7 @@ interface MarketProduct {
   featured: boolean;
   avg_rating?: number;
   review_count?: number;
+  stock_qty?: number;
 }
 
 interface CartItem extends MarketProduct {
@@ -167,6 +168,27 @@ export default function MarketPage() {
                 if (!b) return p;
                 return { ...p, avg_rating: b.sum / b.n, review_count: b.n };
               }),
+            );
+          }
+        } catch { /* ignore */ }
+
+        // Best-effort inventory snapshot for stock-urgency badges.
+        // Sums quantity across all rows per product (multi-location safe).
+        try {
+          const { data: inv } = await supabase
+            .from('inventory')
+            .select('product_id, quantity')
+            .in('product_id', marketIds);
+          if (inv && inv.length > 0) {
+            const stock = new Map<string, number>();
+            for (const r of inv as Array<{ product_id: string | null; quantity: number | null }>) {
+              if (!r.product_id) continue;
+              stock.set(r.product_id, (stock.get(r.product_id) ?? 0) + Number(r.quantity || 0));
+            }
+            setProducts((prev) =>
+              prev.map((p) =>
+                stock.has(p.id) ? { ...p, stock_qty: stock.get(p.id) } : p,
+              ),
             );
           }
         } catch { /* ignore */ }
@@ -449,6 +471,51 @@ export default function MarketPage() {
             </div>
           )}
 
+          {/* Featured carousel — only when on All / no search and there are
+              featured products. Auto-hides when filtered would just duplicate
+              the grid, so it never feels noisy. */}
+          {!loading &&
+            activeBrand === 'all' &&
+            activeCategory === 'All' &&
+            !search.trim() &&
+            (() => {
+              const featured = products.filter((p) => p.featured && p.in_stock);
+              if (featured.length === 0) return null;
+              return (
+                <div className="mb-5">
+                  <div className="mb-2 flex items-end justify-between">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600">
+                        Daily picks
+                      </div>
+                      <h2 className="font-display text-lg font-bold text-navy">
+                        Featured today
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+                    {featured.slice(0, 12).map((p) => {
+                      const inCart = cart.find((i) => i.id === p.id && i.source === p.source);
+                      return (
+                        <div key={`feat-${p.source}-${p.id}`} className="w-44 shrink-0 sm:w-52">
+                          <ProductCard
+                            product={p}
+                            inCartQty={inCart?.qty ?? 0}
+                            onAdd={() => addToCart(p)}
+                            showBrand={false}
+                            onCardClick={() => {
+                              if (p.source === 'market') router.push(`/product/${p.id}`);
+                              else if (p.wholesaler) router.push(`/local-wholesale/${p.wholesaler}`);
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
           {/* Grid */}
           {loading ? (
             <ProductGridSkeleton />
@@ -695,6 +762,12 @@ function ProductCard({
         {product.featured && (
           <div className="absolute right-2 top-2 rounded-md bg-gold px-2 py-0.5 text-[10px] font-extrabold text-navy shadow-sm">
             ★ FEATURED
+          </div>
+        )}
+
+        {typeof product.stock_qty === 'number' && product.stock_qty > 0 && product.stock_qty <= 5 && (
+          <div className="absolute bottom-2 left-2 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
+            Only {product.stock_qty} left
           </div>
         )}
       </div>
