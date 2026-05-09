@@ -6,7 +6,7 @@
 // Built with Tailwind. All product/cart/order logic preserved from the prior
 // implementation; only the presentation layer was rebuilt.
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -68,7 +68,18 @@ const CATEGORY_EMOJI: Record<string, string> = {
   Other: '📦',
 };
 
+// useSearchParams() requires a Suspense boundary in Next 15 production
+// builds (otherwise prerender bails). Default export wraps the inner
+// component so the build succeeds without changing runtime behavior.
 export default function MarketPage() {
+  return (
+    <Suspense fallback={null}>
+      <MarketPageInner />
+    </Suspense>
+  );
+}
+
+function MarketPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
