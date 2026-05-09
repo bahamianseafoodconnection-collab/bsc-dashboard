@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import InvoiceScanner from '@/components/InvoiceScanner';
+import DashboardSnapshot from './snapshot';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -349,6 +350,9 @@ export default function DashboardPage() {
                   <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySupplier)}</div>
                 </div>
               </div>
+
+              {/* PHASE-7 SNAPSHOT — channel split, top products, low stock, AP due */}
+              <DashboardSnapshot />
 
               {/* WHOLESALE ORDERS — ACTION REQUIRED */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px', borderLeft: pendingWholesale > 0 ? '5px solid #ef4444' : '5px solid #e5e7eb' }}>
