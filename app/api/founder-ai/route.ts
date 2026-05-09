@@ -78,13 +78,20 @@ LONG-TERM FIX: per-SKU pricing override flag (build pending).
 - Demand: UNLIMITED on USA buyer side (per Dedrick)
 - Supply: millions of lbs Aug-March from Bahamian fishing boats
 - Bottleneck: operational systems (boat receive / yield / lot tracking / labels / USA buyer CRM / FDA paperwork)
-- Capacity: 30,000 lbs Spiny Tail + 30,000 lbs Andros cold storage
-- Modest 50K-lb season math: ~$125K USD gross profit
-- ONE SEASON PAYS DOWN ~$300K+ OF $635K TOTAL LIABILITY
+- COLD STORAGE CAPACITY (corrected May 9, 2026):
+  - Spiny Tail Nassau: 30,000 lbs (blast 10x10 + holding 10x20)
+  - Cetas variety store Andros: 3,000 lbs ONLY (NOT 30,000 - earlier value was wrong)
+  - TOTAL: 33,000 lbs across both locations
+- LOBSTER YIELD (corrected May 9, 2026): NOT 30% loss. Whole-to-tail yield ~35% (tail-with-shell). When buying TAILS directly from boats (Moores Island, Andros), processing loss is only ~5-10% (just cleaning + trimming).
+- TWO SOURCING STRATEGIES:
+  - A. Buy whole lobster, process to tail at Spiny Tail (~35% yield, more labor)
+  - B. Buy tails directly from Moores Island / Andros at $1.00 cheaper per lb (~95% yield, minimal labor) - FASTER CASH CONVERSION
+- Realistic freezer-turnover ceiling: ~3-4 cycles per season at full capacity = 100-120K lbs whole season-1 max under Strategy A, OR ~90-120K lbs tail season-1 max under Strategy B
 - Build status: NOT STARTED
 - Time to season open: 3 months (Aug 2026)
 - Proposed build: 6-week phased delivery (intake -> yield -> labels -> exports -> CRM)
 - Spiny Tail original purpose was always lobster export (justifies $750K Tom invested)
+- PARTNER OPPORTUNITY: Bob @ Jomara Seafood already moves millions of lbs and likely has US distribution + FDA cert. Joint venture (Structure C) or fee-for-processing (Structure A) better than building US side from scratch.
 
 ### TIER 2 IMMEDIATE PRICING ACTIONS (no system build)
 - Tropic grouper $5/lb arbitrage - buy maximum freezer capacity while glut lasts (80% gross margin per yield breakdown)
@@ -171,7 +178,7 @@ LONG-TERM FIX: per-SKU pricing override flag (build pending).
 
 ## LOCATIONS
 - HQ & Processing Plant: Firetrail Road, Nassau, Bahamas (Spiny Tail facility)
-- Cold Storage: Mastic Point, North Andros (capacity 30,000 lbs, current 9,310 lbs = 31%)
+- Cold Storage: Cetas variety store, Andros (capacity 3,000 lbs - corrected May 9, 2026; earlier 30,000 lbs value was WRONG)
 - Service Areas: Nassau (primary) + Andros (Family Island)
 
 ## CONTACT
@@ -365,7 +372,11 @@ When Dedrick uses these terms, immediately activate the related context:
 - "Manny" -> letter sent 2026-05-05, diversification clock, captures pending
 - "Ben Fische" -> 50,000 lb bulk grouper, projection 27,880/15,165/6,955, small batch test pending
 - "conch" / "Director Gittens" / "quota" / "permit" -> Letters 1 and 2 of 2 sent, 50,000 lbs request, awaiting reply
-- "Spiny Tail" -> Firetrail Rd Nassau, processing plant, 9,310/30,000 lb freezer
+- "Spiny Tail" -> Firetrail Rd Nassau, processing plant, 30,000 lb freezer
+- "Cetas" / "Andros cold storage" -> 3,000 lb capacity ONLY (variety store), NOT 30,000 as earlier docs claim
+- "Moores Island" / "Moores" / "Andros tails" -> direct tail-sourcing opportunity, $1.00 cheaper per lb than baseline (baseline price PENDING from Dedrick)
+- "Bob" / "Jomara owner" -> Bob owns Jomara Seafood, moves millions of lbs, potential lobster partner. Needs visibility on (1) product safety (2) payment trust before scaling. Currently $8,900 owed to Jomara for steaks (May 2026)
+- "Strategy A vs B" -> A = whole lobster processed at Spiny Tail; B = buy tails direct from Moores/Andros (cheaper per cycle, faster turn)
 - "scanner" / "/inventory/scan" -> BUGGED, recursion 99x is_staff calls, bisect plan ready
 - "founder-ai" / "Founder AI" -> this AI, integrated with Supabase live data via tools as of Day 6.7+
 - "Bill" / "Bill Casale" -> strategist, bill_casale channel (5% gross profit SACRED)
