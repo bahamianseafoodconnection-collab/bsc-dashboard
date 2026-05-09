@@ -222,7 +222,7 @@ PLUS government export royalty $0.35/lb (Bahamas govt)
 I1 ANSWERED: Igloo takes COMMISSION on sales (not just $1.75/lb processing fee). PLUS may provide ADVANCE FINANCING - pay BSC at Spiny Tail door for lobster cost so BSC can keep buying from fishermen. Commission % still pending exact figure.
 I2 ANSWERED: Storage fee $700-$1,400/month based on square feet. FLAT monthly, not per-lb. Dedrick will confirm exact from Igloo dashboard.
 I3: Trade execution fee when a buyer purchases from BSC inventory? PENDING
-I4: Lobster tail price discovery range by size grade? PARTIAL ANSWER from Jomara invoices ($13-17.25/lb depending on grade)
+I4 ANSWERED May 9, 2026: No firm Igloo prices yet. Most likely SAME as Jomara ($13-17.25/lb depending on grade) OR up to $0.25/lb more. Igloo's selling-side advantage is MARGINAL on price ($0.25/lb max premium = ~$53K/year lift at 30K lbs/mo). Real Igloo wins are FINANCING + STORAGE + SOURCING + LIQUIDITY, not selling-price uplift. Strategic: keep Jomara as primary buyer (proven), use Igloo for additional volume + financing leverage. Channel mix per B1 framework.
 I5: Onboarding requirements (FDA, HACCP, insurance, customs broker)? PENDING
 I6: Igloo commission/markup on sourcing-side purchases by BSC? PENDING
 
