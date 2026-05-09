@@ -103,6 +103,8 @@ export default function CheckoutPage() {
       .select('id')
       .single();
 
+    const orderIdInserted = data?.id || '';
+
     // Persist a channel-correct financial split. We don't carry per-item cost
     // through to checkout, so we back-compute the cost basis from the cart
     // total assuming online_market sacred pricing. Mathematically exact when
@@ -115,9 +117,10 @@ export default function CheckoutPage() {
       saleAmount: total,
       costBasis: total * onlineToCost,
       channel: 'online_market',
+      orderId: orderIdInserted || null,
     }).catch((err) => console.warn('Financials log failed:', err));
 
-    return data?.id || '';
+    return orderIdInserted;
   }
 
   async function handleProceedToPayment() {

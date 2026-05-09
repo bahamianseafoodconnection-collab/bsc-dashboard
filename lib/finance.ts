@@ -99,26 +99,34 @@ export function splitSale(
 
 // Write one sale's split into the financials table.
 //
-// We write only the four columns the original schema is known to have
-// (revenue, profit, supplier_owed, transactions). VAT and channel are
-// returned in the SaleSplit so callers can log them separately if their
-// schema has those columns.
+// Schema: see sql/2026-05-08-financials.sql.
+// `order_id` is optional — POS callers don't always capture the inserted
+// order id. Channel and vat_collected are first-class columns so we can
+// filter / report by them later.
 export async function recordSaleFinancials(args: {
   saleAmount: number;
   costBasis: number;
   channel: PricingChannel;
+  orderId?: string | null;
 }): Promise<SaleSplit> {
   const split = splitSale(args.saleAmount, args.costBasis, args.channel);
 
   const { error } = await supabase.from("financials").insert({
-    revenue:       split.revenue,
-    profit:        split.bsc_profit,
-    supplier_owed: split.cost_basis,
+    channel:       split.channel,
+    revenue:       round2(split.revenue),
+    profit:        round2(Math.max(0, split.bsc_profit)),
+    supplier_owed: round2(split.cost_basis),
+    vat_collected: round2(split.vat_collected),
     transactions:  1,
+    order_id:      args.orderId ?? null,
   });
   if (error) throw error;
 
   return split;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 // Aggregate everything in the financials table. Hits the DB on every call —
