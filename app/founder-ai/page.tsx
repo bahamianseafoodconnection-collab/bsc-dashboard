@@ -23,6 +23,8 @@ const SUGGESTIONS = [
   'Which SKUs am I underpricing under sacred rules?',
   'How does Igloo Express change our lobster economics?',
   'What questions should I get answered first to unlock the next tier?',
+  'Teach me how to use my dashboard, section by section.',
+  'Walk me through the lobster pipeline pages in order.',
 ];
 
 export default function FounderAIPage() {

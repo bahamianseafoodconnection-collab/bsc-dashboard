@@ -70,6 +70,7 @@ const NAV_GROUPS = [
     label: 'AI & Insights',
     items: [
       { icon: '🤖', label: 'Founder AI',        href: '#ai' },
+      { icon: '📚', label: 'Dashboard Guide',   href: '/dashboard-guide' },
     ],
   },
 ];
