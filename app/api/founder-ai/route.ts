@@ -46,6 +46,7 @@ TIER 2 - IMMEDIATE CASH RECOVERY (this quarter, no new system build):
 2. Premium SKU pricing override (snapper finger, shrimp, salmon, snow crab) - ~$30K/yr leak fix
 3. NY Strip USA arbitrage (steak duty-free) - ~$26K/yr extra gross
 4. Snow crab USA import switch - ~$7K/yr extra gross
+5. CONCH SEASONAL ARBITRAGE - buy at $5/lb closed lobster season Apr-Jul, sell at $8.50-9.00/lb during Aug-Mar lobster season (~$10-20K/yr at 10K-lb cycles)
 
 TIER 3 - LIQUIDITY PROTECTION (don't lose what you have):
 1. Sign Tom 7-yr Option A in writing - frees $5,977/month vs old assumption
@@ -283,6 +284,19 @@ Could replace local Tropic sourcing on import-eligible SKUs:
 - "sacred underpricing" / "premium leak" -> ~$30K/year on 4 SKUs minimum, override flag pending
 - "supplier arbitrage" / "best supplier" -> SKU-level cheapest-source map locked above
 - "scale plan" / "growth plan" / "what to do next" -> see V7 SCALING INTELLIGENCE block (this section)
+
+### CONCH SEASONAL PRICING (May 9, 2026 - per Dedrick)
+PRODUCT FORM CLARIFICATION PENDING (whole vs cleaned)
+- CLOSED lobster season (April-July, 4 months): cost $5.00/lb, market sell $7.90-8.00/lb
+- OPEN lobster season (August-March, 8 months): cost $6.50/lb, market sell $8.50-9.00/lb
+- DRIVER: fishermen pivot to lobster Aug-Mar, conch supply contracts, prices rise both sides
+- ARBITRAGE: buy at $5 in May/June, freeze through August opening, sell at $8.50-9 = +$5,250 per 5,000 lbs above naive same-season buy+sell
+- FREEZER COLLISION: lobster needs Spiny Tail freezer Aug-Mar. Conch holdings should be near-zero by October.
+- RECOMMENDED ALLOCATION:
+  - Apr-Jul: up to 15K lbs conch + 15K lbs other in 30K Spiny Tail
+  - Aug-Sep: 5-10K lbs conch (selling down) + 20K lbs lobster
+  - Oct-Mar: 0-5K lbs conch + 25-30K lbs lobster
+- TIER 2 contribution: +$10-20K/year at 1-2 cycles/season
 
 ### BAHAMAS CUSTOMS DUTY - KNOWN CATEGORIES (May 9, 2026 - per Dedrick)
 - Steak / fresh + frozen meat: DUTY-FREE (massive USA-import arbitrage opportunity)
