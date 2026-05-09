@@ -389,6 +389,7 @@ export default function MarketPage() {
                     product={p}
                     inCartQty={inCart?.qty ?? 0}
                     onAdd={() => addToCart(p)}
+                    showBrand={activeBrand !== 'all'}
                     onBrandClick={() =>
                       p.wholesaler && router.push(`/local-wholesale/${p.wholesaler}`)
                     }
@@ -563,11 +564,17 @@ function ProductCard({
   inCartQty,
   onAdd,
   onBrandClick,
+  showBrand,
 }: {
   product: MarketProduct;
   inCartQty: number;
   onAdd: () => void;
   onBrandClick: () => void;
+  // When false (default "All" / BSC Direct view), the per-product supplier
+  // badge is hidden — customers see everything as one BSC catalog.
+  // Backend pages (/supplier-purchases, /products) still surface supplier
+  // info to staff so we know what to buy from whom.
+  showBrand: boolean;
 }) {
   const brand = product.wholesaler ? BRANDS[product.wholesaler] : null;
   const inCart = inCartQty > 0;
@@ -593,7 +600,7 @@ function ProductCard({
           </div>
         )}
 
-        {brand ? (
+        {showBrand && brand ? (
           <div
             className="absolute left-2 top-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white shadow-sm"
             style={{ backgroundColor: brand.color }}
@@ -603,7 +610,7 @@ function ProductCard({
           </div>
         ) : (
           <div className="absolute left-2 top-2 rounded-md bg-navy px-2 py-0.5 text-[10px] font-bold text-gold shadow-sm">
-            🇧🇸 BSC Direct
+            🇧🇸 BSC
           </div>
         )}
 

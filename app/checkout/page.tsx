@@ -53,6 +53,9 @@ export default function CheckoutPage() {
   const [refNo, setRefNo] = useState('');
   const [last4, setLast4] = useState('');
   const [payMethod, setPayMethod] = useState<'card' | 'cod'>('card');
+  // Where this order is going. 'nassau' = pickup or local delivery in
+  // Nassau. 'mailboat' = ship to Family Island via mailboat.
+  const [deliveryMethod, setDeliveryMethod] = useState<'nassau' | 'mailboat'>('nassau');
 
   useEffect(() => {
     try {
@@ -125,7 +128,15 @@ export default function CheckoutPage() {
         customer_phone: phone.trim() || null,
         customer_address: address.trim() || null,
         customer_id: customerIdLinked,
-        admin_notes: note || null,
+        // Captures customer's delivery preference for fulfillment staff.
+        // Stored on delivery_type for backward-compat with existing
+        // orders queries; admin_notes also gets the human-readable
+        // method + island so it shows on receipts/pick tickets.
+        delivery_type: deliveryMethod,
+        admin_notes: [
+          deliveryMethod === 'mailboat' ? `Mailboat to ${island}` : `Nassau · ${island}`,
+          note,
+        ].filter(Boolean).join(' · ') || null,
         user_id: session?.user.id || null,
       })
       .select('id')
@@ -305,6 +316,53 @@ export default function CheckoutPage() {
                 </div>
               </Card>
 
+              <Card title="Delivery method">
+                <p className="-mt-2 text-xs text-slate-500">
+                  Where should we send your order?
+                </p>
+                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {(
+                    [
+                      {
+                        key: 'nassau',
+                        emoji: '📍',
+                        label: 'Nassau location',
+                        sub: 'Pickup or local delivery in Nassau',
+                      },
+                      {
+                        key: 'mailboat',
+                        emoji: '🚤',
+                        label: 'Mailboat shipping',
+                        sub: 'Ship to a Family Island via mailboat',
+                      },
+                    ] as const
+                  ).map((m) => {
+                    const active = deliveryMethod === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => setDeliveryMethod(m.key)}
+                        className={`flex flex-col items-start gap-1 rounded-xl border-2 p-4 text-left transition ${
+                          active
+                            ? 'border-navy bg-navy-50/40 shadow-[0_0_0_3px_rgba(26,46,90,0.1)]'
+                            : 'border-slate-200 bg-white hover:border-navy'
+                        }`}
+                      >
+                        <span className="text-xl">{m.emoji}</span>
+                        <span className="text-sm font-extrabold text-navy">{m.label}</span>
+                        <span className="text-xs text-slate-500">{m.sub}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {deliveryMethod === 'mailboat' && (
+                  <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    🚤 Mailboat charges + island freight billed separately at packing.
+                  </p>
+                )}
+              </Card>
+
               <Card title="Payment method">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(
@@ -365,6 +423,7 @@ export default function CheckoutPage() {
               island={island}
               refNo={refNo}
               last4={last4}
+              orderId={orderId}
               onContinue={() => router.push('/market')}
               onHome={() => router.push('/')}
             />
@@ -498,6 +557,7 @@ function DoneView({
   island,
   refNo,
   last4,
+  orderId,
   onContinue,
   onHome,
 }: {
@@ -509,6 +569,7 @@ function DoneView({
   island: string;
   refNo: string;
   last4: string;
+  orderId: string | null;
   onContinue: () => void;
   onHome: () => void;
 }) {
@@ -580,7 +641,18 @@ function DoneView({
         </div>
       </div>
 
-      <div className="mt-2 flex gap-3">
+      {orderId && (
+        <a
+          href={`/receipt/${orderId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 block w-full rounded-xl bg-gold px-4 py-3 text-center text-sm font-black text-navy transition hover:bg-gold-300"
+        >
+          🧾 View &amp; print receipt
+        </a>
+      )}
+
+      <div className="mt-3 flex gap-3">
         <button
           onClick={onContinue}
           className="flex-1 rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition hover:border-navy hover:text-navy"

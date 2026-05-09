@@ -350,6 +350,26 @@ export default function OrdersPage() {
                   </button>
                 )}
 
+                {/* Print actions — open in new tab so the order list stays put */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <a
+                    href={`/receipt/${selected.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ display: 'block', backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: '10px', padding: '11px', textAlign: 'center', fontWeight: 800, fontSize: '13px' }}
+                  >
+                    🧾 Receipt
+                  </a>
+                  <a
+                    href={`/pick-ticket/${selected.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ display: 'block', backgroundColor: '#000', color: '#fff', textDecoration: 'none', borderRadius: '10px', padding: '11px', textAlign: 'center', fontWeight: 800, fontSize: '13px' }}
+                  >
+                    📋 Pick Ticket
+                  </a>
+                </div>
+
                 <a
                   href={`https://wa.me/${selected.customer_phone}?text=Hi ${selected.customer_name}! Your BSC order ${selected.id} is now: ${selected.status}. Total: $${selected.total.toFixed(2)}`}
                   target="_blank"

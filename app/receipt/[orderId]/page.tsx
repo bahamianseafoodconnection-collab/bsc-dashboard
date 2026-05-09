@@ -1,0 +1,285 @@
+'use client';
+
+// app/receipt/[orderId]/page.tsx
+//
+// Customer-facing receipt. Public route — accessed via the order UUID
+// (non-guessable). Shows full customer info: name, phone, address,
+// delivery method, items, total, payment status. Print-friendly.
+//
+// Linked from /checkout's done view and from /orders detail (staff).
+
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
+
+type OrderRow = {
+  id: string;
+  created_at: string;
+  order_type: string;
+  payment_method: string | null;
+  payment_status: string | null;
+  payment_ref: string | null;
+  status: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_address: string | null;
+  delivery_type: string | null;
+  wholesale_items: unknown;
+  wholesale_cost_total: number | null;
+  total: number | null;
+  admin_notes: string | null;
+};
+
+type LineItem = {
+  name?: string;
+  qty?: number;
+  quantity?: number;
+  unit?: string;
+  unit_price?: number;
+  price?: number;
+  line_total?: number;
+};
+
+function parseItems(raw: unknown): LineItem[] {
+  if (!raw) return [];
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch { return []; }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw as LineItem[];
+}
+
+export default function ReceiptPage() {
+  const params = useParams<{ orderId: string }>();
+  const orderId = params?.orderId;
+  const [order, setOrder] = useState<OrderRow | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!orderId) { setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle();
+      if (cancelled) return;
+      setOrder((data as OrderRow) ?? null);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [orderId]);
+
+  if (loading) return <Centered>Loading receipt…</Centered>;
+  if (!order) return <Centered>Receipt not found.</Centered>;
+
+  const items = parseItems(order.wholesale_items);
+  const total = Number(order.total ?? order.wholesale_cost_total ?? 0);
+  const subtotal = total / 1.10;
+  const vat = total - subtotal;
+  const invoiceNo = `INV-${order.id.slice(0, 8).toUpperCase()}`;
+
+  return (
+    <div style={pgStyle}>
+      <div className="no-print" style={topBarStyle}>
+        <span>Receipt for {order.customer_name || 'Customer'}</span>
+        <button onClick={() => window.print()} style={printBtnStyle}>🖨 Print</button>
+      </div>
+
+      <div style={cardStyle}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', borderBottom: '2px solid #1a2e5a', paddingBottom: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#1a2e5a' }}>🐟 BSC Marketplace</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
+            Bahamian Seafood Connection · Nassau, Bahamas 🇧🇸
+          </div>
+          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+            +1 (242) 558-4495 · bscbahamas.com
+          </div>
+        </div>
+
+        <div style={metaRowStyle}>
+          <div>
+            <div style={metaLabel}>Receipt</div>
+            <div style={{ ...metaValue, fontFamily: 'monospace' }}>{invoiceNo}</div>
+          </div>
+          <div>
+            <div style={metaLabel}>Date</div>
+            <div style={metaValue}>{fmtDate(order.created_at)}</div>
+          </div>
+          <div>
+            <div style={metaLabel}>Order #</div>
+            <div style={{ ...metaValue, fontFamily: 'monospace', fontSize: 11 }}>
+              {order.id.slice(0, 13)}…
+            </div>
+          </div>
+        </div>
+
+        {/* Customer */}
+        <div style={sectionStyle}>
+          <div style={sectionLabel}>Bill to</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a2e5a' }}>
+            {order.customer_name || 'Walk-in customer'}
+          </div>
+          {order.customer_phone && (
+            <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+              📱 {order.customer_phone}
+            </div>
+          )}
+          {order.customer_address && (
+            <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+              {order.customer_address}
+            </div>
+          )}
+        </div>
+
+        {/* Delivery method */}
+        <div style={sectionStyle}>
+          <div style={sectionLabel}>Delivery</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2e5a' }}>
+            {order.delivery_type === 'mailboat'
+              ? '🚤 Mailboat shipping (Family Island)'
+              : order.delivery_type === 'nassau'
+                ? '📍 Nassau location'
+                : order.delivery_type === 'pickup'
+                  ? '🏪 Pickup'
+                  : '📦 Delivery'}
+          </div>
+          {order.admin_notes && (
+            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{order.admin_notes}</div>
+          )}
+        </div>
+
+        {/* Items */}
+        <div style={sectionStyle}>
+          <div style={sectionLabel}>Items</div>
+          {items.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#666' }}>No line items recorded.</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Item</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }}>Qty</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }}>Price</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }}>Line</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const qty = Number(it.qty ?? it.quantity ?? 0);
+                  const price = Number(it.unit_price ?? it.price ?? 0);
+                  const line = Number(it.line_total ?? price * qty);
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px dotted #eee' }}>
+                      <td style={tdStyle}>{it.name || 'Item'}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>
+                        {qty}{it.unit ? ` ${it.unit}` : ''}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>${price.toFixed(2)}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>
+                        ${line.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Totals */}
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '2px solid #1a2e5a' }}>
+          <div style={totalsRowStyle}>
+            <span style={{ color: '#666', fontSize: 12 }}>Subtotal (excl VAT)</span>
+            <span style={{ fontSize: 13 }}>${subtotal.toFixed(2)}</span>
+          </div>
+          <div style={totalsRowStyle}>
+            <span style={{ color: '#666', fontSize: 12 }}>VAT 10%</span>
+            <span style={{ fontSize: 13 }}>${vat.toFixed(2)}</span>
+          </div>
+          <div style={{ ...totalsRowStyle, marginTop: 8, fontWeight: 900, fontSize: 16, color: '#1a2e5a' }}>
+            <span>TOTAL</span>
+            <span>BSD ${total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Payment */}
+        <div style={sectionStyle}>
+          <div style={sectionLabel}>Payment</div>
+          <div style={{ fontSize: 12, color: '#475569' }}>
+            {order.payment_method ? labelForPayment(order.payment_method) : '—'}
+            {' · '}
+            <span
+              style={{
+                color: order.payment_status === 'approved' || order.status === 'processing'
+                  ? '#22c55e'
+                  : order.payment_status === 'pending'
+                    ? '#d97706'
+                    : '#dc2626',
+                fontWeight: 700,
+              }}
+            >
+              {(order.payment_status || order.status || 'pending').toUpperCase()}
+            </span>
+            {order.payment_ref && (
+              <span style={{ color: '#94a3b8', marginLeft: 8, fontFamily: 'monospace' }}>
+                ref {order.payment_ref}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', fontSize: 10, color: '#999', marginTop: 18, borderTop: '1px solid #eee', paddingTop: 10 }}>
+          Thank you for shopping with BSC Marketplace.<br />
+          Questions? WhatsApp +1 (242) 361-3474 or call +1 (242) 558-4495.
+        </div>
+      </div>
+
+      <style>{`
+        @media print {
+          body { background: white !important; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function labelForPayment(m: string) {
+  if (m === 'card') return '💳 Card';
+  if (m === 'cod') return '💵 Cash on delivery';
+  if (m === 'cash') return '💵 Cash';
+  if (m === 'transfer') return '🏦 Transfer';
+  return m;
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontFamily: 'system-ui' }}>
+      {children}
+    </div>
+  );
+}
+
+const pgStyle: React.CSSProperties = { minHeight: '100vh', background: '#f1f5f9', padding: '20px', fontFamily: "'Inter', system-ui, sans-serif" };
+const cardStyle: React.CSSProperties = { background: '#fff', maxWidth: 600, margin: '0 auto', padding: 28, borderRadius: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.08)', color: '#1a2e5a' };
+const topBarStyle: React.CSSProperties = { maxWidth: 600, margin: '0 auto 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#475569' };
+const printBtnStyle: React.CSSProperties = { background: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 800, fontSize: 12, cursor: 'pointer' };
+const metaRowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 14 };
+const metaLabel: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 };
+const metaValue: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#1a2e5a' };
+const sectionStyle: React.CSSProperties = { marginTop: 14, paddingTop: 10, borderTop: '1px dashed #ddd' };
+const sectionLabel: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 };
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '6px 4px', borderBottom: '2px solid #1a2e5a', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 };
+const tdStyle: React.CSSProperties = { padding: '6px 4px' };
+const totalsRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '4px 0' };
