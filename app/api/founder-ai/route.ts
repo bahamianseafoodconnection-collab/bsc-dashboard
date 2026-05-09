@@ -240,6 +240,14 @@ Could replace local Tropic sourcing on import-eligible SKUs:
 - 16/20 shrimp, salmon portions, snapper fillets all candidates
 - Estimated $50-100K/year savings on cost-of-goods alone
 
+### FATHER & SONS = IGLOO RESELLER (May 9, 2026 - per Dedrick)
+Father & Sons (Jorge Caragol) buys salmon FROM Igloo Express, then resells to BSC at +15% markup.
+- Means: BSC can cut Father & Sons out of salmon supply chain by going direct to Igloo, save the 15%
+- Also possible Father & Sons sources OTHER products (lane snapper, salmon 4oz) from Igloo - need invoice to confirm
+- Pre-invoice example math: if F&S sells salmon at $11.50/lb, Igloo cost = $10/lb. BSC direct save vs current Tropic ($11.90/lb) = $1.90/lb = ~$11,400/year on 500 lbs/month salmon volume
+- TIER 2 ADDITION: cut Father & Sons middleman on Igloo-sourced SKUs once Igloo channel is operational
+- Father & Sons invoice with pre-markup costs PENDING upload
+
 ### IGLOO IMPACT ON BUILD PLAN
 - ELIMINATED: USA buyer CRM (6 hr)
 - ELIMINATED: per-shipment USA P&L module
