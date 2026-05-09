@@ -296,6 +296,41 @@ export default function PurchaseOrdersPage() {
       }
     }
 
+    // Receive hook: post the finished weight to inventory_movements at NASSAU
+    // (Spiny Tail processes there) and update public.products.cost_per_unit
+    // for the matching SKU so POS COGS reflects the new yield basis.
+    // Fire-and-forget — a missing inventory_locations row or unmatched name
+    // can't poison a saved processing run.
+    const linkedSupplier = spinyProducts.find((p) => p.id === linkedProductId);
+    const productName = linkedSupplier?.name || selectedOrder.supplier_name || '';
+    if (productName && weightOutNum > 0 && trueCostPerLb > 0) {
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`;
+          }
+          const { data: { user } } = await supabase.auth.getUser();
+          await fetch('/api/purchase-orders/receive', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              purchase_order_id: selectedOrder.id,
+              product_name: productName,
+              finished_weight_lbs: weightOutNum,
+              true_cost_per_lb: trueCostPerLb,
+              unit: 'lb',
+              location_code: 'NASSAU',
+              recorded_by: user?.id ?? null,
+            }),
+          });
+        } catch (err) {
+          console.warn('PO receive hook failed:', err);
+        }
+      })();
+    }
+
     setSavingProcessing(false);
     setSuccess(
       linkedProductId
