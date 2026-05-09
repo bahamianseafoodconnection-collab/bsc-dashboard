@@ -3,18 +3,19 @@
 // app/processor/processor-client.tsx
 // Processor workspace landing.
 //
-// What it does today (Phase 3):
-//   - Greets the signed-in processor with their name + facility
-//   - Quick links to receive raw inventory, calculate yield, scan a barcode
-//   - Lists recent processing_batches so they can see what's been done
+// View states:
+//   - 'home'      : greeting, quick actions, recent batches, founder review queue
+//   - 'new-batch' : the multi-output batch entry form
 //
-// What's still ahead (Phase 4):
-//   - Multi-output batch entry (raw -> [steaks, head, loss]) submitted as draft
-//   - Founder approval queue
+// Phase 4 additions (2026-05-08):
+//   - "Start new batch" CTA → opens NewBatchForm (status='draft')
+//   - Founder/co_founder see ApprovalQueue for draft batches awaiting review
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import NewBatchForm from './new-batch-form';
+import ApprovalQueue from './approval-queue';
 
 const NAVY = '#060e1c';
 const PANEL = '#0f1a2e';
@@ -24,6 +25,8 @@ const TEXT_DIM = 'rgba(255,255,255,0.55)';
 const BORDER = 'rgba(255,255,255,0.08)';
 const RED = '#f87171';
 const GREEN = '#4ade80';
+
+const APPROVER_ROLES = new Set(['founder', 'co_founder']);
 
 type Batch = {
   id: string;
@@ -37,8 +40,6 @@ type Batch = {
 };
 
 function pickBatch(row: Record<string, unknown>): Batch {
-  // processing_batches has ~31 columns and field names have historically drifted.
-  // Pick the most likely candidates and let the rest fall back to null.
   return {
     id: String(row.id ?? ''),
     batch_number: (row.batch_number as string) ?? null,
@@ -49,14 +50,15 @@ function pickBatch(row: Record<string, unknown>): Batch {
       null,
     status: (row.status as string) ?? null,
     whole_weight_lb:
+      pickNumber(row.raw_weight_lbs) ??
       pickNumber(row.whole_weight_lb) ??
-      pickNumber(row.input_weight_lb) ??
-      pickNumber(row.raw_weight_lb),
+      pickNumber(row.input_weight_lb),
     finished_weight_lb:
+      pickNumber(row.total_finished_weight_lbs) ??
       pickNumber(row.finished_weight_lb) ??
-      pickNumber(row.output_weight_lb) ??
-      pickNumber(row.clean_weight_lb),
-    yield_pct: pickNumber(row.yield_pct),
+      pickNumber(row.output_weight_lb),
+    yield_pct:
+      pickNumber(row.yield_percent) ?? pickNumber(row.yield_pct),
     created_at: (row.created_at as string) ?? null,
   };
 }
@@ -86,16 +88,28 @@ function timeAgo(iso: string | null) {
 }
 
 type Props = {
+  userId: string;
   email: string;
   displayName: string | null;
   role: string;
   location: string | null;
 };
 
-export default function ProcessorClient({ email, displayName, role, location }: Props) {
+type View = 'home' | 'new-batch';
+
+export default function ProcessorClient({
+  userId,
+  email,
+  displayName,
+  role,
+  location,
+}: Props) {
+  const [view, setView] = useState<View>('home');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const isApprover = APPROVER_ROLES.has(role);
 
   async function loadBatches() {
     setFetching(true);
@@ -183,196 +197,232 @@ export default function ProcessorClient({ email, displayName, role, location }: 
           </Link>
         </div>
 
-        {/* Quick actions */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: 10,
-            marginBottom: 22,
-          }}
-        >
-          <ActionCard
-            href="/inventory/scan"
-            title="Receive raw stock"
-            sub="Scan or type a barcode"
-            emoji="📥"
-          />
-          <ActionCard
-            href="/yield"
-            title="Calculate yield"
-            sub="Lot label + channel pricing"
-            emoji="⚖️"
-          />
-          <ActionCard
-            href="/inventory"
-            title="Freezer inventory"
-            sub="See current stock"
-            emoji="🧊"
-          />
-        </div>
-
-        {/* Recent batches */}
-        <div
-          style={{
-            background: PANEL,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 14,
-            padding: 18,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'baseline',
-              marginBottom: 12,
+        {view === 'new-batch' && (
+          <NewBatchForm
+            userId={userId}
+            onCancel={() => setView('home')}
+            onSubmitted={() => {
+              setView('home');
+              loadBatches();
             }}
-          >
-            <h2
-              style={{
-                fontSize: 14,
-                fontWeight: 800,
-                margin: 0,
-                color: '#fff',
-                letterSpacing: 0.5,
-              }}
-            >
-              Recent processing batches
-            </h2>
-            <button
-              type="button"
-              onClick={loadBatches}
-              disabled={fetching}
-              style={{
-                background: 'transparent',
-                color: TEXT_DIM,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 8,
-                padding: '5px 10px',
-                fontSize: 11,
-                cursor: fetching ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {fetching ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
+          />
+        )}
 
-          {fetching && (
-            <p style={{ color: TEXT_DIM, fontSize: 13, margin: 0 }}>Loading batches…</p>
-          )}
-
-          {!fetching && fetchError && (
+        {view === 'home' && (
+          <>
+            {/* Quick actions */}
             <div
               style={{
-                background: 'rgba(248,113,113,0.08)',
-                border: `1px solid ${RED}33`,
-                color: RED,
-                borderRadius: 10,
-                padding: '12px 14px',
-                fontSize: 13,
-                fontWeight: 600,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 10,
+                marginBottom: 22,
               }}
             >
-              ⚠️ Could not load batches: {fetchError}
+              <button
+                type="button"
+                onClick={() => setView('new-batch')}
+                style={{
+                  background: GOLD_BRIGHT,
+                  color: NAVY,
+                  border: 'none',
+                  borderRadius: 14,
+                  padding: 16,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <div style={{ fontSize: 22, marginBottom: 6 }}>＋</div>
+                <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>
+                  Start new batch
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(6,14,28,0.7)' }}>
+                  Raw → finished, sent for founder review
+                </div>
+              </button>
+
+              <ActionCard
+                href="/inventory/scan"
+                title="Receive raw stock"
+                sub="Scan or type a barcode"
+                emoji="📥"
+              />
+              <ActionCard
+                href="/yield"
+                title="Calculate yield"
+                sub="Lot label + channel pricing"
+                emoji="⚖️"
+              />
+              <ActionCard
+                href="/inventory"
+                title="Freezer inventory"
+                sub="See current stock"
+                emoji="🧊"
+              />
             </div>
-          )}
 
-          {!fetching && !fetchError && batches.length === 0 && (
-            <p style={{ color: TEXT_DIM, fontSize: 13, margin: 0 }}>
-              No processing batches yet. Receive raw stock, then calculate a yield to log
-              your first batch.
-            </p>
-          )}
+            {/* Founder approval queue (only visible to founder/co_founder) */}
+            {isApprover && (
+              <div style={{ marginBottom: 22 }}>
+                <ApprovalQueue onChanged={loadBatches} />
+              </div>
+            )}
 
-          {!fetching && !fetchError && batches.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {batches.map((b) => (
-                <div
-                  key={b.id}
+            {/* Recent batches */}
+            <div
+              style={{
+                background: PANEL,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: 18,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  marginBottom: 12,
+                }}
+              >
+                <h2
                   style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 10,
-                    padding: '12px 14px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 12,
-                    flexWrap: 'wrap',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    margin: 0,
+                    color: '#fff',
+                    letterSpacing: 0.5,
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#fff',
-                        marginBottom: 2,
-                      }}
-                    >
-                      {b.product_name || 'Unnamed batch'}
-                    </div>
-                    <div style={{ fontSize: 11, color: TEXT_DIM }}>
-                      {b.batch_number || b.id.slice(0, 8)}
-                      {b.created_at ? ` · ${timeAgo(b.created_at)}` : ''}
-                    </div>
-                  </div>
+                  Recent processing batches
+                </h2>
+                <button
+                  type="button"
+                  onClick={loadBatches}
+                  disabled={fetching}
+                  style={{
+                    background: 'transparent',
+                    color: TEXT_DIM,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 8,
+                    padding: '5px 10px',
+                    fontSize: 11,
+                    cursor: fetching ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {fetching ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
 
-                  {(b.whole_weight_lb !== null || b.finished_weight_lb !== null) && (
+              {fetching && (
+                <p style={{ color: TEXT_DIM, fontSize: 13, margin: 0 }}>
+                  Loading batches…
+                </p>
+              )}
+
+              {!fetching && fetchError && (
+                <div
+                  style={{
+                    background: 'rgba(248,113,113,0.08)',
+                    border: `1px solid ${RED}33`,
+                    color: RED,
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  ⚠️ Could not load batches: {fetchError}
+                </div>
+              )}
+
+              {!fetching && !fetchError && batches.length === 0 && (
+                <p style={{ color: TEXT_DIM, fontSize: 13, margin: 0 }}>
+                  No processing batches yet. Hit “Start new batch” above to log
+                  your first one.
+                </p>
+              )}
+
+              {!fetching && !fetchError && batches.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {batches.map((b) => (
                     <div
+                      key={b.id}
                       style={{
-                        fontSize: 11,
-                        color: TEXT_DIM,
-                        textAlign: 'right',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 10,
+                        padding: '12px 14px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 12,
+                        flexWrap: 'wrap',
                       }}
                     >
-                      {b.whole_weight_lb !== null && (
-                        <div>in: {b.whole_weight_lb.toFixed(1)} lb</div>
-                      )}
-                      {b.finished_weight_lb !== null && (
-                        <div>out: {b.finished_weight_lb.toFixed(1)} lb</div>
-                      )}
-                      {b.yield_pct !== null && (
-                        <div style={{ color: '#fff', fontWeight: 700 }}>
-                          {b.yield_pct.toFixed(1)}%
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#fff',
+                            marginBottom: 2,
+                          }}
+                        >
+                          {b.product_name || 'Unnamed batch'}
+                        </div>
+                        <div style={{ fontSize: 11, color: TEXT_DIM }}>
+                          {b.batch_number || b.id.slice(0, 8)}
+                          {b.created_at ? ` · ${timeAgo(b.created_at)}` : ''}
+                        </div>
+                      </div>
+
+                      {(b.whole_weight_lb !== null || b.finished_weight_lb !== null) && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: TEXT_DIM,
+                            textAlign: 'right',
+                          }}
+                        >
+                          {b.whole_weight_lb !== null && (
+                            <div>in: {b.whole_weight_lb.toFixed(1)} lb</div>
+                          )}
+                          {b.finished_weight_lb !== null && (
+                            <div>out: {b.finished_weight_lb.toFixed(1)} lb</div>
+                          )}
+                          {b.yield_pct !== null && (
+                            <div style={{ color: '#fff', fontWeight: 700 }}>
+                              {b.yield_pct.toFixed(1)}%
+                            </div>
+                          )}
                         </div>
                       )}
+
+                      {b.status && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: 1,
+                            textTransform: 'uppercase',
+                            fontWeight: 800,
+                            padding: '4px 8px',
+                            borderRadius: 999,
+                            color: NAVY,
+                            background: statusTone(b.status),
+                          }}
+                        >
+                          {b.status}
+                        </span>
+                      )}
                     </div>
-                  )}
-
-                  {b.status && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: 1,
-                        textTransform: 'uppercase',
-                        fontWeight: 800,
-                        padding: '4px 8px',
-                        borderRadius: 999,
-                        color: NAVY,
-                        background: statusTone(b.status),
-                      }}
-                    >
-                      {b.status}
-                    </span>
-                  )}
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
-
-        <p
-          style={{
-            color: TEXT_DIM,
-            fontSize: 11,
-            textAlign: 'center',
-            marginTop: 24,
-          }}
-        >
-          Multi-output batch entry + founder approval coming in Phase 4.
-        </p>
+          </>
+        )}
       </div>
     </div>
   );

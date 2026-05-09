@@ -144,6 +144,7 @@ export default async function ProcessorPage() {
 
   return (
     <ProcessorClient
+      userId={auth.user.id}
       email={auth.user.email ?? ''}
       displayName={displayName}
       role={role}
