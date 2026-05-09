@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -70,10 +70,21 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 export default function MarketPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [products, setProducts] = useState<MarketProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setCategory] = useState('All');
+
+  // If the URL specifies ?category=Seafood (linked from /category/[slug] or
+  // outside the app), apply it on first render only. Subsequent user clicks
+  // on the sidebar/drawer take precedence.
+  useEffect(() => {
+    const c = searchParams.get('category');
+    if (!c) return;
+    if (CATEGORIES.includes(c)) setCategory(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [activeBrand, setBrand] = useState('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('featured');
@@ -208,7 +219,9 @@ export default function MarketPage() {
           !q ||
           p.name.toLowerCase().includes(q) ||
           p.sku?.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q);
+          p.description.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q) ||
+          (p.wholesaler ? BRANDS[p.wholesaler]?.name.toLowerCase().includes(q) : false);
         return matchCat && matchBrand && matchSearch;
       })
       .sort((a, b) => {
@@ -399,6 +412,32 @@ export default function MarketPage() {
           <p className="text-sm text-slate-600 sm:text-base">
             Fresh Bahamian seafood + Nassau&rsquo;s top wholesale brands, delivered to your door.
           </p>
+        </div>
+      </section>
+
+      {/* ─── Shop by category strip — links to SEO landing pages ─── */}
+      <section className="border-b border-slate-200 bg-slate-50">
+        <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
+          <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+            {[
+              { slug: 'seafood',    label: 'Seafood',    emoji: '🦐' },
+              { slug: 'meat',       label: 'Meat',       emoji: '🥩' },
+              { slug: 'produce',    label: 'Produce',    emoji: '🥦' },
+              { slug: 'beverages',  label: 'Beverages',  emoji: '🥤' },
+              { slug: 'dairy',      label: 'Dairy',      emoji: '🥛' },
+              { slug: 'frozen',     label: 'Frozen',     emoji: '🧊' },
+              { slug: 'dry-goods',  label: 'Dry Goods',  emoji: '🌾' },
+            ].map((c) => (
+              <Link
+                key={c.slug}
+                href={`/category/${c.slug}`}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-navy transition hover:border-navy hover:bg-navy hover:text-gold"
+              >
+                <span>{c.emoji}</span>
+                <span>{c.label}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
