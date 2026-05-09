@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { notifyOrderStatusChange } from '@/lib/notify-status-change';
 
 // Skip prerendering. Orders page is per-user, runtime-only.
 export const dynamic = 'force-dynamic';
@@ -169,6 +170,14 @@ export default function OrdersPage() {
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: next } : o));
     if (selected?.id === order.id) setSelected({ ...order, status: next });
     setLoading(false);
+
+    // Fire-and-forget customer notification (skipped if no phone/email).
+    notifyOrderStatusChange({
+      orderId: order.id,
+      newStatus: next,
+      customerName: order.customer_name,
+      customerPhone: order.customer_phone || null,
+    });
   }
 
   async function cancelOrder(order: Order) {
@@ -182,6 +191,13 @@ export default function OrdersPage() {
     }
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: 'Cancelled' } : o));
     if (selected?.id === order.id) setSelected({ ...order, status: 'Cancelled' });
+
+    notifyOrderStatusChange({
+      orderId: order.id,
+      newStatus: 'Cancelled',
+      customerName: order.customer_name,
+      customerPhone: order.customer_phone || null,
+    });
   }
 
   function timeAgo(iso: string) {
