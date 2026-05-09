@@ -347,47 +347,86 @@ interface CookieToSet {
   options?: CookieOptions;
 }
 
-async function getAuthorizedUser(): Promise<{
-  id: string;
-  email: string | null;
-  role: string;
-} | null> {
-  try {
-    const cookieStore = await cookies();
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anon) return null;
+// Result codes so the POST handler can return distinct error messages
+// instead of one generic "Unauthorized" that hides what actually broke.
+type AuthResult =
+  | { ok: true; user: { id: string; email: string | null; role: string } }
+  | { ok: false; reason: 'no_session' | 'no_user_row' | 'misconfigured' };
 
-    const supa = createServerClient(url, anon, {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet: CookieToSet[]) =>
-          toSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          ),
-      },
-    });
+async function getAuthorizedUser(req: Request): Promise<AuthResult> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) return { ok: false, reason: 'misconfigured' };
 
-    const {
-      data: { user },
-    } = await supa.auth.getUser();
-    if (!user) return null;
+  // Try two paths in order:
+  //   1. Authorization: Bearer <jwt>  — works when the client passes the
+  //      access token explicitly (see app/dashboard/page.tsx). Most robust;
+  //      doesn't depend on cookie chunking or whatever Supabase did with
+  //      the SSR cookie format this week.
+  //   2. SSR cookies — works for server components and pages that signed
+  //      in via @supabase/ssr's createBrowserClient.
+  let userId: string | null = null;
+  let userEmail: string | null = null;
 
-    // Look up role using service client (bypasses RLS)
-    const service = getServiceClient();
-    if (!service) return null;
-    const { data: row } = await service
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+  const authHeader = req.headers.get('authorization') || '';
+  const bearer = authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7).trim()
+    : '';
 
-    if (!row?.role) return null;
-    return { id: user.id, email: user.email ?? null, role: row.role as string };
-  } catch (e) {
-    console.error('Auth check failed:', e);
-    return null;
+  if (bearer) {
+    try {
+      const supa = createClient(url, anon, {
+        global: { headers: { Authorization: `Bearer ${bearer}` } },
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data } = await supa.auth.getUser(bearer);
+      if (data?.user) {
+        userId = data.user.id;
+        userEmail = data.user.email ?? null;
+      }
+    } catch (e) {
+      console.error('Bearer auth failed:', e);
+    }
   }
+
+  if (!userId) {
+    try {
+      const cookieStore = await cookies();
+      const supa = createServerClient(url, anon, {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: (toSet: CookieToSet[]) =>
+            toSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            ),
+        },
+      });
+      const { data } = await supa.auth.getUser();
+      if (data?.user) {
+        userId = data.user.id;
+        userEmail = data.user.email ?? null;
+      }
+    } catch (e) {
+      console.error('Cookie auth failed:', e);
+    }
+  }
+
+  if (!userId) return { ok: false, reason: 'no_session' };
+
+  // Role lookup uses the service client (bypasses RLS).
+  const service = getServiceClient();
+  if (!service) return { ok: false, reason: 'misconfigured' };
+  const { data: row } = await service
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  if (!row?.role) return { ok: false, reason: 'no_user_row' };
+
+  return {
+    ok: true,
+    user: { id: userId, email: userEmail, role: row.role as string },
+  };
 }
 
 function getServiceClient() {
@@ -513,13 +552,20 @@ async function callAnthropic(
 export async function POST(req: Request) {
   try {
     // 1. AUTH GATE — only Dedrick or Jaquel
-    const authUser = await getAuthorizedUser();
-    if (!authUser) {
+    const auth = await getAuthorizedUser(req);
+    if (!auth.ok) {
+      const messages = {
+        no_session: 'Unauthorized — please sign in.',
+        no_user_row:
+          'Signed in, but no staff record found for your account. Contact Dedrick.',
+        misconfigured: 'Server is missing Supabase credentials.',
+      } as const;
       return NextResponse.json(
-        { error: 'Unauthorized — please sign in.' },
-        { status: 401 }
+        { error: messages[auth.reason] },
+        { status: auth.reason === 'misconfigured' ? 500 : 401 }
       );
     }
+    const authUser = auth.user;
     if (!['founder', 'co_founder'].includes(authUser.role)) {
       return NextResponse.json(
         { error: 'Founder AI is private. Access denied for this role.' },

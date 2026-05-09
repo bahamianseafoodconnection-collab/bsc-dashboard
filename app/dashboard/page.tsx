@@ -194,9 +194,17 @@ export default function DashboardPage() {
     const history = aiMessages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
     setAiMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
     try {
+      // Pull the live access token and pass it explicitly. The server route
+      // would also accept the cookie, but Bearer is robust against any
+      // cookie-format drift between staff-login and the API handler.
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
       const res = await fetch('/api/founder-ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ message: userMsg, history }),
       });
       const data = await res.json();
