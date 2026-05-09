@@ -206,7 +206,7 @@ line_total: Number((i.unit_price * i.qty).toFixed(2)),
 line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)),
 }));
 const customerNameClean = customerName.trim();
-const { error: insertError } = await supabase.from('orders').insert({
+const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({
 order_type: 'pos_sale_nassau',
 payment_method: paymentMethod,
 payment_status: 'paid_in_full',
@@ -215,7 +215,7 @@ wholesale_cost_total: Number(subtotal.toFixed(2)),
 customer_name: customerNameClean || 'Walk-in',
 admin_notes: paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
 user_id: userId,
-});
+}).select('id').single();
 if (insertError) {
 alert('Sale could not be saved: ' + insertError.message);
 setCompleting(false);
@@ -223,11 +223,42 @@ return;
 }
 // Persist channel-correct financial split. Fire-and-forget — a missing
 // financials table or RLS issue must not block the sale.
+const orderId = insertedOrder?.id ?? null;
 recordSaleFinancials({
   saleAmount: subtotal,
   costBasis: costTotal,
   channel: 'nassau_pos',
+  orderId,
 }).catch((err) => console.warn('Financials log failed:', err));
+
+// Decrement inventory at the Nassau location. Fire-and-forget for the same
+// reason — sale is already paid for, can't roll it back over a stock log.
+(async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (session?.access_token) {
+      headers.Authorization = `Bearer ${session.access_token}`;
+    }
+    await fetch('/api/sales/inventory-write', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        location_code: 'NASSAU',
+        order_id: orderId,
+        channel: 'nassau_pos',
+        items: lineItems.map((i) => ({
+          product_id: i.product_id,
+          sku: i.sku,
+          qty: i.qty,
+          unit: i.unit,
+        })),
+      }),
+    });
+  } catch (err) {
+    console.warn('Inventory decrement failed:', err);
+  }
+})();
 setLastSale({
 ref, total: subtotal, cost_total: costTotal, profit: realProfit,
 items: [...cart], customer: customerName.trim() || 'Walk-in',

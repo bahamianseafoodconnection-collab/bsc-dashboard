@@ -120,6 +120,40 @@ export default function CheckoutPage() {
       orderId: orderIdInserted || null,
     }).catch((err) => console.warn('Financials log failed:', err));
 
+    // Decrement inventory for source='market' items (BSC stock). Wholesale
+    // items come from local_wholesale_products and aren't in our inventory.
+    const marketItems = cart
+      .filter((i) => i.source === 'market')
+      .map((i) => ({
+        product_id: i.id,
+        sku: i.sku ?? null,
+        qty: i.qty,
+        unit: i.unit,
+      }));
+    if (marketItems.length > 0) {
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`;
+          }
+          await fetch('/api/sales/inventory-write', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              location_code: 'NASSAU',
+              order_id: orderIdInserted || null,
+              channel: 'online_market',
+              items: marketItems,
+            }),
+          });
+        } catch (err) {
+          console.warn('Inventory decrement failed:', err);
+        }
+      })();
+    }
+
     return orderIdInserted;
   }
 
