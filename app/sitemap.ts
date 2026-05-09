@@ -46,6 +46,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/market`,          lastModified: now, changeFrequency: 'daily',   priority: 0.9 },
     { url: `${base}/local-wholesale`, lastModified: now, changeFrequency: 'weekly',  priority: 0.7 },
     { url: `${base}/us-shopping`,     lastModified: now, changeFrequency: 'weekly',  priority: 0.5 },
+    { url: `${base}/help`,            lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/shipping`,        lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/returns`,         lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/contact`,         lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${base}/login`,           lastModified: now, changeFrequency: 'yearly',  priority: 0.3 },
   ];
 

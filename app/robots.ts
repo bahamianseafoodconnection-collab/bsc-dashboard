@@ -21,6 +21,10 @@ export default function robots(): MetadataRoute.Robots {
           '/us-shopping',
           '/login',
           '/track/',
+          '/help',
+          '/shipping',
+          '/returns',
+          '/contact',
         ],
         disallow: [
           '/dashboard',

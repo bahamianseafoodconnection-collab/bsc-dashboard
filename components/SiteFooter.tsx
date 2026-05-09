@@ -12,19 +12,21 @@ const LINKS = {
     { label: 'Online Market',     href: '/market' },
     { label: 'Local Wholesale',   href: '/local-wholesale' },
     { label: 'Shop USA',          href: '/us-shopping' },
-    { label: 'Checkout',          href: '/checkout' },
+    { label: 'My Account',        href: '/account' },
+    { label: 'My Orders',         href: '/my-orders' },
+    { label: 'Wishlist',          href: '/wishlist' },
   ],
-  services: [
-    { label: 'Pay Utility Bills', href: '/utilities' },
-    { label: 'Vehicles & Parts',  href: '/vehicles' },
-    { label: 'Yield Calculator',  href: '/yield' },
-    { label: 'Order Fulfillment', href: '/order-fulfillment' },
+  help: [
+    { label: 'Help & FAQ',        href: '/help' },
+    { label: 'Shipping & Delivery', href: '/shipping' },
+    { label: 'Returns & Refunds', href: '/returns' },
+    { label: 'Contact Us',        href: '/contact' },
   ],
   company: [
     { label: 'Our Story',         href: '/#why-bsc' },
     { label: 'Supplier Portal',   href: '/supplier' },
+    { label: 'Pay Utility Bills', href: '/utilities' },
     { label: 'Login / Sign Up',   href: '/login' },
-    { label: 'Dashboard',         href: '/dashboard' },
   ],
 };
 
@@ -93,7 +95,7 @@ export default function SiteFooter() {
         </div>
 
         <FooterColumn title="Shop" links={LINKS.shop} />
-        <FooterColumn title="Services" links={LINKS.services} />
+        <FooterColumn title="Help" links={LINKS.help} />
         <FooterColumn title="Company" links={LINKS.company} />
       </div>
 
