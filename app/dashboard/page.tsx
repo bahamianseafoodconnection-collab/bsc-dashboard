@@ -19,6 +19,7 @@ const NAV_GROUPS = [
       { icon: '🟡', label: 'Nassau POS',        href: '/pos' },
       { icon: '🟣', label: 'Andros POS',        href: '/pos-andros' },
       { icon: '📦', label: 'Orders',            href: '/orders' },
+      { icon: '🚚', label: 'Pickup Queue',      href: '/pickup-queue' },
       { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders' },
       { icon: '🏭', label: 'Processor',         href: '/processor' },
     ],
