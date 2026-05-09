@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import AppShell from './AppShell';
 import './globals.css';
 
@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   creator: 'Bahamian Seafood Connection',
   publisher: 'BSC Marketplace',
   keywords: ['Bahamas seafood', 'Nassau food delivery', 'Bahamian marketplace', 'BSC', 'Andros delivery'],
-  themeColor: '#1a2e5a',
   manifest: '/manifest.json',
   icons: { icon: '/favicon.ico', apple: '/apple-touch-icon.png' },
   openGraph: {
@@ -19,6 +18,12 @@ export const metadata: Metadata = {
     locale: 'en_BS',
     siteName: 'BSC Marketplace',
   },
+};
+
+// themeColor moved out of `metadata` per Next 15. The earlier viewport meta
+// tag is also kept inline in <head> below for older browsers / PWA chrome.
+export const viewport: Viewport = {
+  themeColor: '#1a2e5a',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
