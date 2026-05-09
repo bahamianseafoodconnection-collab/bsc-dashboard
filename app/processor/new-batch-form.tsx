@@ -34,6 +34,14 @@ const GREEN = '#4ade80';
 
 type Product = { id: string; name: string; sku?: string | null };
 type Location = { id: string; code: string; name: string };
+type Captain = { id: string; name: string };
+type Vessel = { id: string; captain_id: string | null; name: string; registration: string | null };
+
+type OutputLine = {
+  product_id: string | null;
+  product_label: string;       // shown in UI; mirrors the picked product's name or free text
+  weight_lbs: string;          // string while editing
+};
 
 type Props = {
   userId: string;
@@ -45,6 +53,8 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
   // Reference data
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [captains, setCaptains] = useState<Captain[]>([]);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [refError, setRefError] = useState<string | null>(null);
 
   // Form state
@@ -58,6 +68,11 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
   const [storageLocationId, setStorageLocationId] = useState('');
   const [bestBefore, setBestBefore] = useState('');
   const [notes, setNotes] = useState('');
+  const [captainId, setCaptainId] = useState('');
+  const [vesselId, setVesselId] = useState('');
+
+  // Multi-output state — one row per finished SKU
+  const [outputs, setOutputs] = useState<OutputLine[]>([]);
 
   // Submit state
   const [submitting, setSubmitting] = useState(false);
@@ -66,23 +81,25 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [{ data: prods, error: prodErr }, locRes] = await Promise.all([
-        supabase
-          .from('products')
-          .select('id, name, sku')
-          .order('name')
-          .limit(500),
+      const [prodRes, locRes, capRes, vesRes] = await Promise.all([
+        supabase.from('products').select('id, name, sku').order('name').limit(500),
         fetch('/api/locations', { cache: 'no-store' }).then((r) => r.json()),
+        supabase.from('captains').select('id, name').order('name').limit(500),
+        supabase.from('vessels').select('id, captain_id, name, registration').limit(500),
       ]);
       if (cancelled) return;
-      if (prodErr) {
-        setRefError(`Could not load products: ${prodErr.message}`);
+      if (prodRes.error) {
+        setRefError(`Could not load products: ${prodRes.error.message}`);
       } else {
-        setProducts((prods || []) as Product[]);
+        setProducts((prodRes.data || []) as Product[]);
       }
       if (Array.isArray(locRes?.locations)) {
         setLocations(locRes.locations as Location[]);
       }
+      // Captains/vessels are optional. If the table doesn't exist yet (the
+      // 2026-05-09 migration hasn't been run), the dropdowns just stay empty.
+      if (!capRes.error) setCaptains((capRes.data || []) as Captain[]);
+      if (!vesRes.error) setVessels((vesRes.data || []) as Vessel[]);
     })();
     return () => {
       cancelled = true;
@@ -104,6 +121,25 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
 
   const calcReady = rawW > 0 && rawCost > 0 && finishedW > 0;
   const formValid = productId && calcReady && finishedW <= rawW;
+
+  // Derived output calculations — equal-weight cost allocation by default.
+  const outputsTotalWeight = outputs.reduce(
+    (s, o) => s + (parseFloat(o.weight_lbs) || 0),
+    0
+  );
+  const outputsAllocated = outputs.map((o) => {
+    const w = parseFloat(o.weight_lbs) || 0;
+    const sharePct = outputsTotalWeight > 0 ? (w / outputsTotalWeight) * 100 : 0;
+    const allocCost = (rawCost * sharePct) / 100;
+    const costPerLb = w > 0 ? allocCost / w : 0;
+    return { weight: w, sharePct, allocCost, costPerLb };
+  });
+  const outputsWeightDiff = Math.abs(outputsTotalWeight - finishedW);
+
+  // Vessels filtered by selected captain
+  const captainVessels = vessels.filter(
+    (v) => !captainId || v.captain_id === captainId
+  );
 
   // ─── Filtered product list for the picker ───────────────────────────
   const productMatches = productSearch
@@ -148,15 +184,68 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
     if (processingLocationId) payload.processing_location_id = processingLocationId;
     if (storageLocationId) payload.storage_location_id = storageLocationId;
     if (bestBefore) payload.best_before_date = bestBefore;
+    if (captainId) payload.source_captain_id = captainId;
+    if (vesselId) payload.source_vessel_id = vesselId;
 
-    const { error } = await supabase.from('processing_batches').insert(payload);
-    setSubmitting(false);
-
+    const { data: inserted, error } = await supabase
+      .from('processing_batches')
+      .insert(payload)
+      .select('id')
+      .single();
     if (error) {
       setSubmitError(error.message);
+      setSubmitting(false);
       return;
     }
-    onSubmitted();
+    const batchId = inserted?.id as string | undefined;
+
+    // Insert outputs (multi-output detail). Skip if none entered, or if
+    // the table doesn't exist yet (migration not run) — the batch itself
+    // is the source of truth either way.
+    if (batchId && outputs.length > 0) {
+      const outRows = outputs
+        .map((o, i) => {
+          const calc = outputsAllocated[i];
+          if (!o.product_label.trim() && !o.product_id) return null;
+          if (calc.weight <= 0) return null;
+          return {
+            processing_batch_id: batchId,
+            product_id: o.product_id,
+            output_label: (o.product_label || 'Unnamed output').trim(),
+            output_weight_lbs: round2(calc.weight),
+            cost_share_pct: round2(calc.sharePct),
+            allocated_cost_bsd: round2(calc.allocCost),
+            effective_cost_per_lb: round4(calc.costPerLb),
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r != null);
+      if (outRows.length > 0) {
+        const { error: outErr } = await supabase
+          .from('processing_batch_outputs')
+          .insert(outRows);
+        if (outErr) {
+          // Non-fatal — batch saved, outputs failed. Tell the user but
+          // still onSubmitted() so the queue refreshes.
+          setSubmitError(
+            `Batch saved, but per-output detail failed: ${outErr.message}`
+          );
+        }
+      }
+    }
+
+    setSubmitting(false);
+    if (!submitError) onSubmitted();
+  }
+
+  // Output line helpers
+  function addOutput() {
+    setOutputs((prev) => [...prev, { product_id: null, product_label: '', weight_lbs: '' }]);
+  }
+  function updateOutput(i: number, patch: Partial<OutputLine>) {
+    setOutputs((prev) => prev.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
+  }
+  function removeOutput(i: number) {
+    setOutputs((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   return (
@@ -447,6 +536,172 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
           onChange={(e) => setBestBefore(e.target.value)}
           style={inputStyle}
         />
+
+        {/* Captain + vessel — traceability */}
+        {captains.length > 0 && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <FieldLabel>Source captain</FieldLabel>
+              <select
+                value={captainId}
+                onChange={(e) => {
+                  setCaptainId(e.target.value);
+                  setVesselId('');
+                }}
+                style={{ ...inputStyle, appearance: 'none' }}
+              >
+                <option value="" style={{ background: PANEL }}>— none —</option>
+                {captains.map((c) => (
+                  <option key={c.id} value={c.id} style={{ background: PANEL }}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {captainVessels.length > 0 && (
+              <div style={{ flex: 1 }}>
+                <FieldLabel>Vessel</FieldLabel>
+                <select
+                  value={vesselId}
+                  onChange={(e) => setVesselId(e.target.value)}
+                  style={{ ...inputStyle, appearance: 'none' }}
+                >
+                  <option value="" style={{ background: PANEL }}>— none —</option>
+                  {captainVessels.map((v) => (
+                    <option key={v.id} value={v.id} style={{ background: PANEL }}>
+                      {v.name}
+                      {v.registration ? ` · ${v.registration}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Multi-output section */}
+        <div style={{ marginTop: 18, padding: 14, background: 'rgba(255,255,255,0.02)', border: `1px dashed ${BORDER}`, borderRadius: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: 1, color: GOLD, fontWeight: 700, textTransform: 'uppercase' }}>
+                Output SKUs (optional)
+              </div>
+              <div style={{ fontSize: 11, color: TEXT_DIM, marginTop: 2 }}>
+                Break the finished weight into per-SKU outputs (e.g. steaks + head + loin).
+                Cost is auto-allocated by weight share.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={addOutput}
+              style={{
+                background: GOLD_BRIGHT,
+                color: NAVY,
+                border: 'none',
+                borderRadius: 8,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >+ Add output</button>
+          </div>
+
+          {outputs.map((o, i) => {
+            const calc = outputsAllocated[i];
+            return (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  gap: 6,
+                  alignItems: 'flex-start',
+                  marginTop: 8,
+                  padding: 10,
+                  background: 'rgba(255,255,255,0.03)',
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ flex: 2, minWidth: 0 }}>
+                  <input
+                    type="text"
+                    list={`prods-${i}`}
+                    value={o.product_label}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const matched = products.find((p) => p.name === v);
+                      updateOutput(i, {
+                        product_label: v,
+                        product_id: matched?.id ?? null,
+                      });
+                    }}
+                    placeholder="Output name (e.g. Grouper steak 6oz)"
+                    style={{ ...inputStyle, marginBottom: 0 }}
+                  />
+                  <datalist id={`prods-${i}`}>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.name} />
+                    ))}
+                  </datalist>
+                  <div style={{ fontSize: 10, color: TEXT_DIM, marginTop: 4 }}>
+                    {calc.weight > 0 ? (
+                      <>
+                        {calc.sharePct.toFixed(1)}% share · ${calc.allocCost.toFixed(2)} cost · ${calc.costPerLb.toFixed(2)}/lb
+                      </>
+                    ) : (
+                      'Enter weight to compute'
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={o.weight_lbs}
+                  onChange={(e) => updateOutput(i, { weight_lbs: e.target.value })}
+                  placeholder="lbs"
+                  style={{ ...inputStyle, marginBottom: 0, width: 80, flex: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeOutput(i)}
+                  style={{
+                    background: 'transparent',
+                    color: TEXT_DIM,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 8,
+                    padding: '0 10px',
+                    fontSize: 16,
+                    cursor: 'pointer',
+                    flex: 'none',
+                  }}
+                  aria-label="Remove output"
+                >×</button>
+              </div>
+            );
+          })}
+
+          {outputs.length > 0 && finishedW > 0 && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: 8,
+                background: outputsWeightDiff > 0.5 ? 'rgba(248,113,113,0.08)' : 'rgba(74,222,128,0.08)',
+                border: `1px solid ${outputsWeightDiff > 0.5 ? RED : GREEN}33`,
+                borderRadius: 8,
+                fontSize: 11,
+                color: outputsWeightDiff > 0.5 ? RED : GREEN,
+              }}
+            >
+              Outputs total {outputsTotalWeight.toFixed(2)} lb · finished is{' '}
+              {finishedW.toFixed(2)} lb
+              {outputsWeightDiff > 0.5
+                ? ` · diff ${outputsWeightDiff.toFixed(2)} lb (review)`
+                : ' · ✓ matches'}
+            </div>
+          )}
+        </div>
 
         <FieldLabel>Notes (optional)</FieldLabel>
         <textarea
