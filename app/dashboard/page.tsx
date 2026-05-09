@@ -39,6 +39,7 @@ const NAV_GROUPS = [
       { icon: '🦞', label: 'Lobster Intake',    href: '/lobster-intake' },
       { icon: '⚖️', label: 'Yield Measurement', href: '/yield-measure' },
       { icon: '🏷️', label: 'Lobster Labels',    href: '/lobster-labels' },
+      { icon: '🧊', label: 'Igloo Integration', href: '/igloo' },
     ],
   },
   {
