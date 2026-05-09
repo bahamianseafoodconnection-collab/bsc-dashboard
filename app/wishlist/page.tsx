@@ -298,8 +298,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
           <Link
-            href="/my-orders"
+            href="/account"
             className="ml-auto rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20"
+          >
+            Account
+          </Link>
+          <Link
+            href="/my-orders"
+            className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20"
           >
             My orders
           </Link>

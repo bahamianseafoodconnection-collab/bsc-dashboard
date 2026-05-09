@@ -101,10 +101,16 @@ export default function MyOrdersPage() {
             </div>
           </Link>
           <Link
-            href="/wishlist"
+            href="/account"
             className="ml-auto rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20"
           >
-            ♡ Wishlist
+            Account
+          </Link>
+          <Link
+            href="/wishlist"
+            className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20"
+          >
+            ♡
           </Link>
           <Link
             href="/market"

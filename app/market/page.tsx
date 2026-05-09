@@ -307,6 +307,12 @@ export default function MarketPage() {
           >
             My orders
           </Link>
+          <Link
+            href="/account"
+            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/20 sm:flex sm:h-11"
+          >
+            Account
+          </Link>
           <button
             onClick={() => setShowCart(true)}
             className="relative flex h-10 shrink-0 items-center gap-2 rounded-lg bg-gold px-3 text-sm font-bold text-navy transition hover:bg-gold-300 sm:h-11 sm:px-4"

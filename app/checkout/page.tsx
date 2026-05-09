@@ -79,6 +79,37 @@ export default function CheckoutPage() {
     }
   }, []);
 
+  // Pre-fill name/phone/address from profile + default saved address (if signed in).
+  // Only fills empty fields so a customer who started typing isn't overwritten.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled || !user) return;
+      const [{ data: prof }, { data: addr }] = await Promise.all([
+        supabase.from('profiles').select('full_name, phone').eq('id', user.id).maybeSingle(),
+        supabase
+          .from('customer_addresses')
+          .select('street, island, recipient_name, phone, is_default')
+          .eq('auth_user_id', user.id)
+          .order('is_default', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const profName  = (prof?.full_name as string) || '';
+      const profPhone = (prof?.phone as string)     || '';
+      const fillName  = addr?.recipient_name || profName;
+      const fillPhone = addr?.phone || profPhone;
+      setName((n) => n || fillName);
+      setPhone((p) => p || fillPhone);
+      if (addr?.street) setAddress((a) => a || addr.street);
+      if (addr?.island) setIsland((i) => i === 'Nassau' ? addr.island : i);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Clear the saved cart once we've reached the done view so the next
   // visit to /market starts fresh.
   useEffect(() => {
