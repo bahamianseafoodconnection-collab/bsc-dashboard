@@ -400,6 +400,22 @@ DOESN'T LOCK INTO single deal structure. Scales by keeping multiple sales channe
 
 ### D4 STATUS May 9, 2026: DEFERRED. Test landed-cost calc with 4 reference cases (snow crab / NY Strip / water low / water high) is deferred to a future session per Dedrick. Re-surface when calc is being actively used.
 
+### F1 ANSWERED May 9, 2026: BUILD SEQUENCE APPROVED + multi-tenant Partner Portal
+Build sequence approved as proposed: Pay Jomara -> Partner Portal -> Lobster Intake -> Yield Calc -> Labels -> Igloo Integration.
+
+NEW REQUIREMENT: Partner Portal must be MULTI-TENANT with shareable URLs. Dedrick wants to send unique URLs (e.g., /partner/jomara/abc123) to potential partners via WhatsApp. Each partner sees only their scoped data (their lobster sales, their payment status, their inventory). Same template, different per-token scope.
+
+This makes Partner Portal more valuable - it's not just "Bob's view" but a reusable acquisition tool for future partners. Send a URL, partner sees the same professional tracking experience BSC offers Bob.
+
+Implications for Partner Portal scope:
+- partner_tokens table (token, partner_id, created_at, expires_at)
+- /partner/[partner_slug]/[token] route - public-readable but token-scoped
+- Per-partner: outstanding balance, payment history, real-time inventory at BSC, recent shipments
+- Mobile-optimized (WhatsApp-shared links open on phone)
+- No login required (token IS auth) - reduces friction for partner adoption
+
+### F2 ANSWERED May 9, 2026: SACRED RULES STAY SACRED AT SYSTEM LEVEL. Per-SKU overrides only - never blanket rule changes. This aligns with C1 Option 3 (manual top-20 SKU price migration). Future system override mechanism (Option 1) must respect this principle - no global margin changes via UI. Sacred rules can only be edited in code by founder.
+
 ### D5 STATUS May 9, 2026: IN PROGRESS. Dedrick is drafting the 7-year Option A repayment contract for Tom Gotthelf to sign. THIS IS THE START OF TIER 1 #1 (Fix Tom relationship). The signed contract is the first formal milestone of the relationship rebuild. Numbers to bake into contract: $550K principal, 6% total interest, $583K total payback, $6,940.48/month for 84 months, 0% prepayment penalty (recommend), Bill Casale as witness if appropriate (fellow BNT Inheritance partner).
 
 ### DATA TRUTH PRINCIPLE (locked May 9, 2026 - per Dedrick on C4)
