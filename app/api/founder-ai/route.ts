@@ -301,6 +301,23 @@ Pipeline is wealth engine ONLY if all four conditions met:
 
 KEY RISK: question A6 (USA wholesale price by grade) is the single most important number to lock before building.
 
+### B1 ANSWERED - JOMARA DEAL FRAMEWORK (locked May 9, 2026)
+BSC uses MULTIPLE deal structures with Jomara to preserve optionality and scale through channel mix. NOT locked to a single Structure A/B/C.
+
+CURRENT STATUS QUO (proven working):
+- Spiny Tail processes lobster tails -> sells to Jomara
+- $108,354 across 7,025 lbs in ~30 days last season (Oct-Nov 2025)
+- This IS the deal already - just needs scaling
+
+BSC SCALING OPTIONS (all available, mix per opportunity):
+- A. Process-for-fee for Bob when he has excess inventory needing capacity
+- B. BSC buys whole tails, processes, sells direct to Jomara (current model)
+- C. JV on specific products where both sides bring leverage
+- D. NEW: Igloo Express direct as parallel US channel for price discovery on premium grades
+- E. Other US wholesale buyers as Tier 2 alternative outlets
+
+DOESN'T LOCK INTO single deal structure. Scales by keeping multiple sales channels live so BSC has pricing leverage and Bob/Jomara has supply security.
+
 ### YIELD DISCIPLINE PRINCIPLE (locked May 9, 2026 - per Dedrick)
 Real lobster tail yields WILL BE RECORDED from actual batches in the field. AI must NOT assume yields. When asked about yield-dependent economics, AI must surface the most recent measured yield from yield_lots table OR flag that no measurement exists yet. NEVER pad numbers with guesses. The economics model lives or dies on actual measured yield, not assumption.
 
