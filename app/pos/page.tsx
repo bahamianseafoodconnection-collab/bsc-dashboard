@@ -205,12 +205,14 @@ cost_per_unit: Number(i.cost_per_unit.toFixed(2)),
 line_total: Number((i.unit_price * i.qty).toFixed(2)),
 line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)),
 }));
+const customerNameClean = customerName.trim();
 const { error: insertError } = await supabase.from('orders').insert({
 order_type: 'pos_sale_nassau',
 payment_method: paymentMethod,
 payment_status: 'paid_in_full',
 wholesale_items: lineItems,
 wholesale_cost_total: Number(subtotal.toFixed(2)),
+customer_name: customerNameClean || 'Walk-in',
 admin_notes: paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
 user_id: userId,
 });
