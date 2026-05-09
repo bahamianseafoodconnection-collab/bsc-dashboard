@@ -30,6 +30,17 @@ type Order = {
   wholesale_items: unknown;
 };
 
+const CANCEL_WINDOW_MS = 30 * 60 * 1000;
+const CANCELLABLE = new Set([
+  'Pending', 'Confirmed', 'pending', 'processing', 'payment_pending',
+]);
+
+function canCancel(o: Order): boolean {
+  const live = o.status || o.payment_status || '';
+  if (!CANCELLABLE.has(live)) return false;
+  return Date.now() - new Date(o.created_at).getTime() < CANCEL_WINDOW_MS;
+}
+
 type LineItem = {
   id?: string;
   source?: 'market' | 'wholesale' | 'us';
@@ -69,6 +80,35 @@ export default function MyOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [trackId, setTrackId] = useState('');
+
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  async function cancelOrder(orderId: string) {
+    if (!confirm('Cancel this order? This cannot be undone.')) return;
+    setCancellingId(orderId);
+    setCancelError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      const j = await res.json();
+      if (j.ok) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'Cancelled' } : o)));
+      } else {
+        setCancelError(j.error || 'Could not cancel');
+      }
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   function reorder(items: LineItem[]) {
     if (typeof window === 'undefined' || items.length === 0) return;
@@ -284,7 +324,21 @@ export default function MyOrdersPage() {
                 >
                   ↻ Re-order
                 </button>
+                {canCancel(o) && (
+                  <button
+                    onClick={() => cancelOrder(o.id)}
+                    disabled={cancellingId === o.id}
+                    className="rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-bold text-red-700 hover:border-red-500 disabled:opacity-60"
+                  >
+                    {cancellingId === o.id ? 'Cancelling…' : 'Cancel'}
+                  </button>
+                )}
               </div>
+              {cancelError && cancellingId === null && (
+                <div className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">
+                  {cancelError}
+                </div>
+              )}
             </div>
           );
         })}
