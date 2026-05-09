@@ -20,30 +20,43 @@ const NAV_GROUPS = [
       { icon: '🟣', label: 'Andros POS',        href: '/pos-andros' },
       { icon: '📦', label: 'Orders',            href: '/orders' },
       { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders' },
+      { icon: '🏭', label: 'Processor',         href: '/processor' },
     ],
   },
   {
-    label: 'Business',
+    label: 'Inventory & Supply',
     items: [
+      { icon: '📦', label: 'Inventory',        href: '/inventory' },
       { icon: '🚢', label: 'Suppliers',        href: '/supplier' },
       { icon: '🧾', label: 'Purchase Orders',  href: '/purchase-orders' },
       { icon: '⚖️', label: 'Yield Calculator', href: '/yield' },
-      { icon: '📊', label: 'Reports',          href: '/report' },
-      { icon: '📦', label: 'Inventory',        href: '/inventory' },
+      { icon: '🏷️', label: 'Print Labels',     href: '/labels' },
+      { icon: '🎣', label: 'Captains',          href: '/captains' },
     ],
   },
   {
-    label: 'Services',
+    label: 'Money',
     items: [
-      { icon: '🚗', label: 'Vehicles & Parts', href: '/vehicles' },
-      { icon: '⚡', label: 'Bill Payments',    href: '/utilities' },
-      { icon: '🛒', label: 'Market',           href: '/market' },
+      { icon: '💸', label: 'Expenses',          href: '/expenses' },
+      { icon: '📋', label: 'Accounts Payable',  href: '/accounts-payable' },
+      { icon: '💼', label: 'Payroll',           href: '/payroll' },
+      { icon: '👥', label: 'Customers',         href: '/customers' },
+      { icon: '📈', label: 'Reports + CSV',     href: '/reports' },
+    ],
+  },
+  {
+    label: 'Services & Fleet',
+    items: [
+      { icon: '🚛', label: 'Fleet (internal)',  href: '/fleet' },
+      { icon: '🚗', label: 'Vehicles & Parts',  href: '/vehicles' },
+      { icon: '⚡', label: 'Bill Payments',     href: '/utilities' },
+      { icon: '🛒', label: 'Public Market',     href: '/market' },
     ],
   },
   {
     label: 'AI & Insights',
     items: [
-      { icon: '🤖', label: 'BSC AI Assistant', href: '#ai' },
+      { icon: '🤖', label: 'Founder AI',        href: '#ai' },
     ],
   },
 ];
