@@ -83,6 +83,7 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showImport, setShowImport] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -225,10 +226,22 @@ export default function ProductsPage() {
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>Photos - Prices - Stock - BSC Marketplace</div>
           </div>
         </div>
-        <button onClick={openAdd} style={{ backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
-          + Add Product
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowImport(true)} style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '10px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            📥 Import CSV
+          </button>
+          <button onClick={openAdd} style={{ backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
+            + Add Product
+          </button>
+        </div>
       </div>
+
+      {showImport && (
+        <BulkImportPanel
+          onClose={() => setShowImport(false)}
+          onApplied={() => { setShowImport(false); loadProducts(); }}
+        />
+      )}
 
       {success && (
         <div style={{ backgroundColor: '#e8f5e9', borderLeft: '4px solid #2e7d32', padding: '12px 20px', margin: '16px 20px 0', borderRadius: 8, color: '#2e7d32', fontWeight: 700, fontSize: 14 }}>
@@ -454,3 +467,168 @@ export default function ProductsPage() {
     </div>
   );
 }
+
+/* ───────────── Bulk CSV import ───────────── */
+
+const TEMPLATE_HEADERS = [
+  'name', 'description', 'category',
+  'price_nassau', 'price_andros', 'price_online', 'price_wholesale',
+  'unit', 'image_url', 'in_stock', 'stock_lbs', 'featured',
+];
+const TEMPLATE_SAMPLE = [
+  ['Snapper - Yellowtail', 'Fresh whole snapper', 'seafood', '12.50', '13.99', '14.99', '8.50', 'lb', '', 'true', '40', 'true'],
+  ['Conch - Cleaned', 'Cleaned conch meat', 'seafood', '11.00', '12.50', '13.50', '7.50', 'lb', '', 'true', '25', 'false'],
+];
+
+function downloadTemplate() {
+  const csv = [TEMPLATE_HEADERS.join(','), ...TEMPLATE_SAMPLE.map((r) => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'bsc-products-template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+type ImportPlanRow = {
+  row: number;
+  name: string;
+  action: 'insert' | 'update' | 'skip';
+  productId?: string;
+  error?: string;
+};
+
+type ImportResult = {
+  ok: boolean;
+  dry_run: boolean;
+  total: number;
+  inserted: number;
+  updated: number;
+  errors: number;
+  plan: ImportPlanRow[];
+  error?: string;
+};
+
+function BulkImportPanel({ onClose, onApplied }: { onClose: () => void; onApplied: () => void }) {
+  const [csv, setCsv] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(dry: boolean) {
+    if (!csv.trim()) { setError('Paste a CSV first.'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/products/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv, dry_run: dry }),
+      });
+      const j = (await res.json()) as ImportResult;
+      if (!j.ok) { setError(j.error || 'Import failed'); setResult(null); }
+      else { setResult(j); if (!dry && j.errors === 0) setTimeout(onApplied, 1200); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCsv(String(reader.result || ''));
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, padding: 16, overflow: 'auto' }}>
+      <div style={{ background: '#fff', maxWidth: 720, margin: '20px auto', borderRadius: 14, padding: 22, boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#1a2e5a' }}>📥 Bulk import products</h2>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8' }}>×</button>
+        </div>
+
+        <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: 12, fontSize: 13, color: '#1e3a8a', marginBottom: 14 }}>
+          Match key is <strong>name</strong>. Existing products get updated; new names get inserted. Run a dry-run first.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          <button onClick={downloadTemplate} style={btnSecondary}>↓ Download template</button>
+          <label style={{ ...btnSecondary, display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+            📂 Upload .csv
+            <input type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: 'none' }} />
+          </label>
+        </div>
+
+        <textarea
+          value={csv}
+          onChange={(e) => setCsv(e.target.value)}
+          placeholder={`Paste CSV here. First line must be a header.\n${TEMPLATE_HEADERS.join(',')}`}
+          rows={8}
+          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }}
+        />
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button onClick={() => run(true)}  disabled={busy} style={btnSecondary}>
+            {busy ? '…' : '🔍 Dry run'}
+          </button>
+          <button onClick={() => run(false)} disabled={busy} style={btnPrimary}>
+            {busy ? 'Applying…' : '✓ Apply changes'}
+          </button>
+        </div>
+
+        {error && (
+          <div style={{ marginTop: 12, padding: 10, background: '#fee2e2', color: '#991b1b', borderRadius: 8, fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        {result && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: 'flex', gap: 6, fontSize: 12, marginBottom: 10 }}>
+              <Pill color="#1a6fb5" label={`Total: ${result.total}`} />
+              <Pill color="#2e7d32" label={`Insert: ${result.plan.filter((p) => p.action === 'insert' && !p.error).length}`} />
+              <Pill color="#7c3aed" label={`Update: ${result.plan.filter((p) => p.action === 'update' && !p.error).length}`} />
+              {result.errors > 0 && <Pill color="#dc2626" label={`Errors: ${result.errors}`} />}
+              <Pill color={result.dry_run ? '#94a3b8' : '#2e7d32'} label={result.dry_run ? 'DRY RUN' : 'APPLIED'} />
+            </div>
+            <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              {result.plan.map((p) => (
+                <div key={p.row} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontSize: 12 }}>
+                  <span style={{ color: '#475569' }}>row {p.row} · {p.name || '(no name)'}</span>
+                  <span style={{
+                    color:
+                      p.error ? '#dc2626' :
+                      p.action === 'insert' ? '#2e7d32' :
+                      p.action === 'update' ? '#7c3aed' :
+                      '#94a3b8',
+                    fontWeight: 700,
+                  }}>
+                    {p.error ? `⚠ ${p.error}` : (p.action || 'skip')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Pill({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ background: color, color: '#fff', borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 800 }}>
+      {label}
+    </span>
+  );
+}
+
+const btnPrimary: React.CSSProperties = { background: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 800, fontSize: 13, cursor: 'pointer' };
+const btnSecondary: React.CSSProperties = { background: '#fff', color: '#1a2e5a', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' };
+
