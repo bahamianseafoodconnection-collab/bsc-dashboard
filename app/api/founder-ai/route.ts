@@ -8,7 +8,154 @@ export const dynamic = 'force-dynamic';
 
 const BSC_CONTEXT = `
 # BAHAMIAN SEAFOOD CONNECTION (BSC MARKETPLACE)
-## Master Business Context - V6 - Updated May 6, 2026 (Day 6.7 of 14)
+## Master Business Context - V7 - Updated May 9, 2026
+
+## V7 SCALING INTELLIGENCE (May 9, 2026 session)
+
+### TOM GOTTHELF - INVESTOR DEBT (LOCKED)
+- Original principal: $750,000 (funded Spiny Tail Processing Plant)
+- Repaid to date: $200,000
+- Outstanding: $550,000
+- Term: 7 years (extended from 4 on May 9, 2026 to ease cash flow)
+- Interest: Option A locked - 6% total over term (NOT APR)
+- Total payback: $583,000
+- Monthly debt service: $6,940.48
+- Annual debt service: $83,285.71
+- Action: take 7-year proposal to Tom for written confirmation
+
+### A/P SNAPSHOT (7 of 144 Due POs mapped)
+- Tropic Seafood: $32,752.06 - highest-margin branded line
+- Father & Son (Jorge Caragol): $21,695.60 - branded snapper + salmon 4oz/6oz
+- Sandy Port Seafood Abaco (Oscar Pinder): $11,484.55 - 38 kits / 2,088.10 lbs whole conch @ $5.50/lb
+- Jomara Seafood: $8,900.00 - steaks
+- Anthony Taylor: $5,154.12 - whole conch (volume unknown - assumed ~937 lbs at $5.50/lb)
+- Rosten Munroe: $4,350.00 - 23 kits / 942.9 lbs (mutton/hog/small/large snapper)
+- Promocean International LLC: $1,156.18 - 16/20 jumbo shrimp / 173.86 lbs @ $6.65/lb
+- Supplier subtotal: $85,697.51
+- Plus Tom: $550,000
+- TOTAL LIABILITY: $635,697.51 (with 137 Due POs still unmapped)
+
+### UNIT COSTS LOCKED (per-lb landed, BSD)
+- Whole conch (Oscar Pinder, Sandy Port Abaco): $5.50/lb
+- Whole conch (Anthony Taylor): unknown / assumed $5.50/lb
+- Mutton snapper (Rosten Munroe): $4.52/lb
+- Hog fish (Rosten Munroe): $5.10/lb
+- Small snapper (Rosten Munroe): $3.53/lb
+- Large snapper (Rosten Munroe): $5.15/lb
+- 16/20 jumbo shrimp (Promocean): $6.65/lb
+- 16/20 jumbo shrimp (Tropic Sea Best): $6.99/lb
+- Snapper finger Sea Best (Tropic exclusive): $8.60/lb
+- Snapper fillet 6/8oz (Tropic): $11.19/lb / $116 per 10-lb case
+- Snapper fillet 6/8oz (Promocean competitor): $13.50/lb / $135 per case
+- Salmon 6oz portion (Tropic): $11.90/lb / $4.41 per portion / $119 per 10-lb case (27 portions)
+- Snow crab cluster (Tropic local): $16.95/lb (1.5lb packs, 4 or 8 packs/case)
+- Snow crab cluster (USA source proposal): $9.00 FOB + 35% duty + $0.60/lb freight = ~$13.50/lb landed
+- Lane snapper (fishing boats - need scaling AND cutting): $5.15/lb (40-42lb kits at $210)
+- Lane snapper (Tropic Seafood - scaling only): $6.25/lb (33lb kits at $206.25)
+- Whole grouper (Tropic GLUT): $5.00/lb (normal $8.25, currently dumping)
+- Whole grouper (fishing boats): $6.00/lb
+
+### SUPPLIER ARBITRAGE - ROUTE POs BY CHEAPEST SOURCE PER SKU
+- 16/20 shrimp -> Promocean ($0.34/lb cheaper than Tropic)
+- Snapper fillet 6/8oz -> Tropic ($1.90/lb cheaper than Promocean)
+- Snapper finger Sea Best -> Tropic exclusive (no alternative)
+- Whole grouper -> Tropic during glut, fishing boats after
+- Whole snapper -> fishing boats (pending labor cost to confirm)
+- Whole conch -> Sandy Port + Anthony Taylor (boat sources)
+- Salmon 6oz portion -> Tropic baseline (Father & Son comparison pending)
+- Snow crab cluster -> IMPORT FROM USA (saves $3.50/lb vs Tropic local)
+
+### CRITICAL INSIGHT - SACRED RULES UNDERPRICE PREMIUM SKUs
+Pre-system retail on Snapper Finger ($29 per 2lb bag, $125 per 10lb case) was ABOVE sacred-rule output ($26.10 bag, $105.90 case at 38% Nassau / 12% wholesale). Same pattern observed on:
+- Jumbo 16/20 shrimp: market $14-18/lb vs sacred $10.10
+- Salmon 6oz portion: market $7.99-9.99 vs sacred $6.69
+- Snow crab cluster: market $33.75/pack supports US-import margin only (Tropic-source margin is below sacred)
+ESTIMATED LEAK: ~$2,400/month across 4 known SKUs = $30K+/year.
+SHORT-TERM FIX: manually set pre-system prices on top 20 premium SKUs.
+LONG-TERM FIX: per-SKU pricing override flag (build pending).
+
+### TIER 1 PRIORITY - LOBSTER PIPELINE (THE WEALTH ENGINE)
+- Demand: UNLIMITED on USA buyer side (per Dedrick)
+- Supply: millions of lbs Aug-March from Bahamian fishing boats
+- Bottleneck: operational systems (boat receive / yield / lot tracking / labels / USA buyer CRM / FDA paperwork)
+- Capacity: 30,000 lbs Spiny Tail + 30,000 lbs Andros cold storage
+- Modest 50K-lb season math: ~$125K USD gross profit
+- ONE SEASON PAYS DOWN ~$300K+ OF $635K TOTAL LIABILITY
+- Build status: NOT STARTED
+- Time to season open: 3 months (Aug 2026)
+- Proposed build: 6-week phased delivery (intake -> yield -> labels -> exports -> CRM)
+- Spiny Tail original purpose was always lobster export (justifies $750K Tom invested)
+
+### TIER 2 IMMEDIATE PRICING ACTIONS (no system build)
+- Tropic grouper $5/lb arbitrage - buy maximum freezer capacity while glut lasts (80% gross margin per yield breakdown)
+- Override sacred rule on premium SKUs (snapper finger, shrimp, salmon, snapper fillet, snow crab)
+- Switch snow crab sourcing to USA imports (saves $3.50/lb)
+- Pay Tropic Seafood current first to protect highest-margin credit line
+
+### SPINY TAIL PROCESSING PLANT (Operational facts)
+- Built with Tom Gotthelf $750K investment
+- 30,000 lbs freezer capacity total
+- Blast freezer 10x10 ft + holding freezer 10x20 ft
+- Original mandate: lobster tail USA export
+- Secondary: tenderize conch, process whole grouper / whole snapper / mutton snapper / hog fish
+- Tropic Seafood product is pre-cut (only needs scaling)
+- Fishing-boat product needs scaling AND cutting (extra labor)
+- Per-lb processing labor cost: PENDING from Dedrick
+
+### OPEN QUESTIONS PENDING DEDRICK (May 9, 2026)
+1. Per-lb processing labor cost (snapper sourcing decision blocker)
+2. Father & Son salmon 6oz cost (Tropic vs F&S comparison)
+3. Lobster pipeline scoping (USA buyer relationships, FDA registration status, last-season volume)
+4. Pricing override approach: Option 1 (per-SKU flag) / Option 2 (category margins) / Option 3 (manual migration)
+5. Snow crab USA import authorization (freight broker, FDA HACCP if applicable)
+6. Customs duty Supabase table name (Dedrick claims it exists)
+7. Anthony Taylor whole conch unit price (assumed $5.50/lb pending confirmation)
+8. Supplier portal redesign scope (USA-supplier-targeted)
+
+### KEYWORD GLOSSARY UPDATES (May 9, 2026)
+- "Tom" / "investor" / "550K" -> $550K balance, 7yr, 6% total (Option A), $6,940/month, $583K total payback
+- "A/P" / "payables" / "what do we owe" -> $85,697 supplier mapped + $550K Tom = $635,697 total
+- "Rosten" / "Rosten Munroe" -> 23 kits / 942.9 lbs / $4,350 / blended $4.61/lb / snapper specialist
+- "Sandy Port" / "Oscar Pinder" -> Abaco boat owner, 38 kits whole conch, 2,088.1 lbs, $5.50/lb, $11,484.55 owed
+- "Promocean" -> 16/20 shrimp $6.65/lb (cheap), snapper fillet $13.50/lb (expensive vs Tropic)
+- "snapper finger" -> Tropic-exclusive Sea Best brand, $8.60/lb, premium SKU, sacred rule UNDERPRICES
+- "snow crab" -> Tropic local $16.95/lb, USA import lands $13.50/lb (35% duty + freight). $5.17/pack profit gain on USA switch
+- "Tropic grouper glut" -> $5/lb whole vs normal $8.25, fill freezer NOW while it lasts
+- "lobster pipeline" / "lobster export" / "USA tails" -> Tier 1 build priority, 50K-lb season target, Aug 2026
+- "sacred underpricing" / "premium leak" -> ~$30K/year on 4 SKUs minimum, override flag pending
+- "supplier arbitrage" / "best supplier" -> SKU-level cheapest-source map locked above
+- "scale plan" / "growth plan" / "what to do next" -> see V7 SCALING INTELLIGENCE block (this section)
+
+### BAHAMAS CUSTOMS DUTY - KNOWN CATEGORIES (May 9, 2026 - per Dedrick)
+- Steak / fresh + frozen meat: DUTY-FREE (massive USA-import arbitrage opportunity)
+- "Many other items" duty-free per Dedrick - need full category list
+- Bottled water 40ct case: 60% duty (Sams cost $4/case -> ~$8-9.60 landed -> Bahamas sale $12/case = 25-50% margin depending on freight)
+- 16/20 shrimp / seafood: duty rates vary (likely lower for Bahamian sourcing, ~25-35% on US imports)
+- Snow crab cluster: 35% duty (per session calc)
+- Bahamas customs typically applies duty on CIF (cost + insurance + freight) plus 1% Stamp Tax + Environmental Levy
+- Dedrick claims Supabase has "customs duty rates and categories" table - NAME PENDING (greped codebase, not wired anywhere yet)
+
+### USA-IMPORT ARBITRAGE OPPORTUNITIES (duty-free or low-duty items)
+- BEEF STEAK: duty-free. Sams NY Strip ~$11/lb USA, Tropic NY Strip 8oz $12.75/lb. Landed $11.60/lb saves $1.15/lb. CAB Ribeye similar arbitrage $1-3/lb.
+- 40ct WATER (Sams): $4/case + freight + 60% duty = ~$8-9.60 landed. Sells $12/case. 25-50% margin (wholesale-friendly volume product).
+- Snow crab cluster: $9/lb USA + 35% duty + freight = ~$13.50/lb landed. Tropic local $16.95/lb. Saves $3.50/lb.
+
+### SUPPLIER PORTAL REDESIGN BRIEF (Dedrick request May 9, 2026)
+- Goal: clean / clear / simple / professional design to attract many USA suppliers
+- Build: landed-cost calculator using Bahamas customs duty table (Supabase, name TBD)
+- Build: supplier intake form for USA suppliers (FDA cert upload, FOB pricing, MOQ, lead time)
+- Build: per-SKU duty category tagger
+- Build: profit projection ("if you supply at $X FOB, BSC sells at $Y, your margin is Z%, our margin is W%")
+- Out of scope (for now): ACH integration, multi-currency invoicing, real-time freight quotes
+- Existing pages: /supplier (application form), /supplier-portal (existing supplier login), /supplier-purchases (BSC's POs to suppliers)
+
+### V7 SESSION DELIVERED (May 9, 2026)
+- Q,R,S,T,U,V,W,X,Y,Z,AA,BB,CC,DD,EE,FF,GG batches shipped (reviews, wishlist, promo codes, customer cancel, account hub, pickup queue, trust pages, bulk product CSV import, /pulse live cockpit, newsletter signup, sitemap+robots+SEO, /staff admin page, /pos sales-history, snow crab landed cost analysis)
+- Founder access SQL fix attempted (email not in auth.users for bahamianseafoodconnection@gmail.com - needs email confirmation)
+- HOTFIX 2c2dbed restored Vercel deploy chain (was failing 10 commits due to /market useSearchParams Suspense gap)
+- 3 SQL migrations executed: reviews-wishlist, promo-codes, customer-addresses
+
+
 
 ## OWNERSHIP & FAMILY
 - Founder: Dedrick Tamico Storr Snr (bahamianseafoodconnection@gmail.com, mobile +1-242-359-0285)
