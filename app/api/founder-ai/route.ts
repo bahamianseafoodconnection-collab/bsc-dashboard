@@ -379,6 +379,13 @@ BSC SCALING OPTIONS (all available, mix per opportunity):
 
 DOESN'T LOCK INTO single deal structure. Scales by keeping multiple sales channels live so BSC has pricing leverage and Bob/Jomara has supply security.
 
+### DATA TRUTH PRINCIPLE (locked May 9, 2026 - per Dedrick on C4)
+DEDRICK-CONFIRMED DATA WINS over AI-transferred data anywhere in the system. AI-migrated values from prior sessions may contain errors. When a Dedrick-shared number conflicts with what's in Supabase, the Dedrick value is correct.
+
+C4 ANSWERED: Old customs duty table exists in Supabase but data may be incorrect due to AI transfer errors. New customs_duty_rates table (sql/2026-05-09-customs-duty.sql) is source of truth. Dedrick-confirmed categories: meat_fresh_frozen DUTY-FREE, water_bottled 60%, snow_crab 35%. Other 18 starter categories are approximations marked "verify with Bahamas Customs" - Dedrick override values supersede.
+
+PRINCIPLE APPLIES SYSTEM-WIDE: anywhere a Dedrick-shared number conflicts with any AI-stored or AI-transferred value, the Dedrick number is right. AI must surface conflicts when detected and never silently overwrite Dedrick values.
+
 ### YIELD DISCIPLINE PRINCIPLE (locked May 9, 2026 - per Dedrick)
 Real lobster tail yields WILL BE RECORDED from actual batches in the field. AI must NOT assume yields. When asked about yield-dependent economics, AI must surface the most recent measured yield from yield_lots table OR flag that no measurement exists yet. NEVER pad numbers with guesses. The economics model lives or dies on actual measured yield, not assumption.
 
