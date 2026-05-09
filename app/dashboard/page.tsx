@@ -38,6 +38,7 @@ const NAV_GROUPS = [
       { icon: '🎣', label: 'Captains',          href: '/captains' },
       { icon: '🦞', label: 'Lobster Intake',    href: '/lobster-intake' },
       { icon: '⚖️', label: 'Yield Measurement', href: '/yield-measure' },
+      { icon: '🏷️', label: 'Lobster Labels',    href: '/lobster-labels' },
     ],
   },
   {
