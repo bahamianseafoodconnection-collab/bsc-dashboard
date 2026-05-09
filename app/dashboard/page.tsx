@@ -20,6 +20,7 @@ const NAV_GROUPS = [
       { icon: '🟣', label: 'Andros POS',        href: '/pos-andros' },
       { icon: '📦', label: 'Orders',            href: '/orders' },
       { icon: '🚚', label: 'Pickup Queue',      href: '/pickup-queue' },
+      { icon: '🫀', label: 'Pulse (live)',      href: '/pulse' },
       { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders' },
       { icon: '🏭', label: 'Processor',         href: '/processor' },
     ],
