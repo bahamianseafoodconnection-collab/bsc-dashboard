@@ -256,11 +256,51 @@ Father & Sons (Jorge Caragol) buys salmon FROM Igloo Express, then resells to BS
 - UNCHANGED: lobster intake / yield / lot tracking / labels (BSC still needs these)
 - UNCHANGED: Partner Portal for Bob @ Jomara (separate sourcing partner)
 
-### LOBSTER PIPELINE UNIT ECONOMICS (8-month season Aug-March, $5/lb whole, 35% yield, $25/lb USA wholesale assumed)
-- IN-HOUSE PATH: 12,124 lbs tail/mo, $96,276 gross profit/mo, 8-month season = $770,208 gross
-- IGLOO PATH: 24,248 lbs tail/mo, $190,896 gross profit/mo, 8-month season = $1,527,168 gross
-- TOM GOTTHELF $550K REPAID INSIDE 1 SEASON UNDER IGLOO PATH
-- Both paths assume yield/wholesale/freight figures - REAL NUMBERS PENDING DEDRICK
+### LOBSTER WHOLE-COST PRICING (LOCKED May 9, 2026 - per Dedrick)
+- Direct from day boats Family Island (Moores, Andros, others): $8.00/lb start of season
+- Via Family Island second-hand buyer (middleman): $9.00/lb (+$1)
+- Nassau market default: ~$10.00/lb (typically +$2 over fisherman direct)
+- Nassau season end last year (March): $11.00/lb
+- Within-season spread: ~$3/lb from Aug start to March end
+- ARBITRAGE: Direct Family Island + season-start = $8/lb. Nassau + season-end = $11/lb. $3/lb capturable spread.
+- BSC SOURCING STRATEGY: source direct from Moores Island + Andros day boats to lock $8/lb start cost. Avoid Nassau buy or middlemen.
+
+### LOBSTER PIPELINE UNIT ECONOMICS - CORRECTED May 9, 2026
+EARLIER MODEL USED $5/LB WHOLE WHICH WAS WRONG. Actual whole cost $8-11/lb.
+
+Scenario 1 - Nassau buy ($10/lb whole, in-house, 35% yield):
+- 50,000 lbs whole = $500,000 cost
+- 17,500 lbs tail @ cost basis $28.57/lb
+- + variable $29,575 + fixed (8-mo) $105,072 = total $634,647
+- @ USA wholesale $25/lb: LOSS $197,147
+- @ USA wholesale $35/lb: near break-even
+- @ USA wholesale $40/lb: profit $65,353
+
+Scenario 2 - Direct Family Island ($8/lb whole, in-house):
+- 50,000 lbs whole = $400,000 cost
+- 17,500 lbs tail @ cost basis $22.86/lb
+- + variable + fixed = total $534,647
+- @ $25/lb USA: LOSS $97,147
+- @ $35/lb USA: profit $77,853
+- @ $40/lb USA: profit $165,353
+
+Scenario 3 - Igloo path with direct Family Island sourcing ($8/lb whole, 2x throughput):
+- 100,000 lbs whole = $800,000 cost
+- 35,000 lbs tail @ cost basis $22.86/lb
+- + variable (Igloo $2.30/lb) $80,500 + fixed $105,072 = $985,572
+- @ $35/lb USA: profit $239,428
+- @ $40/lb USA: profit $414,428
+- IGLOO COMMISSION/STORAGE STILL UNKNOWN - could subtract significantly
+
+### LOBSTER PIPELINE GO/NO-GO CRITERIA (LOCKED May 9, 2026)
+Pipeline is wealth engine ONLY if all four conditions met:
+1. Sources direct Family Island day boats (NOT Nassau, NOT middlemen)
+2. USA wholesale price averages >= $30/lb tail
+3. Yield >= 35% whole-to-tail
+4. Igloo structure is service fee only (not commission)
+
+If any of these is wrong, pipeline breaks even or loses at scale.
+KEY RISK: question A6 (USA wholesale price by grade) is the single most important number to lock before building.
 
 ### AIR CARGO CONSTRAINT
 - Maximum: 5,900 lbs per shipment
