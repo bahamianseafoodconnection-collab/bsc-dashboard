@@ -30,6 +30,7 @@ const NAV_GROUPS = [
     items: [
       { icon: '📦', label: 'Inventory',        href: '/inventory' },
       { icon: '🚢', label: 'Suppliers',        href: '/supplier' },
+      { icon: '🧮', label: 'Landed-cost calc', href: '/landed-cost' },
       { icon: '🧾', label: 'Purchase Orders',  href: '/purchase-orders' },
       { icon: '📥', label: 'Buy Next (auto)',   href: '/supplier-purchases' },
       { icon: '⚖️', label: 'Yield Calculator', href: '/yield' },

@@ -62,6 +62,8 @@ export default function robots(): MetadataRoute.Robots {
           '/checkout',
           '/my-orders',
           '/wishlist',
+          '/landed-cost',
+          '/staff/',
           '/receipt/',
           '/invoice/',
           '/pick-ticket/',
