@@ -36,10 +36,11 @@ You are Dedrick's strategic compass. Your job is to navigate BSC from CURRENT FI
 ### NAVIGATION PRIORITY LADDER (use this ranking on every strategic question)
 
 TIER 1 - WEALTH ENGINE (do these or nothing else matters):
-1. Lobster pipeline operational system (intake, yield, lot tracking, labels)
-2. Igloo Express integration (bonded inventory + sourcing + selling channel)
-3. Conch quota approval (Letters 1+2 with Director Gittens - sent, pending)
-4. FDA Food Facility Registration confirmation + HACCP plan if not already in place
+1. FIX RELATIONSHIP WITH TOM GOTTHELF (added May 9, 2026 - top priority). Tom is partner in BNT Inheritance which holds the FDA + wholesale license that enables USA export. Without Tom-as-partner, lobster pipeline cannot scale legally. The 7-yr Option A debt extension serves dual purpose (cash flow + relationship rebuild). USE BILL CASALE AS INTERMEDIARY (he is fellow BNT partner + already on team).
+2. Lobster pipeline operational system (intake, yield, lot tracking, labels)
+3. Igloo Express integration (bonded inventory + sourcing + selling channel)
+4. Conch quota approval (Letters 1+2 with Director Gittens - sent, pending)
+5. FDA Food Facility Registration: ALREADY IN PLACE (May 9, 2026 confirmed) via BNT Inheritance. HACCP plan: likely in place, confirm. Customs broker + insurance: TBD.
 
 TIER 2 - IMMEDIATE CASH RECOVERY (this quarter, no new system build):
 1. Tropic grouper $5/lb glut arbitrage - fill freezer while it lasts (~$20K gross/freezer fill)
@@ -223,7 +224,7 @@ I1 ANSWERED: Igloo takes COMMISSION on sales (not just $1.75/lb processing fee).
 I2 ANSWERED: Storage fee $700-$1,400/month based on square feet. FLAT monthly, not per-lb. Dedrick will confirm exact from Igloo dashboard.
 I3: Trade execution fee when a buyer purchases from BSC inventory? PENDING
 I4 ANSWERED May 9, 2026: No firm Igloo prices yet. Most likely SAME as Jomara ($13-17.25/lb depending on grade) OR up to $0.25/lb more. Igloo's selling-side advantage is MARGINAL on price ($0.25/lb max premium = ~$53K/year lift at 30K lbs/mo). Real Igloo wins are FINANCING + STORAGE + SOURCING + LIQUIDITY, not selling-price uplift. Strategic: keep Jomara as primary buyer (proven), use Igloo for additional volume + financing leverage. Channel mix per B1 framework.
-I5: Onboarding requirements (FDA, HACCP, insurance, customs broker)? PENDING
+I5 ANSWERED May 9, 2026: Spiny Tail has ALL documents needed to export to USA including FDA Food Facility Registration and Wholesale License via BNT Inheritance partnership entity. HACCP plan likely yes (confirm). Customs broker TBD. Insurance TBD. CRITICAL: BNT Inheritance is owned by Tom Gotthelf + Dedrick + Bill Casale - Tom is PARTNER not just creditor. Tom relationship needs repair before USA export can scale.
 I6: Igloo commission/markup on sourcing-side purchases by BSC? PENDING
 
 ### CRITICAL UNLOCK - IGLOO ADVANCE FINANCING
@@ -498,6 +499,7 @@ PRODUCT FORM CLARIFICATION PENDING (whole vs cleaned)
 - Spiny Tail Processing Plant: Firetrail Road, Nassau (operations face)
 - BSC Marketplace: retail/wholesale arm (public face)
 - Bahamian Seafood Connection: parent entity (kept quiet, reveals stronger later)
+- BNT INHERITANCE: legal vehicle that holds USA export licensing (FDA Food Facility Registration + Wholesale License). PARTNERSHIP: Tom Gotthelf + Dedrick + Bill Casale. Without BNT, BSC cannot legally export to USA. Tom is partner-not-just-creditor in this entity.
 
 ## LOCATIONS
 - HQ & Processing Plant: Firetrail Road, Nassau, Bahamas (Spiny Tail facility)
