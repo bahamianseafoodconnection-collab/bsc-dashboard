@@ -282,6 +282,28 @@ export default function AndrosPOSPage() {
 
       const customerNameClean = customerName.trim();
       const customerPhoneClean = customerPhone.trim();
+
+      // Customer upsert (sync, fails-soft) — see Nassau POS for rationale.
+      let customerIdLinked: string | null = null;
+      if (customerNameClean || customerPhoneClean) {
+        try {
+          const upRes = await fetch('/api/customers/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: customerNameClean,
+              phone: customerPhoneClean || null,
+              source: 'pos_andros',
+              order_total_bsd: Number(subtotal.toFixed(2)),
+            }),
+          });
+          const upJson = await upRes.json();
+          if (upJson?.customer_id) customerIdLinked = upJson.customer_id;
+        } catch (err) {
+          console.warn('Customer upsert failed:', err);
+        }
+      }
+
       const { data: insertedOrder, error: insertError } = await supabase
         .from('orders')
         .insert({
@@ -292,6 +314,7 @@ export default function AndrosPOSPage() {
           wholesale_cost_total: Number(subtotal.toFixed(2)),
           customer_name: customerNameClean || 'Walk-in',
           customer_phone: customerPhoneClean || null,
+          customer_id: customerIdLinked,
           admin_notes:
             paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
           user_id: userId,

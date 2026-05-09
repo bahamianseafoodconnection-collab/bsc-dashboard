@@ -65,6 +65,20 @@ export default function LoginPage() {
           phone,
           role: 'customer',
         });
+        // Also seed the customer-tracking record. Fire-and-forget — the
+        // signup is the authoritative event; this just gets them on the
+        // tracking radar before their first order.
+        fetch('/api/customers/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            phone: phone || null,
+            email,
+            source: 'online',
+            auth_user_id: data.user.id,
+          }),
+        }).catch((err) => console.warn('Customer seed failed:', err));
       }
       await new Promise((r) => setTimeout(r, 400));
       window.location.href = '/market';

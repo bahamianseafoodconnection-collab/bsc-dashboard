@@ -208,6 +208,30 @@ line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)),
 }));
 const customerNameClean = customerName.trim();
 const customerPhoneClean = customerPhone.trim();
+
+// Upsert customer first if we have anything to dedup on. Synchronous so
+// the order row gets a customer_id link immediately. Fails-soft — a
+// network blip on customer tracking can't block a paid sale.
+let customerIdLinked: string | null = null;
+if (customerNameClean || customerPhoneClean) {
+  try {
+    const upRes = await fetch('/api/customers/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: customerNameClean,
+        phone: customerPhoneClean || null,
+        source: 'pos_nassau',
+        order_total_bsd: Number(subtotal.toFixed(2)),
+      }),
+    });
+    const upJson = await upRes.json();
+    if (upJson?.customer_id) customerIdLinked = upJson.customer_id;
+  } catch (err) {
+    console.warn('Customer upsert failed:', err);
+  }
+}
+
 const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({
 order_type: 'pos_sale_nassau',
 payment_method: paymentMethod,
@@ -216,6 +240,7 @@ wholesale_items: lineItems,
 wholesale_cost_total: Number(subtotal.toFixed(2)),
 customer_name: customerNameClean || 'Walk-in',
 customer_phone: customerPhoneClean || null,
+customer_id: customerIdLinked,
 admin_notes: paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
 user_id: userId,
 }).select('id').single();

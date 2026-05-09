@@ -1,245 +1,621 @@
-// File: app/customers/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+// app/customers/page.tsx
+//
+// Customer tracking — reads the public.customers table populated by the
+// /api/customers/upsert endpoint. Detail view aggregates the customer's
+// orders to surface their buying habits (top items, channel mix, recency).
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { getAllCustomers, type Customer } from '../../lib/store';
+
+type CustomerRow = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  total_orders: number;
+  total_spent_bsd: number;
+};
+
+type OrderRow = {
+  id: string;
+  created_at: string;
+  order_type: string;
+  payment_method: string | null;
+  payment_status: string | null;
+  wholesale_cost_total: number | null;
+  total: number | null;
+  wholesale_items: unknown;
+};
+
+type LineItem = {
+  name: string;
+  qty: number;
+  unit?: string;
+  unit_price?: number;
+  line_total?: number;
+};
+
+type SortKey = 'spent' | 'visits' | 'recent' | 'name';
 
 export default function CustomersPage() {
-  const router = useRouter();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [rows, setRows] = useState<CustomerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'visits' | 'spent' | 'recent' | 'name'>('visits');
-  const [selected, setSelected] = useState<Customer | null>(null);
-  const [isControlAdmin, setIsControlAdmin] = useState(false);
+  const [sort, setSort] = useState<SortKey>('spent');
+  const [selected, setSelected] = useState<CustomerRow | null>(null);
 
   useEffect(() => {
-    setCustomers(getAllCustomers());
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from('profiles').select('role').eq('id', user.id).single().then(({ data }) => {
-        if (data?.role === 'control_admin') setIsControlAdmin(true);
-      });
-    });
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      const { data, error: err } = await supabase
+        .from('customers')
+        .select(
+          'id, name, phone, email, source, first_seen_at, last_seen_at, total_orders, total_spent_bsd'
+        )
+        .order('total_spent_bsd', { ascending: false })
+        .limit(500);
+      if (cancelled) return;
+      if (err) {
+        setError(err.message);
+        setRows([]);
+      } else {
+        setRows((data || []) as CustomerRow[]);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const filtered = customers
-    .filter(c =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.replace(/\D/g, '').includes(search.replace(/\D/g, ''))
-    )
-    .sort((a, b) => {
-      if (sortBy === 'visits') return (b.visitCount || 0) - (a.visitCount || 0);
-      if (sortBy === 'spent')  return (b.totalSpent || 0) - (a.totalSpent || 0);
-      if (sortBy === 'name')   return a.name.localeCompare(b.name);
-      if (sortBy === 'recent') return new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime();
-      return 0;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const out = rows.filter((c) => {
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.phone && c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, ''))) ||
+        (c.email && c.email.toLowerCase().includes(q))
+      );
     });
+    out.sort((a, b) => {
+      if (sort === 'spent') return Number(b.total_spent_bsd) - Number(a.total_spent_bsd);
+      if (sort === 'visits') return b.total_orders - a.total_orders;
+      if (sort === 'name') return a.name.localeCompare(b.name);
+      // recent
+      return new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime();
+    });
+    return out;
+  }, [rows, search, sort]);
 
-  const totalRevenue    = customers.reduce((s, c) => s + (c.totalSpent || 0), 0);
-  const totalVisits     = customers.reduce((s, c) => s + (c.visitCount || 0), 0);
-  const avgSpend        = customers.length > 0 ? totalRevenue / customers.length : 0;
-  const repeatCustomers = customers.filter(c => (c.visitCount || 0) > 1).length;
+  const totalRevenue = rows.reduce((s, c) => s + Number(c.total_spent_bsd || 0), 0);
+  const totalOrders = rows.reduce((s, c) => s + Number(c.total_orders || 0), 0);
+  const repeatCustomers = rows.filter((c) => c.total_orders > 1).length;
+  const avgSpend = rows.length > 0 ? totalRevenue / rows.length : 0;
 
-  const pg: React.CSSProperties = {
-    padding: 16, backgroundColor: '#060d1f', minHeight: '100vh',
-    color: '#fff', fontFamily: 'sans-serif', paddingBottom: 100,
-    maxWidth: 640, margin: '0 auto',
-  };
-  const card: React.CSSProperties = {
-    backgroundColor: '#0d1f3c', borderRadius: 14, padding: '14px 16px',
-    border: '1px solid #1e3a5f', marginBottom: 12,
-  };
-  const inp: React.CSSProperties = {
-    display: 'block', width: '100%', padding: '12px 13px', borderRadius: 10,
-    backgroundColor: '#111c33', color: '#fff', border: '1px solid #1e2d4a',
-    fontSize: 15, marginBottom: 12, boxSizing: 'border-box' as const, outline: 'none',
-  };
+  if (selected) {
+    return (
+      <CustomerDetail customer={selected} onBack={() => setSelected(null)} />
+    );
+  }
 
-  const BSCControlBack = () => (
-    <button onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #1a1200, #2a1e00)', border: '1px solid #f5c518', borderRadius: 10, color: '#f5c518', fontWeight: 'bold', fontSize: 12, cursor: 'pointer', padding: '7px 14px', marginBottom: 14 }}>
-      ← BSC Control
-    </button>
-  );
-
-  const whatsappCustomer = (c: Customer) => {
-    let raw = c.phone.replace(/\D/g, '');
-    if (raw.startsWith('242') && raw.length === 10) raw = '1' + raw;
-    else if (raw.length === 7) raw = '1242' + raw;
-    else if (!raw.startsWith('1')) raw = '1242' + raw;
-    window.open(`https://api.whatsapp.com/send?phone=${raw}`, '_blank');
-  };
-
-  // ── CUSTOMER DETAIL VIEW ──
-  if (selected) return (
-    <div style={pg}>
-      {isControlAdmin && <BSCControlBack />}
-      <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#f5c518', fontSize: 14, cursor: 'pointer', marginBottom: 16, padding: 0 }}>
-        ← Back to Customers
-      </button>
-      <div style={{ ...card, background: 'linear-gradient(135deg, #0d1f3c, #132a4a)', borderColor: '#f5c518' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-          <div>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', backgroundColor: '#f5c518', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 'bold', color: '#000', marginBottom: 10 }}>
-              {selected.name.charAt(0).toUpperCase()}
-            </div>
-            <p style={{ margin: 0, fontWeight: 'bold', fontSize: 20 }}>{selected.name}</p>
-            <p style={{ margin: '4px 0 0', color: '#60a5fa', fontSize: 14 }}>📱 {selected.phone}</p>
-          </div>
-          <span style={{ backgroundColor: '#0a1f0a', color: '#4ade80', border: '1px solid #4ade80', borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 'bold' }}>
-            {(selected.visitCount || 0) > 5 ? 'LOYAL' : (selected.visitCount || 0) > 1 ? 'REPEAT' : 'NEW'}
-          </span>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-          {[
-            { label: 'TOTAL SPENT', value: '$' + (selected.totalSpent || 0).toFixed(2), color: '#4ade80' },
-            { label: 'VISITS',      value: String(selected.visitCount || 0),             color: '#f5c518' },
-            { label: 'AVG/VISIT',   value: '$' + ((selected.visitCount || 0) > 0 ? ((selected.totalSpent || 0) / selected.visitCount).toFixed(2) : '0.00'), color: '#60a5fa' },
-          ].map(stat => (
-            <div key={stat.label} style={{ backgroundColor: '#060d1f', borderRadius: 10, padding: '10px 12px', textAlign: 'center' as const }}>
-              <p style={{ margin: 0, color: '#4a5568', fontSize: 9, letterSpacing: 1 }}>{stat.label}</p>
-              <p style={{ margin: '6px 0 0', color: stat.color, fontWeight: 'bold', fontSize: 16 }}>{stat.value}</p>
-            </div>
-          ))}
-        </div>
-        <p style={{ margin: '0 0 4px', color: '#4a5568', fontSize: 11 }}>Last visit: <span style={{ color: '#aaa' }}>{selected.lastVisit || 'N/A'}</span></p>
-        <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>Customer ID: <span style={{ color: '#4a5568', fontSize: 10, fontFamily: 'monospace' }}>{selected.id}</span></p>
-      </div>
-      <p style={{ color: '#6b7280', fontSize: 10, letterSpacing: 2, margin: '0 0 10px' }}>ACTIONS</p>
-      <button onClick={() => whatsappCustomer(selected)} style={{ width: '100%', padding: '13px', borderRadius: 12, backgroundColor: '#25d366', color: '#000', fontWeight: 'bold', border: 'none', fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
-        💬 WhatsApp {selected.name.split(' ')[0]}
-      </button>
-      <button onClick={() => { const subject = encodeURIComponent(`BSC Marketplace — Special offer for ${selected.name}`); const body = encodeURIComponent(`Hi ${selected.name},\n\nThank you for being a valued BSC Marketplace customer!\n\nWe have fresh seafood and products available. Visit us or order online:\nhttps://project-1fnu0.vercel.app/market\n\nFiretrial Road, Nassau, Bahamas\nWhatsApp: +1 (242) 361-3474\n\nFresh · Local · Bahamian 🐟`); window.open(`mailto:?subject=${subject}&body=${body}`, '_blank'); }} style={{ width: '100%', padding: '13px', borderRadius: 12, backgroundColor: '#60a5fa', color: '#000', fontWeight: 'bold', border: 'none', fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
-        📧 Send Email
-      </button>
-      <button onClick={() => router.push('/pos')} style={{ width: '100%', padding: '13px', borderRadius: 12, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
-        🛒 New Sale for {selected.name.split(' ')[0]}
-      </button>
-      <div style={card}>
-        <p style={{ margin: '0 0 10px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Customer Value Tier</p>
-        {[
-          { label: 'New Customer',    min: 0,  max: 1,   color: '#6b7280' },
-          { label: 'Repeat Customer', min: 2,  max: 4,   color: '#60a5fa' },
-          { label: 'Loyal Customer',  min: 5,  max: 9,   color: '#4ade80' },
-          { label: 'VIP Customer',    min: 10, max: 999, color: '#f5c518' },
-        ].map(tier => {
-          const visits = selected.visitCount || 0;
-          const isActive = visits >= tier.min && visits <= tier.max;
-          return (
-            <div key={tier.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e3a5f' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isActive ? tier.color : '#2a3a5a' }} />
-                <p style={{ margin: 0, color: isActive ? tier.color : '#4a5568', fontSize: 13, fontWeight: isActive ? 'bold' : 'normal' }}>{tier.label}</p>
-              </div>
-              <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{tier.min === 0 ? '1st visit' : tier.max === 999 ? `${tier.min}+ visits` : `${tier.min}–${tier.max} visits`}</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  // ── MAIN LIST VIEW ──
   return (
-    <div style={pg}>
-      {isControlAdmin && <BSCControlBack />}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h1 style={{ margin: 0, color: '#f5c518', fontSize: 20, fontWeight: 'bold' }}>👥 Customers</h1>
-          <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>BSC Marketplace · {customers.length} total</p>
-        </div>
-        <button onClick={() => router.push('/pos')} style={{ padding: '9px 14px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: 13 }}>
-          🛒 POS
-        </button>
+    <div style={pgStyle}>
+      <Link href="/dashboard" style={backStyle}>
+        ← BSC Control
+      </Link>
+      <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f5c518', marginBottom: 4 }}>
+        Customers
+      </h1>
+      <p style={{ color: '#64748b', fontSize: 12, marginBottom: 16 }}>
+        Auto-tracked from POS sales (with phone) and online registrations.
+      </p>
+
+      {/* Stat strip */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, 1fr)',
+          gap: 8,
+          marginBottom: 14,
+        }}
+      >
+        <Stat label="Total customers" value={String(rows.length)} />
+        <Stat label="Repeat (2+ orders)" value={String(repeatCustomers)} />
+        <Stat label="Lifetime revenue" value={`BSD $${totalRevenue.toFixed(2)}`} />
+        <Stat label="Avg. lifetime spend" value={`BSD $${avgSpend.toFixed(2)}`} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
-        {[
-          { label: 'CUSTOMERS', value: String(customers.length), color: '#f5c518' },
-          { label: 'REVENUE',   value: '$' + totalRevenue.toFixed(0), color: '#4ade80' },
-          { label: 'VISITS',    value: String(totalVisits),    color: '#60a5fa' },
-          { label: 'REPEAT',    value: String(repeatCustomers),color: '#a78bfa' },
-        ].map(kpi => (
-          <div key={kpi.label} style={{ backgroundColor: '#0d1f3c', borderRadius: 12, padding: '10px 12px', border: '1px solid #1e3a5f', textAlign: 'center' as const }}>
-            <p style={{ margin: 0, color: '#4a5568', fontSize: 8, letterSpacing: 1 }}>{kpi.label}</p>
-            <p style={{ margin: '5px 0 0', color: kpi.color, fontWeight: 'bold', fontSize: 15 }}>{kpi.value}</p>
-          </div>
-        ))}
-      </div>
-
-      <input placeholder="🔍 Search by name or phone..." value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" style={inp} />
-
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto' as const }}>
-        {([
-          { key: 'visits', label: 'Most Visits' },
-          { key: 'spent',  label: 'Top Spenders' },
-          { key: 'recent', label: 'Recent' },
-          { key: 'name',   label: 'A–Z' },
-        ] as { key: typeof sortBy; label: string }[]).map(opt => (
-          <button key={opt.key} onClick={() => setSortBy(opt.key)} style={{ padding: '7px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap' as const, backgroundColor: sortBy === opt.key ? '#f5c518' : '#0d1f3c', color: sortBy === opt.key ? '#000' : '#6b7280' }}>
-            {opt.label}
+      {/* Search + sort */}
+      <input
+        type="text"
+        placeholder="Search by name, phone, or email…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={inputStyle}
+      />
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto' }}>
+        {(
+          [
+            ['spent',  '💰 Top spenders'],
+            ['visits', '🔁 Most visits'],
+            ['recent', '🕒 Most recent'],
+            ['name',   '🔤 A → Z'],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setSort(k)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 999,
+              border: 'none',
+              background: sort === k ? '#f5c518' : '#1e2d4a',
+              color: sort === k ? '#060d1f' : '#cbd5e1',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {label}
           </button>
         ))}
       </div>
 
-      {customers.length === 0 && (
-        <div style={{ ...card, textAlign: 'center', padding: 40 }}>
-          <p style={{ fontSize: 40, marginBottom: 12 }}>👥</p>
-          <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 15 }}>No customers yet</p>
-          <p style={{ margin: '8px 0 0', color: '#4a5568', fontSize: 13 }}>Customers are saved automatically when you complete a sale in the POS.</p>
+      {loading && <p style={{ color: '#94a3b8' }}>Loading customers…</p>}
+
+      {!loading && error && (
+        <div
+          style={{
+            background: 'rgba(248,113,113,0.1)',
+            border: '1px solid #f87171',
+            borderRadius: 12,
+            padding: 14,
+            color: '#f87171',
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          ⚠️ Could not load customers: {error}. If the table doesn&rsquo;t exist
+          yet, run sql/2026-05-08-customers.sql in the Supabase SQL editor.
         </div>
       )}
 
-      {filtered.length === 0 && customers.length > 0 && (
-        <p style={{ color: '#4a5568', textAlign: 'center', padding: 20 }}>No customers match your search</p>
+      {!loading && !error && rows.length === 0 && (
+        <div style={{ ...cardStyle, textAlign: 'center', color: '#94a3b8' }}>
+          No customers tracked yet. Once POS sales include a name + phone, or
+          someone registers online, they&rsquo;ll appear here automatically.
+        </div>
       )}
 
-      {filtered.map((c, i) => {
-        const avgPerVisit = (c.visitCount || 0) > 0 ? (c.totalSpent || 0) / c.visitCount : 0;
-        const tier = (c.visitCount || 0) >= 10 ? { label: 'VIP', color: '#f5c518' }
-          : (c.visitCount || 0) >= 5 ? { label: 'LOYAL', color: '#4ade80' }
-          : (c.visitCount || 0) >= 2 ? { label: 'REPEAT', color: '#60a5fa' }
-          : { label: 'NEW', color: '#6b7280' };
-        return (
-          <div key={c.id} onClick={() => setSelected(c)} style={{ ...card, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 42, height: 42, borderRadius: '50%', backgroundColor: i < 3 ? '#f5c518' : '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 'bold', color: i < 3 ? '#000' : '#aaa', flexShrink: 0 }}>
-              {i < 3 ? ['🥇', '🥈', '🥉'][i] : c.name.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                <p style={{ margin: 0, fontWeight: 'bold', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{c.name}</p>
-                <span style={{ backgroundColor: '#060d1f', color: tier.color, border: '1px solid ' + tier.color, borderRadius: 20, padding: '1px 7px', fontSize: 9, fontWeight: 'bold', flexShrink: 0 }}>{tier.label}</span>
-              </div>
-              <p style={{ margin: 0, color: '#60a5fa', fontSize: 12 }}>📱 {c.phone}</p>
-              <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 11 }}>Last visit: {c.lastVisit || 'N/A'}</p>
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <p style={{ margin: 0, color: '#4ade80', fontWeight: 'bold', fontSize: 15 }}>${(c.totalSpent || 0).toFixed(2)}</p>
-              <p style={{ margin: '2px 0 0', color: '#f5c518', fontSize: 11 }}>{c.visitCount || 0} visits</p>
-              <p style={{ margin: '2px 0 0', color: '#4a5568', fontSize: 10 }}>${avgPerVisit.toFixed(2)}/visit</p>
+      {!loading && !error && filtered.length === 0 && rows.length > 0 && (
+        <div style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>
+          No matches.
+        </div>
+      )}
+
+      {filtered.map((c) => (
+        <button
+          key={c.id}
+          onClick={() => setSelected(c)}
+          style={{
+            ...cardStyle,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'pointer',
+            border: '1px solid #1e3a5f',
+            background: '#0d1f3c',
+            color: '#fff',
+            width: '100%',
+            textAlign: 'left',
+            fontFamily: 'inherit',
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>{c.name}</div>
+            <div style={{ color: '#94a3b8', fontSize: 11 }}>
+              {c.phone || c.email || '—'} · {c.source.replace('_', ' ')}
             </div>
           </div>
-        );
-      })}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontWeight: 900, color: '#f5c518', fontSize: 14 }}>
+              BSD ${Number(c.total_spent_bsd).toFixed(2)}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: 11 }}>
+              {c.total_orders} order{c.total_orders === 1 ? '' : 's'} · last{' '}
+              {timeAgo(c.last_seen_at)}
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
-      {customers.length > 0 && (
-        <div style={{ ...card, background: 'linear-gradient(135deg, #0a1220, #0d1a2e)', marginTop: 8 }}>
-          <p style={{ margin: '0 0 10px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>Customer Summary</p>
-          {[
-            { label: 'Total Customers',         value: String(customers.length) },
-            { label: 'Total Revenue',            value: '$' + totalRevenue.toFixed(2) },
-            { label: 'Avg Spend Per Customer',   value: '$' + avgSpend.toFixed(2) },
-            { label: 'Total Visits',             value: String(totalVisits) },
-            { label: 'Repeat Customers',         value: repeatCustomers + ' (' + (customers.length > 0 ? Math.round((repeatCustomers / customers.length) * 100) : 0) + '%)' },
-          ].map(row => (
-            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 8, borderBottom: '1px solid #1e3a5f' }}>
-              <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>{row.label}</p>
-              <p style={{ margin: 0, color: '#fff', fontWeight: 'bold', fontSize: 13 }}>{row.value}</p>
+/* ─── Detail view ─── */
+
+function CustomerDetail({
+  customer,
+  onBack,
+}: {
+  customer: CustomerRow;
+  onBack: () => void;
+}) {
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select(
+          'id, created_at, order_type, payment_method, payment_status, wholesale_cost_total, total, wholesale_items'
+        )
+        .eq('customer_id', customer.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (cancelled) return;
+      setOrders((data || []) as OrderRow[]);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [customer.id]);
+
+  // Aggregate top items across all orders.
+  const topItems = useMemo(() => {
+    const counts = new Map<string, { name: string; qty: number; spend: number }>();
+    for (const o of orders) {
+      const items = parseItems(o.wholesale_items);
+      for (const it of items) {
+        const key = (it.name || '').trim() || 'Unknown';
+        const existing = counts.get(key) || { name: key, qty: 0, spend: 0 };
+        existing.qty += Number(it.qty || 0);
+        existing.spend += Number(it.line_total ?? (it.unit_price || 0) * (it.qty || 0));
+        counts.set(key, existing);
+      }
+    }
+    return Array.from(counts.values())
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 8);
+  }, [orders]);
+
+  const channelMix = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const o of orders) {
+      counts.set(o.order_type, (counts.get(o.order_type) || 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [orders]);
+
+  const lifetimeOrders = orders.length;
+  const lifetimeSpend = orders.reduce(
+    (s, o) => s + Number(o.total ?? o.wholesale_cost_total ?? 0),
+    0
+  );
+
+  return (
+    <div style={pgStyle}>
+      <button onClick={onBack} style={backStyle}>
+        ← All customers
+      </button>
+
+      <div
+        style={{
+          ...cardStyle,
+          background: 'linear-gradient(135deg,#0d1f3c,#1a2e5a)',
+          border: '1px solid #f5c518',
+        }}
+      >
+        <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
+          {customer.name}
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>
+          {customer.phone || '—'}
+          {customer.email ? ` · ${customer.email}` : ''}
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 6 }}>
+          First seen {fmtDate(customer.first_seen_at)} · Last seen{' '}
+          {fmtDate(customer.last_seen_at)} · Source {customer.source}
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2,1fr)',
+            gap: 8,
+            marginTop: 14,
+          }}
+        >
+          <Stat label="Lifetime orders" value={String(lifetimeOrders)} />
+          <Stat label="Lifetime spend" value={`BSD $${lifetimeSpend.toFixed(2)}`} />
+        </div>
+
+        {customer.phone && (
+          <a
+            href={`https://api.whatsapp.com/send?phone=${normalizePhone(customer.phone)}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-block',
+              marginTop: 14,
+              padding: '8px 14px',
+              borderRadius: 8,
+              background: '#25D366',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 800,
+              textDecoration: 'none',
+            }}
+          >
+            💬 WhatsApp customer
+          </a>
+        )}
+      </div>
+
+      {/* Top items */}
+      <h3 style={{ color: '#f5c518', fontSize: 14, marginBottom: 8 }}>
+        Top items by spend
+      </h3>
+      {loading ? (
+        <p style={{ color: '#94a3b8' }}>Loading orders…</p>
+      ) : topItems.length === 0 ? (
+        <div style={{ ...cardStyle, color: '#94a3b8', textAlign: 'center' }}>
+          No items yet.
+        </div>
+      ) : (
+        <div style={{ marginBottom: 18 }}>
+          {topItems.map((it) => (
+            <div
+              key={it.name}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                background: '#0d1f3c',
+                border: '1px solid #1e3a5f',
+                borderRadius: 10,
+                padding: '10px 12px',
+                marginBottom: 6,
+                color: '#fff',
+              }}
+            >
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{it.name}</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                  {it.qty} units total
+                </div>
+              </div>
+              <div
+                style={{
+                  fontWeight: 900,
+                  color: '#f5c518',
+                  fontSize: 13,
+                }}
+              >
+                BSD ${it.spend.toFixed(2)}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Channel mix */}
+      {channelMix.length > 0 && (
+        <>
+          <h3 style={{ color: '#f5c518', fontSize: 14, marginBottom: 8 }}>
+            Channel mix
+          </h3>
+          <div
+            style={{
+              display: 'flex',
+              gap: 6,
+              flexWrap: 'wrap',
+              marginBottom: 18,
+            }}
+          >
+            {channelMix.map(([type, n]) => (
+              <span
+                key={type}
+                style={{
+                  background: '#1e2d4a',
+                  color: '#cbd5e1',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '5px 10px',
+                  borderRadius: 999,
+                }}
+              >
+                {type.replace('_', ' ')}: {n}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Order history */}
+      <h3 style={{ color: '#f5c518', fontSize: 14, marginBottom: 8 }}>
+        Order history
+      </h3>
+      {loading ? (
+        <p style={{ color: '#94a3b8' }}>Loading…</p>
+      ) : orders.length === 0 ? (
+        <div style={{ ...cardStyle, color: '#94a3b8', textAlign: 'center' }}>
+          No orders yet.
+        </div>
+      ) : (
+        orders.map((o) => (
+          <div key={o.id} style={cardStyle}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+              }}
+            >
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                {fmtDate(o.created_at)}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: '#f5c518' }}>
+                BSD $
+                {Number(o.total ?? o.wholesale_cost_total ?? 0).toFixed(2)}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+              {o.order_type.replace('_', ' ')} ·{' '}
+              {o.payment_method || '—'} ·{' '}
+              {o.payment_status || '—'}
+            </div>
+            {(() => {
+              const items = parseItems(o.wholesale_items);
+              if (items.length === 0) return null;
+              return (
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    color: '#cbd5e1',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {items.slice(0, 5).map((it, idx) => (
+                    <div key={idx}>
+                      • {it.qty} × {it.name}
+                    </div>
+                  ))}
+                  {items.length > 5 && (
+                    <div style={{ color: '#64748b' }}>
+                      …and {items.length - 5} more
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/* ─── helpers ─── */
+
+function parseItems(raw: unknown): LineItem[] {
+  if (!raw) return [];
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw as LineItem[];
+}
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function normalizePhone(p: string) {
+  let raw = p.replace(/\D/g, '');
+  if (raw.startsWith('242') && raw.length === 10) raw = '1' + raw;
+  else if (raw.length === 7) raw = '1242' + raw;
+  else if (!raw.startsWith('1')) raw = '1242' + raw;
+  return raw;
+}
+
+/* ─── styles ─── */
+
+const pgStyle: React.CSSProperties = {
+  padding: 16,
+  backgroundColor: '#060d1f',
+  minHeight: '100vh',
+  color: '#fff',
+  fontFamily: 'system-ui, -apple-system, sans-serif',
+  paddingBottom: 80,
+  maxWidth: 640,
+  margin: '0 auto',
+};
+
+const cardStyle: React.CSSProperties = {
+  backgroundColor: '#0d1f3c',
+  borderRadius: 12,
+  padding: '12px 14px',
+  border: '1px solid #1e3a5f',
+  marginBottom: 8,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '11px 14px',
+  borderRadius: 10,
+  background: '#111c33',
+  border: '1px solid #1e2d4a',
+  color: '#fff',
+  fontSize: 14,
+  marginBottom: 10,
+  boxSizing: 'border-box',
+  outline: 'none',
+};
+
+const backStyle: React.CSSProperties = {
+  display: 'inline-block',
+  background: 'rgba(245,197,24,0.1)',
+  border: '1px solid #f5c518',
+  borderRadius: 8,
+  color: '#f5c518',
+  fontWeight: 700,
+  fontSize: 12,
+  padding: '6px 12px',
+  marginBottom: 14,
+  textDecoration: 'none',
+};
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        background: '#0d1f3c',
+        border: '1px solid #1e3a5f',
+        borderRadius: 10,
+        padding: '10px 12px',
+      }}
+    >
+      <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 900, color: '#f5c518', marginTop: 2 }}>
+        {value}
+      </div>
     </div>
   );
 }

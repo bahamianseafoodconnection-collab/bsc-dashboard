@@ -89,6 +89,30 @@ export default function CheckoutPage() {
 
   async function createOrder(): Promise<string> {
     const { data: { session } } = await supabase.auth.getSession();
+
+    // Customer upsert before order insert (sync, fails-soft).
+    let customerIdLinked: string | null = null;
+    if (name.trim() || phone.trim() || session?.user) {
+      try {
+        const upRes = await fetch('/api/customers/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            phone: phone.trim() || null,
+            email: session?.user?.email || null,
+            source: 'online',
+            auth_user_id: session?.user?.id || null,
+            order_total_bsd: total,
+          }),
+        });
+        const upJson = await upRes.json();
+        if (upJson?.customer_id) customerIdLinked = upJson.customer_id;
+      } catch (err) {
+        console.warn('Customer upsert failed:', err);
+      }
+    }
+
     const { data } = await supabase
       .from('orders')
       .insert({
@@ -97,6 +121,10 @@ export default function CheckoutPage() {
         payment_status: payMethod === 'cod' ? 'pending' : 'processing',
         wholesale_items: cart,
         wholesale_cost_total: total,
+        customer_name: name.trim() || null,
+        customer_phone: phone.trim() || null,
+        customer_address: address.trim() || null,
+        customer_id: customerIdLinked,
         admin_notes: note || null,
         user_id: session?.user.id || null,
       })
