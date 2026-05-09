@@ -301,6 +301,11 @@ Pipeline is wealth engine ONLY if all four conditions met:
 
 KEY RISK: question A6 (USA wholesale price by grade) is the single most important number to lock before building.
 
+### YIELD DISCIPLINE PRINCIPLE (locked May 9, 2026 - per Dedrick)
+Real lobster tail yields WILL BE RECORDED from actual batches in the field. AI must NOT assume yields. When asked about yield-dependent economics, AI must surface the most recent measured yield from yield_lots table OR flag that no measurement exists yet. NEVER pad numbers with guesses. The economics model lives or dies on actual measured yield, not assumption.
+
+A5 STATUS: yield will be confirmed from first batches of Aug 2026 lobster season. Until then, all yield-dependent projections must be marked PROVISIONAL.
+
 ### A6 ANSWERED + LOBSTER ECONOMICS RE-CORRECTED May 9, 2026
 Real Spiny Tail-to-Jomara invoices (Oct-Nov 2025, $108,354 across 7,025 lbs tail):
 USA wholesale prices to Jomara Seafood (Hialeah FL):
