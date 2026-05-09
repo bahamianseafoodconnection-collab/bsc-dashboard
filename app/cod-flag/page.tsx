@@ -45,14 +45,8 @@ if (cancellations === 2) return 'final_warning';
 return 'blocked';
 }
 
-const MOCK_FLAGS: CustomerFlag[] = [
-{ id: '1', customer_name: 'John Williams', customer_phone: '+1 (242) 555-0101', cod_cancellations: 3, flag_level: 'blocked', blocked_at: '2026-04-28', notes: 'Cancelled 3 COD orders. Delivery blocked.', created_at: '2026-04-01', last_incident: '2026-04-28' },
-{ id: '2', customer_name: 'Sandra Clarke', customer_phone: '+1 (242) 555-0202', cod_cancellations: 2, flag_level: 'final_warning', notes: 'Final warning issued. One more = blocked.', created_at: '2026-04-10', last_incident: '2026-04-25' },
-{ id: '3', customer_name: 'Mark Thompson', customer_phone: '+1 (242) 555-0303', cod_cancellations: 1, flag_level: 'warning', notes: '1st COD cancellation. Warning issued.', created_at: '2026-04-20', last_incident: '2026-04-22' },
-];
-
 export default function CODFlagSystemPage() {
-const [flags, setFlags] = useState<CustomerFlag[]>(MOCK_FLAGS);
+const [flags, setFlags] = useState<CustomerFlag[]>([]);
 const [search, setSearch] = useState('');
 const [filterLevel, setFilterLevel] = useState<FlagLevel | 'all'>('all');
 const [adding, setAdding] = useState(false);
@@ -60,6 +54,30 @@ const [newPhone, setNewPhone] = useState('');
 const [newName, setNewName] = useState('');
 const [newNote, setNewNote] = useState('');
 const [loading, setLoading] = useState(false);
+const [fetching, setFetching] = useState(true);
+const [fetchError, setFetchError] = useState<string | null>(null);
+
+useEffect(() => {
+  let cancelled = false;
+  (async () => {
+    setFetching(true);
+    setFetchError(null);
+    const { data, error } = await supabase
+      .from('customer_cod_flags')
+      .select('*')
+      .order('last_incident', { ascending: false, nullsFirst: false })
+      .limit(500);
+    if (cancelled) return;
+    if (error) {
+      setFetchError(error.message);
+      setFlags([]);
+    } else {
+      setFlags((data || []) as CustomerFlag[]);
+    }
+    setFetching(false);
+  })();
+  return () => { cancelled = true; };
+}, []);
 
 const filtered = flags.filter((f) => {
 const matchSearch = f.customer_name.toLowerCase().includes(search.toLowerCase()) || f.customer_phone.includes(search);
