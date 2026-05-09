@@ -26,6 +26,7 @@ const PROTECTED = [
   '/labels',
   '/reports',
   '/payroll',
+  '/fleet',
 ];
 
 export async function middleware(request: NextRequest) {
