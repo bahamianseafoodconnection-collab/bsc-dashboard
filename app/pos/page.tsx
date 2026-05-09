@@ -111,6 +111,7 @@ const [cart, setCart] = useState<CartItem[]>([]);
 const [category, setCategory] = useState<string>('all');
 const [search, setSearch] = useState('');
 const [customerName, setCustomerName] = useState('');
+const [customerPhone, setCustomerPhone] = useState('');
 const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
 const [cardRef, setCardRef] = useState('');
 const [completing, setCompleting] = useState(false);
@@ -206,6 +207,7 @@ line_total: Number((i.unit_price * i.qty).toFixed(2)),
 line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)),
 }));
 const customerNameClean = customerName.trim();
+const customerPhoneClean = customerPhone.trim();
 const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({
 order_type: 'pos_sale_nassau',
 payment_method: paymentMethod,
@@ -213,6 +215,7 @@ payment_status: 'paid_in_full',
 wholesale_items: lineItems,
 wholesale_cost_total: Number(subtotal.toFixed(2)),
 customer_name: customerNameClean || 'Walk-in',
+customer_phone: customerPhoneClean || null,
 admin_notes: paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
 user_id: userId,
 }).select('id').single();
@@ -264,7 +267,7 @@ ref, total: subtotal, cost_total: costTotal, profit: realProfit,
 items: [...cart], customer: customerName.trim() || 'Walk-in',
 payment_method: paymentMethod, card_ref: paymentMethod === 'card' ? cardRef : null,
 });
-setCart([]); setCustomerName(''); setCardRef('');
+setCart([]); setCustomerName(''); setCustomerPhone(''); setCardRef('');
 } catch (e) {
 alert('Sale failed: ' + (e instanceof Error ? e.message : 'unknown error'));
 } finally {
@@ -383,12 +386,19 @@ style={{ backgroundColor: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 1
 </div>
 </div>
 
-<div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0' }}>
+<div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: 6 }}>
 <input
 type="text"
 placeholder="Customer name (optional)"
 value={customerName}
 onChange={(e) => setCustomerName(e.target.value)}
+style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+/>
+<input
+type="tel"
+placeholder="Phone (optional, enables tracking)"
+value={customerPhone}
+onChange={(e) => setCustomerPhone(e.target.value)}
 style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
 />
 </div>
