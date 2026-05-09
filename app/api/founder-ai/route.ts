@@ -218,13 +218,47 @@ NOT just outsourced processing. Igloo is a USA-BONDED SEAFOOD TRADING HUB with F
 PLUS the processing service: $1.75/lb final pack (plastic sleeve + labor + box)
 PLUS government export royalty $0.35/lb (Bahamas govt)
 
-### IGLOO PENDING QUESTIONS (CRITICAL - locks the deal economics)
-- I1: Does Igloo take commission on sales OR is $1.75/lb the only cost?
-- I2: Storage fee $/lb/month while goods sit in bond?
-- I3: Trade execution fee when a buyer purchases from BSC inventory?
-- I4: Typical price discovery range for spiny lobster tail by size grade (5oz/6oz/8oz/10oz/12oz+)?
-- I5: Onboarding requirements (FDA, HACCP, insurance, customs broker)?
-- I6: Igloo commission/markup on sourcing-side purchases by BSC?
+### IGLOO DEAL TERMS - PARTIALLY ANSWERED May 9, 2026
+I1 ANSWERED: Igloo takes COMMISSION on sales (not just $1.75/lb processing fee). PLUS may provide ADVANCE FINANCING - pay BSC at Spiny Tail door for lobster cost so BSC can keep buying from fishermen. Commission % still pending exact figure.
+I2 ANSWERED: Storage fee $700-$1,400/month based on square feet. FLAT monthly, not per-lb. Dedrick will confirm exact from Igloo dashboard.
+I3: Trade execution fee when a buyer purchases from BSC inventory? PENDING
+I4: Lobster tail price discovery range by size grade? PARTIAL ANSWER from Jomara invoices ($13-17.25/lb depending on grade)
+I5: Onboarding requirements (FDA, HACCP, insurance, customs broker)? PENDING
+I6: Igloo commission/markup on sourcing-side purchases by BSC? PENDING
+
+### CRITICAL UNLOCK - IGLOO ADVANCE FINANCING
+This is a working capital lifeline. Cash flow becomes:
+1. Fishermen -> BSC pays cost
+2. BSC processes at Spiny Tail
+3. Ships to Igloo Miami
+4. IGLOO PAYS BSC COST BASIS AT THE DOOR (advance) <- the unlock
+5. Igloo final-packs + sells globally at price discovery
+6. Igloo deducts commission + processing fee + storage
+7. BSC receives net
+
+BSC can scale lobster volume FAR beyond its bank balance because financing is provided. This is the lever that turns 15K lbs/mo proven volume into 60K lbs/mo financing-enabled volume.
+
+### LOBSTER ECONOMICS WITH FULL IGLOO STRUCTURE (May 9, 2026)
+Per-lb cost stack:
+- Tail buy direct Family Island: $8.00/lb
+- BSC variable (royalty + cooler ship to Miami): $0.50/lb (no packing - Igloo does it)
+- Igloo final pack: $1.75/lb
+- Igloo storage allocation (~$1,400/mo / ~15K lbs avg inventory): $0.09/lb
+- Sub-total before commission: $10.34/lb
+- Avg sell (Jomara invoices baseline): $15.42/lb
+- Pre-commission margin: $5.08/lb
+
+Net margin sensitivity by commission %:
+- 5% comm: net $4.31/lb (28%)
+- 10% comm: net $3.54/lb (23%) - planning baseline
+- 15% comm: net $2.77/lb (18%)
+
+8-MONTH SEASON GROSS AT 10% COMMISSION:
+- 15K lbs/mo (current proven volume): $424,800
+- 30K lbs/mo (Spiny Tail capacity ceiling): $849,600
+- 60K lbs/mo (financing-enabled scaling): $1,699,200
+
+TOM $550K REPAID IN SEASON 1 at 30K lbs/mo. Doubled at 60K lbs/mo.
 
 ### REVISED LOBSTER ECONOMICS (Igloo as platform)
 - Spiny Tail freezer constraint REMOVED (product moves to Igloo bond after processing)
