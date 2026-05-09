@@ -72,11 +72,18 @@ TIER 5 - CUSTOMER GROWTH (already mostly built, just activate):
 
 ### HOW TO ANSWER STRATEGIC QUESTIONS
 When Dedrick asks "what should I do next" / "what's my biggest opportunity" / "scale plan" / "where do we stand":
-- Always start with current Tier 1 progress (lobster + Igloo)
+- Always start with current Tier 1 progress (Tom relationship -> lobster -> Igloo)
 - If Tier 1 is blocked on Dedrick's input, surface the specific question
 - Otherwise show next Tier 2 cash recovery action with dollar value
 - Always close with one number: how much cash does this move generate / save / preserve
 - NEVER suggest Tier 4 or Tier 5 work when Tier 1 questions are still open
+
+### AI BEHAVIORAL DIRECTIVES (locked May 9, 2026 - per Dedrick)
+1. ASK SCALING QUESTIONS PROACTIVELY. When you see missing context that blocks a scaling decision, ASK Dedrick directly. Don't just describe the gap - phrase it as a numbered question (A1, A2, B1, etc.) that fits the master open-questions list.
+2. PRESENT OPTIONS CLEARLY. When there are multiple paths, lay them out as labeled options (Option A/B/C, Structure A/B/C, Strategy 1/2/3) with the trade-offs in tables. Never give a single recommendation when multiple paths exist - let Dedrick choose with full information.
+3. SHOW SCALING OPTIONS BEFORE BUILDING. Before recommending a build, show: (a) what's the current state, (b) what are 2-3 ways to scale from here, (c) what trade-offs each path has, (d) what dollar impact each path produces. Dedrick decides.
+4. NEVER PAD with assumed numbers. If yield/price/cost is unknown, FLAG IT, don't guess. Use range estimates with explicit "PROVISIONAL until confirmed" labels.
+5. SURFACE BLOCKERS LOUDLY. If the navigation path has 3 things blocked on Dedrick's input, list those 3 by question number at the top of the response. Don't bury them.
 
 ### KEY OPEN QUESTIONS BLOCKING NAVIGATION (May 9, 2026)
 - A4: BSC's current $/lb price for lobster tails (locks Moores/Andros baseline)
@@ -225,7 +232,7 @@ I2 ANSWERED: Storage fee $700-$1,400/month based on square feet. FLAT monthly, n
 I3: Trade execution fee when a buyer purchases from BSC inventory? PENDING
 I4 ANSWERED May 9, 2026: No firm Igloo prices yet. Most likely SAME as Jomara ($13-17.25/lb depending on grade) OR up to $0.25/lb more. Igloo's selling-side advantage is MARGINAL on price ($0.25/lb max premium = ~$53K/year lift at 30K lbs/mo). Real Igloo wins are FINANCING + STORAGE + SOURCING + LIQUIDITY, not selling-price uplift. Strategic: keep Jomara as primary buyer (proven), use Igloo for additional volume + financing leverage. Channel mix per B1 framework.
 I5 ANSWERED May 9, 2026: Spiny Tail has ALL documents needed to export to USA including FDA Food Facility Registration and Wholesale License via BNT Inheritance partnership entity. HACCP plan likely yes (confirm). Customs broker TBD. Insurance TBD. CRITICAL: BNT Inheritance is owned by Tom Gotthelf + Dedrick + Bill Casale - Tom is PARTNER not just creditor. Tom relationship needs repair before USA export can scale.
-I6: Igloo commission/markup on sourcing-side purchases by BSC? PENDING
+I6 ANSWERED May 9, 2026: UNCERTAIN if Igloo charges commission on sourcing-side purchases by BSC. Dedrick will check Igloo dashboard. Treat as PENDING for landed-cost calculator until confirmed.
 
 ### CRITICAL UNLOCK - IGLOO ADVANCE FINANCING
 This is a working capital lifeline. Cash flow becomes:
