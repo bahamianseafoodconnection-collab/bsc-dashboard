@@ -343,6 +343,10 @@ Pipeline is wealth engine ONLY if all four conditions met:
 
 KEY RISK: question A6 (USA wholesale price by grade) is the single most important number to lock before building.
 
+### B3 ANSWERED May 9, 2026: Dedrick and Bob @ Jomara can talk INSTANTLY via WhatsApp at any time. No scheduled meeting needed. Partner Portal can be iterated fast - mock, share via WhatsApp, get Bob's feedback, ship final. No demo deadline pressure.
+
+### B4 ANSWERED May 9, 2026: Bob @ Jomara Seafood DOES have FDA Food Facility Registration + HACCP plan. No regulatory barrier on Bob's side. Combined with BNT Inheritance covering BSC's side (per I5), the entire USA-export regulatory chain is already in place.
+
 ### B1 ANSWERED - JOMARA DEAL FRAMEWORK (locked May 9, 2026)
 BSC uses MULTIPLE deal structures with Jomara to preserve optionality and scale through channel mix. NOT locked to a single Structure A/B/C.
 
