@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,17 @@ type Order = {
   wholesale_items: unknown;
 };
 
-type LineItem = { name?: string; qty?: number; quantity?: number; unit?: string };
+type LineItem = {
+  id?: string;
+  source?: 'market' | 'wholesale' | 'us';
+  sku?: string;
+  name?: string;
+  price?: number;
+  qty?: number;
+  quantity?: number;
+  unit?: string;
+  image_url?: string;
+};
 
 function parseItems(raw: unknown): LineItem[] {
   if (!raw) return [];
@@ -53,10 +64,41 @@ function statusTone(s: string | null): { bg: string; text: string; label: string
 }
 
 export default function MyOrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [trackId, setTrackId] = useState('');
+
+  function reorder(items: LineItem[]) {
+    if (typeof window === 'undefined' || items.length === 0) return;
+    try {
+      const stored = window.localStorage.getItem('bsc_cart');
+      const current: LineItem[] = stored ? JSON.parse(stored) : [];
+      for (const it of items) {
+        if (!it.id || !it.name || typeof it.price !== 'number') continue;
+        const qty = Number(it.qty ?? it.quantity ?? 1);
+        const source = (it.source as 'market' | 'wholesale' | 'us') || 'market';
+        const idx = current.findIndex((c) => c.id === it.id && c.source === source);
+        if (idx >= 0) {
+          current[idx].qty = Number(current[idx].qty ?? current[idx].quantity ?? 1) + qty;
+        } else {
+          current.push({
+            id: it.id,
+            source,
+            sku: it.sku,
+            name: it.name,
+            price: it.price,
+            qty,
+            unit: it.unit || 'each',
+            image_url: it.image_url,
+          });
+        }
+      }
+      window.localStorage.setItem('bsc_cart', JSON.stringify(current));
+      router.push('/checkout');
+    } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -220,7 +262,7 @@ export default function MyOrdersPage() {
                   </span>
                 )}
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   href={`/track/${o.id}`}
                   className="rounded-lg bg-navy px-4 py-2 text-xs font-bold text-gold hover:bg-navy-700"
@@ -235,6 +277,13 @@ export default function MyOrdersPage() {
                 >
                   🧾 Receipt
                 </Link>
+                <button
+                  onClick={() => reorder(items)}
+                  disabled={items.length === 0}
+                  className="rounded-lg bg-gold px-4 py-2 text-xs font-bold text-navy hover:bg-gold-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ↻ Re-order
+                </button>
               </div>
             </div>
           );

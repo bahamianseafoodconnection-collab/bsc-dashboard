@@ -93,6 +93,9 @@ export default function ProductPage() {
   const [inWishlist, setInWishlist] = useState(false);
   const [wishlistBusy, setWishlistBusy] = useState(false);
 
+  // Recently viewed (other products, excluding this one)
+  const [recent, setRecent] = useState<Product[]>([]);
+
   // Resolve identity once on mount
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +148,35 @@ export default function ProductPage() {
     })();
     return () => { cancelled = true; };
   }, [id, authUserId]);
+
+  // Track this product in localStorage 'bsc_recent_viewed' (FIFO, max 12),
+  // then load the other recently viewed products into a strip below.
+  useEffect(() => {
+    if (!id || typeof window === 'undefined') return;
+    let cancelled = false;
+    let priorIds: string[] = [];
+    try {
+      const raw = window.localStorage.getItem('bsc_recent_viewed');
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      priorIds = (Array.isArray(arr) ? arr : []).filter((x) => typeof x === 'string' && x !== id);
+      const next = [id, ...priorIds].slice(0, 12);
+      window.localStorage.setItem('bsc_recent_viewed', JSON.stringify(next));
+    } catch { /* ignore */ }
+
+    if (priorIds.length === 0) { setRecent([]); return; }
+    (async () => {
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, description, price, unit, category, image_url, in_stock, featured')
+        .in('id', priorIds.slice(0, 8));
+      if (cancelled) return;
+      // Preserve the localStorage order so the most recent shows first.
+      const byId = new Map<string, Product>();
+      ((data || []) as Product[]).forEach((p) => byId.set(p.id, p));
+      setRecent(priorIds.slice(0, 8).map((rid) => byId.get(rid)).filter(Boolean) as Product[]);
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   useEffect(() => {
     if (!id) { setLoading(false); return; }
@@ -598,6 +630,47 @@ export default function ProductPage() {
             </ul>
           )}
         </section>
+
+        {/* Recently viewed */}
+        {recent.length > 0 && (
+          <section className="mt-14">
+            <h2 className="mb-3 font-display text-xl font-black text-navy">
+              Recently viewed
+            </h2>
+            <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+              {recent.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/product/${r.id}`}
+                  className="group flex w-36 shrink-0 flex-col overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100 transition hover:shadow-card-hover sm:w-44"
+                >
+                  <div className="relative aspect-square overflow-hidden bg-slate-100">
+                    {r.image_url ? (
+                      <img
+                        src={r.image_url}
+                        alt={r.name}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-3xl">
+                        {CATEGORY_EMOJI[r.category || ''] || '📦'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <h3 className="clamp-2 text-xs font-bold leading-snug text-navy sm:text-sm">
+                      {r.name}
+                    </h3>
+                    <div className="mt-1 text-sm font-extrabold text-navy">
+                      BSD ${r.price.toFixed(2)}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Related */}
         {related.length > 0 && (
