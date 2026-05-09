@@ -43,6 +43,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/market') ||
     pathname.startsWith('/product/') ||
     pathname.startsWith('/track/') ||
+    pathname.startsWith('/partner/') ||
     pathname.startsWith('/my-orders') ||
     pathname.startsWith('/receipt/') ||
     pathname.startsWith('/utilities') ||

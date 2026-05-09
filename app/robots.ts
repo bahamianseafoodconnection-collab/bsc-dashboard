@@ -64,6 +64,8 @@ export default function robots(): MetadataRoute.Robots {
           '/wishlist',
           '/landed-cost',
           '/staff/',
+          '/partner-tokens',
+          '/partner/',
           '/receipt/',
           '/invoice/',
           '/pick-ticket/',
