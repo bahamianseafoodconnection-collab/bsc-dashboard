@@ -295,12 +295,66 @@ Scenario 3 - Igloo path with direct Family Island sourcing ($8/lb whole, 2x thro
 ### LOBSTER PIPELINE GO/NO-GO CRITERIA (LOCKED May 9, 2026)
 Pipeline is wealth engine ONLY if all four conditions met:
 1. Sources direct Family Island day boats (NOT Nassau, NOT middlemen)
-2. USA wholesale price averages >= $30/lb tail
+2. USA wholesale price averages >= $30/lb tail [CORRECTED BELOW - actual is $13-17/lb tail, model rerun needed]
 3. Yield >= 35% whole-to-tail
 4. Igloo structure is service fee only (not commission)
 
-If any of these is wrong, pipeline breaks even or loses at scale.
 KEY RISK: question A6 (USA wholesale price by grade) is the single most important number to lock before building.
+
+### A6 ANSWERED + LOBSTER ECONOMICS RE-CORRECTED May 9, 2026
+Real Spiny Tail-to-Jomara invoices (Oct-Nov 2025, $108,354 across 7,025 lbs tail):
+USA wholesale prices to Jomara Seafood (Hialeah FL):
+- #1 Quality 5-9oz: $16.25-$17.25/lb (premium portion control)
+- #1 Quality 10-16oz: $13.00-$14.00/lb (lower per lb on big tails)
+- #2 Quality 5-9oz: $16.25/lb
+- #2 Quality 12-16oz: $12.00/lb
+- AVERAGE actual sell: $15.42/lb tail
+- COUNTER-INTUITIVE: smaller tails (5-9oz) command HIGHER prices than larger (10-16oz). Restaurant portion control beats "bigger is better"
+
+REINTERPRETED A4: $8/lb at Family Island day boats is TAIL cost, not WHOLE cost. Bahamian fishermen tail at sea (exporting whole spiny lobster is restricted). Strategy A (buy whole + process) is rare in Bahamas; Strategy B (buy tails) is dominant.
+
+CORRECTED LOBSTER ECONOMICS:
+- Buy tails direct Family Island: $8/lb tail
+- Yield 95% (cleaning loss only): effective $8.42/lb
+- Variable in-house: $1.69/lb
+- Fixed allocation (full capacity 30K lbs/mo): $0.38/lb
+- TOTAL COST: $10.49/lb finished tail
+- AVG SELL to Jomara: $15.42/lb
+- NET MARGIN: $4.93/lb tail (32%)
+- AT 30K LBS TAIL/MO (full capacity): $147,900/mo gross
+- 8-MONTH SEASON: $1,183,200 gross profit
+- This aligns with real invoice volume (7,025 lbs in ~30 days last season)
+
+SPINY TAIL VOLUME SOLD TO JOMARA OCT-NOV 2025 (proof of concept):
+- Invoice 1 (10/23/2025): $50,232.50 / 3,005 lbs (avg $16.72/lb)
+- Invoice 2 (10/23/2025): $15,707.50 / 1,040 lbs (avg $15.10/lb)
+- Invoice 3 (11/20/2025): $42,414.00 / 2,980 lbs (avg $14.23/lb)
+- TOTAL: $108,354 / 7,025 lbs in ~30 days
+
+### A3 ANSWERED + SALMON ARBITRAGE CONFIRMED May 9, 2026
+Father & Sons Invoice 1347 (March 30, 2026, $16,005.60 total):
+- 6oz salmon portions IVP No Skin (10lb case): $7.20/lb
+- 8oz salmon portions IVP No Skin (10lb case): $7.30/lb
+- 2/3 lb salmon filet IVP Skin On (22lb catch wt): $5.70/lb
+- 4oz salmon portions IVP Skin On (10lb case): $5.70/lb
+
+THE SALMON ARBITRAGE - LARGEST CASH RECOVERY OPPORTUNITY ALL SESSION:
+- F&S 6oz salmon: $7.20/lb. F&S markup 15%. Igloo cost: $6.26/lb.
+- Tropic 6oz salmon: $11.90/lb (CURRENT BSC SOURCE)
+- Direct Igloo would save BSC: $11.90 - $6.26 = $5.64/lb (47% cheaper)
+- On 1,200 lbs single shipment volume: $6,768 saved per invoice
+- Annualized 6oz salmon alone: ~$81K/year recoverable
+- Add 8oz + 4oz + filet across year: probably $100K+/year recoverable on salmon
+
+THIS IS THE BIGGEST DOLLAR LEVER IDENTIFIED. Goes in Tier 2 immediately.
+
+### TIER 2 CASH RECOVERY UPDATED ranked by dollar impact:
+1. Salmon Tropic-to-Igloo switch: ~$100K/year (NEW, biggest)
+2. Premium SKU pricing override: ~$30K/year
+3. NY Strip USA arbitrage: ~$26K/year
+4. Tropic grouper glut: ~$20K per freezer fill
+5. Conch seasonal arbitrage: $10-20K/year
+6. Snow crab USA import: $7K/year
 
 ### AIR CARGO CONSTRAINT
 - Maximum: 5,900 lbs per shipment
