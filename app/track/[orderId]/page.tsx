@@ -29,11 +29,29 @@ type Order = {
   wholesale_cost_total: number | null;
   delivery_type: string | null;
   customer_name: string | null;
+  customer_phone: string | null;
   customer_address: string | null;
   wholesale_items: unknown;
+  promo_code: string | null;
+  promo_discount: number | null;
+  user_id: string | null;
+  admin_notes: string | null;
 };
 
-type LineItem = { name?: string; qty?: number; quantity?: number; unit?: string };
+type LineItem = {
+  name?: string;
+  qty?: number;
+  quantity?: number;
+  unit?: string;
+  price?: number;
+};
+
+const STATUS_FLOW = ['Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Delivered'];
+const PICKUP_FLOW = ['Pending', 'Confirmed', 'Ready for Pickup', 'Delivered'];
+const CANCEL_WINDOW_MS = 30 * 60 * 1000;
+const CANCELLABLE = new Set([
+  'Pending', 'Confirmed', 'pending', 'processing', 'payment_pending',
+]);
 
 function parseItems(raw: unknown): LineItem[] {
   if (!raw) return [];
@@ -44,18 +62,27 @@ function parseItems(raw: unknown): LineItem[] {
   return raw as LineItem[];
 }
 
-// Map raw order.status → fulfillment timeline step (0..3) + label.
-// Stages: 0=Received, 1=Processing, 2=Ready, 3=Delivered.
-function timelineStep(s: string | null): { step: number; label: string; color: string } {
-  const v = (s || '').toLowerCase();
-  if (v === 'delivered')         return { step: 3, label: 'Delivered',      color: '#22c55e' };
-  if (v === 'ready')             return { step: 2, label: 'Ready for you',  color: '#f5c518' };
-  if (v === 'processing'   ||
-      v === 'paid'         ||
-      v === 'preparing')         return { step: 1, label: 'Processing',     color: '#3b82f6' };
-  if (v === 'cancelled' ||
-      v === 'payment_failed')    return { step: -1, label: s || 'Cancelled', color: '#ef4444' };
-  return { step: 0, label: 'Received', color: '#94a3b8' };
+function flowFor(o: Order): string[] {
+  const dt = (o.delivery_type || '').toLowerCase();
+  return dt === 'pickup' ? PICKUP_FLOW : STATUS_FLOW;
+}
+
+// Maps the live status to a step index in the chosen flow + a friendly
+// label + a tone color. Negative step => terminal cancelled state.
+function timelineStep(o: Order, flow: string[]): { step: number; label: string; color: string } {
+  const live = (o.status || o.payment_status || '').trim();
+  if (live === 'Cancelled' || live === 'cancelled' || live === 'payment_failed')
+    return { step: -1, label: 'Cancelled', color: '#ef4444' };
+  const idx = flow.indexOf(live);
+  if (idx >= 0) {
+    const palette = ['#94a3b8', '#1a6fb5', '#a78bfa', '#fb923c', '#22c55e'];
+    return { step: idx, label: live, color: palette[idx] || '#22c55e' };
+  }
+  // Common synonyms from POS / payment_status — best-effort map.
+  const v = live.toLowerCase();
+  if (v === 'delivered')                       return { step: flow.length - 1, label: 'Delivered', color: '#22c55e' };
+  if (v === 'paid' || v === 'processing')      return { step: 1, label: 'Confirmed', color: '#1a6fb5' };
+  return { step: 0, label: live || 'Received', color: '#94a3b8' };
 }
 
 export default function TrackOrderPage() {
@@ -63,32 +90,75 @@ export default function TrackOrderPage() {
   const orderId = params?.orderId;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('orders')
-        .select(
-          'id, created_at, updated_at, order_type, status, payment_status, payment_method, total, wholesale_cost_total, delivery_type, customer_name, customer_address, wholesale_items'
-        )
-        .eq('id', orderId)
-        .maybeSingle();
+      const [{ data }, { data: { user } }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select(
+            'id, created_at, updated_at, order_type, status, payment_status, payment_method, total, wholesale_cost_total, delivery_type, customer_name, customer_phone, customer_address, wholesale_items, promo_code, promo_discount, user_id, admin_notes'
+          )
+          .eq('id', orderId)
+          .maybeSingle(),
+        supabase.auth.getUser(),
+      ]);
       if (cancelled) return;
       setOrder((data as Order) ?? null);
+      setAuthUserId(user?.id ?? null);
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [orderId]);
 
+  async function handleCancel() {
+    if (!order) return;
+    if (!confirm('Cancel this order? This cannot be undone.')) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/orders/cancel', {
+        method: 'POST', headers,
+        body: JSON.stringify({ order_id: order.id }),
+      });
+      const j = await res.json();
+      if (j.ok) setOrder({ ...order, status: 'Cancelled' });
+      else setCancelError(j.error || 'Could not cancel');
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   if (loading) return <Centered>Looking up your order…</Centered>;
   if (!order) return <NotFound id={orderId} />;
 
-  const tl = timelineStep(order.status || order.payment_status);
+  const flow = flowFor(order);
+  const tl = timelineStep(order, flow);
   const total = Number(order.total ?? order.wholesale_cost_total ?? 0);
   const items = parseItems(order.wholesale_items);
+  const itemsHavePrice = items.some((it) => typeof it.price === 'number');
+  const subtotal = itemsHavePrice
+    ? items.reduce((s, it) => s + (Number(it.price ?? 0) * Number(it.qty ?? it.quantity ?? 1)), 0)
+    : null;
+  const discount = Number(order.promo_discount || 0);
   const refNo = `INV-${order.id.slice(0, 8).toUpperCase()}`;
+  const ageMs = Date.now() - new Date(order.created_at).getTime();
+  const live = order.status || order.payment_status || '';
+  const canCancel =
+    !!authUserId &&
+    order.user_id === authUserId &&
+    CANCELLABLE.has(live) &&
+    ageMs < CANCEL_WINDOW_MS;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
@@ -139,7 +209,7 @@ export default function TrackOrderPage() {
         {tl.step >= 0 && (
           <div className="mt-6 rounded-2xl bg-white p-5 shadow-card">
             <div className="flex items-center justify-between gap-2">
-              {['Received', 'Processing', 'Ready', 'Delivered'].map((stage, i) => {
+              {flow.map((stage, i) => {
                 const reached = tl.step >= i;
                 return (
                   <div key={stage} className="flex flex-1 flex-col items-center gap-1.5">
@@ -150,7 +220,7 @@ export default function TrackOrderPage() {
                     >
                       {reached ? '✓' : i + 1}
                     </div>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${reached ? 'text-navy' : 'text-slate-400'}`}>
+                    <span className={`text-center text-[10px] font-bold uppercase tracking-wider ${reached ? 'text-navy' : 'text-slate-400'}`}>
                       {stage}
                     </span>
                   </div>
@@ -160,7 +230,7 @@ export default function TrackOrderPage() {
             <div className="relative mt-3 h-1 rounded-full bg-slate-200">
               <div
                 className="absolute left-0 top-0 h-1 rounded-full bg-gold transition-all"
-                style={{ width: `${(Math.max(0, tl.step) / 3) * 100}%` }}
+                style={{ width: `${(Math.max(0, tl.step) / Math.max(1, flow.length - 1)) * 100}%` }}
               />
             </div>
           </div>
@@ -195,35 +265,77 @@ export default function TrackOrderPage() {
           )}
         </div>
 
-        {/* Items */}
+        {/* Items + pricing */}
         <div className="mt-4 rounded-2xl bg-white p-5 shadow-card">
-          <div className="mb-3 flex items-baseline justify-between">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Items
-            </div>
-            <div className="text-lg font-extrabold text-navy">
-              BSD ${total.toFixed(2)}
-            </div>
+          <div className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+            Items
           </div>
           {items.length === 0 ? (
             <p className="text-sm text-slate-500">No line items recorded.</p>
           ) : (
-            items.map((it, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between border-b border-slate-100 py-2 text-sm last:border-b-0"
-              >
-                <span className="text-slate-700">{it.name || 'Item'}</span>
-                <span className="font-bold text-navy">
-                  {Number(it.qty ?? it.quantity ?? 0)}
-                  {it.unit ? ` ${it.unit}` : ''}
-                </span>
-              </div>
-            ))
+            items.map((it, i) => {
+              const qty = Number(it.qty ?? it.quantity ?? 0);
+              const lineTotal = typeof it.price === 'number' ? it.price * qty : null;
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 text-sm last:border-b-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-slate-700">{it.name || 'Item'}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {qty}{it.unit ? ` ${it.unit}` : ''}
+                      {typeof it.price === 'number' && (
+                        <> · BSD ${it.price.toFixed(2)} each</>
+                      )}
+                    </div>
+                  </div>
+                  {lineTotal !== null && (
+                    <div className="shrink-0 font-bold text-navy">
+                      BSD ${lineTotal.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
+
+          {/* Pricing breakdown */}
+          <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm">
+            {subtotal !== null && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Subtotal</span>
+                <span className="font-bold text-navy">BSD ${subtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {order.promo_code && discount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">
+                  Promo (<span className="font-mono text-emerald-700">{order.promo_code}</span>)
+                </span>
+                <span className="font-bold text-emerald-700">−BSD ${discount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-slate-100 pt-2 text-base">
+              <span className="font-extrabold text-navy">Total</span>
+              <span className="font-black text-navy">BSD ${total.toFixed(2)}</span>
+            </div>
+            {order.payment_method && (
+              <div className="pt-1 text-[11px] text-slate-500">
+                Paid via {order.payment_method.toUpperCase()}
+                {order.payment_status && ` · ${order.payment_status}`}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Receipt + support */}
+        {cancelError && (
+          <div className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+            {cancelError}
+          </div>
+        )}
+
+        {/* Actions */}
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <Link
             href={`/receipt/${order.id}`}
@@ -241,6 +353,15 @@ export default function TrackOrderPage() {
           >
             💬 WhatsApp BSC
           </a>
+          {canCancel && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-bold text-red-700 hover:border-red-500 disabled:opacity-60"
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+          )}
         </div>
       </main>
     </div>
