@@ -343,6 +343,14 @@ Pipeline is wealth engine ONLY if all four conditions met:
 
 KEY RISK: question A6 (USA wholesale price by grade) is the single most important number to lock before building.
 
+### B5 ANSWERED May 9, 2026: BSC <-> JOMARA TWO-WAY TRADE
+- BSC SELLS lobster tails TO Jomara (Spiny Tail invoices Oct-Nov 2025: $108,354 / 7,025 lbs). Per-grade prices locked under A6.
+- BSC DOES NOT buy lobster tails from Jomara.
+- BSC BUYS OTHER PRODUCTS from Jomara (e.g., $8,900 owed for steaks per session A/P snapshot).
+- Bidirectional trade relationship, not one-way supplier/customer.
+- Some Jomara-supplied products may be Igloo-sourced (like F&S salmon was) - potential direct-Igloo savings opportunity once invoice document is shared.
+- Pending: Jomara invoice for other products being shared shortly.
+
 ### B3 ANSWERED May 9, 2026: Dedrick and Bob @ Jomara can talk INSTANTLY via WhatsApp at any time. No scheduled meeting needed. Partner Portal can be iterated fast - mock, share via WhatsApp, get Bob's feedback, ship final. No demo deadline pressure.
 
 ### B4 ANSWERED May 9, 2026: Bob @ Jomara Seafood DOES have FDA Food Facility Registration + HACCP plan. No regulatory barrier on Bob's side. Combined with BNT Inheritance covering BSC's side (per I5), the entire USA-export regulatory chain is already in place.
