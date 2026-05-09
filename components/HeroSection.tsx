@@ -1,136 +1,206 @@
 'use client';
 
+// Public-facing hero. Tailwind-based, mobile-first.
+// Keeps the slow zoom + staggered fade-in vibe of the prior version.
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-// ── YOUR ACTUAL FILE IN SUPABASE ──────────────────────────────────────────────
-const HERO_IMG = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/94C94225-7A21-4E0F-BA00-79CA6E108385.jpg';
+const HERO_IMG =
+  'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/94C94225-7A21-4E0F-BA00-79CA6E108385.jpg';
+
+const STATS = [
+  { n: '9,310+', l: 'lbs in cold storage' },
+  { n: '7',      l: 'Nassau wholesalers' },
+  { n: '5',      l: 'Florida stores' },
+  { n: '2',      l: 'Islands served' },
+];
 
 export default function HeroSection() {
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setLoaded(true), 80); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    const t = setTimeout(() => setLoaded(true), 80);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+    <section className="relative flex min-h-[640px] w-full items-center overflow-hidden h-[100svh] max-h-[980px]">
+      {/* Background photo with slow zoom-in */}
+      <div
+        className={`absolute inset-0 bg-cover bg-[center_40%] transition-transform duration-[8000ms] ease-out will-change-transform ${
+          loaded ? 'scale-100' : 'scale-[1.06]'
+        }`}
+        style={{ backgroundImage: `url('${HERO_IMG}')` }}
+        aria-hidden
+      />
+      {/* Layered overlays for legibility on the navy/gold palette */}
+      <div
+        className="absolute inset-0"
+        aria-hidden
+        style={{
+          background:
+            'linear-gradient(108deg, rgba(5,12,24,.95) 0%, rgba(10,21,42,.84) 40%, rgba(15,33,55,.5) 65%, rgba(0,0,0,.15) 100%)',
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        aria-hidden
+        style={{
+          background:
+            'linear-gradient(to top, rgba(5,12,24,.92) 0%, rgba(5,12,24,.3) 28%, transparent 58%)',
+        }}
+      />
+      {/* Gold accent stripe down the left edge */}
+      <div
+        className="pointer-events-none absolute inset-y-0 left-0 w-1 opacity-60"
+        aria-hidden
+        style={{
+          background:
+            'linear-gradient(to bottom, transparent, #d4a843 18%, #f4c842 50%, #d4a843 82%, transparent)',
+        }}
+      />
 
-        .bsc-hero { position:relative; width:100%; height:100svh; min-height:640px; max-height:980px; overflow:hidden; display:flex; align-items:center; }
-
-        .bsc-hero-bg { position:absolute; inset:0; background:url('${HERO_IMG}') center 40%/cover; transform:scale(1.06); transition:transform 8s cubic-bezier(.25,.46,.45,.94); will-change:transform; pointer-events:none; }
-        .bsc-hero-bg.on { transform:scale(1.0); }
-
-        .bsc-hero-ov1 { position:absolute; inset:0; background:linear-gradient(108deg, rgba(5,12,24,.95) 0%, rgba(10,21,42,.84) 40%, rgba(15,33,55,.5) 65%, rgba(0,0,0,.15) 100%); pointer-events:none; }
-        .bsc-hero-ov2 { position:absolute; inset:0; background:linear-gradient(to top, rgba(5,12,24,.92) 0%, rgba(5,12,24,.3) 28%, transparent 58%); pointer-events:none; }
-        .bsc-hero-ov3 { position:absolute; inset:0; background:radial-gradient(ellipse 60% 80% at 100% 50%, rgba(212,168,67,.06) 0%, transparent 70%); pointer-events:none; }
-        .bsc-hero-bar { position:absolute; left:0; top:0; bottom:0; width:4px; background:linear-gradient(to bottom, transparent, #d4a843 18%, #f5c842 50%, #d4a843 82%, transparent); opacity:.65; pointer-events:none; }
-
-        .bsc-hero-inner { position:relative; z-index:10; max-width:1280px; margin:0 auto; padding:100px 6% 0; width:100%; pointer-events:none; }
-        .bsc-hero-inner > * { pointer-events:auto; }
-
-        .bsc-hero-eye { display:inline-flex; align-items:center; gap:10px; margin-bottom:22px; opacity:0; transform:translateY(18px); transition:opacity .65s ease .1s, transform .65s ease .1s; pointer-events:none; }
-        .bsc-hero-eye.on { opacity:1; transform:translateY(0); }
-        .bsc-hero-eye-ln { width:32px; height:1px; background:linear-gradient(to right, transparent, #d4a843); }
-        .bsc-hero-eye-tx { font-family:'DM Sans',sans-serif; font-size:11px; font-weight:600; letter-spacing:.22em; text-transform:uppercase; color:#d4a843; }
-
-        .bsc-hero-h1 { font-family:'Playfair Display',serif; font-weight:900; font-size:clamp(48px,7.8vw,98px); line-height:1.0; color:#fff; margin:0 0 8px; max-width:680px; opacity:0; transform:translateY(28px); transition:opacity .8s ease .25s, transform .8s ease .25s; pointer-events:none; }
-        .bsc-hero-h1.on { opacity:1; transform:translateY(0); }
-        .bsc-hero-h1-gold { display:block; font-style:italic; background:linear-gradient(130deg,#f5c842 0%,#d4a015 40%,#f0b429 72%,#c8860f 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-
-        .bsc-hero-sep { display:flex; align-items:center; gap:14px; margin-bottom:24px; opacity:0; transform:translateY(18px); transition:opacity .65s ease .42s, transform .65s ease .42s; pointer-events:none; }
-        .bsc-hero-sep.on { opacity:1; transform:translateY(0); }
-        .bsc-hero-sep-ln { width:52px; height:1px; background:linear-gradient(to right,#d4a843,transparent); }
-        .bsc-hero-sep-tx { font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500; letter-spacing:.16em; color:rgba(212,168,67,.75); text-transform:uppercase; }
-
-        .bsc-hero-desc { font-family:'DM Sans',sans-serif; font-size:clamp(14px,1.7vw,17px); line-height:1.78; color:rgba(226,232,240,.72); max-width:440px; margin-bottom:38px; font-weight:300; opacity:0; transform:translateY(18px); transition:opacity .65s ease .52s, transform .65s ease .52s; pointer-events:none; }
-        .bsc-hero-desc.on { opacity:1; transform:translateY(0); }
-
-        .bsc-hero-ctas { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:54px; opacity:0; transform:translateY(18px); transition:opacity .65s ease .62s, transform .65s ease .62s; }
-        .bsc-hero-ctas.on { opacity:1; transform:translateY(0); }
-
-        .bsc-cta-main { display:inline-flex; align-items:center; gap:8px; padding:15px 34px; background:linear-gradient(130deg,#f5c842 0%,#c8860f 100%); color:#060e1c; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; text-decoration:none; border-radius:4px; box-shadow:0 6px 32px rgba(212,160,21,.42), inset 0 1px 0 rgba(255,255,255,.14); transition:transform .2s ease, box-shadow .2s ease, filter .2s ease; position:relative; overflow:hidden; pointer-events:auto; }
-        .bsc-cta-main::after { content:''; position:absolute; top:0; left:-100%; width:50%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent); transition:left .55s ease; pointer-events:none; }
-        .bsc-cta-main:hover::after { left:160%; }
-        .bsc-cta-main:hover { transform:translateY(-3px); box-shadow:0 14px 42px rgba(212,160,21,.55); filter:brightness(1.06); }
-
-        .bsc-cta-ghost { display:inline-flex; align-items:center; gap:8px; padding:14px 26px; background:rgba(255,255,255,.055); color:rgba(255,255,255,.85); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; text-decoration:none; border:1.5px solid rgba(255,255,255,.2); border-radius:4px; backdrop-filter:blur(8px); transition:all .22s ease; pointer-events:auto; }
-        .bsc-cta-ghost:hover { background:rgba(255,255,255,.1); border-color:rgba(212,168,67,.55); color:#f5c842; transform:translateY(-2px); }
-
-        .bsc-hero-stats { display:flex; gap:0; opacity:0; transform:translateY(14px); transition:opacity .65s ease .78s, transform .65s ease .78s; pointer-events:none; }
-        .bsc-hero-stats.on { opacity:1; transform:translateY(0); }
-        .bsc-hero-stat { padding-right:28px; margin-right:28px; border-right:1px solid rgba(255,255,255,.1); }
-        .bsc-hero-stat:last-child { border:none; margin:0; padding-right:0; }
-        .bsc-hero-stat-n { font-family:'Playfair Display',serif; font-size:26px; font-weight:700; color:#f5c842; line-height:1; margin-bottom:5px; }
-        .bsc-hero-stat-l { font-family:'DM Sans',sans-serif; font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.4); }
-
-        .bsc-hero-scroll { position:absolute; bottom:32px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:7px; z-index:10; cursor:pointer; animation:bscScrollFade .6s ease 1.3s both; pointer-events:auto; opacity:0; }
-        @keyframes bscScrollFade { to { opacity:1; } }
-        .bsc-scroll-mouse { width:23px; height:36px; border:2px solid rgba(255,255,255,.28); border-radius:12px; display:flex; justify-content:center; padding-top:6px; }
-        .bsc-scroll-dot { width:4px; height:6px; background:#d4a843; border-radius:2px; animation:bscBounce 1.9s ease-in-out infinite; }
-        @keyframes bscBounce { 0%,100%{transform:translateY(0);opacity:1;} 50%{transform:translateY(8px);opacity:.35;} }
-        .bsc-scroll-lbl { font-family:'DM Sans',sans-serif; font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:rgba(255,255,255,.3); font-weight:600; }
-
-        @media(max-width:640px){
-          .bsc-hero-inner{padding:88px 5% 0;}
-          .bsc-hero-ctas{flex-direction:column;}
-          .bsc-cta-main,.bsc-cta-ghost{justify-content:center;}
-          .bsc-hero-stats{flex-wrap:wrap;gap:16px;}
-          .bsc-hero-stat{padding:0;border:none;margin:0;min-width:80px;}
-          .bsc-hero-stat-n{font-size:22px;}
-        }
-      `}</style>
-
-      <section className="bsc-hero">
-        <div className={`bsc-hero-bg ${loaded ? 'on' : ''}`} />
-        <div className="bsc-hero-ov1" /><div className="bsc-hero-ov2" /><div className="bsc-hero-ov3" />
-        <div className="bsc-hero-bar" />
-
-        <div className="bsc-hero-inner">
-          <div className={`bsc-hero-eye ${loaded ? 'on' : ''}`}>
-            <span className="bsc-hero-eye-ln" />
-            <span className="bsc-hero-eye-tx">Nassau · Commonwealth of the Bahamas 🇧🇸</span>
+      {/* Content */}
+      <div className="relative z-10 mx-auto w-full max-w-[1280px] px-[6%] pt-24 sm:pt-28">
+        <FadeIn loaded={loaded} delay="delay-[100ms]">
+          <div className="mb-5 inline-flex items-center gap-2.5">
+            <span className="h-px w-8 bg-gradient-to-r from-transparent to-gold" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gold">
+              Nassau · Commonwealth of the Bahamas 🇧🇸
+            </span>
           </div>
+        </FadeIn>
 
-          <h1 className={`bsc-hero-h1 ${loaded ? 'on' : ''}`}>
-            Fresh From<br />Our Waters<br />
-            <span className="bsc-hero-h1-gold">To Your Door.</span>
+        <FadeIn loaded={loaded} delay="delay-[250ms]" amount="lg">
+          <h1 className="font-display text-5xl font-black leading-[1.0] text-white sm:text-6xl md:text-7xl lg:text-[98px]">
+            Fresh From
+            <br />
+            Our Waters
+            <br />
+            <span
+              className="block bg-clip-text italic text-transparent"
+              style={{
+                backgroundImage:
+                  'linear-gradient(130deg,#f4c842 0%,#d4a015 40%,#f0b429 72%,#c8860f 100%)',
+              }}
+            >
+              To Your Door.
+            </span>
           </h1>
+        </FadeIn>
 
-          <div className={`bsc-hero-sep ${loaded ? 'on' : ''}`}>
-            <span className="bsc-hero-sep-ln" />
-            <span className="bsc-hero-sep-tx">Seafood · Meat · Wholesale · Services</span>
+        <FadeIn loaded={loaded} delay="delay-[420ms]">
+          <div className="mt-6 mb-6 flex items-center gap-3.5">
+            <span className="h-px w-12 bg-gradient-to-r from-gold to-transparent" />
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-gold/75">
+              Seafood · Meat · Wholesale · Services
+            </span>
           </div>
+        </FadeIn>
 
-          <p className={`bsc-hero-desc ${loaded ? 'on' : ''}`}>
-            Nassau's premier marketplace for premium seafood, fresh meats, and Bahamian wholesale — delivered to your door, sourced with pride.
+        <FadeIn loaded={loaded} delay="delay-[520ms]">
+          <p className="mb-9 max-w-md text-sm font-light leading-relaxed text-slate-200/75 sm:text-base lg:text-lg">
+            Nassau&rsquo;s premier marketplace for premium seafood, fresh meats, and Bahamian
+            wholesale — delivered to your door, sourced with pride.
           </p>
+        </FadeIn>
 
-          <div className={`bsc-hero-ctas ${loaded ? 'on' : ''}`}>
-            <Link href="/market" className="bsc-cta-main">Shop Now →</Link>
-            <Link href="/local-wholesale" className="bsc-cta-ghost">🇧🇸 Wholesale</Link>
-            <Link href="/us-shopping" className="bsc-cta-ghost">🇺🇸 Shop USA</Link>
+        <FadeIn loaded={loaded} delay="delay-[620ms]">
+          <div className="mb-12 flex flex-wrap gap-3">
+            <Link
+              href="/market"
+              className="group relative inline-flex items-center gap-2 overflow-hidden rounded px-8 py-3.5 text-xs font-bold uppercase tracking-[0.08em] text-navy shadow-[0_6px_32px_rgba(212,160,21,.42)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_42px_rgba(212,160,21,.55)] sm:text-sm"
+              style={{ background: 'linear-gradient(130deg,#f4c842 0%,#c8860f 100%)' }}
+            >
+              <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-500 group-hover:translate-x-full" />
+              <span className="relative">Shop Now →</span>
+            </Link>
+            <Link
+              href="/local-wholesale"
+              className="inline-flex items-center gap-2 rounded border border-white/20 bg-white/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-white/85 backdrop-blur transition hover:border-gold/60 hover:bg-white/10 hover:text-gold sm:text-sm"
+            >
+              🇧🇸 Wholesale
+            </Link>
+            <Link
+              href="/us-shopping"
+              className="inline-flex items-center gap-2 rounded border border-white/20 bg-white/5 px-6 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-white/85 backdrop-blur transition hover:border-gold/60 hover:bg-white/10 hover:text-gold sm:text-sm"
+            >
+              🇺🇸 Shop USA
+            </Link>
           </div>
+        </FadeIn>
 
-          <div className={`bsc-hero-stats ${loaded ? 'on' : ''}`}>
-            {[
-              {n:'9,310+', l:'lbs in cold storage'},
-              {n:'7',      l:'Nassau wholesalers'},
-              {n:'5',      l:'Florida stores'},
-              {n:'2',      l:'Islands served'},
-            ].map(s => (
-              <div key={s.l} className="bsc-hero-stat">
-                <div className="bsc-hero-stat-n">{s.n}</div>
-                <div className="bsc-hero-stat-l">{s.l}</div>
+        <FadeIn loaded={loaded} delay="delay-[780ms]">
+          <div className="flex flex-wrap items-stretch gap-6 sm:gap-0">
+            {STATS.map((s, i) => (
+              <div
+                key={s.l}
+                className={`min-w-20 sm:pr-7 ${i < STATS.length - 1 ? 'sm:mr-7 sm:border-r sm:border-white/10' : ''}`}
+              >
+                <div className="font-display text-xl font-bold leading-none text-gold sm:text-2xl">
+                  {s.n}
+                </div>
+                <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                  {s.l}
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </FadeIn>
+      </div>
 
-        <div className="bsc-hero-scroll" onClick={() => window.scrollTo({top:window.innerHeight,behavior:'smooth'})}>
-          <div className="bsc-scroll-mouse"><div className="bsc-scroll-dot" /></div>
-          <span className="bsc-scroll-lbl">Scroll</span>
+      {/* Scroll indicator */}
+      <button
+        type="button"
+        onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+        className="absolute bottom-8 left-1/2 z-10 hidden -translate-x-1/2 flex-col items-center gap-1.5 opacity-0 animate-[fadeIn_.6s_ease_1.3s_forwards] md:flex"
+        aria-label="Scroll to content"
+      >
+        <div className="flex h-9 w-6 justify-center rounded-xl border-2 border-white/30 pt-1.5">
+          <div
+            className="h-1.5 w-1 rounded-sm bg-gold"
+            style={{ animation: 'bsc-bounce 1.9s ease-in-out infinite' }}
+          />
         </div>
-      </section>
-    </>
+        <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/30">
+          Scroll
+        </span>
+      </button>
+
+      {/* Local keyframes (scoped via style tag, very small) */}
+      <style>{`
+        @keyframes bsc-bounce {
+          0%,100% { transform: translateY(0); opacity: 1; }
+          50%     { transform: translateY(8px); opacity: .35; }
+        }
+        @keyframes fadeIn {
+          to { opacity: 1; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+function FadeIn({
+  loaded,
+  delay,
+  amount = 'sm',
+  children,
+}: {
+  loaded: boolean;
+  delay: string;
+  amount?: 'sm' | 'lg';
+  children: React.ReactNode;
+}) {
+  // Translate amount controls how far the element rises while fading in.
+  const translateOff = amount === 'lg' ? 'translate-y-7' : 'translate-y-4';
+  return (
+    <div
+      className={`transition-all duration-[700ms] ease-out ${delay} ${
+        loaded ? 'translate-y-0 opacity-100' : `${translateOff} opacity-0`
+      }`}
+    >
+      {children}
+    </div>
   );
 }
