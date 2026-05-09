@@ -114,7 +114,7 @@ export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen]           = useState(false);
   const [activeTab, setActiveTab]               = useState('overview');
   const [aiMessages, setAiMessages]             = useState<Message[]>([
-    { role: 'assistant', content: "Good morning, Dedrick! I'm your BSC AI Assistant. Ask me anything about your business — revenue, margins, inventory, pricing, or strategy." },
+    { role: 'assistant', content: "Good morning. I'm Founder AI — I see your live BSC database, know your principles, and apply your sacred pricing rules. Ask anything: today's numbers, a margin call, a strategy question, a pricing decision." },
   ]);
   const [aiInput, setAiInput]                   = useState('');
   const [aiLoading, setAiLoading]               = useState(false);
@@ -188,11 +188,27 @@ export default function DashboardPage() {
     const userMsg = aiInput.trim();
     setAiInput('');
     setAiLoading(true);
+    // Snapshot history BEFORE appending the new user message so we send the
+    // last 10 *prior* turns plus the current question (which the API receives
+    // as `message`).
+    const history = aiMessages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
     setAiMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
     try {
-      const res  = await fetch('/api/ai-assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: userMsg }) });
+      const res = await fetch('/api/founder-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg, history }),
+      });
       const data = await res.json();
-      setAiMessages((prev) => [...prev, { role: 'assistant', content: data.reply || 'Sorry, I could not get a response.' }]);
+      const reply =
+        data.reply ||
+        data.error ||
+        (res.status === 401
+          ? 'Session expired — please sign in again.'
+          : res.status === 403
+            ? 'Founder AI is private. Only Dedrick or Jaquel can use it.'
+            : 'Sorry, I could not get a response.');
+      setAiMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
     } catch {
       setAiMessages((prev) => [...prev, { role: 'assistant', content: 'Connection error. Please try again.' }]);
     }
@@ -289,7 +305,7 @@ export default function DashboardPage() {
               { key: 'revenue',   label: '💰 Revenue' },
               { key: 'yield',     label: '⚖️ Yield' },
               { key: 'inventory', label: '🧊 Freezer' },
-              { key: 'ai',        label: '🤖 AI' },
+              { key: 'ai',        label: '🤖 Founder AI' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -660,10 +676,25 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
               <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px 16px 0 0', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ width: '34px', height: '34px', borderRadius: '50%', backgroundColor: '#f4c842', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>🤖</div>
-                <div>
-                  <div style={{ color: '#fff', fontWeight: 800, fontSize: '14px' }}>BSC AI Assistant</div>
-                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>Knows your entire business</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ color: '#fff', fontWeight: 800, fontSize: '14px' }}>Founder AI</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>Live database · sacred rules · founder principles</div>
                 </div>
+                <Link
+                  href="/founder-ai"
+                  style={{
+                    color: '#f4c842',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                    backgroundColor: 'rgba(244,200,66,0.15)',
+                    padding: '5px 10px',
+                    borderRadius: '8px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Open full ↗
+                </Link>
               </div>
               <div style={{ flex: 1, backgroundColor: '#fff', overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {aiMessages.map((msg, i) => (
@@ -719,7 +750,7 @@ export default function DashboardPage() {
             { icon: '🟡', label: 'Nassau',   href: '/pos' },
             { icon: '💰', label: 'Revenue',  tab: 'revenue' },
             { icon: '⚖️', label: 'Yield',    tab: 'yield' },
-            { icon: '🤖', label: 'AI',       tab: 'ai' },
+            { icon: '🤖', label: 'Founder AI', tab: 'ai' },
           ].map((item) => (
             'href' in item ? (
               <Link
