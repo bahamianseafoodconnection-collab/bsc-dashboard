@@ -61,8 +61,9 @@ type SupplierProduct = {
 };
 
 type SupplierOption = {
+  // public.suppliers uses `name` as the canonical column.
   id: string;
-  business_name: string | null;
+  name: string | null;
   contact_name: string | null;
 };
 
@@ -106,25 +107,25 @@ export default function PurchaseOrdersPage() {
     try {
       const { data } = await supabase
         .from('suppliers')
-        .select('id, business_name, contact_name')
-        .order('business_name', { ascending: true })
+        .select('id, name, contact_name')
+        .order('name', { ascending: true })
         .limit(500);
       setAllSuppliers((data || []) as SupplierOption[]);
     } catch { /* non-fatal — falls back to free text */ }
   }
 
-  // Resolve whatever the user typed to the canonical supplier business_name
-  // if it matches an existing row (case-insensitive, trimmed). Otherwise
-  // returns the trimmed input as-is so brand-new suppliers still work.
+  // Resolve whatever the user typed to the canonical supplier name
+  // if it matches an existing row (case-insensitive, trimmed).
+  // Returns the trimmed input as-is so brand-new suppliers still work.
   function normalizeSupplierName(typed: string): string {
     const q = typed.trim().toLowerCase();
     if (!q) return '';
     const match = allSuppliers.find((s) => {
-      const bn = (s.business_name || '').trim().toLowerCase();
+      const bn = (s.name || '').trim().toLowerCase();
       const cn = (s.contact_name || '').trim().toLowerCase();
       return bn === q || cn === q;
     });
-    return match?.business_name?.trim() || typed.trim();
+    return match?.name?.trim() || typed.trim();
   }
 
   async function loadOrders() {
@@ -756,13 +757,13 @@ export default function PurchaseOrdersPage() {
         />
         <datalist id="po-supplier-list">
           {allSuppliers.map((s) => (
-            <option key={s.id} value={s.business_name || s.contact_name || ''} />
+            <option key={s.id} value={s.name || s.contact_name || ''} />
           ))}
         </datalist>
         {supplierName.trim() &&
           !allSuppliers.some((s) =>
-            (s.business_name || '').trim().toLowerCase() === supplierName.trim().toLowerCase() ||
-            (s.contact_name  || '').trim().toLowerCase() === supplierName.trim().toLowerCase()
+            (s.name         || '').trim().toLowerCase() === supplierName.trim().toLowerCase() ||
+            (s.contact_name || '').trim().toLowerCase() === supplierName.trim().toLowerCase()
           ) && (
             <p style={{ fontSize: 11, color: '#f5c518', margin: '4px 0 8px' }}>
               ⚠ &ldquo;{supplierName}&rdquo; isn&rsquo;t in the suppliers list yet — this will save as a new supplier name.

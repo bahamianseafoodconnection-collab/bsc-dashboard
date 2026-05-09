@@ -269,10 +269,10 @@ await loadData(session.user.email || '');
 
 async function loadData(email: string) {
 try {
-const { data: sup } = await supabase.from('suppliers').select('*').eq('email', email).single();
+const { data: sup } = await supabase.from('suppliers').select('*').eq('contact_email', email).single();
 if (sup) {
 setSupplierId(sup.id);
-setSupplierName(sup.full_name || sup.company_name || 'Jorge Caragol');
+setSupplierName(sup.name || sup.contact_name || 'Jorge Caragol');
 }
 const supId = sup?.id;
 

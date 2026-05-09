@@ -33,11 +33,12 @@ type Product = {
   unit_of_measure: string | null;
 };
 type Supplier = {
+  // Mirrors public.suppliers schema (name = canonical, contact_* fields).
   id: string;
-  business_name: string | null;
+  name: string | null;
   contact_name: string | null;
-  phone: string | null;
-  email: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
 };
 type LineItem = {
   product_id?: string;
@@ -62,10 +63,13 @@ type ProductRollup = {
 
 type SupplierRollup = {
   supplier_id: string;
+  // Display name (from suppliers.name with fallback to contact_name).
+  // Field name kept as `business_name` for backward compat with the
+  // already-rendered JSX further down.
   business_name: string;
   contact_name: string | null;
-  phone: string | null;
-  email: string | null;
+  phone: string | null;     // sourced from suppliers.contact_phone
+  email: string | null;     // sourced from suppliers.contact_email
   products: ProductRollup[];
   total_cost: number;
   total_units: number;
@@ -164,7 +168,7 @@ export default function SupplierPurchasesPage() {
     if (supplierIds.size > 0) {
       const { data: supRows } = await supabase
         .from('suppliers')
-        .select('id, business_name, contact_name, phone, email')
+        .select('id, name, contact_name, contact_phone, contact_email')
         .in('id', Array.from(supplierIds));
       const supMap = new Map<string, Supplier>();
       for (const s of (supRows || []) as Supplier[]) supMap.set(s.id, s);
@@ -258,12 +262,12 @@ export default function SupplierPurchasesPage() {
         return {
           supplier_id: supplierId,
           business_name:
-            supplier?.business_name ||
+            supplier?.name ||
             supplier?.contact_name ||
             `Supplier ${supplierId.slice(0, 6)}`,
           contact_name: supplier?.contact_name ?? null,
-          phone: supplier?.phone ?? null,
-          email: supplier?.email ?? null,
+          phone: supplier?.contact_phone ?? null,
+          email: supplier?.contact_email ?? null,
           products: productsList,
           total_cost,
           total_units,

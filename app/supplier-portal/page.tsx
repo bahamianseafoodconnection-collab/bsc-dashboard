@@ -70,10 +70,11 @@ export default async function SupplierPortalPage() {
     return <Forbidden email={auth.user.email ?? ''} reason={`role_${userRow.role}`} />;
   }
 
-  // Resolve their suppliers row.
+  // Resolve their suppliers row. Schema uses `name` (canonical) +
+  // contact_* fields (contact_email/phone/whatsapp).
   const { data: supplier } = await admin
     .from('suppliers')
-    .select('id, business_name, contact_name, phone, email, status, applied_at')
+    .select('id, name, contact_name, contact_phone, contact_email, status, applied_at')
     .eq('portal_user_id', auth.user.id)
     .maybeSingle();
 
@@ -84,8 +85,8 @@ export default async function SupplierPortalPage() {
   return (
     <SupplierPortalClient
       supplierId={supplier.id as string}
-      supplierName={(supplier.business_name as string) || (supplier.contact_name as string) || 'Supplier'}
-      supplierEmail={(supplier.email as string) ?? null}
+      supplierName={(supplier.name as string) || (supplier.contact_name as string) || 'Supplier'}
+      supplierEmail={(supplier.contact_email as string) ?? null}
       role={userRow.role as string}
       displayName={(userRow.full_name as string) ?? null}
     />

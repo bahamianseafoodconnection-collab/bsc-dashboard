@@ -7,10 +7,12 @@ import { supabase } from '@/lib/supabase';
 type Screen = 'home' | 'apply' | 'supplier-login' | 'portal' | 'admin' | 'spiny-tails';
 
 type Application = {
-  business_name: string;
+  // Field names match the public.suppliers schema:
+  //   name (canonical) · contact_name · contact_phone · contact_email
+  name: string;
   contact_name: string;
-  phone: string;
-  email: string;
+  contact_phone: string;
+  contact_email: string;
   product_types: string;
   message: string;
 };
@@ -78,7 +80,7 @@ export default function SupplierPage() {
   }, []);
 
   // Application form
-  const [app, setApp] = useState<Application>({ business_name: '', contact_name: '', phone: '', email: '', product_types: '', message: '' });
+  const [app, setApp] = useState<Application>({ name: '', contact_name: '', contact_phone: '', contact_email: '', product_types: '', message: '' });
 
   // Add product form
   const [pName, setPName]     = useState('');
@@ -244,10 +246,10 @@ export default function SupplierPage() {
             <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
               <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Business Information</h3>
               {[
-                { label: 'Business Name', key: 'business_name', placeholder: 'Your business name', type: 'text' },
+                { label: 'Business Name', key: 'name', placeholder: 'Your business name', type: 'text' },
                 { label: 'Contact Name', key: 'contact_name', placeholder: 'Your full name', type: 'text' },
-                { label: 'WhatsApp Number', key: 'phone', placeholder: '+1 (242) 000-0000', type: 'tel' },
-                { label: 'Email', key: 'email', placeholder: 'you@example.com', type: 'email' },
+                { label: 'WhatsApp Number', key: 'contact_phone', placeholder: '+1 (242) 000-0000', type: 'tel' },
+                { label: 'Email', key: 'contact_email', placeholder: 'you@example.com', type: 'email' },
                 { label: 'Product Types', key: 'product_types', placeholder: 'e.g. Seafood, Meats, Produce', type: 'text' },
               ].map((f) => (
                 <div key={f.key} style={{ marginBottom: '14px' }}>

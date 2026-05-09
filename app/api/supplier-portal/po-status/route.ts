@@ -4,8 +4,8 @@
 // THAT BELONGS TO THEM. Auth flow:
 //   1. Resolve auth.uid() → users.role (must be supplier or partner_us)
 //   2. Resolve user → suppliers.portal_user_id
-//   3. Verify the PO's supplier_name matches the supplier's
-//      business_name (case-insensitive, trimmed)
+//   3. Verify the PO's supplier_name matches the supplier's name
+//      (case-insensitive, trimmed; contact_name as fallback)
 //   4. Allow only forward-progression: allocated → preparing → ready
 //      → delivered (or cancelled at any point)
 //   5. Service-role admin client does the update so RLS can't block it
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
 
   const { data: supplier } = await admin
     .from('suppliers')
-    .select('id, business_name, contact_name')
+    .select('id, name, contact_name')
     .eq('portal_user_id', userId)
     .maybeSingle();
   if (!supplier) {
@@ -147,10 +147,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Purchase order not found' }, { status: 404 });
   }
 
-  // Ownership check: PO supplier_name must match this supplier.
+  // Ownership check: PO supplier_name must match this supplier's
+  // canonical name OR their contact_name.
   const poSupplier = (po.supplier_name as string | null)?.trim().toLowerCase() || '';
   const myNames = [
-    (supplier.business_name as string | null)?.trim().toLowerCase() || '',
+    (supplier.name as string | null)?.trim().toLowerCase() || '',
     (supplier.contact_name as string | null)?.trim().toLowerCase() || '',
   ].filter(Boolean);
   if (!myNames.includes(poSupplier)) {
