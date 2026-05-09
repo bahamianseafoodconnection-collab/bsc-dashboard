@@ -57,6 +57,16 @@ export default function CheckoutPage() {
   // Nassau. 'mailboat' = ship to Family Island via mailboat.
   const [deliveryMethod, setDeliveryMethod] = useState<'nassau' | 'mailboat'>('nassau');
 
+  // Promo code state
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [promoApplied, setPromoApplied] = useState<{
+    promo_id: string;
+    code: string;
+    discount_amount: number;
+  } | null>(null);
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -78,7 +88,75 @@ export default function CheckoutPage() {
   }, [view]);
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const total = subtotal;
+  const promoDiscount = promoApplied
+    ? Math.min(promoApplied.discount_amount, subtotal)
+    : 0;
+  const total = Math.max(0, subtotal - promoDiscount);
+
+  // Re-validate (or drop) an applied promo whenever the cart changes — the
+  // discount may have crossed a min_subtotal threshold.
+  useEffect(() => {
+    if (!promoApplied) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch('/api/promos/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoApplied.code, subtotal, email: null, phone: phone || null }),
+      });
+      const j = await res.json();
+      if (cancelled) return;
+      if (!j?.valid) {
+        setPromoApplied(null);
+        setPromoError(j?.reason || 'Promo no longer valid');
+      } else {
+        setPromoApplied({
+          promo_id: j.promo_id,
+          code: j.code,
+          discount_amount: Number(j.discount_amount || 0),
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+    // Intentionally only re-run when subtotal flips — the form fields don't
+    // affect promo validity day-to-day.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal]);
+
+  async function applyPromo() {
+    setPromoError(null);
+    const code = promoCodeInput.trim();
+    if (!code) { setPromoError('Enter a code'); return; }
+    setPromoBusy(true);
+    try {
+      const res = await fetch('/api/promos/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal, email: null, phone: phone || null }),
+      });
+      const j = await res.json();
+      if (!j?.valid) {
+        setPromoError(j?.reason || 'Code not valid');
+        setPromoApplied(null);
+      } else {
+        setPromoApplied({
+          promo_id: j.promo_id,
+          code: j.code,
+          discount_amount: Number(j.discount_amount || 0),
+        });
+      }
+    } catch {
+      setPromoError('Could not check that code');
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
+  function clearPromo() {
+    setPromoApplied(null);
+    setPromoCodeInput('');
+    setPromoError(null);
+  }
 
   const payload: PaymentPayload = {
     amount: subtotal,
@@ -127,33 +205,52 @@ export default function CheckoutPage() {
       }
     }
 
+    const orderRow: Record<string, unknown> = {
+      order_type: 'online_market',
+      payment_method: payMethod,
+      payment_status: payMethod === 'cod' ? 'pending' : 'processing',
+      wholesale_items: cart,
+      wholesale_cost_total: total,
+      customer_name: name.trim() || null,
+      customer_phone: phone.trim() || null,
+      customer_address: address.trim() || null,
+      customer_id: customerIdLinked,
+      delivery_type: deliveryMethod,
+      admin_notes: [
+        deliveryMethod === 'mailboat' ? `Mailboat to ${island}` : `Nassau · ${island}`,
+        note,
+      ].filter(Boolean).join(' · ') || null,
+      user_id: session?.user.id || null,
+    };
+    if (promoApplied && promoDiscount > 0) {
+      orderRow.promo_code = promoApplied.code;
+      orderRow.promo_discount = promoDiscount;
+    }
+
     const { data } = await supabase
       .from('orders')
-      .insert({
-        order_type: 'online_market',
-        payment_method: payMethod,
-        payment_status: payMethod === 'cod' ? 'pending' : 'processing',
-        wholesale_items: cart,
-        wholesale_cost_total: total,
-        customer_name: name.trim() || null,
-        customer_phone: phone.trim() || null,
-        customer_address: address.trim() || null,
-        customer_id: customerIdLinked,
-        // Captures customer's delivery preference for fulfillment staff.
-        // Stored on delivery_type for backward-compat with existing
-        // orders queries; admin_notes also gets the human-readable
-        // method + island so it shows on receipts/pick tickets.
-        delivery_type: deliveryMethod,
-        admin_notes: [
-          deliveryMethod === 'mailboat' ? `Mailboat to ${island}` : `Nassau · ${island}`,
-          note,
-        ].filter(Boolean).join(' · ') || null,
-        user_id: session?.user.id || null,
-      })
+      .insert(orderRow)
       .select('id')
       .single();
 
     const orderIdInserted = data?.id || '';
+
+    // Record promo redemption (fire-and-forget).
+    if (orderIdInserted && promoApplied && promoDiscount > 0) {
+      fetch('/api/promos/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          promo_id: promoApplied.promo_id,
+          promo_code: promoApplied.code,
+          order_id: orderIdInserted,
+          customer_id: customerIdLinked,
+          customer_email: session?.user?.email ?? null,
+          customer_phone: phone.trim() || null,
+          applied_amount: promoDiscount,
+        }),
+      }).catch((err) => console.warn('Promo redemption log failed:', err));
+    }
 
     // Persist a channel-correct financial split. We don't carry per-item cost
     // through to checkout, so we back-compute the cost basis from the cart
@@ -491,6 +588,70 @@ export default function CheckoutPage() {
                   <span className="text-slate-500">Delivery</span>
                   <span className="font-bold text-emerald-600">Calculated at delivery</span>
                 </div>
+
+                {/* Promo code */}
+                {view === 'summary' && (
+                  <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
+                    {promoApplied ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-bold text-emerald-700">
+                            ✓ {promoApplied.code} applied
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            −BSD ${fmt(promoDiscount)} off
+                          </div>
+                        </div>
+                        <button
+                          onClick={clearPromo}
+                          className="text-[11px] font-bold text-slate-500 hover:text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Promo code
+                        </div>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={promoCodeInput}
+                            onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); applyPromo(); }
+                            }}
+                            placeholder="Enter code"
+                            className="flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold uppercase tracking-wider text-navy outline-none placeholder:text-slate-300 placeholder:normal-case focus:border-navy"
+                          />
+                          <button
+                            onClick={applyPromo}
+                            disabled={promoBusy || !promoCodeInput.trim()}
+                            className="rounded-md bg-navy px-3 py-1.5 text-xs font-black text-gold hover:bg-navy-700 disabled:opacity-50"
+                          >
+                            {promoBusy ? '…' : 'Apply'}
+                          </button>
+                        </div>
+                        {promoError && (
+                          <div className="mt-1.5 text-[11px] text-red-600">
+                            {promoError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {promoApplied && promoDiscount > 0 && (
+                  <div className="mt-2 flex justify-between text-xs">
+                    <span className="text-slate-500">Promo ({promoApplied.code})</span>
+                    <span className="font-bold text-emerald-700">
+                      −BSD ${fmt(promoDiscount)}
+                    </span>
+                  </div>
+                )}
+
                 <div className="mt-2 flex items-end justify-between border-t-2 border-navy pt-3">
                   <span className="text-sm font-extrabold text-navy">Total</span>
                   <span className="text-xl font-black text-navy">BSD ${fmt(total)}</span>
