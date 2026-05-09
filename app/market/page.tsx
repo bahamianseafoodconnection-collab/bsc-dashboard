@@ -48,6 +48,8 @@ interface MarketProduct {
   image_url: string;
   in_stock: boolean;
   featured: boolean;
+  avg_rating?: number;
+  review_count?: number;
 }
 
 interface CartItem extends MarketProduct {
@@ -139,6 +141,36 @@ export default function MarketPage() {
       }));
       setProducts([...market, ...wholesale]);
       setLoading(false);
+
+      // Best-effort aggregate of approved reviews per BSC product.
+      // Failures (e.g. table not yet migrated) are silently ignored —
+      // cards just render without ratings.
+      const marketIds = market.map((m) => m.id);
+      if (marketIds.length > 0) {
+        try {
+          const { data: revs } = await supabase
+            .from('product_reviews')
+            .select('product_id, rating')
+            .in('product_id', marketIds)
+            .eq('status', 'approved');
+          if (revs && revs.length > 0) {
+            const buckets = new Map<string, { sum: number; n: number }>();
+            for (const r of revs as Array<{ product_id: string; rating: number }>) {
+              const cur = buckets.get(r.product_id) ?? { sum: 0, n: 0 };
+              cur.sum += r.rating;
+              cur.n += 1;
+              buckets.set(r.product_id, cur);
+            }
+            setProducts((prev) =>
+              prev.map((p) => {
+                const b = buckets.get(p.id);
+                if (!b) return p;
+                return { ...p, avg_rating: b.sum / b.n, review_count: b.n };
+              }),
+            );
+          }
+        } catch { /* ignore */ }
+      }
     })();
   }, []);
 
@@ -678,6 +710,14 @@ function ProductCard({
         >
           {product.name}
         </h3>
+
+        {typeof product.avg_rating === 'number' && (product.review_count ?? 0) > 0 && (
+          <div className="flex items-center gap-1 text-[11px] text-slate-500">
+            <span className="text-gold">★</span>
+            <span className="font-bold text-navy">{product.avg_rating.toFixed(1)}</span>
+            <span>({product.review_count})</span>
+          </div>
+        )}
 
         {product.description && (
           <p className="clamp-2 text-xs text-slate-500">{product.description}</p>
