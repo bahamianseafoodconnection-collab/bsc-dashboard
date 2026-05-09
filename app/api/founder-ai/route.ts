@@ -99,15 +99,86 @@ LONG-TERM FIX: per-SKU pricing override flag (build pending).
 - Switch snow crab sourcing to USA imports (saves $3.50/lb)
 - Pay Tropic Seafood current first to protect highest-margin credit line
 
-### SPINY TAIL PROCESSING PLANT (Operational facts)
+### SPINY TAIL PROCESSING PLANT (Operational facts + LOCKED COSTS May 9, 2026)
 - Built with Tom Gotthelf $750K investment
-- 30,000 lbs freezer capacity total
-- Blast freezer 10x10 ft + holding freezer 10x20 ft
+- 30,000 lbs freezer capacity total (blast 10x10 + holding 10x20 ft)
 - Original mandate: lobster tail USA export
 - Secondary: tenderize conch, process whole grouper / whole snapper / mutton snapper / hog fish
 - Tropic Seafood product is pre-cut (only needs scaling)
 - Fishing-boat product needs scaling AND cutting (extra labor)
-- Per-lb processing labor cost: PENDING from Dedrick
+
+### SPINY TAIL FIXED COSTS (LOCKED May 9, 2026)
+- Facility rental: $2,500/month
+- Processors: 6 staff x 40 hrs/week x $8/hr = $1,920/week = $8,314/month
+- Electricity: $2,200/month
+- Internet: $120/month
+- TOTAL FIXED: $13,134/month
+- Processing capacity in-house: 7,000-8,000 lbs whole lobster per WEEK
+- Processing capacity with Igloo offload: estimated 2x throughput (16,000 lbs/week)
+
+### LOBSTER EXPORT VARIABLE COSTS (LOCKED May 9, 2026)
+- 10lb empty packing box: $2.00 + 45% Bahamas duty + ~$0.60 freight = ~$3.50/box landed = $0.35/lb tail
+- Government export royalty: $0.35/lb
+- Air cargo: $0.90/lb
+- Loading fee: $500/load (5,900 lb max per shipment, ~$0.085/lb)
+- IN-HOUSE total variable: $1.69/lb tail
+
+### IGLOO EXPRESS MIAMI - SEAFOOD TRADING HUB (corrected May 9, 2026)
+NOT just outsourced processing. Igloo is a USA-BONDED SEAFOOD TRADING HUB with FOUR distinct leverages:
+
+1. SELL CHANNEL: BSC stores lobster tails in Igloo's bonded facility, sells to global buyers (USA, EU, Asia, Caribbean). Igloo IS the USA buyer CRM - BSC does not need to build one.
+
+2. SOURCE CHANNEL: BSC buys seafood from Igloo's global supplier network at competitive prices. Lobster, snow crab, shrimp, salmon, exotic species. Replaces some Tropic local sourcing.
+
+3. BONDED STORAGE: Products held in US bond pay NO US customs duty until they leave bond into US commerce. BSC selling to Europe from Igloo = no US duty. Massive optionality.
+
+4. PRICE DISCOVERY + LIQUIDITY: Like a stock exchange for seafood. List product, buyers come. Could push average selling price up 15-25% vs single-buyer negotiations.
+
+PLUS the processing service: $1.75/lb final pack (plastic sleeve + labor + box)
+PLUS government export royalty $0.35/lb (Bahamas govt)
+
+### IGLOO PENDING QUESTIONS (CRITICAL - locks the deal economics)
+- I1: Does Igloo take commission on sales OR is $1.75/lb the only cost?
+- I2: Storage fee $/lb/month while goods sit in bond?
+- I3: Trade execution fee when a buyer purchases from BSC inventory?
+- I4: Typical price discovery range for spiny lobster tail by size grade (5oz/6oz/8oz/10oz/12oz+)?
+- I5: Onboarding requirements (FDA, HACCP, insurance, customs broker)?
+- I6: Igloo commission/markup on sourcing-side purchases by BSC?
+
+### REVISED LOBSTER ECONOMICS (Igloo as platform)
+- Spiny Tail freezer constraint REMOVED (product moves to Igloo bond after processing)
+- Throughput becomes labor + air cargo + Igloo storage cost limited
+- If Igloo price discovery yields $28/lb avg tail (vs $25/lb assumption):
+  24,248 lbs tail/mo × $11/lb margin = $266,728/mo gross
+  8-month season = $2,133,824 gross
+- TWO SEASONS CLEAR ALL DEBT (Tom $550K + suppliers $85K) + FUND EXPANSION
+
+### IGLOO SOURCING ARBITRAGE OPPORTUNITY
+Could replace local Tropic sourcing on import-eligible SKUs:
+- Snow crab cluster: Tropic $16.95/lb -> Igloo source ~$13.50/lb landed (save $3.50)
+- 16/20 shrimp, salmon portions, snapper fillets all candidates
+- Estimated $50-100K/year savings on cost-of-goods alone
+
+### IGLOO IMPACT ON BUILD PLAN
+- ELIMINATED: USA buyer CRM (6 hr)
+- ELIMINATED: per-shipment USA P&L module
+- SIMPLIFIED: export module becomes "ship to Igloo + log it"
+- ADDED: Igloo integration module (track BSC's bonded inventory at Igloo, log shipments in/out, reconcile invoices)
+- UNCHANGED: lobster intake / yield / lot tracking / labels (BSC still needs these)
+- UNCHANGED: Partner Portal for Bob @ Jomara (separate sourcing partner)
+
+### LOBSTER PIPELINE UNIT ECONOMICS (8-month season Aug-March, $5/lb whole, 35% yield, $25/lb USA wholesale assumed)
+- IN-HOUSE PATH: 12,124 lbs tail/mo, $96,276 gross profit/mo, 8-month season = $770,208 gross
+- IGLOO PATH: 24,248 lbs tail/mo, $190,896 gross profit/mo, 8-month season = $1,527,168 gross
+- TOM GOTTHELF $550K REPAID INSIDE 1 SEASON UNDER IGLOO PATH
+- Both paths assume yield/wholesale/freight figures - REAL NUMBERS PENDING DEDRICK
+
+### AIR CARGO CONSTRAINT
+- Maximum: 5,900 lbs per shipment
+- $500 loading fee per load
+- Cost: $0.90/lb in-flight
+- 12K lbs/mo tail = 2 shipments/mo
+- 24K lbs/mo tail = 4 shipments/mo
 
 ### OPEN QUESTIONS PENDING DEDRICK (May 9, 2026)
 1. Per-lb processing labor cost (snapper sourcing decision blocker)
