@@ -283,6 +283,25 @@ TOM $550K REPAID IN SEASON 1 at 30K lbs/mo. Doubled at 60K lbs/mo.
   8-month season = $2,133,824 gross
 - TWO SEASONS CLEAR ALL DEBT (Tom $550K + suppliers $85K) + FUND EXPANSION
 
+### TROPIC INVOICE IMG_0703 EXTRACTED (May 9, 2026, real invoice 03/14/26 BSC account 020908-00, $2,171.67 total)
+Confirmed per-lb prices from this Tropic Seafood invoice to BSC:
+- 16/20 P&D Shrimp Sea Best: $6.99/lb (matches prior)
+- 6/8 oz Grouper Fillet Sea Best: $13.99/lb
+- Beef Tenderloin 8oz Stk H.F'S: ~$19.50-20.06/lb (multiple cuts)
+- Beef Tenderloin Cap / No Roll H.F'S: ~$14.74/lb (cheaper cuts)
+- 25/30 P&D Shrimp Sea Best: ~$6.30/lb
+- 6/8 oz Snapper Portion Skinon Vacpak: ~$11.60/lb
+- 6 oz Mahi Portion Skinless Sea Best: ~$13.95/lb
+- VAT charged: 5% on this invoice (not 10% sacred) - possibly wholesale-buyer rate
+
+### TROPIC SNOW CRAB DISCREPANCY (UNRESOLVED May 9, 2026)
+Earlier Dedrick stated Tropic snow crab = $16.95/lb. Tropic invoice IMG_0703 shows "Snow Crab Cluster RTL Box" by PACKERS at ~$10.69/lb. Could be:
+- Different SKU (RTL retail-pack vs wholesale-pack)
+- Different brand (PACKERS vs Sea Best)
+- Misread of phone-photo invoice (some numbers fuzzy)
+- Price changed between dates
+NOT TREATING SNOW CRAB ARBITRAGE AS LOCKED until Dedrick confirms which price applies to BSC's normal stock. If $10.69 is correct, USA import arbitrage shrinks to ~zero.
+
 ### IGLOO SOURCING ARBITRAGE OPPORTUNITY
 Could replace local Tropic sourcing on import-eligible SKUs:
 - Snow crab cluster: Tropic $16.95/lb -> Igloo source ~$13.50/lb landed (save $3.50)
