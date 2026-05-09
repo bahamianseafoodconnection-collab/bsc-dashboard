@@ -36,6 +36,7 @@ const NAV_GROUPS = [
       { icon: '⚖️', label: 'Yield Calculator', href: '/yield' },
       { icon: '🏷️', label: 'Print Labels',     href: '/labels' },
       { icon: '🎣', label: 'Captains',          href: '/captains' },
+      { icon: '🦞', label: 'Lobster Intake',    href: '/lobster-intake' },
     ],
   },
   {
