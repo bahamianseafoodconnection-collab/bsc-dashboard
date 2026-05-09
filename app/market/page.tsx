@@ -261,6 +261,20 @@ export default function MarketPage() {
             </div>
           </div>
 
+          <Link
+            href="/wishlist"
+            aria-label="Open wishlist"
+            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-base text-white transition hover:bg-white/20 sm:flex sm:h-11"
+            title="Wishlist"
+          >
+            ♡
+          </Link>
+          <Link
+            href="/my-orders"
+            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/20 sm:flex sm:h-11"
+          >
+            My orders
+          </Link>
           <button
             onClick={() => setShowCart(true)}
             className="relative flex h-10 shrink-0 items-center gap-2 rounded-lg bg-gold px-3 text-sm font-bold text-navy transition hover:bg-gold-300 sm:h-11 sm:px-4"

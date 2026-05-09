@@ -41,6 +41,17 @@ type CartItem = {
   image_url?: string;
 };
 
+type Review = {
+  id: string;
+  created_at: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  author_name: string;
+  is_verified_purchase: boolean;
+  auth_user_id: string | null;
+};
+
 const CATEGORY_EMOJI: Record<string, string> = {
   Seafood: '🦐',
   Meat: '🥩',
@@ -63,6 +74,77 @@ export default function ProductPage() {
   const [notFound, setNotFound] = useState(false);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+
+  // Auth + identity
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authUserName, setAuthUserName] = useState<string>('');
+  const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
+
+  // Reviews
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [rRating, setRRating] = useState(5);
+  const [rTitle, setRTitle] = useState('');
+  const [rBody, setRBody] = useState('');
+  const [rSubmitting, setRSubmitting] = useState(false);
+  const [rError, setRError] = useState<string | null>(null);
+
+  // Wishlist
+  const [inWishlist, setInWishlist] = useState(false);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
+
+  // Resolve identity once on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (user) {
+        setAuthUserId(user.id);
+        setAuthUserEmail(user.email ?? null);
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!cancelled) {
+          setAuthUserName(
+            (prof?.full_name as string) ||
+              (user.email ? user.email.split('@')[0] : 'Customer')
+          );
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load reviews + wishlist status when product or user changes
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      const { data: revData } = await supabase
+        .from('product_reviews')
+        .select('id, created_at, rating, title, body, author_name, is_verified_purchase, auth_user_id')
+        .eq('product_id', id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (cancelled) return;
+      setReviews((revData || []) as Review[]);
+
+      if (authUserId) {
+        const { data: wl } = await supabase
+          .from('wishlists')
+          .select('id')
+          .eq('product_id', id)
+          .eq('auth_user_id', authUserId)
+          .maybeSingle();
+        if (!cancelled) setInWishlist(!!wl);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, authUserId]);
 
   useEffect(() => {
     if (!id) { setLoading(false); return; }
@@ -132,6 +214,77 @@ export default function ProductPage() {
     router.push('/checkout');
   }
 
+  async function toggleWishlist() {
+    if (!product) return;
+    if (!authUserId) {
+      router.push(`/login?next=/product/${product.id}`);
+      return;
+    }
+    setWishlistBusy(true);
+    try {
+      if (inWishlist) {
+        await supabase
+          .from('wishlists')
+          .delete()
+          .eq('auth_user_id', authUserId)
+          .eq('product_id', product.id);
+        setInWishlist(false);
+      } else {
+        await supabase
+          .from('wishlists')
+          .insert({ auth_user_id: authUserId, product_id: product.id });
+        setInWishlist(true);
+      }
+    } catch {
+      /* silent — UI reflects intent */
+    } finally {
+      setWishlistBusy(false);
+    }
+  }
+
+  async function submitReview(e: React.FormEvent) {
+    e.preventDefault();
+    if (!product || !authUserId) return;
+    setRError(null);
+    if (!(rRating >= 1 && rRating <= 5)) { setRError('Pick 1–5 stars.'); return; }
+    setRSubmitting(true);
+    const { error } = await supabase.from('product_reviews').insert({
+      product_id: product.id,
+      auth_user_id: authUserId,
+      author_name: authUserName || (authUserEmail || 'Customer'),
+      rating: rRating,
+      title: rTitle.trim() || null,
+      body: rBody.trim() || null,
+      status: 'approved',
+    });
+    setRSubmitting(false);
+    if (error) {
+      setRError(
+        error.code === '23505'
+          ? 'You already reviewed this product. Edit your existing review.'
+          : error.message
+      );
+      return;
+    }
+    // Reload review list
+    const { data: revData } = await supabase
+      .from('product_reviews')
+      .select('id, created_at, rating, title, body, author_name, is_verified_purchase, auth_user_id')
+      .eq('product_id', product.id)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setReviews((revData || []) as Review[]);
+    setShowReviewForm(false);
+    setRTitle(''); setRBody(''); setRRating(5);
+  }
+
+  const reviewCount = reviews.length;
+  const avgRating = reviewCount > 0
+    ? reviews.reduce((s, r) => s + r.rating, 0) / reviewCount
+    : 0;
+  const userAlreadyReviewed = !!(authUserId && reviews.find((r) => r.auth_user_id === authUserId));
+
   if (loading) return <Centered>Loading…</Centered>;
   if (notFound || !product) return <NotFound />;
 
@@ -195,9 +348,46 @@ export default function ProductPage() {
                 {product.category}
               </div>
             )}
-            <h1 className="font-display text-3xl font-black leading-tight text-navy sm:text-4xl">
-              {product.name}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="font-display text-3xl font-black leading-tight text-navy sm:text-4xl">
+                {product.name}
+              </h1>
+              <button
+                onClick={toggleWishlist}
+                disabled={wishlistBusy}
+                aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl transition ${
+                  inWishlist
+                    ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                    : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-red-500'
+                }`}
+              >
+                {inWishlist ? '♥' : '♡'}
+              </button>
+            </div>
+
+            {/* Star summary — links down to the reviews section */}
+            {reviewCount > 0 ? (
+              <a
+                href="#reviews"
+                className="mt-2 inline-flex items-center gap-2 text-sm text-slate-600 hover:text-navy"
+              >
+                <Stars value={avgRating} />
+                <span className="font-bold text-navy">{avgRating.toFixed(1)}</span>
+                <span>·</span>
+                <span>
+                  {reviewCount} review{reviewCount === 1 ? '' : 's'}
+                </span>
+              </a>
+            ) : (
+              <a
+                href="#reviews"
+                className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500 hover:text-navy"
+              >
+                <Stars value={0} muted />
+                <span>Be the first to review</span>
+              </a>
+            )}
 
             <div className="mt-4 flex items-baseline gap-2">
               <span className="text-3xl font-extrabold text-navy sm:text-4xl">
@@ -272,6 +462,143 @@ export default function ProductPage() {
           </div>
         </div>
 
+        {/* Reviews */}
+        <section id="reviews" className="mt-14 rounded-2xl bg-white p-5 shadow-card sm:p-7">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl font-black text-navy">
+                Customer reviews
+              </h2>
+              {reviewCount > 0 ? (
+                <div className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+                  <Stars value={avgRating} />
+                  <span className="font-bold text-navy">{avgRating.toFixed(1)}</span>
+                  <span>·</span>
+                  <span>
+                    Based on {reviewCount} review{reviewCount === 1 ? '' : 's'}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-1 text-sm text-slate-500">
+                  No reviews yet — be the first.
+                </div>
+              )}
+            </div>
+            {authUserId && !userAlreadyReviewed && !showReviewForm && (
+              <button
+                onClick={() => setShowReviewForm(true)}
+                className="rounded-xl bg-navy px-5 py-2.5 text-xs font-black text-gold hover:bg-navy-700"
+              >
+                + Write a review
+              </button>
+            )}
+            {!authUserId && (
+              <Link
+                href={`/login?next=/product/${product.id}`}
+                className="rounded-xl border border-navy px-5 py-2.5 text-xs font-black text-navy hover:bg-navy hover:text-gold"
+              >
+                Sign in to review
+              </Link>
+            )}
+          </div>
+
+          {showReviewForm && authUserId && !userAlreadyReviewed && (
+            <form
+              onSubmit={submitReview}
+              className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200"
+            >
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Your rating
+                </div>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setRRating(n)}
+                      aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                      className={`text-3xl leading-none transition ${
+                        n <= rRating ? 'text-gold' : 'text-slate-300 hover:text-gold/60'
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <input
+                type="text"
+                value={rTitle}
+                onChange={(e) => setRTitle(e.target.value)}
+                placeholder="Title (optional)"
+                maxLength={120}
+                className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none"
+              />
+              <textarea
+                value={rBody}
+                onChange={(e) => setRBody(e.target.value)}
+                placeholder="Tell other shoppers what you thought…"
+                maxLength={2000}
+                rows={4}
+                className="mb-2 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none"
+              />
+              {rError && (
+                <div className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {rError}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={rSubmitting}
+                  className="rounded-xl bg-navy px-5 py-2.5 text-xs font-black text-gold hover:bg-navy-700 disabled:opacity-60"
+                >
+                  {rSubmitting ? 'Posting…' : 'Post review'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowReviewForm(false); setRError(null); }}
+                  className="rounded-xl border border-slate-300 px-5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+
+          {reviews.length > 0 && (
+            <ul className="mt-6 space-y-5 divide-y divide-slate-100">
+              {reviews.map((rv, i) => (
+                <li key={rv.id} className={i === 0 ? '' : 'pt-5'}>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Stars value={rv.rating} />
+                    {rv.title && (
+                      <span className="text-sm font-bold text-navy">{rv.title}</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {rv.author_name}
+                    {rv.is_verified_purchase && (
+                      <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                        ✓ Verified buyer
+                      </span>
+                    )}
+                    <span className="ml-2 text-slate-400">
+                      · {new Date(rv.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {rv.body && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                      {rv.body}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* Related */}
         {related.length > 0 && (
           <section className="mt-14">
@@ -322,6 +649,33 @@ function Centered({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500 font-sans">
       {children}
     </div>
+  );
+}
+
+function Stars({ value, muted = false }: { value: number; muted?: boolean }) {
+  // Renders 5 stars where each is filled, half, or empty based on value.
+  const v = Math.max(0, Math.min(5, value));
+  return (
+    <span className="inline-flex" aria-label={`${v.toFixed(1)} out of 5`}>
+      {[1, 2, 3, 4, 5].map((n) => {
+        const fill = Math.max(0, Math.min(1, v - (n - 1)));
+        const pct = Math.round(fill * 100);
+        const base = muted ? 'text-slate-300' : 'text-slate-300';
+        const accent = muted ? 'text-slate-400' : 'text-gold';
+        return (
+          <span key={n} className="relative inline-block text-base leading-none">
+            <span className={base}>★</span>
+            <span
+              className={`absolute inset-0 overflow-hidden ${accent}`}
+              style={{ width: `${pct}%` }}
+              aria-hidden
+            >
+              ★
+            </span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
