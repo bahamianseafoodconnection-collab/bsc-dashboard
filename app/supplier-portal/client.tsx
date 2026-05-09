@@ -29,6 +29,26 @@ type Invoice = {
   due_date?: string | null;
   summary: string | null;
 };
+type PurchaseOrder = {
+  id: string;
+  supplier_name: string | null;
+  ai_summary: string | null;
+  items: unknown;
+  total_cost: number | null;
+  status: string | null;
+  processing_status: string | null;
+  allocated_by: string | null;
+  created_at: string;
+};
+type POItem = {
+  name?: string;
+  cases?: number;
+  qty?: number;
+  unitDescription?: string;
+  unit?: string;
+  costPerCase?: number;
+  totalCost?: number;
+};
 type Payment = {
   id: string;
   invoice_id: string | null;
@@ -61,8 +81,11 @@ export default function SupplierPortalClient({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [errors, setErrors] = useState<{ invoices?: string; payments?: string; products?: string }>({});
+  const [errors, setErrors] = useState<{ invoices?: string; payments?: string; products?: string; pos?: string }>({});
+  const [busyPoId, setBusyPoId] = useState<string | null>(null);
+  const [poError, setPoError] = useState<string | null>(null);
 
   // Add-product form state
   const [showProdForm, setShowProdForm] = useState(false);
@@ -75,7 +98,8 @@ export default function SupplierPortalClient({
   async function load() {
     setLoading(true);
     setErrors({});
-    const [invRes, payRes, prodRes] = await Promise.all([
+    setPoError(null);
+    const [invRes, payRes, prodRes, poRes] = await Promise.all([
       supabase
         .from('purchase_invoices')
         .select('id, invoice_ref, total_amount, balance_owed, status, created_at, due_date, summary')
@@ -93,16 +117,64 @@ export default function SupplierPortalClient({
         .eq('supplier_id', supplierId)
         .order('created_at', { ascending: false })
         .limit(200),
+      // POs are matched by supplier_name (text), not supplier_id — that's
+      // how the existing /purchase-orders flow writes them. ilike matches
+      // case-insensitively and tolerates trailing whitespace.
+      supabase
+        .from('purchase_orders')
+        .select('id, supplier_name, ai_summary, items, total_cost, status, processing_status, allocated_by, created_at')
+        .ilike('supplier_name', supplierName.trim())
+        .order('created_at', { ascending: false })
+        .limit(100),
     ]);
     const errs: typeof errors = {};
     if (invRes.error) errs.invoices = invRes.error.message; else setInvoices((invRes.data || []) as Invoice[]);
     if (payRes.error) errs.payments = payRes.error.message; else setPayments((payRes.data || []) as Payment[]);
     if (prodRes.error) errs.products = prodRes.error.message; else setProducts((prodRes.data || []) as Product[]);
+    if (poRes.error)   errs.pos = poRes.error.message;       else setPos((poRes.data || []) as PurchaseOrder[]);
     setErrors(errs);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [supplierId]);
+  async function advancePoStatus(po: PurchaseOrder, next: string) {
+    setBusyPoId(po.id);
+    setPoError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/supplier-portal/po-status', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ purchase_order_id: po.id, next_status: next }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setPoError(json.error || 'Status update failed');
+        setBusyPoId(null);
+        return;
+      }
+      await load();
+    } catch (e) {
+      setPoError(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setBusyPoId(null);
+    }
+  }
+
+  function pickNumber(po: PurchaseOrder) {
+    return `PICK-${po.id.slice(0, 8).toUpperCase()}`;
+  }
+  function parsePoItems(raw: unknown): POItem[] {
+    if (!raw) return [];
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch { return []; }
+    }
+    if (!Array.isArray(raw)) return [];
+    return raw as POItem[];
+  }
+
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [supplierId]);
 
   const totalInvoiced = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
   const totalOutstanding = invoices.reduce((s, i) => s + Number(i.balance_owed || 0), 0);
@@ -203,6 +275,193 @@ export default function SupplierPortalClient({
             ⚠️ Could not load invoices / payments. Some data may be hidden.
           </div>
         )}
+
+        {/* BSC Marketplace orders to you */}
+        <Section
+          title="BSC Marketplace orders"
+          right={
+            <span style={{ fontSize: 11, color: TEXT_DIM }}>
+              {pos.filter((p) => !['delivered', 'cancelled'].includes((p.status || '').toLowerCase())).length} active
+            </span>
+          }
+        >
+          {errors.pos && (
+            <div
+              style={{
+                background: 'rgba(248,113,113,0.08)',
+                border: `1px solid ${RED}33`,
+                color: RED,
+                borderRadius: 8,
+                padding: '8px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              ⚠️ {errors.pos}
+            </div>
+          )}
+          {poError && (
+            <div
+              style={{
+                background: 'rgba(248,113,113,0.08)',
+                border: `1px solid ${RED}33`,
+                color: RED,
+                borderRadius: 8,
+                padding: '8px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              ⚠️ {poError}
+            </div>
+          )}
+          {pos.length === 0 ? (
+            <p style={{ color: TEXT_DIM, fontSize: 13, margin: 0 }}>
+              No purchase orders from BSC yet.
+            </p>
+          ) : (
+            pos.map((po) => {
+              const status = (po.status || 'allocated').toLowerCase();
+              const items = parsePoItems(po.items);
+              const totalUnits = items.reduce(
+                (s, it) => s + Number(it.cases ?? it.qty ?? 0),
+                0
+              );
+              const next: { label: string; value: string } | null =
+                status === 'allocated' ? { label: 'Mark preparing', value: 'preparing' }
+              : status === 'preparing' ? { label: 'Mark ready for pickup/delivery', value: 'ready' }
+              : status === 'ready'     ? { label: 'Mark delivered', value: 'delivered' }
+              : null;
+              const tone =
+                status === 'delivered' ? GREEN
+              : status === 'ready'     ? GOLD_BRIGHT
+              : status === 'preparing' ? '#a78bfa'
+              : status === 'cancelled' ? RED
+              : '#94a3b8';
+
+              return (
+                <div
+                  key={po.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${BORDER}`,
+                    borderLeft: `4px solid ${tone}`,
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    marginTop: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'baseline',
+                      gap: 12,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: '#fff',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {pickNumber(po)}
+                      </div>
+                      <div style={{ fontSize: 11, color: TEXT_DIM, marginTop: 2 }}>
+                        {fmtDate(po.created_at)} · {totalUnits} units · {items.length} SKU
+                        {items.length === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {po.total_cost != null && (
+                        <div style={{ fontSize: 14, fontWeight: 900, color: GOLD_BRIGHT }}>
+                          ${Number(po.total_cost).toFixed(2)}
+                        </div>
+                      )}
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          marginTop: 4,
+                          fontSize: 9,
+                          letterSpacing: 1,
+                          textTransform: 'uppercase',
+                          fontWeight: 800,
+                          padding: '3px 8px',
+                          borderRadius: 999,
+                          background: tone,
+                          color: NAVY,
+                        }}
+                      >
+                        {status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {items.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      {items.map((it, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            padding: '4px 0',
+                            fontSize: 12,
+                            color: '#cbd5e1',
+                            borderBottom: i < items.length - 1 ? '1px dotted rgba(255,255,255,0.05)' : 'none',
+                          }}
+                        >
+                          <span>{it.name || 'Item'}</span>
+                          <span style={{ color: '#fff', fontWeight: 700 }}>
+                            {Number(it.cases ?? it.qty ?? 0)}{' '}
+                            {it.unitDescription || it.unit || 'units'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {next && (
+                    <button
+                      type="button"
+                      onClick={() => advancePoStatus(po, next.value)}
+                      disabled={busyPoId === po.id}
+                      style={{
+                        marginTop: 10,
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background:
+                          busyPoId === po.id
+                            ? '#4b5563'
+                            : next.value === 'delivered'
+                              ? GREEN
+                              : GOLD_BRIGHT,
+                        color: NAVY,
+                        fontWeight: 800,
+                        fontSize: 12,
+                        cursor: busyPoId === po.id ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {busyPoId === po.id ? 'Saving…' : `→ ${next.label}`}
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+          <p style={{ fontSize: 10, color: TEXT_DIM, marginTop: 8 }}>
+            Pick numbers tie to BSC&rsquo;s receiving slip. Mark each PO
+            forward as you prepare and deliver.
+          </p>
+        </Section>
 
         {/* Open invoices */}
         <Section title="Open invoices" right={<span style={{ fontSize: 11, color: TEXT_DIM }}>{invoices.filter((i) => Number(i.balance_owed) > 0).length} open</span>}>
@@ -482,6 +741,12 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 }
 
 function round4(n: number) { return Math.round(n * 10000) / 10000; }
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+}
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
