@@ -44,6 +44,7 @@ const NAV_GROUPS = [
       { icon: '📋', label: 'Accounts Payable',  href: '/accounts-payable' },
       { icon: '💼', label: 'Payroll',           href: '/payroll' },
       { icon: '👥', label: 'Customers',         href: '/customers' },
+      { icon: '🪪', label: 'Staff',             href: '/staff' },
       { icon: '🎟️', label: 'Promo Codes',       href: '/promos' },
       { icon: '⭐', label: 'Reviews',            href: '/reviews-admin' },
       { icon: '📈', label: 'Reports + CSV',     href: '/reports' },
