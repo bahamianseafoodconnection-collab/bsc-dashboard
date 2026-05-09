@@ -75,6 +75,29 @@ export default function MarketPage() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('featured');
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Persist cart across page reloads + share with /checkout. localStorage
+  // (not sessionStorage) so the cart survives closing the tab. Hydration:
+  // on mount, read from storage and set state. Subsequent changes flow
+  // back to storage in a separate effect.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = window.localStorage.getItem('bsc_cart');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCart(parsed as CartItem[]);
+        }
+      }
+    } catch { /* ignore corrupt storage */ }
+  }, []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem('bsc_cart', JSON.stringify(cart));
+    } catch { /* quota or private mode — silent ok */ }
+  }, [cart]);
   const [showCart, setShowCart] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -390,9 +413,12 @@ export default function MarketPage() {
                     inCartQty={inCart?.qty ?? 0}
                     onAdd={() => addToCart(p)}
                     showBrand={activeBrand !== 'all'}
-                    onBrandClick={() =>
-                      p.wholesaler && router.push(`/local-wholesale/${p.wholesaler}`)
-                    }
+                    // Click image / name → product detail page (BSC products only;
+                    // wholesale items still route to their supplier shop).
+                    onCardClick={() => {
+                      if (p.source === 'market') router.push(`/product/${p.id}`);
+                      else if (p.wholesaler)     router.push(`/local-wholesale/${p.wholesaler}`);
+                    }}
                   />
                 );
               })}
@@ -563,13 +589,13 @@ function ProductCard({
   product,
   inCartQty,
   onAdd,
-  onBrandClick,
+  onCardClick,
   showBrand,
 }: {
   product: MarketProduct;
   inCartQty: number;
   onAdd: () => void;
-  onBrandClick: () => void;
+  onCardClick: () => void;
   // When false (default "All" / BSC Direct view), the per-product supplier
   // badge is hidden — customers see everything as one BSC catalog.
   // Backend pages (/supplier-purchases, /products) still surface supplier
@@ -585,7 +611,7 @@ function ProductCard({
       <div
         className="relative aspect-square cursor-pointer overflow-hidden"
         style={{ backgroundColor: brand?.light ?? '#f0f9ff' }}
-        onClick={onBrandClick}
+        onClick={onCardClick}
       >
         {product.image_url ? (
           <img
@@ -632,7 +658,10 @@ function ProductCard({
           <span>{product.category}</span>
         </div>
 
-        <h3 className="clamp-2 text-sm font-bold leading-snug text-navy sm:text-base">
+        <h3
+          className="clamp-2 cursor-pointer text-sm font-bold leading-snug text-navy hover:text-navy-700 sm:text-base"
+          onClick={onCardClick}
+        >
           {product.name}
         </h3>
 

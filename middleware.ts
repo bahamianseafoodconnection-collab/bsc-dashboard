@@ -41,6 +41,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/staff-login') ||
     pathname.startsWith('/staff/activate') ||
     pathname.startsWith('/market') ||
+    pathname.startsWith('/product/') ||
+    pathname.startsWith('/track/') ||
+    pathname.startsWith('/my-orders') ||
+    pathname.startsWith('/receipt/') ||
     pathname.startsWith('/utilities') ||
     pathname.startsWith('/legal') ||
     pathname.startsWith('/onboarding') ||

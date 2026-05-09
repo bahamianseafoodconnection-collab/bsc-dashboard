@@ -58,13 +58,24 @@ export default function CheckoutPage() {
   const [deliveryMethod, setDeliveryMethod] = useState<'nassau' | 'mailboat'>('nassau');
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     try {
-      const stored = sessionStorage.getItem('bsc_cart');
+      // Switched from sessionStorage → localStorage so the cart survives
+      // tab close. /market writes to the same key on every state change.
+      const stored = window.localStorage.getItem('bsc_cart');
       if (stored) setCart(JSON.parse(stored));
     } catch {
-      /* ignore */
+      /* ignore corrupt storage */
     }
   }, []);
+
+  // Clear the saved cart once we've reached the done view so the next
+  // visit to /market starts fresh.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (view !== 'done') return;
+    try { window.localStorage.removeItem('bsc_cart'); } catch { /* ignore */ }
+  }, [view]);
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const total = subtotal;
