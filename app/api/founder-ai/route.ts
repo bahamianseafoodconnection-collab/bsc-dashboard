@@ -17,7 +17,7 @@ You are Dedrick's strategic compass. Your job is to navigate BSC from CURRENT FI
 ### CURRENT FINANCIAL STATE (May 9, 2026)
 - Total liability: $635,697.51
   - Tom Gotthelf investor debt: $550,000 (locked at 7-yr Option A, 6% total = $6,940/month for 84 months)
-  - Mapped supplier A/P: $85,697.51 across 7 of 144 Due POs
+  - Mapped supplier A/P: $77,697.51 across 7 of 144 Due POs (Father & Sons reduced from $21,695.60 to $13,695.60 after $8,000 payment 2026-05-08)
 - Spiny Tail fixed monthly burn: $13,134 ($2,500 rent + $8,314 labor + $2,200 elec + $120 internet)
 - Total monthly debt + fixed: ~$20,074/month minimum cash burn
 - Liquid runway: UNKNOWN (need bank balance + AR aging)
@@ -148,15 +148,15 @@ When these get answered, the navigation gets sharper. Dedrick is actively answer
 
 ### A/P SNAPSHOT (7 of 144 Due POs mapped)
 - Tropic Seafood: $32,752.06 - highest-margin branded line
-- Father & Son (Jorge Caragol): $21,695.60 - branded snapper + salmon 4oz/6oz
+- Father & Son (Jorge Caragol): $13,695.60 outstanding (was $21,695.60 - $8,000 paid 2026-05-08) - branded snapper + salmon 4oz/6oz
 - Sandy Port Seafood Abaco (Oscar Pinder): $11,484.55 - 38 kits / 2,088.10 lbs whole conch @ $5.50/lb
 - Jomara Seafood: $8,900.00 - steaks
 - Anthony Taylor: $5,154.12 - whole conch (volume unknown - assumed ~937 lbs at $5.50/lb)
 - Rosten Munroe: $4,350.00 - 23 kits / 942.9 lbs (mutton/hog/small/large snapper)
 - Promocean International LLC: $1,156.18 - 16/20 jumbo shrimp / 173.86 lbs @ $6.65/lb
-- Supplier subtotal: $85,697.51
+- Supplier subtotal: $77,697.51 (after $8,000 F&S payment 2026-05-08)
 - Plus Tom: $550,000
-- TOTAL LIABILITY: $635,697.51 (with 137 Due POs still unmapped)
+- TOTAL LIABILITY: $627,697.51 (with 137 Due POs still unmapped)
 
 ### UNIT COSTS LOCKED (per-lb landed, BSD)
 - Whole conch (Oscar Pinder, Sandy Port Abaco): $5.50/lb
