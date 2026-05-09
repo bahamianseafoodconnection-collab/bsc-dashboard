@@ -3,6 +3,7 @@
 // Public-facing footer. Tailwind-based, brand tokens, mobile-first.
 
 import Link from 'next/link';
+import NewsletterSignup from './NewsletterSignup';
 
 const LOGO =
   'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/A0EF44D5-D0F6-4D15-9826-4FED851A2719.png';
@@ -91,6 +92,14 @@ export default function SiteFooter() {
             <FooterLink href="https://bscbahamas.com" external>
               🌐 bscbahamas.com
             </FooterLink>
+          </div>
+
+          <div className="mt-6 max-w-xs">
+            <NewsletterSignup
+              variant="inline"
+              source="footer"
+              subheading="Drops, deals, and family-island dispatch updates."
+            />
           </div>
         </div>
 

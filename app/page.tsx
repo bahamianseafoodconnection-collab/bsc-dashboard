@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import HeroSection from '@/components/HeroSection';
 import SiteFooter from '@/components/SiteFooter';
+import NewsletterSignup from '@/components/NewsletterSignup';
 
 const STORAGE_BASE =
   'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
@@ -488,6 +489,13 @@ export default function HomePage() {
               Browse Market
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* ─── Newsletter ─── */}
+      <section className="border-t border-slate-100 bg-slate-50 px-[5%] py-14 md:py-16">
+        <div className="mx-auto max-w-3xl">
+          <NewsletterSignup source="home" />
         </div>
       </section>
 
