@@ -59,9 +59,11 @@ export async function POST(req: NextRequest) {
       { cookies: { get: (name: string) => cookieStore.get(name)?.value } }
     );
 
+    // Approved RBC payment flips the order to 'processing' so fulfillment
+    // staff see it on /orders + the dashboard wholesale queue immediately.
     const orderStatus =
       result.status === 'approved'
-        ? 'paid'
+        ? 'processing'
         : result.status === 'pending'
         ? 'payment_pending'
         : 'payment_failed';

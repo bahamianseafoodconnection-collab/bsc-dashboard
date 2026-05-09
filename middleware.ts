@@ -29,6 +29,7 @@ const PROTECTED = [
   '/fleet',
   '/supplier-portal',
   '/notifications',
+  '/supplier-purchases',
 ];
 
 export async function middleware(request: NextRequest) {

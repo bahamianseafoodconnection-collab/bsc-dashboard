@@ -29,6 +29,7 @@ const NAV_GROUPS = [
       { icon: '📦', label: 'Inventory',        href: '/inventory' },
       { icon: '🚢', label: 'Suppliers',        href: '/supplier' },
       { icon: '🧾', label: 'Purchase Orders',  href: '/purchase-orders' },
+      { icon: '📥', label: 'Buy Next (auto)',   href: '/supplier-purchases' },
       { icon: '⚖️', label: 'Yield Calculator', href: '/yield' },
       { icon: '🏷️', label: 'Print Labels',     href: '/labels' },
       { icon: '🎣', label: 'Captains',          href: '/captains' },

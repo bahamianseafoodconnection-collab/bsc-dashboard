@@ -40,9 +40,11 @@ export async function POST(req: NextRequest) {
 
     const paymentStatus =
       status === 'APPROVED' ? 'approved' : status === 'PENDING' ? 'pending' : 'declined';
+    // Approved RBC payment flips order to 'processing' so fulfillment kicks
+    // in. Same destination value as the synchronous /charge path.
     const orderStatus =
       paymentStatus === 'approved'
-        ? 'paid'
+        ? 'processing'
         : paymentStatus === 'pending'
         ? 'payment_pending'
         : 'payment_failed';
