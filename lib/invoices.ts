@@ -1,10 +1,16 @@
-// File: lib/invoices.ts
-import { createClient } from "@supabase/supabase-js";
+// lib/invoices.ts
+//
+// Invoice persistence helpers. Backed by the `invoices` table in Supabase.
+//
+// Earlier versions of this file kept an in-memory `invoicesCache` so the
+// invoice detail page could show a result instantly after redirect. The cache
+// was module-scope state, which meant:
+//   - on the server it was shared across requests and silently drifted
+//   - on the client it was empty after every full page load, so the "cache hit"
+//     never actually happened in practice
+// The DB is fast enough; we just hit it every time now.
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from "./supabase";
 
 export type InvoiceItem = {
   productName: string;
@@ -34,11 +40,24 @@ export type InvoiceInput = {
   total: number;
 };
 
-// In-memory cache so invoice page works immediately after redirect
-export let invoicesCache: Invoice[] = [];
-
 function generateId(): string {
   return "INV-" + Date.now();
+}
+
+function rowToInvoice(row: Record<string, unknown>): Invoice {
+  const rawItems = row.items;
+  const items =
+    typeof rawItems === "string"
+      ? (JSON.parse(rawItems) as InvoiceItem[])
+      : ((rawItems ?? []) as InvoiceItem[]);
+  return {
+    id: String(row.id ?? ""),
+    date: String(row.date ?? ""),
+    customerName: String(row.customer_name ?? ""),
+    customerPhone: String(row.customer_phone ?? ""),
+    items,
+    total: Number(row.total ?? 0),
+  };
 }
 
 export async function createInvoice(input: InvoiceInput): Promise<Invoice> {
@@ -56,11 +75,7 @@ export async function createInvoice(input: InvoiceInput): Promise<Invoice> {
     total: input.total,
   };
 
-  // Add to memory cache immediately
-  invoicesCache.push(invoice);
-
-  // Save to Supabase
-  await supabase.from("invoices").insert({
+  const { error } = await supabase.from("invoices").insert({
     id: invoice.id,
     date: invoice.date,
     customer_name: invoice.customerName,
@@ -68,28 +83,26 @@ export async function createInvoice(input: InvoiceInput): Promise<Invoice> {
     items: JSON.stringify(invoice.items),
     total: invoice.total,
   });
+  if (error) throw error;
 
   return invoice;
 }
 
 export async function fetchInvoicesFromDB(): Promise<Invoice[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("invoices")
     .select("*")
     .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map((row) => rowToInvoice(row as Record<string, unknown>));
+}
 
-  if (!data) return [];
-
-  const invoices: Invoice[] = data.map((row) => ({
-    id: row.id,
-    date: row.date,
-    customerName: row.customer_name,
-    customerPhone: row.customer_phone,
-    items:
-      typeof row.items === "string" ? JSON.parse(row.items) : row.items,
-    total: row.total,
-  }));
-
-  invoicesCache = invoices;
-  return invoices;
+export async function getInvoiceById(id: string): Promise<Invoice | null> {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToInvoice(data as Record<string, unknown>);
 }
