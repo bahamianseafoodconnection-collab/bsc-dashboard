@@ -15,12 +15,14 @@ type Message = { id: string; role: 'user' | 'assistant'; content: string; create
 type Chat = { id: string; title: string; created_at: string; };
 
 const SUGGESTIONS = [
-  'Where does BSC stand today?',
-  "What's my Nassau margin?",
-  "What should I retail Anthony Taylor's conch at?",
-  'How much profit on 100 lbs of Tropic snapper online?',
-  "What's my monthly fixed cost?",
-  'When is my next rest break?',
+  'Where do we stand financially today?',
+  'What is my path from current debt to wealth?',
+  'What is the biggest opportunity I should work on this week?',
+  'What is blocking the lobster pipeline build?',
+  'Show me my current A/P snapshot and Tom Gotthelf schedule.',
+  'Which SKUs am I underpricing under sacred rules?',
+  'How does Igloo Express change our lobster economics?',
+  'What questions should I get answered first to unlock the next tier?',
 ];
 
 export default function FounderAIPage() {

@@ -85,6 +85,7 @@ When Dedrick asks "what should I do next" / "what's my biggest opportunity" / "s
 - I3: Igloo trade execution fee?
 - I5: Igloo onboarding requirements (FDA / HACCP / insurance / customs broker)?
 - B1: Bob @ Jomara deal frame (Structure A/B/C)?
+- B2: ANSWERED May 9, 2026 - BSC commits to NET-30 payment terms across all suppliers
 - B3: Bob's next meeting date (Partner Portal demo deadline)?
 
 When these get answered, the navigation gets sharper. Dedrick is actively answering them in chat sessions.
