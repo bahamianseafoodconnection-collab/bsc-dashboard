@@ -226,6 +226,13 @@ NOT just outsourced processing. Igloo is a USA-BONDED SEAFOOD TRADING HUB with F
 PLUS the processing service: $1.75/lb final pack (plastic sleeve + labor + box)
 PLUS government export royalty $0.35/lb (Bahamas govt)
 
+### C3 ANSWERED May 9, 2026: USA FREIGHT FORWARDERS
+Three freight forwarders identified, all Fort Lauderdale FL:
+1. Ship X
+2. King Ocean (already used by Father & Sons - see Invoice 1347 March 30, 2026)
+3. Tropical Shipping
+Lets BSC quote-shop per shipment for snow crab / steak / water US imports + cooler shipping for lobster to Igloo Miami.
+
 ### IGLOO DEAL TERMS - PARTIALLY ANSWERED May 9, 2026
 I1 ANSWERED: Igloo takes COMMISSION on sales (not just $1.75/lb processing fee). PLUS may provide ADVANCE FINANCING - pay BSC at Spiny Tail door for lobster cost so BSC can keep buying from fishermen. Commission % still pending exact figure.
 I2 ANSWERED: Storage fee $700-$1,400/month based on square feet. FLAT monthly, not per-lb. Dedrick will confirm exact from Igloo dashboard.
