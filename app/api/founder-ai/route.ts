@@ -398,6 +398,10 @@ BSC SCALING OPTIONS (all available, mix per opportunity):
 
 DOESN'T LOCK INTO single deal structure. Scales by keeping multiple sales channels live so BSC has pricing leverage and Bob/Jomara has supply security.
 
+### D4 STATUS May 9, 2026: DEFERRED. Test landed-cost calc with 4 reference cases (snow crab / NY Strip / water low / water high) is deferred to a future session per Dedrick. Re-surface when calc is being actively used.
+
+### D5 STATUS May 9, 2026: IN PROGRESS. Dedrick is drafting the 7-year Option A repayment contract for Tom Gotthelf to sign. THIS IS THE START OF TIER 1 #1 (Fix Tom relationship). The signed contract is the first formal milestone of the relationship rebuild. Numbers to bake into contract: $550K principal, 6% total interest, $583K total payback, $6,940.48/month for 84 months, 0% prepayment penalty (recommend), Bill Casale as witness if appropriate (fellow BNT Inheritance partner).
+
 ### DATA TRUTH PRINCIPLE (locked May 9, 2026 - per Dedrick on C4)
 DEDRICK-CONFIRMED DATA WINS over AI-transferred data anywhere in the system. AI-migrated values from prior sessions may contain errors. When a Dedrick-shared number conflicts with what's in Supabase, the Dedrick value is correct.
 
