@@ -5,9 +5,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import SplineViewer from './SplineViewer';
 
 const HERO_IMG =
   'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/94C94225-7A21-4E0F-BA00-79CA6E108385.jpg';
+
+// Optional 3D Spline scene URL for the hero. When unset, the page falls
+// back to the static photo. To enable: design a scene at spline.design,
+// publish it, copy the .splinecode URL into Vercel as
+// NEXT_PUBLIC_SPLINE_HERO. No code change required after that.
+const SPLINE_SCENE = process.env.NEXT_PUBLIC_SPLINE_HERO || '';
 
 const STATS = [
   { n: '9,310+', l: 'lbs in cold storage' },
@@ -25,14 +32,24 @@ export default function HeroSection() {
 
   return (
     <section className="relative flex min-h-[640px] w-full items-center overflow-hidden h-[100svh] max-h-[980px]">
-      {/* Background photo with slow zoom-in */}
-      <div
-        className={`absolute inset-0 bg-cover bg-[center_40%] transition-transform duration-[8000ms] ease-out will-change-transform ${
-          loaded ? 'scale-100' : 'scale-[1.06]'
-        }`}
-        style={{ backgroundImage: `url('${HERO_IMG}')` }}
-        aria-hidden
-      />
+      {/* Background — Spline 3D scene when configured, else slow-zoom photo.
+          SplineViewer handles its own image fallback if the scene fails. */}
+      {SPLINE_SCENE ? (
+        <SplineViewer
+          scene={SPLINE_SCENE}
+          fallback={HERO_IMG}
+          alt=""
+          className="absolute inset-0 h-full w-full"
+        />
+      ) : (
+        <div
+          className={`absolute inset-0 bg-cover bg-[center_40%] transition-transform duration-[8000ms] ease-out will-change-transform ${
+            loaded ? 'scale-100' : 'scale-[1.06]'
+          }`}
+          style={{ backgroundImage: `url('${HERO_IMG}')` }}
+          aria-hidden
+        />
+      )}
       {/* Layered overlays for legibility on the navy/gold palette */}
       <div
         className="absolute inset-0"
