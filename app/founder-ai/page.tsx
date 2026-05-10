@@ -89,9 +89,13 @@ export default function FounderAIPage() {
     }
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/founder-ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ chatId, message: userText, history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })) }),
       });
       const data = await res.json();
@@ -103,7 +107,7 @@ export default function FounderAIPage() {
       }
       setMessages(prev => [...prev, aiMsg]);
     } catch {
-      const errMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '⚠️ Connection error. Check that ANTHROPIC_API_KEY is set in Vercel.', created_at: new Date().toISOString() };
+      const errMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: 'Connection error. Check that ANTHROPIC_API_KEY is set in Vercel.', created_at: new Date().toISOString() };
       setMessages(prev => [...prev, errMsg]);
     }
     setLoading(false);
