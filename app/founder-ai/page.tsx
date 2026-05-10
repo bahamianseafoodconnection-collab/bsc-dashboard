@@ -1,13 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 const LOGO = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/A0EF44D5-D0F6-4D15-9826-4FED851A2719.png';
 
@@ -37,21 +32,36 @@ export default function FounderAIPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   useEffect(() => {
+    let mounted = true;
     async function checkSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.replace('/staff-login?redirect=/founder-ai');
-        return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (!session) {
+          window.location.href = '/staff-login';
+          return;
+        }
+        setSessionToken(session.access_token);
+        setAuthReady(true);
+        loadChats();
+      } catch (err) {
+        if (!mounted) return;
+        setAuthError('Session check failed. Please go to /staff-login.');
+        setAuthReady(true);
       }
-      setSessionToken(session.access_token);
-      setAuthReady(true);
-      loadChats();
     }
     checkSession();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
@@ -117,13 +127,12 @@ export default function FounderAIPage() {
       const data = await res.json();
       const aiText = data.reply || data.error || 'No response received.';
       const aiMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: aiText, created_at: new Date().toISOString() };
-
       if (chatId) {
         await supabase.from('founder_messages').insert([{ chat_id: chatId, role: 'assistant', content: aiText, created_at: aiMsg.created_at }]);
       }
       setMessages(prev => [...prev, aiMsg]);
     } catch {
-      const errMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: 'Connection error. Check that ANTHROPIC_API_KEY is set in Vercel.', created_at: new Date().toISOString() };
+      const errMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: 'Connection error. Please try again.', created_at: new Date().toISOString() };
       setMessages(prev => [...prev, errMsg]);
     }
     setLoading(false);
@@ -146,8 +155,22 @@ export default function FounderAIPage() {
 
   if (!authReady) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#060e1c', color: '#f5c842', fontFamily: 'DM Sans, sans-serif', fontSize: '15px' }}>
-        Checking session...
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#060e1c', color: '#f5c842', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', gap: 16 }}>
+        <div>Checking session...</div>
+        <a href="/staff-login" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textDecoration: 'underline' }}>
+          Taking too long? Click here to sign in
+        </a>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#060e1c', color: '#fca5a5', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', gap: 16 }}>
+        <div>{authError}</div>
+        <a href="/staff-login" style={{ background: '#f5c842', color: '#060e1c', padding: '12px 24px', borderRadius: 10, fontWeight: 700, textDecoration: 'none' }}>
+          Go to Staff Login
+        </a>
       </div>
     );
   }
@@ -271,7 +294,7 @@ export default function FounderAIPage() {
           <div className="fai-header">
             <div className="fai-header-left">
               <button className="fai-icon-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-              <button className="fai-icon-btn" onClick={() => router.push('/dashboard')}>←</button>
+              <button className="fai-icon-btn" onClick={() => { window.location.href = '/dashboard'; }}>←</button>
             </div>
             <div className="fai-header-center">
               <div className="fai-logo"><img src={LOGO} alt="BSC" /></div>
