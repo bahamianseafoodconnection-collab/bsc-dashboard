@@ -35,10 +35,25 @@ export default function FounderAIPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { loadChats(); }, []);
+  useEffect(() => {
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace('/staff-login?redirect=/founder-ai');
+        return;
+      }
+      setSessionToken(session.access_token);
+      setAuthReady(true);
+      loadChats();
+    }
+    checkSession();
+  }, []);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
 
   async function loadChats() {
@@ -90,11 +105,12 @@ export default function FounderAIPage() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || sessionToken;
       const res = await fetch('/api/founder-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ chatId, message: userText, history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })) }),
       });
@@ -126,6 +142,14 @@ export default function FounderAIPage() {
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/`(.+?)`/g, '<code>$1</code>')
       .replace(/\n/g, '<br />');
+  }
+
+  if (!authReady) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#060e1c', color: '#f5c842', fontFamily: 'DM Sans, sans-serif', fontSize: '15px' }}>
+        Checking session...
+      </div>
+    );
   }
 
   return (
@@ -247,7 +271,7 @@ export default function FounderAIPage() {
           <div className="fai-header">
             <div className="fai-header-left">
               <button className="fai-icon-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-              <button className="fai-icon-btn" onClick={() => router.push('/')}>←</button>
+              <button className="fai-icon-btn" onClick={() => router.push('/dashboard')}>←</button>
             </div>
             <div className="fai-header-center">
               <div className="fai-logo"><img src={LOGO} alt="BSC" /></div>
