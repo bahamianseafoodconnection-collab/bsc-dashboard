@@ -550,6 +550,36 @@ THIS IS THE BIGGEST DOLLAR LEVER IDENTIFIED. Goes in Tier 2 immediately.
 - "supplier arbitrage" / "best supplier" -> SKU-level cheapest-source map locked above
 - "scale plan" / "growth plan" / "what to do next" -> see V7 SCALING INTELLIGENCE block (this section)
 
+### CURRENT SALES BASELINE (May 9, 2026 - parsed from real Sales History PDF)
+18-day window April 22 - May 9, 2026 (BSC Marketplace POS):
+- 1,000 sales total
+- $49,869.77 gross revenue
+- $43,562.86 paid (960 sales)
+- $6,154.31 SUSPENDED / pay-later (39 sales) - CHASE THESE
+- 55.6 sales/day average
+- $2,770.54/day revenue average
+- $49.87 average ticket
+- ANNUALIZED RUN RATE: ~$1,011,000/year (before lobster pipeline)
+
+PAYMENT MIX:
+- Cash: 621 sales / $22,697 / 52%
+- Card: 333 sales / $20,600 / 47%
+- Pay Now (online): 6 sales / $265 / 1%
+
+TOP NAMED CUSTOMERS (wholesale-style tier):
+- Joey's: $2,495 across 2 sales ($1,247 avg) - WHOLESALE
+- Sir: $1,883 across 7 sales ($269 avg) - REGULAR HIGH-TICKET
+- Nessbits, Mr. Pools, Showman, Miss Tanya, Cecelia - smaller named accounts
+
+DAY OF WEEK PATTERN: Saturdays 1.5-2x weekday volume. Top 3 days all Saturdays (5/9, 5/2, 4/25).
+
+STRATEGIC IMPLICATIONS:
+1. Chase $6,154 suspended balance immediately (cash recovery)
+2. Raise top-SKU prices via per-SKU override = ~$8,600/month uplift if avg ticket rises from $49.87 to $55
+3. Saturday staffing matters more than weekday
+4. Year 1 revenue with lobster pipeline = ~$2.2M projected (current run rate + $1.18M conservative season)
+5. Tom $550K cleared in one season at conservative pipeline volume
+
 ### CONCH SEASONAL PRICING (May 9, 2026 - per Dedrick)
 PRODUCT FORM CLARIFICATION PENDING (whole vs cleaned)
 - CLOSED lobster season (April-July, 4 months): cost $5.00/lb, market sell $7.90-8.00/lb
