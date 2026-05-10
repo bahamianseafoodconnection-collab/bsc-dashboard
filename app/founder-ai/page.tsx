@@ -30,49 +30,41 @@ export default function FounderAIPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [authError, setAuthError] = useState('');
+
+  const supabaseRef = useRef(
+    createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  );
+  const supabase = supabaseRef.current;
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   useEffect(() => {
-    let mounted = true;
-    async function checkSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        if (!session) {
-          window.location.href = '/staff-login';
-          return;
-        }
-        setSessionToken(session.access_token);
-        setAuthReady(true);
-        loadChats();
-      } catch (err) {
-        if (!mounted) return;
-        setAuthError('Session check failed. Please go to /staff-login.');
-        setAuthReady(true);
-      }
-    }
-    checkSession();
-    return () => { mounted = false; };
+    loadChats();
   }, []);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
 
   async function loadChats() {
-    const { data } = await supabase.from('founder_chats').select('id, title, created_at').order('created_at', { ascending: false }).limit(30);
+    const { data } = await supabase
+      .from('founder_chats')
+      .select('id, title, created_at')
+      .order('created_at', { ascending: false })
+      .limit(30);
     if (data) setChats(data);
   }
 
   async function loadMessages(chatId: string) {
-    const { data } = await supabase.from('founder_messages').select('*').eq('chat_id', chatId).order('created_at', { ascending: true });
+    const { data } = await supabase
+      .from('founder_messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true });
     if (data) setMessages(data);
     setCurrentChatId(chatId);
     setSidebarOpen(false);
@@ -102,38 +94,73 @@ export default function FounderAIPage() {
 
     let chatId = currentChatId;
     if (!chatId) {
-      const { data: newChat } = await supabase.from('founder_chats').insert([{ title: userText.slice(0, 60), created_at: new Date().toISOString() }]).select().single();
+      const { data: newChat } = await supabase
+        .from('founder_chats')
+        .insert([{ title: userText.slice(0, 60), created_at: new Date().toISOString() }])
+        .select()
+        .single();
       if (newChat) { chatId = newChat.id; setCurrentChatId(chatId); loadChats(); }
     }
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: userText, created_at: new Date().toISOString() };
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userText,
+      created_at: new Date().toISOString(),
+    };
     setMessages(prev => [...prev, userMsg]);
 
     if (chatId) {
-      await supabase.from('founder_messages').insert([{ chat_id: chatId, role: 'user', content: userText, created_at: userMsg.created_at }]);
+      await supabase.from('founder_messages').insert([{
+        chat_id: chatId,
+        role: 'user',
+        content: userText,
+        created_at: userMsg.created_at,
+      }]);
     }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || sessionToken;
+      const token = session?.access_token ?? '';
+
       const res = await fetch('/api/founder-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ chatId, message: userText, history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          chatId,
+          message: userText,
+          history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+        }),
       });
+
       const data = await res.json();
       const aiText = data.reply || data.error || 'No response received.';
-      const aiMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: aiText, created_at: new Date().toISOString() };
+      const aiMsg: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: aiText,
+        created_at: new Date().toISOString(),
+      };
+
       if (chatId) {
-        await supabase.from('founder_messages').insert([{ chat_id: chatId, role: 'assistant', content: aiText, created_at: aiMsg.created_at }]);
+        await supabase.from('founder_messages').insert([{
+          chat_id: chatId,
+          role: 'assistant',
+          content: aiText,
+          created_at: aiMsg.created_at,
+        }]);
       }
       setMessages(prev => [...prev, aiMsg]);
     } catch {
-      const errMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: 'Connection error. Please try again.', created_at: new Date().toISOString() };
-      setMessages(prev => [...prev, errMsg]);
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: 'Connection error. Please try again.',
+        created_at: new Date().toISOString(),
+      }]);
     }
     setLoading(false);
   }
@@ -142,37 +169,25 @@ export default function FounderAIPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }
 
-  function formatTime(iso: string) { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); }
-  function formatDate(iso: string) { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-  function greeting() { const h = new Date().getHours(); if (h < 12) return 'Good morning'; if (h < 17) return 'Good afternoon'; return 'Good evening'; }
+  function formatTime(iso: string) {
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  function greeting() {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
 
   function fmt(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/`(.+?)`/g, '<code>$1</code>')
       .replace(/\n/g, '<br />');
-  }
-
-  if (!authReady) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#060e1c', color: '#f5c842', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', gap: 16 }}>
-        <div>Checking session...</div>
-        <a href="/staff-login" style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, textDecoration: 'underline' }}>
-          Taking too long? Click here to sign in
-        </a>
-      </div>
-    );
-  }
-
-  if (authError) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#060e1c', color: '#fca5a5', fontFamily: 'DM Sans, sans-serif', fontSize: '15px', gap: 16 }}>
-        <div>{authError}</div>
-        <a href="/staff-login" style={{ background: '#f5c842', color: '#060e1c', padding: '12px 24px', borderRadius: 10, fontWeight: 700, textDecoration: 'none' }}>
-          Go to Staff Login
-        </a>
-      </div>
-    );
   }
 
   return (
@@ -189,9 +204,7 @@ export default function FounderAIPage() {
         .fai-sidebar-header { display:flex; justify-content:space-between; align-items:center; padding:20px 18px 14px; border-bottom:1px solid rgba(212,168,67,.12); }
         .fai-sidebar-title { color:#f5c842; font-family:'Playfair Display',serif; font-weight:700; font-size:16px; }
         .fai-sidebar-icon { background:none; border:none; color:rgba(255,255,255,.55); font-size:22px; cursor:pointer; padding:6px 10px; border-radius:8px; }
-        .fai-sidebar-icon:hover { background:rgba(255,255,255,.06); color:#d4a843; }
         .fai-new-btn { margin:14px 16px; padding:12px 16px; background:linear-gradient(130deg,#f5c842,#c8860f); color:#060e1c; border:none; border-radius:10px; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; box-shadow:0 4px 18px rgba(212,168,67,.3); font-family:inherit; }
-        .fai-new-btn:hover { transform:translateY(-1px); box-shadow:0 6px 24px rgba(212,168,67,.45); }
         .fai-chat-list { flex:1; overflow-y:auto; padding:0 10px 20px; }
         .fai-chat-list::-webkit-scrollbar { width:6px; }
         .fai-chat-list::-webkit-scrollbar-thumb { background:rgba(212,168,67,.2); border-radius:6px; }
@@ -208,7 +221,6 @@ export default function FounderAIPage() {
         .fai-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:rgba(6,14,28,.7); backdrop-filter:blur(12px); border-bottom:1px solid rgba(212,168,67,.18); flex-shrink:0; gap:12px; }
         .fai-header-left, .fai-header-right { display:flex; align-items:center; gap:8px; }
         .fai-icon-btn { background:none; border:none; color:rgba(255,255,255,.6); font-size:20px; cursor:pointer; padding:8px 10px; border-radius:8px; line-height:1; }
-        .fai-icon-btn:hover { background:rgba(255,255,255,.06); color:#d4a843; }
         .fai-header-center { display:flex; align-items:center; gap:11px; flex:1; min-width:0; justify-content:center; }
         .fai-logo { width:36px; height:36px; border-radius:50%; background:#fafaf6; display:flex; align-items:center; justify-content:center; padding:4px; flex-shrink:0; box-shadow:0 2px 12px rgba(212,168,67,.3); border:1.5px solid rgba(212,168,67,.4); }
         .fai-logo img { width:100%; height:100%; object-fit:contain; }
@@ -220,11 +232,8 @@ export default function FounderAIPage() {
         @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.5;} }
         .fai-status-text { font-size:9.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#22c55e; }
         .fai-messages { flex:1; overflow-y:auto; padding:24px 16px; display:flex; flex-direction:column; gap:14px; max-width:880px; width:100%; margin:0 auto; }
-        .fai-messages::-webkit-scrollbar { width:7px; }
-        .fai-messages::-webkit-scrollbar-thumb { background:rgba(212,168,67,.18); border-radius:7px; }
         .fai-welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; padding:30px 20px; gap:14px; flex:1; text-align:center; }
-        .fai-welcome-logo { width:90px; height:90px; border-radius:50%; background:#fafaf6; display:flex; align-items:center; justify-content:center; padding:10px; margin-bottom:14px; box-shadow:0 12px 40px rgba(212,168,67,.45); border:2px solid rgba(212,168,67,.5); animation:welcomeIn .6s cubic-bezier(.25,.46,.45,.94); }
-        @keyframes welcomeIn { from{opacity:0;transform:scale(.7);} to{opacity:1;transform:scale(1);} }
+        .fai-welcome-logo { width:90px; height:90px; border-radius:50%; background:#fafaf6; display:flex; align-items:center; justify-content:center; padding:10px; margin-bottom:14px; box-shadow:0 12px 40px rgba(212,168,67,.45); border:2px solid rgba(212,168,67,.5); }
         .fai-welcome-logo img { width:100%; height:100%; object-fit:contain; }
         .fai-welcome-title { font-family:'Playfair Display',serif; color:#fff; font-size:clamp(24px,3.6vw,34px); font-weight:900; line-height:1.15; max-width:480px; }
         .fai-welcome-title .gold { background:linear-gradient(130deg,#f5c842,#c8860f); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; font-style:italic; }
@@ -257,7 +266,6 @@ export default function FounderAIPage() {
         .fai-textarea::placeholder { color:rgba(255,255,255,.35); }
         .fai-textarea:focus { border-color:rgba(212,168,67,.5); box-shadow:0 0 0 3px rgba(212,168,67,.1); }
         .fai-send { background:linear-gradient(130deg,#f5c842,#c8860f); border:none; color:#060e1c; width:48px; height:48px; border-radius:13px; cursor:pointer; font-size:18px; font-weight:900; flex-shrink:0; box-shadow:0 4px 18px rgba(212,168,67,.35); display:flex; align-items:center; justify-content:center; }
-        .fai-send:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 24px rgba(212,168,67,.5); }
         .fai-send:disabled { opacity:.35; cursor:not-allowed; }
         .fai-hint { max-width:880px; margin:8px auto 0; text-align:center; font-size:9.5px; letter-spacing:.12em; color:rgba(255,255,255,.28); text-transform:uppercase; font-weight:600; }
         @media(max-width:640px){
@@ -341,9 +349,7 @@ export default function FounderAIPage() {
                     <div className="fai-avatar fai-avatar-ai"><img src={LOGO} alt="" /></div>
                     <div className="fai-bubble fai-bubble-ai">
                       <div className="fai-typing">
-                        <span className="fai-dot" />
-                        <span className="fai-dot" />
-                        <span className="fai-dot" />
+                        <span className="fai-dot" /><span className="fai-dot" /><span className="fai-dot" />
                       </div>
                     </div>
                   </div>
@@ -355,7 +361,16 @@ export default function FounderAIPage() {
 
           <div className="fai-input-wrap">
             <div className="fai-input-inner">
-              <textarea ref={inputRef} className="fai-textarea" placeholder="Ask Founder AI anything about your business..." value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} rows={1} disabled={loading} />
+              <textarea
+                ref={inputRef}
+                className="fai-textarea"
+                placeholder="Ask Founder AI anything about your business..."
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                disabled={loading}
+              />
               <button className="fai-send" onClick={() => sendMessage()} disabled={!input.trim() || loading}>↑</button>
             </div>
             <div className="fai-hint">🔒 Private · Powered by Claude · Chat history saved</div>
