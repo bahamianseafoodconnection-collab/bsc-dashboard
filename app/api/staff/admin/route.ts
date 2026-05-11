@@ -31,20 +31,32 @@ function adminClient(): SupabaseClient | null {
   });
 }
 
+function extractUserIdFromJWT(token: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1];
+    const padded = payload + '=='.slice((payload.length % 4) || 4);
+    const decoded = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    return decoded.sub || null;
+  } catch {
+    return null;
+  }
+}
+
 async function callerIsAdmin(req: Request, admin: SupabaseClient): Promise<boolean> {
   const auth = req.headers.get('authorization') || req.headers.get('Authorization');
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) return false;
 
-  // Use admin client to verify the token — more reliable than creating a new client
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return false;
+  const userId = extractUserIdFromJWT(token);
+  if (!userId) return false;
 
   // Check profiles table first
   const { data: profile } = await admin
     .from('profiles')
     .select('role')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle();
 
   if (profile?.role && ALLOWED_ADMIN_ROLES.has(String(profile.role))) return true;
@@ -53,7 +65,7 @@ async function callerIsAdmin(req: Request, admin: SupabaseClient): Promise<boole
   const { data: userRow } = await admin
     .from('users')
     .select('role')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle();
 
   if (!userRow?.role) return false;
