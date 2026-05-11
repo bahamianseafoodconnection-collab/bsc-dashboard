@@ -36,16 +36,11 @@ async function callerIsAdmin(req: Request, admin: SupabaseClient): Promise<boole
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) return false;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const userClient = createClient(url, anon, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user) return false;
+  // Use admin client to verify the token — more reliable than creating a new client
+  const { data: { user }, error } = await admin.auth.getUser(token);
+  if (error || !user) return false;
 
-  // Check profiles table first, then fall back to users table
+  // Check profiles table first
   const { data: profile } = await admin
     .from('profiles')
     .select('role')
@@ -54,6 +49,7 @@ async function callerIsAdmin(req: Request, admin: SupabaseClient): Promise<boole
 
   if (profile?.role && ALLOWED_ADMIN_ROLES.has(String(profile.role))) return true;
 
+  // Fall back to users table
   const { data: userRow } = await admin
     .from('users')
     .select('role')
@@ -74,7 +70,6 @@ async function selectAll(admin: SupabaseClient) {
     const { data, error } = await admin.from('staff_roster').select(cols).order('role', { ascending: true });
     if (!error) return data || [];
   }
-  // fallback to users table
   for (const cols of variants) {
     const { data, error } = await admin.from('users').select(cols).order('role', { ascending: true });
     if (!error) return data || [];
