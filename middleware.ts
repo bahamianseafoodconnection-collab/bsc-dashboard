@@ -32,11 +32,11 @@ const PUBLIC_ROUTES = [
 const ROLE_ROUTES: Record<string, string[]> = {
   founder:      ['*'],
   co_founder:   ['*'],
-  manager:      ['/dashboard', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/expenses', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
+  manager:      ['/ashley', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/expenses', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
   cashier:      ['/pos', '/pos-andros', '/orders', '/pickup-queue'],
   andros_staff: ['/pos-andros'],
-  right_hand:   ['/dashboard', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
-  strategist:   ['/dashboard', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
+  right_hand:   ['/ashley', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
+  strategist:   ['/ashley', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
   processor:    ['/processor'],
   supplier:     ['/supplier-portal'],
   partner_us:   ['/supplier-portal'],
@@ -101,13 +101,16 @@ export async function middleware(request: NextRequest) {
 
   if (!roleCanAccess(role, pathname)) {
     const homeMap: Record<string, string> = {
+      manager:      '/ashley',
+      right_hand:   '/ashley',
+      strategist:   '/ashley',
       cashier:      '/pos',
       andros_staff: '/pos-andros',
       processor:    '/processor',
       supplier:     '/supplier-portal',
       partner_us:   '/supplier-portal',
     };
-    const home = homeMap[role] || '/dashboard';
+    const home = homeMap[role] || '/staff-login';
     return NextResponse.redirect(new URL(home, request.url));
   }
 
