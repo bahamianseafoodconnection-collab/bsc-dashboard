@@ -30,16 +30,17 @@ const PUBLIC_ROUTES = [
 ];
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  founder:      ['*'],
-  co_founder:   ['*'],
-  manager:      ['/ashley', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/expenses', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
-  cashier:      ['/pos', '/pos-andros', '/orders', '/pickup-queue'],
-  andros_staff: ['/pos-andros'],
-  right_hand:   ['/ashley', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
-  strategist:   ['/ashley', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
-  processor:    ['/processor'],
-  supplier:     ['/supplier-portal'],
-  partner_us:   ['/supplier-portal'],
+  control_admin: ['*'],
+  founder:       ['*'],
+  co_founder:    ['*'],
+  manager:       ['/ashley', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/expenses', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
+  cashier:       ['/pos', '/pos-andros', '/orders', '/pickup-queue'],
+  andros_staff:  ['/pos-andros'],
+  right_hand:    ['/ashley', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
+  strategist:    ['/ashley', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
+  processor:     ['/processor'],
+  supplier:      ['/supplier-portal'],
+  partner_us:    ['/supplier-portal'],
 };
 
 function isPublic(pathname: string): boolean {
@@ -87,13 +88,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const { data: userRow } = await supabase
-    .from('users')
+  // Check profiles table first, then fall back to users table
+  let role: string | null = null;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
     .select('role')
     .eq('id', session.user.id)
     .single();
 
-  const role = userRow?.role as string | null;
+  role = profileRow?.role as string | null;
+
+  if (!role) {
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', session.user.id)
+      .single();
+    role = userRow?.role as string | null;
+  }
 
   if (!role) {
     return NextResponse.redirect(new URL('/staff-login', request.url));
