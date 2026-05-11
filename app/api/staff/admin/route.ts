@@ -36,7 +36,10 @@ function extractUserIdFromJWT(token: string): string | null {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const payload = parts[1];
-    const padded = payload + '=='.slice((payload.length % 4) || 4);
+    // Convert base64url to standard base64
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    // Fix padding
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
     const decoded = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
     return decoded.sub || null;
   } catch {
