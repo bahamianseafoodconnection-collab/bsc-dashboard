@@ -2,62 +2,63 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const PROTECTED = [
-  '/dashboard',
-  '/pos',
-  '/pos-andros',
-  '/orders',
-  '/inventory',
-  '/purchase-orders',
-  '/report',
-  '/yield',
-  '/supplier',
-  '/vehicles',
-  '/ashley',
-  '/jaquel',
-  '/cash',
-  '/bills',
-  '/customers',
-  '/staff',
-  '/processor',
-  '/expenses',
-  '/accounts-payable',
-  '/captains',
-  '/labels',
-  '/reports',
-  '/payroll',
-  '/fleet',
-  '/supplier-portal',
-  '/notifications',
-  '/supplier-purchases',
+const PUBLIC_ROUTES = [
+  '/',
+  '/login',
+  '/staff-login',
+  '/staff/activate',
+  '/market',
+  '/product/',
+  '/track/',
+  '/partner/',
+  '/my-orders',
+  '/receipt/',
+  '/utilities',
+  '/legal',
+  '/onboarding',
+  '/api/',
+  '/_next',
+  '/favicon',
+  '/local-wholesale',
+  '/us-shopping',
+  '/help',
+  '/shipping',
+  '/returns',
+  '/contact',
+  '/sitemap',
+  '/robots',
 ];
+
+const ROLE_ROUTES: Record<string, string[]> = {
+  founder:      ['*'],
+  co_founder:   ['*'],
+  manager:      ['/dashboard', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/expenses', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
+  cashier:      ['/pos', '/pos-andros', '/orders', '/pickup-queue'],
+  andros_staff: ['/pos-andros'],
+  right_hand:   ['/dashboard', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
+  strategist:   ['/dashboard', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
+  processor:    ['/processor'],
+  supplier:     ['/supplier-portal'],
+  partner_us:   ['/supplier-portal'],
+};
+
+function isPublic(pathname: string): boolean {
+  return PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
+}
+
+function roleCanAccess(role: string, pathname: string): boolean {
+  const allowed = ROLE_ROUTES[role];
+  if (!allowed) return false;
+  if (allowed.includes('*')) return true;
+  return allowed.some(route => pathname === route || pathname.startsWith(route));
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (
-    pathname === '/' ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/staff-login') ||
-    pathname.startsWith('/staff/activate') ||
-    pathname.startsWith('/market') ||
-    pathname.startsWith('/product/') ||
-    pathname.startsWith('/track/') ||
-    pathname.startsWith('/partner/') ||
-    pathname.startsWith('/my-orders') ||
-    pathname.startsWith('/receipt/') ||
-    pathname.startsWith('/utilities') ||
-    pathname.startsWith('/legal') ||
-    pathname.startsWith('/onboarding') ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/favicon')
-  ) {
+  if (isPublic(pathname)) {
     return NextResponse.next();
   }
-
-  const needsAuth = PROTECTED.some(route => pathname.startsWith(route));
-  if (!needsAuth) return NextResponse.next();
 
   const response = NextResponse.next();
 
@@ -86,9 +87,33 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', session.user.id)
+    .single();
+
+  const role = userRow?.role as string | null;
+
+  if (!role) {
+    return NextResponse.redirect(new URL('/staff-login', request.url));
+  }
+
+  if (!roleCanAccess(role, pathname)) {
+    const homeMap: Record<string, string> = {
+      cashier:      '/pos',
+      andros_staff: '/pos-andros',
+      processor:    '/processor',
+      supplier:     '/supplier-portal',
+      partner_us:   '/supplier-portal',
+    };
+    const home = homeMap[role] || '/dashboard';
+    return NextResponse.redirect(new URL(home, request.url));
+  }
+
   return response;
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.svg|.*\\.ico).*)'],
 };
