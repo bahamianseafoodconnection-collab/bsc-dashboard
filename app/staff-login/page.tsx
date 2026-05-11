@@ -34,7 +34,7 @@ export default function StaffLoginPage() {
         return;
       }
 
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 600));
 
       const { data: roleData, error: roleErr } = await supabase.rpc('get_my_role');
 
@@ -54,10 +54,14 @@ export default function StaffLoginPage() {
         return;
       }
 
+      const dashboardRoles = ['control_admin', 'founder', 'co_founder', 'manager', 'cashier', 'right_hand', 'supervisor'];
+
       if (role === 'processor') {
         window.location.href = '/processor';
       } else if (role === 'supplier') {
         window.location.href = '/supplier';
+      } else if (dashboardRoles.includes(role)) {
+        window.location.href = '/dashboard';
       } else {
         window.location.href = '/dashboard';
       }
