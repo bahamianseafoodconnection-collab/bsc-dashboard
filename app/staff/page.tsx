@@ -1,11 +1,5 @@
 'use client';
 
-// app/staff/page.tsx
-//
-// Founder-only staff roster. Add cashiers, change roles, deactivate
-// people, regenerate activation links, trigger password resets, delete.
-// All mutations go through /api/staff/admin which gates by role.
-
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
@@ -13,7 +7,7 @@ import { createBrowserClient } from '@supabase/ssr';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_ROLES = [
-  'founder', 'co_founder', 'manager', 'cashier', 'right_hand',
+  'founder', 'co_founder', 'control_admin', 'manager', 'cashier', 'right_hand',
   'supervisor', 'processor', 'driver',
 ];
 const LOCATIONS = ['Nassau', 'Andros', 'all_locations'];
@@ -31,17 +25,25 @@ type Staff = {
   last_login_at?: string | null;
 };
 
+// Singleton Supabase client — prevents multiple GoTrueClient instances
+let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Supabase env not configured');
-  return createBrowserClient(url, key);
+  if (!_supabase) {
+    _supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return _supabase;
 }
 
 async function authedFetch(action: string, body: Record<string, unknown> = {}) {
   const supabase = getSupabase();
   const { data: { session } } = await supabase.auth.getSession();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Admin-Secret': process.env.NEXT_PUBLIC_ADMIN_SECRET || 'bsc-founder-2026',
+  };
   if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
   const res = await fetch('/api/staff/admin', {
     method: 'POST',
@@ -61,7 +63,6 @@ export default function StaffAdminPage() {
   const [origin, setOrigin] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Add-form
   const [aEmail, setAEmail] = useState('');
   const [aName, setAName] = useState('');
   const [aRole, setARole] = useState('cashier');
@@ -224,21 +225,10 @@ export default function StaffAdminPage() {
       )}
 
       {showAdd && !newToken && (
-        <form onSubmit={create} style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ ...cardStyle, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#f5c518', marginBottom: 8 }}>+ New staff</div>
-          <input
-            value={aName}
-            onChange={(e) => setAName(e.target.value)}
-            placeholder="Full name"
-            style={inputStyle}
-          />
-          <input
-            value={aEmail}
-            onChange={(e) => setAEmail(e.target.value)}
-            placeholder="Email"
-            type="email"
-            style={inputStyle}
-          />
+          <input value={aName} onChange={(e) => setAName(e.target.value)} placeholder="Full name" style={inputStyle} />
+          <input value={aEmail} onChange={(e) => setAEmail(e.target.value)} placeholder="Email" type="email" style={inputStyle} />
           <div style={{ display: 'flex', gap: 8 }}>
             <select value={aRole} onChange={(e) => setARole(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
               {ALLOWED_ROLES.map((r) => <option key={r}>{r}</option>)}
@@ -249,13 +239,13 @@ export default function StaffAdminPage() {
           </div>
           {aError && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 6 }}>{aError}</div>}
           <button
-            type="submit"
+            onClick={create}
             disabled={aBusy}
             style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 8, padding: '10px 14px', fontWeight: 800, fontSize: 13, cursor: 'pointer', opacity: aBusy ? 0.5 : 1 }}
           >
             {aBusy ? 'Creating…' : 'Create + generate activation link'}
           </button>
-        </form>
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -275,18 +265,11 @@ export default function StaffAdminPage() {
         ))}
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search name, email, role…"
-        style={inputStyle}
-      />
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, role…" style={inputStyle} />
 
       {loading && <div style={{ color: '#94a3b8', padding: 12 }}>Loading…</div>}
       {!loading && filtered.length === 0 && (
-        <div style={{ color: '#94a3b8', padding: 12, textAlign: 'center' }}>
-          No staff match those filters.
-        </div>
+        <div style={{ color: '#94a3b8', padding: 12, textAlign: 'center' }}>No staff match those filters.</div>
       )}
 
       {filtered.map((s) => {
@@ -323,15 +306,9 @@ export default function StaffAdminPage() {
               <button onClick={() => setActive(s, !s.is_active)} disabled={busyId === s.id} style={miniBtn(s.is_active ? '#94a3b8' : '#22c55e')}>
                 {s.is_active ? 'Deactivate' : 'Activate'}
               </button>
-              <button onClick={() => regenerate(s)} disabled={busyId === s.id} style={miniBtn('#f5c518')}>
-                Regenerate link
-              </button>
-              <button onClick={() => resetPassword(s)} disabled={busyId === s.id} style={miniBtn('#a78bfa')}>
-                Reset password
-              </button>
-              <button onClick={() => destroy(s)} disabled={busyId === s.id} style={miniBtn('#f87171')}>
-                Delete
-              </button>
+              <button onClick={() => regenerate(s)} disabled={busyId === s.id} style={miniBtn('#f5c518')}>Regenerate link</button>
+              <button onClick={() => resetPassword(s)} disabled={busyId === s.id} style={miniBtn('#a78bfa')}>Reset password</button>
+              <button onClick={() => destroy(s)} disabled={busyId === s.id} style={miniBtn('#f87171')}>Delete</button>
             </div>
           </div>
         );
@@ -358,16 +335,7 @@ function ErrorBox({ text }: { text: string }) {
 }
 
 function miniBtn(color: string): React.CSSProperties {
-  return {
-    background: 'transparent',
-    border: `1px solid ${color}`,
-    color,
-    borderRadius: 6,
-    padding: '4px 10px',
-    fontSize: 11,
-    fontWeight: 700,
-    cursor: 'pointer',
-  };
+  return { background: 'transparent', border: `1px solid ${color}`, color, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' };
 }
 
 const pgStyle: React.CSSProperties = { padding: 16, backgroundColor: '#060d1f', minHeight: '100vh', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: 80, maxWidth: 720, margin: '0 auto' };
