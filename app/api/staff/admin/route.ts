@@ -78,24 +78,39 @@ async function callerIsAdmin(req: Request, admin: SupabaseClient, body: Body): P
 }
 
 async function selectAll(admin: SupabaseClient) {
-  const variants = [
+  // Query users table first — primary source of truth
+  const userVariants = [
     'id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at',
-    'id, email, role, name, primary_location, is_active, activation_token, created_at, last_login_at',
+    'id, email, role, full_name, primary_location, is_active, activation_token, created_at',
     'id, email, role, primary_location, is_active, activation_token, created_at',
   ];
-  for (const cols of variants) {
-    const { data, error } = await admin.from('staff_roster').select(cols).order('role', { ascending: true });
+  for (const cols of userVariants) {
+    const { data, error } = await admin
+      .from('users')
+      .select(cols)
+      .not('role', 'eq', 'customer')
+      .order('role', { ascending: true });
     if (!error) return data || [];
   }
-  for (const cols of variants) {
-    const { data, error } = await admin.from('users').select(cols).order('role', { ascending: true });
+
+  // Fall back to staff_roster
+  const rosterVariants = [
+    'id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at',
+    'id, email, role, full_name, primary_location, is_active, activation_token, created_at',
+    'id, email, role, primary_location, is_active, activation_token, created_at',
+  ];
+  for (const cols of rosterVariants) {
+    const { data, error } = await admin
+      .from('staff_roster')
+      .select(cols)
+      .order('role', { ascending: true });
     if (!error) return data || [];
   }
   return [];
 }
 
 async function patchUser(admin: SupabaseClient, id: string, patch: Record<string, unknown>) {
-  const tables = ['staff_roster', 'users'];
+  const tables = ['users', 'staff_roster'];
   for (const table of tables) {
     const variantsToTry = [
       patch,
@@ -162,7 +177,7 @@ export async function POST(req: Request) {
         { id: userId, email, role, name: body.full_name || null, primary_location: body.primary_location || null, is_active: false, activation_token: token },
       ];
 
-      const tables = ['staff_roster', 'users'];
+      const tables = ['users', 'staff_roster'];
       let insErr: string | null = 'unknown';
 
       outer:
@@ -209,8 +224,8 @@ export async function POST(req: Request) {
 
     case 'reset_password': {
       if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
-      const { data: u } = await admin.from('staff_roster').select('email').eq('id', body.id).maybeSingle();
-      const email = u?.email || (await admin.from('users').select('email').eq('id', body.id).maybeSingle()).data?.email;
+      const { data: u } = await admin.from('users').select('email').eq('id', body.id).maybeSingle();
+      const email = u?.email || (await admin.from('staff_roster').select('email').eq('id', body.id).maybeSingle()).data?.email;
       if (!email) return NextResponse.json({ ok: false, error: 'User has no email' }, { status: 400 });
       const { error: rErr } = await admin.auth.resetPasswordForEmail(email, {
         redirectTo: `${new URL(req.url).origin}/staff-login`,
@@ -223,8 +238,8 @@ export async function POST(req: Request) {
       if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
       const { error: aErr } = await admin.auth.admin.deleteUser(body.id);
       if (aErr) return NextResponse.json({ ok: false, error: aErr.message }, { status: 500 });
-      await admin.from('staff_roster').delete().eq('id', body.id);
       await admin.from('users').delete().eq('id', body.id);
+      await admin.from('staff_roster').delete().eq('id', body.id);
       return NextResponse.json({ ok: true });
     }
 
