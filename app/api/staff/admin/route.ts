@@ -31,9 +31,6 @@ function adminClient(): SupabaseClient | null {
   return createClient(url, service, {
     auth: { autoRefreshToken: false, persistSession: false },
     db: { schema: 'public' },
-    global: {
-      headers: { 'x-my-custom-header': 'bsc-admin' },
-    },
   });
 }
 
@@ -81,24 +78,6 @@ async function callerIsAdmin(req: Request, admin: SupabaseClient, body: Body): P
   return ALLOWED_ADMIN_ROLES.has(String(userRow.role));
 }
 
-async function selectAll(admin: SupabaseClient) {
-  const { data, error } = await admin
-    .from('users')
-    .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at')
-    .order('role', { ascending: true });
-
-  if (!error) return data || [];
-
-  const { data: roster, error: rosterErr } = await admin
-    .from('staff_roster')
-    .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at')
-    .order('role', { ascending: true });
-
-  if (!rosterErr) return roster || [];
-
-  return [];
-}
-
 async function patchUser(admin: SupabaseClient, id: string, patch: Record<string, unknown>) {
   const tables = ['users', 'staff_roster'];
   for (const table of tables) {
@@ -138,27 +117,16 @@ export async function POST(req: Request) {
 
   switch (action) {
     case 'list': {
-      const users = await selectAll(admin);
-      return NextResponse.json({ ok: true, users });
-    }
-
-    case 'debug': {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'missing';
-      const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-      const hasSecret = !!process.env.ADMIN_SECRET;
-      const { data, error, count } = await admin
+      const { data, error } = await admin
         .from('users')
-        .select('id, email, role', { count: 'exact' })
-        .limit(10);
-      return NextResponse.json({
-        ok: true,
-        url: url.slice(0, 40),
-        hasKey,
-        hasSecret,
-        data,
-        error: error?.message || null,
-        count,
-      });
+        .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at')
+        .order('role', { ascending: true });
+
+      if (error) {
+        return NextResponse.json({ ok: false, error: error.message, debug: 'users query failed' }, { status: 500 });
+      }
+
+      return NextResponse.json({ ok: true, users: data || [], debug_count: data?.length ?? 0 });
     }
 
     case 'create': {
