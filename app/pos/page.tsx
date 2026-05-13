@@ -1,533 +1,380 @@
-'use client';
+'use client'
 
-import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
-import { splitSale, recordSaleFinancials } from '@/lib/finance';
+import { useState, useEffect, useCallback } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 
-export const dynamic = 'force-dynamic';
+let _supabase: ReturnType<typeof createBrowserClient> | null = null
+function getSupabase() {
+  if (!_supabase) {
+    _supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  }
+  return _supabase
+}
 
-type CatalogRow = {
-  id: string; sku: string; barcode: string | null; name: string;
-  description: string | null; category: string; unit_of_measure: string;
-  pack_size: string | null; image_url: string | null; is_bsc_processed: boolean;
-  pricing_mode: string | null; margin_multiplier: number | null;
-  vat_multiplier: number | null; manual_unit_price: number | null;
-  cost_per_unit: number | null;
-};
+interface Product {
+  id: string
+  sku: string
+  barcode: string | null
+  name: string
+  category: string
+  is_bsc_processed: boolean
+  sell_price: number
+  promo_price: number | null
+  promo_label: string | null
+  is_per_lb: boolean
+}
 
-type SellableProduct = {
-  id: string; sku: string; barcode: string | null; name: string;
-  category: string; unit_of_measure: string; pack_size: string | null;
-  image_url: string | null; is_bsc_processed: boolean;
-  unit_price: number; cost_per_unit: number;
-};
+interface CartItem {
+  product: Product
+  quantity: number
+  unit_price: number
+  weight_lb?: number
+}
 
-type CartItem = {
-  product_id: string; sku: string; name: string;
-  unit_price: number; cost_per_unit: number;
-  unit_of_measure: string; qty: number;
-};
+interface Promotion {
+  product_id: string
+  promo_price: number
+  display_label: string
+}
 
-type PaymentMethod = 'cash' | 'card' | 'transfer';
-type CardTerminal = 'rbc_plug_and_play' | 'rbc_physical_terminal';
-
-const CARD_TERMINALS: { value: CardTerminal; label: string }[] = [
+const TERMINALS = [
   { value: 'rbc_plug_and_play', label: '📱 RBC Plug & Play' },
   { value: 'rbc_physical_terminal', label: '🖥️ RBC Physical Terminal' },
-];
+]
 
-type CompletedSale = {
-  ref: string; total: number; cost_total: number; profit: number;
-  items: CartItem[]; customer: string;
-  payment_method: PaymentMethod; card_ref: string | null;
-  card_terminal: CardTerminal | null;
-};
+const CATEGORIES = [
+  { label: 'All',     match: (c: string) => true },
+  { label: 'Seafood', match: (c: string) => c.includes('seafood') },
+  { label: 'Meat',    match: (c: string) => c === 'meat' },
+  { label: 'Produce', match: (c: string) => c === 'produce' },
+  { label: 'Grocery', match: (c: string) => c === 'grocery' },
+]
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  fresh_seafood: '🐟', frozen_seafood: '🦞', processed_seafood: '🦐',
-  meat: '🥩', produce: '🥦', juice_smoothie: '🥤',
-  wellness_shot: '💪', grocery: '🌾', snack: '🍪',
-  beverage: '💧', household: '🧴', toiletry: '🧼',
-};
+const PER_LB_SKUS = new Set(['83359'])
 
-const CATEGORY_LABEL: Record<string, string> = {
-  fresh_seafood: 'Fresh', frozen_seafood: 'Frozen',
-  processed_seafood: 'Processed', meat: 'Meat', produce: 'Produce',
-  juice_smoothie: 'Juice', wellness_shot: 'Wellness',
-  grocery: 'Grocery', snack: 'Snack', beverage: 'Drinks',
-  household: 'Household', toiletry: 'Toiletry',
-};
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Supabase env not configured.');
-  return createBrowserClient(url, key);
-}
-
-function computePrice(r: CatalogRow): number {
-  if (r.pricing_mode === 'manual_override' && r.manual_unit_price != null) return Number(r.manual_unit_price);
-  if (r.pricing_mode === 'formula' && r.cost_per_unit != null && r.margin_multiplier != null && r.vat_multiplier != null)
-    return Number(r.cost_per_unit) * Number(r.margin_multiplier) * Number(r.vat_multiplier);
-  if (r.manual_unit_price != null) return Number(r.manual_unit_price);
-  return 0;
-}
-
-function genRef() { return 'BSC-' + Date.now().toString().slice(-8); }
-
-export default function RegisterPage() {
-  const [products, setProducts] = useState<SellableProduct[]>([]);
-  const [productsLoading, setProductsLoading] = useState(true);
-  const [productsError, setProductsError] = useState<string | null>(null);
-  const [unsellableCount, setUnsellableCount] = useState(0);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [category, setCategory] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-  const [cardRef, setCardRef] = useState('');
-  const [cardTerminal, setCardTerminal] = useState<CardTerminal>('rbc_plug_and_play');
-  const [completing, setCompleting] = useState(false);
-  const [lastSale, setLastSale] = useState<CompletedSale | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [cartOpen, setCartOpen] = useState(false);
-
-  useEffect(() => {
-    const supabase = getSupabase();
-    supabase.auth.getSession().then(({ data: { session } }) => setUserId(session?.user.id || null));
-  }, []);
+export default function POSPage() {
+  const supabase = getSupabase()
+  const [products, setProducts] = useState<Product[]>([])
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [search, setSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState('All')
+  const [isWednesday, setIsWednesday] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showCart, setShowCart] = useState(false)
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [terminal, setTerminal] = useState('rbc_plug_and_play')
+  const [cardRef, setCardRef] = useState('')
+  const [orderSuccess, setOrderSuccess] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [weightInput, setWeightInput] = useState<{ productId: string; weight: string } | null>(null)
 
   const loadCatalog = useCallback(async () => {
-    setProductsLoading(true); setProductsError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const supabase = getSupabase();
-      const { data: rows, error } = await supabase.rpc('get_pos_catalog', { p_channel: 'nassau_pos' });
-      if (error) throw error;
-      const sellable: SellableProduct[] = []; let unsellable = 0;
-      (rows as CatalogRow[] || []).forEach((r) => {
-        const unit_price = computePrice(r);
-        if (unit_price <= 0) { unsellable++; return; }
-        sellable.push({ id: r.id, sku: r.sku, barcode: r.barcode, name: r.name, category: r.category, unit_of_measure: r.unit_of_measure, pack_size: r.pack_size, image_url: r.image_url, is_bsc_processed: r.is_bsc_processed, unit_price, cost_per_unit: r.cost_per_unit ? Number(r.cost_per_unit) : 0 });
-      });
-      setProducts(sellable); setUnsellableCount(unsellable);
-    } catch (e) {
-      setProductsError(e instanceof Error ? e.message : 'Failed to load catalog');
-    } finally { setProductsLoading(false); }
-  }, []);
+      const today = new Date().getDay()
+      setIsWednesday(today === 3)
 
-  useEffect(() => { loadCatalog(); }, [loadCatalog]);
+      const { data: productsRaw, error: prodErr } = await supabase
+        .from('products')
+        .select('id, sku, barcode, name, category, is_bsc_processed, product_pricing!inner(manual_unit_price)')
+        .eq('sell_nassau', true)
+        .eq('status', 'active')
+        .eq('product_pricing.channel', 'nassau_pos')
+        .eq('product_pricing.is_current', true)
+        .eq('product_pricing.is_active', true)
+        .order('name')
 
-  const categoriesPresent = Array.from(new Set(products.map((p) => p.category))).sort();
-  const filtered = products.filter((p) => {
-    const matchCat = category === 'all' || p.category === category;
-    const q = search.trim().toLowerCase();
-    const matchSearch = !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || (p.barcode || '').toLowerCase().includes(q);
-    return matchCat && matchSearch;
-  });
+      if (prodErr) throw prodErr
 
-  function addToCart(p: SellableProduct) {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.product_id === p.id);
-      if (existing) return prev.map((i) => i.product_id === p.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { product_id: p.id, sku: p.sku, name: p.name, unit_price: p.unit_price, cost_per_unit: p.cost_per_unit, unit_of_measure: p.unit_of_measure, qty: 1 }];
-    });
-  }
-  function changeQty(id: string, delta: number) { setCart((prev) => prev.map((i) => i.product_id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)); }
-  function removeItem(id: string) { setCart((prev) => prev.filter((i) => i.product_id !== id)); }
-
-  const subtotal = cart.reduce((s, i) => s + i.unit_price * i.qty, 0);
-  const costTotal = cart.reduce((s, i) => s + i.cost_per_unit * i.qty, 0);
-  const realProfit = splitSale(subtotal, costTotal, 'nassau_pos').bsc_profit;
-  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-  const terminalLabel = CARD_TERMINALS.find(t => t.value === cardTerminal)?.label || cardTerminal;
-
-  async function completeSale() {
-    if (cart.length === 0 || completing) return;
-    if (paymentMethod === 'card' && !cardRef.trim()) { alert('Please enter the card payment reference number from the terminal.'); return; }
-    setCompleting(true);
-    const ref = genRef();
-    try {
-      const supabase = getSupabase();
-      const lineItems = cart.map((i) => ({ product_id: i.product_id, sku: i.sku, name: i.name, qty: i.qty, unit: i.unit_of_measure, unit_price: Number(i.unit_price.toFixed(2)), cost_per_unit: Number(i.cost_per_unit.toFixed(2)), line_total: Number((i.unit_price * i.qty).toFixed(2)), line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)) }));
-      const customerNameClean = customerName.trim();
-      const customerPhoneClean = customerPhone.trim();
-      let customerIdLinked: string | null = null;
-      if (customerNameClean || customerPhoneClean) {
-        try {
-          const upRes = await fetch('/api/customers/upsert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: customerNameClean, phone: customerPhoneClean || null, source: 'pos_nassau', order_total_bsd: Number(subtotal.toFixed(2)) }) });
-          const upJson = await upRes.json();
-          if (upJson?.customer_id) customerIdLinked = upJson.customer_id;
-        } catch (err) { console.warn('Customer upsert failed:', err); }
+      let promos: Promotion[] = []
+      if (today === 3) {
+        const { data: promoRaw, error: promoErr } = await supabase
+          .from('promotions')
+          .select('product_id, promo_price, display_label')
+          .eq('day_of_week', 3)
+          .eq('channel', 'nassau_pos')
+          .eq('is_active', true)
+        if (!promoErr && promoRaw) promos = promoRaw
       }
-      const cardNotes = paymentMethod === 'card' ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}` : null;
-      const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({ order_type: 'pos_sale_nassau', payment_method: paymentMethod, payment_status: 'paid_in_full', wholesale_items: lineItems, wholesale_cost_total: Number(subtotal.toFixed(2)), customer_name: customerNameClean || 'Walk-in', customer_phone: customerPhoneClean || null, customer_id: customerIdLinked, admin_notes: cardNotes, user_id: userId }).select('id').single();
-      if (insertError) { alert('Sale could not be saved: ' + insertError.message); setCompleting(false); return; }
-      const orderId = insertedOrder?.id ?? null;
-      recordSaleFinancials({ saleAmount: subtotal, costBasis: costTotal, channel: 'nassau_pos', orderId }).catch((err) => console.warn('Financials log failed:', err));
-      (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-          if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-          await fetch('/api/sales/inventory-write', { method: 'POST', headers, body: JSON.stringify({ location_code: 'NASSAU', order_id: orderId, channel: 'nassau_pos', items: lineItems.map((i) => ({ product_id: i.product_id, sku: i.sku, qty: i.qty, unit: i.unit })) }) });
-        } catch (err) { console.warn('Inventory decrement failed:', err); }
-      })();
-      if (customerPhoneClean && customerNameClean && customerNameClean !== 'Walk-in') {
-        fetch('/api/notifications/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'whatsapp', recipient_phone: customerPhoneClean, recipient_name: customerNameClean, template_key: 'order_confirmation_pos_nassau', body: `Hi ${customerNameClean}, thanks for shopping at BSC Marketplace Nassau. Your receipt: BSD $${subtotal.toFixed(2)} (${ref}). — BSC`, related_order_id: orderId, related_customer_id: customerIdLinked }) }).catch((err) => console.warn('Notification queue failed:', err));
+
+      const promoMap = new Map(promos.map(pr => [pr.product_id, pr]))
+
+      const merged: Product[] = (productsRaw ?? []).map((p: any) => {
+        const pricing = Array.isArray(p.product_pricing) ? p.product_pricing[0] : p.product_pricing
+        const promo = promoMap.get(p.id)
+        return {
+          id: p.id, sku: p.sku, barcode: p.barcode, name: p.name,
+          category: p.category, is_bsc_processed: p.is_bsc_processed,
+          sell_price: Number(pricing?.manual_unit_price ?? 0),
+          promo_price: promo ? Number(promo.promo_price) : null,
+          promo_label: promo?.display_label ?? null,
+          is_per_lb: PER_LB_SKUS.has(p.sku),
+        }
+      })
+
+      setProducts(merged)
+    } catch (err: any) {
+      setError(err.message ?? 'Failed to load catalog')
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase])
+
+  useEffect(() => { loadCatalog() }, [loadCatalog])
+
+  const activeCat = CATEGORIES.find(c => c.label === activeCategory) ?? CATEGORIES[0]
+  const filtered = products.filter(p => {
+    const matchCat = activeCat.match(p.category)
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.includes(search)
+    return matchCat && matchSearch
+  })
+
+  function addToCart(product: Product, weightLb?: number) {
+    if (product.is_per_lb && !weightLb) { setWeightInput({ productId: product.id, weight: '' }); return }
+    const unit_price = product.promo_price ?? product.sell_price
+    setCart(prev => {
+      if (!product.is_per_lb) {
+        const idx = prev.findIndex(i => i.product.id === product.id)
+        if (idx > -1) return prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity + 1 } : item)
       }
-      setLastSale({ ref, total: subtotal, cost_total: costTotal, profit: realProfit, items: [...cart], customer: customerName.trim() || 'Walk-in', payment_method: paymentMethod, card_ref: paymentMethod === 'card' ? cardRef : null, card_terminal: paymentMethod === 'card' ? cardTerminal : null });
-      setCart([]); setCustomerName(''); setCustomerPhone(''); setCardRef(''); setCartOpen(false);
-    } catch (e) {
-      alert('Sale failed: ' + (e instanceof Error ? e.message : 'unknown error'));
-    } finally { setCompleting(false); }
+      return [...prev, { product, quantity: 1, unit_price, weight_lb: weightLb }]
+    })
+    setWeightInput(null)
   }
 
-  const CardSection = () => (
-    <>
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>Card Terminal</label>
-        <select value={cardTerminal} onChange={(e) => setCardTerminal(e.target.value as CardTerminal)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #1a2e5a', fontSize: 13, fontWeight: 700, backgroundColor: '#f0f4ff', color: '#1a2e5a', outline: 'none', cursor: 'pointer' }}>
-          {CARD_TERMINALS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-      </div>
-      <input type="text" placeholder="Card terminal ref # (required)" value={cardRef} onChange={(e) => setCardRef(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, outline: 'none', boxSizing: 'border-box', marginBottom: 10, fontFamily: 'monospace' }} />
-    </>
-  );
+  function removeFromCart(idx: number) { setCart(prev => prev.filter((_, i) => i !== idx)) }
 
-  const CartContent = () => (
-    <>
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <input type="text" placeholder="Customer name (optional)" value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none' }} />
-        <input type="tel" placeholder="Phone (optional)" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none' }} />
-      </div>
+  function adjustQty(idx: number, delta: number) {
+    setCart(prev => prev.map((item, i) => {
+      if (i !== idx) return item
+      const qty = item.quantity + delta
+      return qty <= 0 ? null : { ...item, quantity: qty }
+    }).filter(Boolean) as CartItem[])
+  }
 
-      <div style={{ padding: '8px 16px' }}>
-        {cart.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 0', color: '#ccc' }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>🛒</div>
-            <div style={{ fontSize: 14 }}>Tap a product to add</div>
+  function confirmWeight() {
+    if (!weightInput) return
+    const product = products.find(p => p.id === weightInput.productId)
+    const lbs = parseFloat(weightInput.weight)
+    if (!product || isNaN(lbs) || lbs <= 0) return
+    addToCart(product, lbs)
+  }
+
+  const subtotal = cart.reduce((sum, item) => {
+    if (item.product.is_per_lb && item.weight_lb) return sum + item.unit_price * item.weight_lb
+    return sum + item.unit_price * item.quantity
+  }, 0)
+  const vatAmount = 0
+  const total = subtotal + vatAmount
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+
+  async function handleCheckout() {
+    if (!cart.length) return
+    setSubmitting(true)
+    try {
+      const terminalLabel = TERMINALS.find(t => t.value === terminal)?.label ?? terminal
+      const adminNotes = cardRef ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}` : `Terminal: ${terminalLabel}`
+      const items = cart.map(item => ({
+        product_id: item.product.id, sku: item.product.sku, name: item.product.name,
+        quantity: item.quantity, unit_price: item.unit_price, weight_lb: item.weight_lb ?? null,
+        line_total: item.product.is_per_lb && item.weight_lb ? item.unit_price * item.weight_lb : item.unit_price * item.quantity,
+        promo_applied: item.product.promo_price !== null, promo_label: item.product.promo_label ?? null,
+      }))
+      const { error: orderErr } = await supabase.from('orders').insert({
+        location: 'bsc_marketplace_nassau', channel: 'nassau_pos', items,
+        subtotal, vat_amount: vatAmount, total, payment_method: 'card',
+        terminal_type: terminal, admin_notes: adminNotes, status: 'completed',
+      })
+      if (orderErr) throw orderErr
+      setOrderSuccess(true)
+      setCart([])
+      setCardRef('')
+      setShowCheckout(false)
+      setShowCart(false)
+      setTimeout(() => setOrderSuccess(false), 4000)
+    } catch (err: any) {
+      alert('Order failed: ' + (err.message ?? 'Unknown error'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+
+      <header className="sticky top-0 z-40 bg-gray-900 border-b border-gray-800 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-bold text-lg leading-tight" style={{ color: '#f5c518', fontFamily: "'Playfair Display', serif" }}>BSC Marketplace</h1>
+            <p className="text-xs text-gray-400">Nassau POS · Fire Trail Road</p>
           </div>
-        ) : cart.map((item) => (
-          <div key={item.product_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-              <div style={{ color: '#999', fontSize: 12 }}>${item.unit_price.toFixed(2)} / {item.unit_of_measure}</div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button onClick={() => changeQty(item.product_id, -1)} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e5e7eb', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-              <span style={{ fontWeight: 800, fontSize: 15, minWidth: 28, textAlign: 'center' }}>{item.qty}</span>
-              <button onClick={() => changeQty(item.product_id, 1)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-            </div>
-            <div style={{ minWidth: 60, textAlign: 'right' }}>
-              <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 15 }}>${(item.unit_price * item.qty).toFixed(2)}</div>
-              <button onClick={() => removeItem(item.product_id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', padding: 0 }}>remove</button>
-            </div>
+          <div className="flex items-center gap-3">
+            {isWednesday && <span className="text-xs font-bold px-2 py-1 rounded-full animate-pulse" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>🐟 Wed Special</span>}
+            <button onClick={() => setShowCart(true)} className="relative bg-gray-800 rounded-xl px-4 py-2 text-sm font-semibold" style={{ color: '#f5c518' }}>
+              🛒 Cart
+              {cartCount > 0 && <span className="absolute -top-1 -right-1 text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>{cartCount}</span>}
+            </button>
           </div>
-        ))}
-      </div>
-
-      <div style={{ padding: '14px 16px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafafa' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ color: '#666', fontSize: 15 }}>Subtotal</span>
-          <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 15 }}>${subtotal.toFixed(2)}</span>
         </div>
-        {costTotal > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, padding: '8px 10px', backgroundColor: '#e8f5e9', borderRadius: 8 }}>
-            <span style={{ color: '#2e7d32', fontSize: 14, fontWeight: 700 }}>Real Profit</span>
-            <span style={{ color: '#2e7d32', fontWeight: 900, fontSize: 15 }}>${realProfit.toFixed(2)}</span>
-          </div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
-          {(['cash', 'card', 'transfer'] as const).map((m) => (
-            <button key={m} onClick={() => setPaymentMethod(m)} style={{ padding: 10, borderRadius: 8, border: '2px solid', borderColor: paymentMethod === m ? '#1a2e5a' : '#e5e7eb', backgroundColor: paymentMethod === m ? '#1a2e5a' : '#fff', color: paymentMethod === m ? '#f4c842' : '#666', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              {m === 'cash' ? '💵' : m === 'card' ? '💳' : '🏦'} {m}
+        <div className="mt-3">
+          <input type="text" placeholder="Search product or scan SKU..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-2 text-sm border border-gray-700 focus:outline-none focus:border-yellow-400" />
+        </div>
+        <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+          {CATEGORIES.map(cat => (
+            <button key={cat.label} onClick={() => setActiveCategory(cat.label)} className="shrink-0 text-xs px-3 py-1.5 rounded-full font-medium transition-colors"
+              style={activeCategory === cat.label ? { backgroundColor: '#f5c518', color: '#060d1f', fontWeight: 700 } : { backgroundColor: '#1f2937', color: '#9ca3af' }}>
+              {cat.label}
             </button>
           ))}
         </div>
-        {paymentMethod === 'card' && <CardSection />}
-        <button onClick={completeSale} disabled={cart.length === 0 || completing} style={{ width: '100%', backgroundColor: cart.length === 0 || completing ? '#e5e7eb' : '#f4c842', color: cart.length === 0 || completing ? '#999' : '#1a2e5a', border: 'none', borderRadius: 12, padding: 16, fontWeight: 900, fontSize: 17, cursor: cart.length === 0 || completing ? 'not-allowed' : 'pointer' }}>
-          {completing ? 'Saving…' : cart.length === 0 ? 'Add Items First' : `Complete Sale · $${subtotal.toFixed(2)}`}
-        </button>
-      </div>
-    </>
-  );
+      </header>
 
-  return (
-    <>
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+      {isWednesday && (
+        <div className="mx-4 mt-4 rounded-xl p-3 text-center" style={{ backgroundColor: '#1a1500', border: '1px solid #f5c518' }}>
+          <p className="text-sm font-bold" style={{ color: '#f5c518' }}>🐟 Wednesday Salmon Special — Prices applied automatically</p>
+          <p className="text-xs text-gray-400 mt-1">4oz $2.75 · 6oz $5.50 · 8oz $7.20 · 2-3lb Fillet $26.00/piece</p>
+        </div>
+      )}
 
-        .pos-shell {
-          display: flex;
-          height: 100dvh;
-          background: #f8f9fa;
-          overflow: hidden;
-        }
-        .pos-products {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-          min-width: 0;
-        }
-        .pos-product-scroll {
-          flex: 1;
-          overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-          padding: 14px;
-          padding-bottom: 100px;
-        }
-        .pos-cart-desktop {
-          width: 360px;
-          flex-shrink: 0;
-          border-left: 1px solid #e2e8f0;
-          display: flex;
-          flex-direction: column;
-          overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .pos-cart-fab { display: none; }
-        .product-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-          gap: 10px;
-        }
+      {orderSuccess && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl px-6 py-3 text-sm font-bold shadow-xl" style={{ backgroundColor: '#16a34a', color: 'white' }}>✓ Sale saved successfully</div>
+      )}
 
-        @media (max-width: 768px) {
-          .pos-cart-desktop { display: none; }
-          .pos-cart-fab {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: fixed;
-            bottom: 24px;
-            right: 20px;
-            z-index: 50;
-            background: #f4c842;
-            color: #1a2e5a;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 6px 24px rgba(0,0,0,0.2);
-            font-size: 24px;
-            font-weight: 900;
-          }
-          .pos-cart-fab-badge {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background: #ef4444;
-            color: #fff;
-            border-radius: 50%;
-            width: 22px;
-            height: 22px;
-            font-size: 11px;
-            font-weight: 900;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .product-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
-          .pos-product-scroll { padding-bottom: 120px; }
-        }
+      <main className="flex-1 p-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-48"><p className="text-gray-400 text-sm animate-pulse">Loading catalog...</p></div>
+        ) : error ? (
+          <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 text-sm text-red-300">
+            <p className="font-bold">Failed to load catalog</p>
+            <p className="mt-1 text-xs">{error}</p>
+            <button onClick={loadCatalog} className="mt-3 text-xs underline">Retry</button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center text-gray-500 py-16 text-sm">No products found</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {filtered.map(product => {
+              const displayPrice = product.promo_price ?? product.sell_price
+              const hasPromo = product.promo_price !== null
+              return (
+                <button key={product.id} onClick={() => addToCart(product)} className="relative bg-gray-900 border rounded-xl p-3 text-left active:scale-95 transition-transform" style={{ borderColor: hasPromo ? '#f5c518' : '#374151' }}>
+                  {hasPromo && <span className="absolute top-2 right-2 text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>Special</span>}
+                  {product.is_bsc_processed && <span className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded-full bg-blue-900 text-blue-300">BSC</span>}
+                  <p className="text-xs text-gray-500 mt-5 mb-1">{product.sku}</p>
+                  <p className="text-sm font-semibold text-white leading-tight line-clamp-2">{product.name}</p>
+                  <div className="mt-2 flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-base font-bold" style={{ color: '#f5c518' }}>${displayPrice.toFixed(2)}</span>
+                    {hasPromo && <span className="text-xs text-gray-500 line-through">${product.sell_price.toFixed(2)}</span>}
+                    {product.is_per_lb && <span className="text-xs text-gray-400">/lb</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </main>
 
-        @media (min-width: 1200px) {
-          .pos-cart-desktop { width: 400px; }
-          .product-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-        }
-
-        .mobile-cart-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 60;
-          background: rgba(0,0,0,0.5);
-        }
-        .mobile-cart-sheet {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          max-height: 95dvh;
-          z-index: 61;
-          background: #fff;
-          border-radius: 20px 20px 0 0;
-          display: flex;
-          flex-direction: column;
-          box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
-          overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-      `}</style>
-
-      <div className="pos-shell">
-
-        {/* PRODUCTS PANEL */}
-        <div className="pos-products">
-          <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 16px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Link href="/dashboard" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: 20 }}>←</Link>
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: 17, color: '#1a2e5a' }}>BSC POS</div>
-                  <div style={{ fontSize: 11, color: '#94a3b8' }}>Nassau · Firetrail Road</div>
-                </div>
-              </div>
-              <Link href="/pos/scan" style={{ backgroundColor: '#f4c842', color: '#1a2e5a', textDecoration: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 800 }}>
-                📷 Scan
-              </Link>
+      {weightInput && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
+            <h3 className="font-bold text-lg mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>Enter Weight (lbs)</h3>
+            <p className="text-sm text-gray-400 mb-4">{products.find(p => p.id === weightInput.productId)?.name}</p>
+            <input type="number" step="0.01" min="0.01" placeholder="e.g. 2.5" value={weightInput.weight}
+              onChange={e => setWeightInput(prev => prev ? { ...prev, weight: e.target.value } : null)}
+              onKeyDown={e => e.key === 'Enter' && confirmWeight()}
+              className="w-full bg-gray-800 text-white text-2xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 text-center" autoFocus />
+            <p className="text-xs text-gray-500 text-center mt-1">pounds</p>
+            {weightInput.weight && !isNaN(parseFloat(weightInput.weight)) && (
+              <p className="text-center text-sm mt-3" style={{ color: '#f5c518' }}>
+                Total: <strong>${((products.find(p => p.id === weightInput.productId)?.promo_price ?? products.find(p => p.id === weightInput.productId)?.sell_price ?? 0) * parseFloat(weightInput.weight)).toFixed(2)}</strong>
+              </p>
+            )}
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setWeightInput(null)} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Cancel</button>
+              <button onClick={confirmWeight} className="flex-1 rounded-xl py-3 text-sm font-bold" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>Add to Cart</button>
             </div>
-            <input
-              type="text" placeholder="Search by name, SKU, or barcode…"
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none', marginBottom: 10 }}
-            />
-            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-              <button onClick={() => setCategory('all')} style={{ padding: '6px 12px', borderRadius: 20, border: 'none', backgroundColor: category === 'all' ? '#1a2e5a' : '#f0f0f0', color: category === 'all' ? '#fff' : '#555', fontSize: 12, fontWeight: category === 'all' ? 800 : 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                All ({products.length})
+          </div>
+        </div>
+      )}
+
+      {showCart && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCart(false)} />
+          <div className="relative bg-gray-900 rounded-t-3xl border-t border-gray-700 flex flex-col" style={{ maxHeight: '95dvh', WebkitOverflowScrolling: 'touch' as any }}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-800 shrink-0">
+              <h2 className="font-bold text-lg" style={{ fontFamily: "'Playfair Display', serif" }}>Cart ({cartCount})</h2>
+              <button onClick={() => setShowCart(false)} className="text-gray-400 text-2xl leading-none w-8 h-8 flex items-center justify-center">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {cart.length === 0 ? (
+                <p className="text-center text-gray-500 py-12 text-sm">Cart is empty</p>
+              ) : (
+                <div className="space-y-3">
+                  {cart.map((item, i) => {
+                    const lineTotal = item.product.is_per_lb && item.weight_lb ? item.unit_price * item.weight_lb : item.unit_price * item.quantity
+                    return (
+                      <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-xl p-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{item.product.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            ${item.unit_price.toFixed(2)}{item.product.is_per_lb && item.weight_lb ? ` × ${item.weight_lb}lb` : item.quantity > 1 ? ` × ${item.quantity}` : ''}
+                            {item.product.promo_price !== null && <span className="ml-1.5" style={{ color: '#f5c518' }}>★ Special</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!item.product.is_per_lb && (
+                            <>
+                              <button onClick={() => adjustQty(i, -1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold flex items-center justify-center">−</button>
+                              <span className="text-sm w-4 text-center">{item.quantity}</span>
+                              <button onClick={() => adjustQty(i, 1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold flex items-center justify-center">+</button>
+                            </>
+                          )}
+                          <span className="text-sm font-bold ml-1" style={{ color: '#f5c518' }}>${lineTotal.toFixed(2)}</span>
+                          <button onClick={() => removeFromCart(i)} className="text-red-400 text-xl ml-1 leading-none">×</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="px-5 pb-6 pt-3 border-t border-gray-800 shrink-0">
+              <div className="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm text-gray-400 mb-3"><span>VAT (0% — food items)</span><span>$0.00</span></div>
+              <div className="flex justify-between font-bold text-xl mb-4"><span>Total</span><span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span></div>
+              <button onClick={() => setShowCheckout(true)} disabled={cart.length === 0} className="w-full py-4 rounded-2xl font-bold text-base disabled:opacity-40" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                Charge ${total.toFixed(2)}
               </button>
-              {categoriesPresent.map((cat) => {
-                const count = products.filter((p) => p.category === cat).length;
-                return (
-                  <button key={cat} onClick={() => setCategory(cat)} style={{ padding: '6px 12px', borderRadius: 20, border: 'none', backgroundColor: category === cat ? '#1a2e5a' : '#f0f0f0', color: category === cat ? '#fff' : '#555', fontSize: 12, fontWeight: category === cat ? 800 : 500, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {CATEGORY_EMOJI[cat] || '📦'} {CATEGORY_LABEL[cat] || cat} ({count})
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="pos-product-scroll">
-            {productsLoading && (
-              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>Loading catalog…
-              </div>
-            )}
-            {productsError && (
-              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 16, color: '#991b1b' }}>
-                <div style={{ fontWeight: 800, marginBottom: 4 }}>Catalog could not load</div>
-                <div style={{ fontSize: 12 }}>{productsError}</div>
-                <button onClick={loadCatalog} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 8, border: '1px solid #991b1b', backgroundColor: '#fff', color: '#991b1b', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
-              </div>
-            )}
-            {!productsLoading && !productsError && unsellableCount > 0 && products.length > 0 && (
-              <div style={{ backgroundColor: '#fffbea', border: '1px solid #fde68a', borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 12, color: '#92400e' }}>
-                ⚠️ {unsellableCount} product{unsellableCount !== 1 ? 's' : ''} hidden — missing pricing.
-              </div>
-            )}
-            {!productsLoading && !productsError && products.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>🆕</div>
-                <div style={{ fontWeight: 700 }}>No sellable products yet</div>
-                <Link href="/pos/scan" style={{ display: 'inline-block', marginTop: 16, backgroundColor: '#1a2e5a', color: '#f4c842', padding: '10px 20px', borderRadius: 10, textDecoration: 'none', fontWeight: 800, fontSize: 13 }}>📷 Open Scanner</Link>
-              </div>
-            )}
-            {!productsLoading && !productsError && filtered.length === 0 && products.length > 0 && (
-              <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontWeight: 700 }}>No matches</div>
-              </div>
-            )}
-            <div className="product-grid">
-              {filtered.map((p) => (
-                <button key={p.id} onClick={() => addToCart(p)} style={{ backgroundColor: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'center', width: '100%' }}>
-                  {p.image_url
-                    ? <img src={p.image_url} alt={p.name} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8 }} />
-                    : <span style={{ fontSize: 32 }}>{CATEGORY_EMOJI[p.category] || '📦'}</span>
-                  }
-                  <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 12, lineHeight: 1.3 }}>{p.name}</span>
-                  <span style={{ color: '#94a3b8', fontSize: 10, fontFamily: 'monospace' }}>{p.sku}</span>
-                  <span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16 }}>${p.unit_price.toFixed(2)}</span>
-                  <span style={{ color: '#6b7280', fontSize: 10 }}>per {p.unit_of_measure}</span>
-                </button>
-              ))}
             </div>
           </div>
         </div>
+      )}
 
-        {/* CART — Desktop */}
-        <div className="pos-cart-desktop">
-          <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#1a2e5a', flexShrink: 0 }}>
-            <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 16 }}>Current Sale</div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
+      {showCheckout && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
+            <h3 className="font-bold text-xl mb-5" style={{ fontFamily: "'Playfair Display', serif" }}>Checkout</h3>
+            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Terminal</label>
+            <select value={terminal} onChange={e => setTerminal(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400">
+              {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # (optional)</label>
+            <input type="text" placeholder="e.g. 4521" value={cardRef} onChange={e => setCardRef(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-5 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+            <div className="flex justify-between font-bold text-xl mb-5"><span>Total</span><span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span></div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCheckout(false)} disabled={submitting} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Back</button>
+              <button onClick={handleCheckout} disabled={submitting} className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                {submitting ? 'Saving...' : 'Confirm Sale'}
+              </button>
+            </div>
           </div>
-          <CartContent />
         </div>
-
-        {/* CART — Mobile FAB */}
-        <button className="pos-cart-fab" onClick={() => setCartOpen(true)}>
-          🛒
-          {cartCount > 0 && <span className="pos-cart-fab-badge">{cartCount}</span>}
-        </button>
-
-        {/* CART — Mobile Sheet */}
-        {cartOpen && (
-          <>
-            <div className="mobile-cart-overlay" onClick={() => setCartOpen(false)} />
-            <div className="mobile-cart-sheet">
-              <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', flexShrink: 0 }}>
-                <div>
-                  <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 16 }}>Current Sale</div>
-                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
-                </div>
-                <button onClick={() => setCartOpen(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 24, cursor: 'pointer', padding: '0 4px' }}>✕</button>
-              </div>
-              <CartContent />
-            </div>
-          </>
-        )}
-
-        {/* SALE COMPLETE MODAL */}
-        {lastSale && (
-          <>
-            <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 70 }} />
-            <div style={{ position: 'fixed', inset: 16, maxWidth: 440, margin: '0 auto', backgroundColor: '#fff', borderRadius: 20, zIndex: 71, overflowY: 'auto', WebkitOverflowScrolling: 'touch' as never, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', height: 'fit-content', maxHeight: 'calc(100dvh - 32px)' }}>
-              <div style={{ backgroundColor: '#1a2e5a', padding: 24, textAlign: 'center', borderRadius: '20px 20px 0 0' }}>
-                <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
-                <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 22 }}>Sale Complete</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 4, fontFamily: 'monospace' }}>{lastSale.ref}</div>
-              </div>
-              <div style={{ padding: 24 }}>
-                <div style={{ marginBottom: 14, fontSize: 13, color: '#666', lineHeight: 1.7 }}>
-                  <strong>Customer:</strong> {lastSale.customer}<br />
-                  <strong>Payment:</strong> {lastSale.payment_method.toUpperCase()}
-                  {lastSale.card_terminal && ` · ${CARD_TERMINALS.find(t => t.value === lastSale.card_terminal)?.label}`}
-                  {lastSale.card_ref ? ` (Ref: ${lastSale.card_ref})` : ''}<br />
-                  <strong>Date:</strong> {new Date().toLocaleString()}
-                </div>
-                {lastSale.items.map((item) => (
-                  <div key={item.product_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f5f5f5' }}>
-                    <span style={{ color: '#444', fontSize: 14 }}>{item.name} × {item.qty}</span>
-                    <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 14 }}>${(item.unit_price * item.qty).toFixed(2)}</span>
-                  </div>
-                ))}
-                <div style={{ marginTop: 16, padding: 14, backgroundColor: '#fef9e7', borderRadius: 12, marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ color: '#666', fontSize: 15, fontWeight: 700 }}>Total</span>
-                    <span style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 20 }}>${lastSale.total.toFixed(2)}</span>
-                  </div>
-                  {lastSale.cost_total > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#2e7d32', fontSize: 14, fontWeight: 700 }}>Real Profit</span>
-                      <span style={{ color: '#2e7d32', fontWeight: 900, fontSize: 16 }}>${lastSale.profit.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-                <a href={`https://wa.me/?text=${encodeURIComponent(`BSC Marketplace Receipt\nRef: ${lastSale.ref}\nCustomer: ${lastSale.customer}\nTotal: $${lastSale.total.toFixed(2)}\nPayment: ${lastSale.payment_method.toUpperCase()}\n\nThank you for shopping with BSC!`)}`} target="_blank" rel="noreferrer" style={{ display: 'block', backgroundColor: '#25D366', color: '#fff', textDecoration: 'none', borderRadius: 12, padding: 14, textAlign: 'center', fontWeight: 800, fontSize: 15, marginBottom: 10 }}>
-                  💬 Send Receipt via WhatsApp
-                </a>
-                <button onClick={() => setLastSale(null)} style={{ width: '100%', backgroundColor: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 12, padding: 14, fontWeight: 900, fontSize: 15, cursor: 'pointer' }}>
-                  + New Sale
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </>
-  );
+      )}
+    </div>
+  )
 }
