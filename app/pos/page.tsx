@@ -45,6 +45,12 @@ const TERMINALS = [
   { value: 'rbc_physical_terminal', label: '🖥️ RBC Physical Terminal' },
 ]
 
+const PAYMENT_METHODS = [
+  { value: 'cash', label: '💵 Cash' },
+  { value: 'card', label: '💳 Card' },
+  { value: 'wire', label: '🏦 Wire Transfer' },
+]
+
 const CATEGORIES = [
   { label: 'All',     match: (c: string) => true },
   { label: 'Seafood', match: (c: string) => c.includes('seafood') },
@@ -66,8 +72,11 @@ export default function POSPage() {
   const [error, setError] = useState<string | null>(null)
   const [showCart, setShowCart] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState('cash')
   const [terminal, setTerminal] = useState('rbc_plug_and_play')
   const [cardRef, setCardRef] = useState('')
+  const [cashTendered, setCashTendered] = useState('')
+  const [wireRef, setWireRef] = useState('')
   const [orderSuccess, setOrderSuccess] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [weightInput, setWeightInput] = useState<{ productId: string; weight: string } | null>(null)
@@ -173,27 +182,44 @@ export default function POSPage() {
   const total = subtotal + vatAmount
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
+  const cashTenderedNum = parseFloat(cashTendered) || 0
+  const changeDue = paymentMethod === 'cash' && cashTenderedNum >= total ? cashTenderedNum - total : 0
+
   async function handleCheckout() {
     if (!cart.length) return
     setSubmitting(true)
     try {
-      const terminalLabel = TERMINALS.find(t => t.value === terminal)?.label ?? terminal
-      const adminNotes = cardRef ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}` : `Terminal: ${terminalLabel}`
+      let adminNotes = ''
+      if (paymentMethod === 'card') {
+        const terminalLabel = TERMINALS.find(t => t.value === terminal)?.label ?? terminal
+        adminNotes = cardRef ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}` : `Terminal: ${terminalLabel}`
+      } else if (paymentMethod === 'cash') {
+        adminNotes = `Cash tendered: $${cashTenderedNum.toFixed(2)} | Change: $${changeDue.toFixed(2)}`
+      } else if (paymentMethod === 'wire') {
+        adminNotes = wireRef ? `Wire ref: ${wireRef}` : 'Wire transfer'
+      }
+
       const items = cart.map(item => ({
         product_id: item.product.id, sku: item.product.sku, name: item.product.name,
         quantity: item.quantity, unit_price: item.unit_price, weight_lb: item.weight_lb ?? null,
         line_total: item.product.is_per_lb && item.weight_lb ? item.unit_price * item.weight_lb : item.unit_price * item.quantity,
         promo_applied: item.product.promo_price !== null, promo_label: item.product.promo_label ?? null,
       }))
+
       const { error: orderErr } = await supabase.from('orders').insert({
         location: 'bsc_marketplace_nassau', channel: 'nassau_pos', items,
-        subtotal, vat_amount: vatAmount, total, payment_method: 'card',
-        terminal_type: terminal, admin_notes: adminNotes, status: 'completed',
+        subtotal, vat_amount: vatAmount, total,
+        payment_method: paymentMethod,
+        terminal_type: paymentMethod === 'card' ? terminal : null,
+        admin_notes: adminNotes, status: 'completed',
       })
       if (orderErr) throw orderErr
+
       setOrderSuccess(true)
       setCart([])
       setCardRef('')
+      setCashTendered('')
+      setWireRef('')
       setShowCheckout(false)
       setShowCart(false)
       setTimeout(() => setOrderSuccess(false), 4000)
@@ -203,6 +229,10 @@ export default function POSPage() {
       setSubmitting(false)
     }
   }
+
+  const checkoutReady = paymentMethod === 'card' ? true
+    : paymentMethod === 'cash' ? (cashTenderedNum >= total && total > 0)
+    : true
 
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -359,16 +389,60 @@ export default function POSPage() {
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
           <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
             <h3 className="font-bold text-xl mb-5" style={{ fontFamily: "'Playfair Display', serif" }}>Checkout</h3>
-            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Terminal</label>
-            <select value={terminal} onChange={e => setTerminal(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400">
-              {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # (optional)</label>
-            <input type="text" placeholder="e.g. 4521" value={cardRef} onChange={e => setCardRef(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-5 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+
+            {/* Payment method selector */}
+            <label className="block text-xs text-gray-400 mb-2 uppercase tracking-wide">Payment Method</label>
+            <div className="grid grid-cols-3 gap-2 mb-5">
+              {PAYMENT_METHODS.map(pm => (
+                <button key={pm.value} onClick={() => setPaymentMethod(pm.value)}
+                  className="py-3 rounded-xl text-xs font-bold transition-colors"
+                  style={paymentMethod === pm.value ? { backgroundColor: '#f5c518', color: '#060d1f' } : { backgroundColor: '#1f2937', color: '#9ca3af' }}>
+                  {pm.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Card fields */}
+            {paymentMethod === 'card' && (
+              <>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Terminal</label>
+                <select value={terminal} onChange={e => setTerminal(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400">
+                  {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # (optional)</label>
+                <input type="text" placeholder="e.g. 4521" value={cardRef} onChange={e => setCardRef(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+              </>
+            )}
+
+            {/* Cash fields */}
+            {paymentMethod === 'cash' && (
+              <>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Cash Tendered ($)</label>
+                <input type="number" step="0.01" min="0" placeholder={total.toFixed(2)} value={cashTendered} onChange={e => setCashTendered(e.target.value)} className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 mb-3 border border-gray-700 text-center focus:outline-none focus:border-yellow-400" autoFocus />
+                {cashTenderedNum >= total && total > 0 && (
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#052e16' }}>
+                    <p className="text-xs text-gray-400">Change Due</p>
+                    <p className="text-2xl font-bold" style={{ color: '#4ade80' }}>${changeDue.toFixed(2)}</p>
+                  </div>
+                )}
+                {cashTenderedNum > 0 && cashTenderedNum < total && (
+                  <p className="text-xs text-red-400 text-center mb-4">Amount is less than total</p>
+                )}
+              </>
+            )}
+
+            {/* Wire fields */}
+            {paymentMethod === 'wire' && (
+              <>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Wire Ref # (optional)</label>
+                <input type="text" placeholder="e.g. TRF-20260513" value={wireRef} onChange={e => setWireRef(e.target.value)} className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+              </>
+            )}
+
             <div className="flex justify-between font-bold text-xl mb-5"><span>Total</span><span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span></div>
             <div className="flex gap-3">
               <button onClick={() => setShowCheckout(false)} disabled={submitting} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Back</button>
-              <button onClick={handleCheckout} disabled={submitting} className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+              <button onClick={handleCheckout} disabled={submitting || !checkoutReady} className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
                 {submitting ? 'Saving...' : 'Confirm Sale'}
               </button>
             </div>
