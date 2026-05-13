@@ -30,6 +30,10 @@ function adminClient(): SupabaseClient | null {
   if (!url || !service) return null;
   return createClient(url, service, {
     auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'public' },
+    global: {
+      headers: { 'x-my-custom-header': 'bsc-admin' },
+    },
   });
 }
 
@@ -136,6 +140,25 @@ export async function POST(req: Request) {
     case 'list': {
       const users = await selectAll(admin);
       return NextResponse.json({ ok: true, users });
+    }
+
+    case 'debug': {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'missing';
+      const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const hasSecret = !!process.env.ADMIN_SECRET;
+      const { data, error, count } = await admin
+        .from('users')
+        .select('id, email, role', { count: 'exact' })
+        .limit(10);
+      return NextResponse.json({
+        ok: true,
+        url: url.slice(0, 40),
+        hasKey,
+        hasSecret,
+        data,
+        error: error?.message || null,
+        count,
+      });
     }
 
     case 'create': {
