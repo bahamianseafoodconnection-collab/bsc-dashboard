@@ -85,7 +85,6 @@ async function selectAll(admin: SupabaseClient) {
 
   if (!error) return data || [];
 
-  // Fall back to staff_roster
   const { data: roster, error: rosterErr } = await admin
     .from('staff_roster')
     .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at')
