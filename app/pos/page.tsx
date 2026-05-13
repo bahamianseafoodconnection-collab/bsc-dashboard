@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
@@ -38,6 +38,14 @@ interface Promotion {
   product_id: string
   promo_price: number
   display_label: string
+}
+
+interface Customer {
+  id: string
+  full_name: string
+  phone: string
+  total_orders: number
+  total_spent: number
 }
 
 const TERMINALS = [
@@ -80,6 +88,14 @@ export default function POSPage() {
   const [orderSuccess, setOrderSuccess] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [weightInput, setWeightInput] = useState<{ productId: string; weight: string } | null>(null)
+
+  // Customer state
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [customerName, setCustomerName] = useState('')
+  const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null)
+  const [customerLookingUp, setCustomerLookingUp] = useState(false)
+  const [customerStatus, setCustomerStatus] = useState<'idle' | 'found' | 'new'>('idle')
+  const phoneSearchTimeout = useRef<NodeJS.Timeout | null>(null)
 
   const loadCatalog = useCallback(async () => {
     setLoading(true)
@@ -136,6 +152,43 @@ export default function POSPage() {
 
   useEffect(() => { loadCatalog() }, [loadCatalog])
 
+  // Phone lookup — fires 600ms after user stops typing
+  function handlePhoneChange(val: string) {
+    setCustomerPhone(val)
+    setFoundCustomer(null)
+    setCustomerStatus('idle')
+    setCustomerName('')
+    if (phoneSearchTimeout.current) clearTimeout(phoneSearchTimeout.current)
+    if (val.length < 7) return
+    phoneSearchTimeout.current = setTimeout(async () => {
+      setCustomerLookingUp(true)
+      const { data } = await supabase
+        .from('customers')
+        .select('id, full_name, phone, total_orders, total_spent')
+        .eq('phone', val.trim())
+        .maybeSingle()
+      setCustomerLookingUp(false)
+      if (data) {
+        setFoundCustomer(data)
+        setCustomerName(data.full_name)
+        setCustomerStatus('found')
+      } else {
+        setCustomerStatus('new')
+      }
+    }, 600)
+  }
+
+  function resetCheckout() {
+    setCustomerPhone('')
+    setCustomerName('')
+    setFoundCustomer(null)
+    setCustomerStatus('idle')
+    setCardRef('')
+    setCashTendered('')
+    setWireRef('')
+    setPaymentMethod('cash')
+  }
+
   const activeCat = CATEGORIES.find(c => c.label === activeCategory) ?? CATEGORIES[0]
   const filtered = products.filter(p => {
     const matchCat = activeCat.match(p.category)
@@ -181,14 +234,42 @@ export default function POSPage() {
   const vatAmount = 0
   const total = subtotal + vatAmount
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-
   const cashTenderedNum = parseFloat(cashTendered) || 0
   const changeDue = paymentMethod === 'cash' && cashTenderedNum >= total ? cashTenderedNum - total : 0
+  const checkoutReady = paymentMethod === 'cash' ? (cashTenderedNum >= total && total > 0) : true
 
   async function handleCheckout() {
     if (!cart.length) return
     setSubmitting(true)
     try {
+      // Upsert customer
+      let customerId: string | null = null
+      const phoneClean = customerPhone.trim()
+      const nameClean = customerName.trim()
+
+      if (phoneClean && nameClean) {
+        if (foundCustomer) {
+          // Existing customer — update stats
+          await supabase.from('customers').update({
+            last_seen_at: new Date().toISOString(),
+            total_orders: foundCustomer.total_orders + 1,
+            total_spent: Number(foundCustomer.total_spent) + total,
+          }).eq('id', foundCustomer.id)
+          customerId = foundCustomer.id
+        } else {
+          // New customer — insert
+          const { data: newCust } = await supabase.from('customers').insert({
+            full_name: nameClean,
+            phone: phoneClean,
+            total_orders: 1,
+            total_spent: total,
+            created_by: '7b62672c-9259-4c1b-98d4-3b78369a52ab',
+          }).select('id').single()
+          customerId = newCust?.id ?? null
+        }
+      }
+
+      // Build admin notes
       let adminNotes = ''
       if (paymentMethod === 'card') {
         const terminalLabel = TERMINALS.find(t => t.value === terminal)?.label ?? terminal
@@ -212,14 +293,15 @@ export default function POSPage() {
         payment_method: paymentMethod,
         terminal_type: paymentMethod === 'card' ? terminal : null,
         admin_notes: adminNotes, status: 'completed',
+        customer_id: customerId,
+        customer_name: nameClean || null,
+        customer_phone: phoneClean || null,
       })
       if (orderErr) throw orderErr
 
       setOrderSuccess(true)
       setCart([])
-      setCardRef('')
-      setCashTendered('')
-      setWireRef('')
+      resetCheckout()
       setShowCheckout(false)
       setShowCart(false)
       setTimeout(() => setOrderSuccess(false), 4000)
@@ -229,10 +311,6 @@ export default function POSPage() {
       setSubmitting(false)
     }
   }
-
-  const checkoutReady = paymentMethod === 'card' ? true
-    : paymentMethod === 'cash' ? (cashTenderedNum >= total && total > 0)
-    : true
 
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -386,11 +464,54 @@ export default function POSPage() {
       )}
 
       {showCheckout && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
-          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700 overflow-y-auto" style={{ maxHeight: '95dvh' }}>
             <h3 className="font-bold text-xl mb-5" style={{ fontFamily: "'Playfair Display', serif" }}>Checkout</h3>
 
-            {/* Payment method selector */}
+            {/* ── Customer lookup ── */}
+            <div className="mb-5 rounded-xl p-4" style={{ backgroundColor: '#0d1117', border: '1px solid #374151' }}>
+              <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Customer Phone</label>
+              <input
+                type="tel"
+                placeholder="e.g. 242-555-0100"
+                value={customerPhone}
+                onChange={e => handlePhoneChange(e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-xl px-4 py-2.5 mb-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400"
+              />
+
+              {customerLookingUp && <p className="text-xs text-gray-400 animate-pulse">Looking up customer...</p>}
+
+              {customerStatus === 'found' && foundCustomer && (
+                <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: '#052e16' }}>
+                  <p className="text-xs font-bold" style={{ color: '#4ade80' }}>✓ Returning Customer</p>
+                  <p className="text-sm font-semibold text-white mt-0.5">{foundCustomer.full_name}</p>
+                  <p className="text-xs text-gray-400">{foundCustomer.total_orders} orders · ${Number(foundCustomer.total_spent).toFixed(2)} lifetime</p>
+                </div>
+              )}
+
+              {customerStatus === 'new' && (
+                <>
+                  <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: '#1c1200' }}>
+                    <p className="text-xs font-bold" style={{ color: '#f5c518' }}>✦ New Customer</p>
+                    <p className="text-xs text-gray-400">Enter name to save to database</p>
+                  </div>
+                  <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Customer Name</label>
+                  <input
+                    type="text"
+                    placeholder="Full name"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="w-full bg-gray-800 text-white rounded-xl px-4 py-2.5 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400"
+                  />
+                </>
+              )}
+
+              {customerStatus === 'idle' && !customerLookingUp && (
+                <p className="text-xs text-gray-500">Optional — enter phone to look up or create customer</p>
+              )}
+            </div>
+
+            {/* ── Payment method ── */}
             <label className="block text-xs text-gray-400 mb-2 uppercase tracking-wide">Payment Method</label>
             <div className="grid grid-cols-3 gap-2 mb-5">
               {PAYMENT_METHODS.map(pm => (
@@ -402,7 +523,7 @@ export default function POSPage() {
               ))}
             </div>
 
-            {/* Card fields */}
+            {/* Card */}
             {paymentMethod === 'card' && (
               <>
                 <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Terminal</label>
@@ -414,7 +535,7 @@ export default function POSPage() {
               </>
             )}
 
-            {/* Cash fields */}
+            {/* Cash */}
             {paymentMethod === 'cash' && (
               <>
                 <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Cash Tendered ($)</label>
@@ -431,7 +552,7 @@ export default function POSPage() {
               </>
             )}
 
-            {/* Wire fields */}
+            {/* Wire */}
             {paymentMethod === 'wire' && (
               <>
                 <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Wire Ref # (optional)</label>
@@ -441,7 +562,7 @@ export default function POSPage() {
 
             <div className="flex justify-between font-bold text-xl mb-5"><span>Total</span><span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span></div>
             <div className="flex gap-3">
-              <button onClick={() => setShowCheckout(false)} disabled={submitting} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Back</button>
+              <button onClick={() => { setShowCheckout(false); resetCheckout() }} disabled={submitting} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Back</button>
               <button onClick={handleCheckout} disabled={submitting || !checkoutReady} className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
                 {submitting ? 'Saving...' : 'Confirm Sale'}
               </button>
