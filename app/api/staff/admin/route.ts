@@ -78,34 +78,21 @@ async function callerIsAdmin(req: Request, admin: SupabaseClient, body: Body): P
 }
 
 async function selectAll(admin: SupabaseClient) {
-  // Query users table first — primary source of truth
-  const userVariants = [
-    'id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at',
-    'id, email, role, full_name, primary_location, is_active, activation_token, created_at',
-    'id, email, role, primary_location, is_active, activation_token, created_at',
-  ];
-  for (const cols of userVariants) {
-    const { data, error } = await admin
-      .from('users')
-      .select(cols)
-      .not('role', 'eq', 'customer')
-      .order('role', { ascending: true });
-    if (!error) return data || [];
-  }
+  const { data, error } = await admin
+    .from('users')
+    .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at')
+    .order('role', { ascending: true });
+
+  if (!error) return data || [];
 
   // Fall back to staff_roster
-  const rosterVariants = [
-    'id, email, role, full_name, primary_location, is_active, activation_token, created_at, last_login_at',
-    'id, email, role, full_name, primary_location, is_active, activation_token, created_at',
-    'id, email, role, primary_location, is_active, activation_token, created_at',
-  ];
-  for (const cols of rosterVariants) {
-    const { data, error } = await admin
-      .from('staff_roster')
-      .select(cols)
-      .order('role', { ascending: true });
-    if (!error) return data || [];
-  }
+  const { data: roster, error: rosterErr } = await admin
+    .from('staff_roster')
+    .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at')
+    .order('role', { ascending: true });
+
+  if (!rosterErr) return roster || [];
+
   return [];
 }
 
