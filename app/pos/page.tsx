@@ -30,11 +30,18 @@ type CartItem = {
 };
 
 type PaymentMethod = 'cash' | 'card' | 'transfer';
+type CardTerminal = 'rbc_plug_and_play' | 'rbc_physical_terminal';
+
+const CARD_TERMINALS: { value: CardTerminal; label: string }[] = [
+  { value: 'rbc_plug_and_play', label: '📱 RBC Plug & Play' },
+  { value: 'rbc_physical_terminal', label: '🖥️ RBC Physical Terminal' },
+];
 
 type CompletedSale = {
   ref: string; total: number; cost_total: number; profit: number;
   items: CartItem[]; customer: string;
   payment_method: PaymentMethod; card_ref: string | null;
+  card_terminal: CardTerminal | null;
 };
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -81,6 +88,7 @@ export default function RegisterPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [cardRef, setCardRef] = useState('');
+  const [cardTerminal, setCardTerminal] = useState<CardTerminal>('rbc_plug_and_play');
   const [completing, setCompleting] = useState(false);
   const [lastSale, setLastSale] = useState<CompletedSale | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -134,6 +142,8 @@ export default function RegisterPage() {
   const realProfit = splitSale(subtotal, costTotal, 'nassau_pos').bsc_profit;
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
+  const terminalLabel = CARD_TERMINALS.find(t => t.value === cardTerminal)?.label || cardTerminal;
+
   async function completeSale() {
     if (cart.length === 0 || completing) return;
     if (paymentMethod === 'card' && !cardRef.trim()) { alert('Please enter the card payment reference number from the terminal.'); return; }
@@ -152,7 +162,12 @@ export default function RegisterPage() {
           if (upJson?.customer_id) customerIdLinked = upJson.customer_id;
         } catch (err) { console.warn('Customer upsert failed:', err); }
       }
-      const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({ order_type: 'pos_sale_nassau', payment_method: paymentMethod, payment_status: 'paid_in_full', wholesale_items: lineItems, wholesale_cost_total: Number(subtotal.toFixed(2)), customer_name: customerNameClean || 'Walk-in', customer_phone: customerPhoneClean || null, customer_id: customerIdLinked, admin_notes: paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null, user_id: userId }).select('id').single();
+
+      const cardNotes = paymentMethod === 'card'
+        ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}`
+        : null;
+
+      const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({ order_type: 'pos_sale_nassau', payment_method: paymentMethod, payment_status: 'paid_in_full', wholesale_items: lineItems, wholesale_cost_total: Number(subtotal.toFixed(2)), customer_name: customerNameClean || 'Walk-in', customer_phone: customerPhoneClean || null, customer_id: customerIdLinked, admin_notes: cardNotes, user_id: userId }).select('id').single();
       if (insertError) { alert('Sale could not be saved: ' + insertError.message); setCompleting(false); return; }
       const orderId = insertedOrder?.id ?? null;
       recordSaleFinancials({ saleAmount: subtotal, costBasis: costTotal, channel: 'nassau_pos', orderId }).catch((err) => console.warn('Financials log failed:', err));
@@ -167,12 +182,38 @@ export default function RegisterPage() {
       if (customerPhoneClean && customerNameClean && customerNameClean !== 'Walk-in') {
         fetch('/api/notifications/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'whatsapp', recipient_phone: customerPhoneClean, recipient_name: customerNameClean, template_key: 'order_confirmation_pos_nassau', body: `Hi ${customerNameClean}, thanks for shopping at BSC Marketplace Nassau. Your receipt: BSD $${subtotal.toFixed(2)} (${ref}). — BSC`, related_order_id: orderId, related_customer_id: customerIdLinked }) }).catch((err) => console.warn('Notification queue failed:', err));
       }
-      setLastSale({ ref, total: subtotal, cost_total: costTotal, profit: realProfit, items: [...cart], customer: customerName.trim() || 'Walk-in', payment_method: paymentMethod, card_ref: paymentMethod === 'card' ? cardRef : null });
+      setLastSale({ ref, total: subtotal, cost_total: costTotal, profit: realProfit, items: [...cart], customer: customerName.trim() || 'Walk-in', payment_method: paymentMethod, card_ref: paymentMethod === 'card' ? cardRef : null, card_terminal: paymentMethod === 'card' ? cardTerminal : null });
       setCart([]); setCustomerName(''); setCustomerPhone(''); setCardRef(''); setCartOpen(false);
     } catch (e) {
       alert('Sale failed: ' + (e instanceof Error ? e.message : 'unknown error'));
     } finally { setCompleting(false); }
   }
+
+  const CardSection = () => (
+    <>
+      <div style={{ marginBottom: 8 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>
+          Card Terminal
+        </label>
+        <select
+          value={cardTerminal}
+          onChange={(e) => setCardTerminal(e.target.value as CardTerminal)}
+          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #1a2e5a', fontSize: 13, fontWeight: 700, backgroundColor: '#f0f4ff', color: '#1a2e5a', outline: 'none', cursor: 'pointer' }}
+        >
+          {CARD_TERMINALS.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+      <input
+        type="text"
+        placeholder="Card terminal ref # (required)"
+        value={cardRef}
+        onChange={(e) => setCardRef(e.target.value)}
+        style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, outline: 'none', boxSizing: 'border-box', marginBottom: 10, fontFamily: 'monospace' }}
+      />
+    </>
+  );
 
   const CartPanel = () => (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#fff' }}>
@@ -232,9 +273,7 @@ export default function RegisterPage() {
             </button>
           ))}
         </div>
-        {paymentMethod === 'card' && (
-          <input type="text" placeholder="Card terminal ref # (required)" value={cardRef} onChange={(e) => setCardRef(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, outline: 'none', boxSizing: 'border-box', marginBottom: 10, fontFamily: 'monospace' }} />
-        )}
+        {paymentMethod === 'card' && <CardSection />}
         <button onClick={completeSale} disabled={cart.length === 0 || completing} style={{ width: '100%', backgroundColor: cart.length === 0 || completing ? '#e5e7eb' : '#f4c842', color: cart.length === 0 || completing ? '#999' : '#1a2e5a', border: 'none', borderRadius: 12, padding: 16, fontWeight: 900, fontSize: 16, cursor: cart.length === 0 || completing ? 'not-allowed' : 'pointer' }}>
           {completing ? 'Saving…' : cart.length === 0 ? 'Add Items to Sell' : `Complete Sale · $${subtotal.toFixed(2)}`}
         </button>
@@ -300,8 +339,6 @@ export default function RegisterPage() {
 
         {/* PRODUCTS PANEL */}
         <div className="pos-products">
-
-          {/* Header */}
           <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -335,7 +372,6 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Product Grid */}
           <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
             {productsLoading && (
               <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
@@ -455,9 +491,7 @@ export default function RegisterPage() {
                     </button>
                   ))}
                 </div>
-                {paymentMethod === 'card' && (
-                  <input type="text" placeholder="Card terminal ref # (required)" value={cardRef} onChange={(e) => setCardRef(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 13, outline: 'none', marginBottom: 10, fontFamily: 'monospace' }} />
-                )}
+                {paymentMethod === 'card' && <CardSection />}
                 <button onClick={completeSale} disabled={cart.length === 0 || completing} style={{ width: '100%', backgroundColor: cart.length === 0 || completing ? '#e5e7eb' : '#f4c842', color: cart.length === 0 || completing ? '#999' : '#1a2e5a', border: 'none', borderRadius: 12, padding: 16, fontWeight: 900, fontSize: 17, cursor: cart.length === 0 || completing ? 'not-allowed' : 'pointer' }}>
                   {completing ? 'Saving…' : cart.length === 0 ? 'Add Items First' : `Complete Sale · $${subtotal.toFixed(2)}`}
                 </button>
@@ -479,7 +513,9 @@ export default function RegisterPage() {
               <div style={{ padding: 24 }}>
                 <div style={{ marginBottom: 14, fontSize: 13, color: '#666', lineHeight: 1.7 }}>
                   <strong>Customer:</strong> {lastSale.customer}<br />
-                  <strong>Payment:</strong> {lastSale.payment_method.toUpperCase()}{lastSale.card_ref ? ` (Ref: ${lastSale.card_ref})` : ''}<br />
+                  <strong>Payment:</strong> {lastSale.payment_method.toUpperCase()}
+                  {lastSale.card_terminal && ` · ${CARD_TERMINALS.find(t => t.value === lastSale.card_terminal)?.label}`}
+                  {lastSale.card_ref ? ` (Ref: ${lastSale.card_ref})` : ''}<br />
                   <strong>Date:</strong> {new Date().toLocaleString()}
                 </div>
                 {lastSale.items.map((item) => (
