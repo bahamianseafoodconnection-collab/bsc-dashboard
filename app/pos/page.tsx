@@ -141,7 +141,6 @@ export default function RegisterPage() {
   const costTotal = cart.reduce((s, i) => s + i.cost_per_unit * i.qty, 0);
   const realProfit = splitSale(subtotal, costTotal, 'nassau_pos').bsc_profit;
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-
   const terminalLabel = CARD_TERMINALS.find(t => t.value === cardTerminal)?.label || cardTerminal;
 
   async function completeSale() {
@@ -162,11 +161,7 @@ export default function RegisterPage() {
           if (upJson?.customer_id) customerIdLinked = upJson.customer_id;
         } catch (err) { console.warn('Customer upsert failed:', err); }
       }
-
-      const cardNotes = paymentMethod === 'card'
-        ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}`
-        : null;
-
+      const cardNotes = paymentMethod === 'card' ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}` : null;
       const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert({ order_type: 'pos_sale_nassau', payment_method: paymentMethod, payment_status: 'paid_in_full', wholesale_items: lineItems, wholesale_cost_total: Number(subtotal.toFixed(2)), customer_name: customerNameClean || 'Walk-in', customer_phone: customerPhoneClean || null, customer_id: customerIdLinked, admin_notes: cardNotes, user_id: userId }).select('id').single();
       if (insertError) { alert('Sale could not be saved: ' + insertError.message); setCompleting(false); return; }
       const orderId = insertedOrder?.id ?? null;
@@ -192,64 +187,42 @@ export default function RegisterPage() {
   const CardSection = () => (
     <>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>
-          Card Terminal
-        </label>
-        <select
-          value={cardTerminal}
-          onChange={(e) => setCardTerminal(e.target.value as CardTerminal)}
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #1a2e5a', fontSize: 13, fontWeight: 700, backgroundColor: '#f0f4ff', color: '#1a2e5a', outline: 'none', cursor: 'pointer' }}
-        >
-          {CARD_TERMINALS.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
+        <label style={{ fontSize: 11, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>Card Terminal</label>
+        <select value={cardTerminal} onChange={(e) => setCardTerminal(e.target.value as CardTerminal)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #1a2e5a', fontSize: 13, fontWeight: 700, backgroundColor: '#f0f4ff', color: '#1a2e5a', outline: 'none', cursor: 'pointer' }}>
+          {CARD_TERMINALS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
       </div>
-      <input
-        type="text"
-        placeholder="Card terminal ref # (required)"
-        value={cardRef}
-        onChange={(e) => setCardRef(e.target.value)}
-        style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, outline: 'none', boxSizing: 'border-box', marginBottom: 10, fontFamily: 'monospace' }}
-      />
+      <input type="text" placeholder="Card terminal ref # (required)" value={cardRef} onChange={(e) => setCardRef(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 12, outline: 'none', boxSizing: 'border-box', marginBottom: 10, fontFamily: 'monospace' }} />
     </>
   );
 
-  const CartPanel = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#fff' }}>
-      <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 16 }}>Current Sale</div>
-          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
-        </div>
-        <button onClick={() => setCartOpen(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', fontSize: 22, cursor: 'pointer', padding: '0 4px', display: 'none' }} className="cart-close">✕</button>
-      </div>
-
+  const CartContent = () => (
+    <>
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <input type="text" placeholder="Customer name (optional)" value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-        <input type="tel" placeholder="Phone (optional)" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+        <input type="text" placeholder="Customer name (optional)" value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none' }} />
+        <input type="tel" placeholder="Phone (optional)" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none' }} />
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
+      <div style={{ padding: '8px 16px' }}>
         {cart.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#ccc' }}>
+          <div style={{ textAlign: 'center', padding: '32px 0', color: '#ccc' }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>🛒</div>
-            <div style={{ fontSize: 13 }}>Tap a product to add</div>
+            <div style={{ fontSize: 14 }}>Tap a product to add</div>
           </div>
         ) : cart.map((item) => (
           <div key={item.product_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-              <div style={{ color: '#999', fontSize: 11 }}>${item.unit_price.toFixed(2)} / {item.unit_of_measure}</div>
+              <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+              <div style={{ color: '#999', fontSize: 12 }}>${item.unit_price.toFixed(2)} / {item.unit_of_measure}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <button onClick={() => changeQty(item.product_id, -1)} style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e5e7eb', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-              <span style={{ fontWeight: 800, fontSize: 14, minWidth: 24, textAlign: 'center' }}>{item.qty}</span>
-              <button onClick={() => changeQty(item.product_id, 1)} style={{ width: 28, height: 28, borderRadius: 6, border: 'none', backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={() => changeQty(item.product_id, -1)} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e5e7eb', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+              <span style={{ fontWeight: 800, fontSize: 15, minWidth: 28, textAlign: 'center' }}>{item.qty}</span>
+              <button onClick={() => changeQty(item.product_id, 1)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
             </div>
-            <div style={{ minWidth: 56, textAlign: 'right' }}>
-              <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 14 }}>${(item.unit_price * item.qty).toFixed(2)}</div>
-              <button onClick={() => removeItem(item.product_id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 11, cursor: 'pointer', padding: 0 }}>remove</button>
+            <div style={{ minWidth: 60, textAlign: 'right' }}>
+              <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 15 }}>${(item.unit_price * item.qty).toFixed(2)}</div>
+              <button onClick={() => removeItem(item.product_id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', padding: 0 }}>remove</button>
             </div>
           </div>
         ))}
@@ -257,28 +230,28 @@ export default function RegisterPage() {
 
       <div style={{ padding: '14px 16px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafafa' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ color: '#666', fontSize: 14 }}>Subtotal</span>
-          <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 14 }}>${subtotal.toFixed(2)}</span>
+          <span style={{ color: '#666', fontSize: 15 }}>Subtotal</span>
+          <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 15 }}>${subtotal.toFixed(2)}</span>
         </div>
         {costTotal > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, padding: '8px 10px', backgroundColor: '#e8f5e9', borderRadius: 8 }}>
-            <span style={{ color: '#2e7d32', fontSize: 13, fontWeight: 700 }}>Real Profit</span>
+            <span style={{ color: '#2e7d32', fontSize: 14, fontWeight: 700 }}>Real Profit</span>
             <span style={{ color: '#2e7d32', fontWeight: 900, fontSize: 15 }}>${realProfit.toFixed(2)}</span>
           </div>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
           {(['cash', 'card', 'transfer'] as const).map((m) => (
-            <button key={m} onClick={() => setPaymentMethod(m)} style={{ padding: 8, borderRadius: 8, border: '2px solid', borderColor: paymentMethod === m ? '#1a2e5a' : '#e5e7eb', backgroundColor: paymentMethod === m ? '#1a2e5a' : '#fff', color: paymentMethod === m ? '#f4c842' : '#666', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <button key={m} onClick={() => setPaymentMethod(m)} style={{ padding: 10, borderRadius: 8, border: '2px solid', borderColor: paymentMethod === m ? '#1a2e5a' : '#e5e7eb', backgroundColor: paymentMethod === m ? '#1a2e5a' : '#fff', color: paymentMethod === m ? '#f4c842' : '#666', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
               {m === 'cash' ? '💵' : m === 'card' ? '💳' : '🏦'} {m}
             </button>
           ))}
         </div>
         {paymentMethod === 'card' && <CardSection />}
-        <button onClick={completeSale} disabled={cart.length === 0 || completing} style={{ width: '100%', backgroundColor: cart.length === 0 || completing ? '#e5e7eb' : '#f4c842', color: cart.length === 0 || completing ? '#999' : '#1a2e5a', border: 'none', borderRadius: 12, padding: 16, fontWeight: 900, fontSize: 16, cursor: cart.length === 0 || completing ? 'not-allowed' : 'pointer' }}>
-          {completing ? 'Saving…' : cart.length === 0 ? 'Add Items to Sell' : `Complete Sale · $${subtotal.toFixed(2)}`}
+        <button onClick={completeSale} disabled={cart.length === 0 || completing} style={{ width: '100%', backgroundColor: cart.length === 0 || completing ? '#e5e7eb' : '#f4c842', color: cart.length === 0 || completing ? '#999' : '#1a2e5a', border: 'none', borderRadius: 12, padding: 16, fontWeight: 900, fontSize: 17, cursor: cart.length === 0 || completing ? 'not-allowed' : 'pointer' }}>
+          {completing ? 'Saving…' : cart.length === 0 ? 'Add Items First' : `Complete Sale · $${subtotal.toFixed(2)}`}
         </button>
       </div>
-    </div>
+    </>
   );
 
   return (
@@ -286,52 +259,108 @@ export default function RegisterPage() {
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
-        .pos-shell { display: flex; height: 100dvh; background: #f8f9fa; overflow: hidden; }
-        .pos-products { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .pos-cart-desktop { width: 360px; flex-shrink: 0; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; }
-        .pos-cart-mobile-overlay { display: none; }
+
+        .pos-shell {
+          display: flex;
+          height: 100dvh;
+          background: #f8f9fa;
+          overflow: hidden;
+        }
+        .pos-products {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          min-width: 0;
+        }
+        .pos-product-scroll {
+          flex: 1;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          padding: 14px;
+          padding-bottom: 100px;
+        }
+        .pos-cart-desktop {
+          width: 360px;
+          flex-shrink: 0;
+          border-left: 1px solid #e2e8f0;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
         .pos-cart-fab { display: none; }
-        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+        .product-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 10px;
+        }
 
         @media (max-width: 768px) {
           .pos-cart-desktop { display: none; }
           .pos-cart-fab {
-            display: flex; align-items: center; justify-content: center;
-            position: fixed; bottom: 24px; right: 20px; z-index: 50;
-            background: #f4c842; color: #1a2e5a;
-            width: 64px; height: 64px; border-radius: 50%;
-            border: none; cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            bottom: 24px;
+            right: 20px;
+            z-index: 50;
+            background: #f4c842;
+            color: #1a2e5a;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
             box-shadow: 0 6px 24px rgba(0,0,0,0.2);
-            font-size: 24px; font-weight: 900;
+            font-size: 24px;
+            font-weight: 900;
           }
           .pos-cart-fab-badge {
-            position: absolute; top: -4px; right: -4px;
-            background: #ef4444; color: #fff;
-            border-radius: 50%; width: 22px; height: 22px;
-            font-size: 11px; font-weight: 900;
-            display: flex; align-items: center; justify-content: center;
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ef4444;
+            color: #fff;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            font-size: 11px;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
-          .pos-cart-mobile-overlay {
-            display: block;
-            position: fixed; inset: 0; z-index: 60;
-            background: rgba(0,0,0,0.5);
-          }
-          .pos-cart-mobile-sheet {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            height: 90dvh; z-index: 61;
-            background: #fff;
-            border-radius: 20px 20px 0 0;
-            display: flex; flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
-          }
-          .cart-close { display: flex !important; }
           .product-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+          .pos-product-scroll { padding-bottom: 120px; }
         }
 
         @media (min-width: 1200px) {
           .pos-cart-desktop { width: 400px; }
           .product-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+        }
+
+        .mobile-cart-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 60;
+          background: rgba(0,0,0,0.5);
+        }
+        .mobile-cart-sheet {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          max-height: 95dvh;
+          z-index: 61;
+          background: #fff;
+          border-radius: 20px 20px 0 0;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
         }
       `}</style>
 
@@ -339,7 +368,7 @@ export default function RegisterPage() {
 
         {/* PRODUCTS PANEL */}
         <div className="pos-products">
-          <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 16px' }}>
+          <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 16px', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Link href="/dashboard" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: 20 }}>←</Link>
@@ -372,7 +401,7 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
+          <div className="pos-product-scroll">
             {productsLoading && (
               <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>Loading catalog…
@@ -405,7 +434,7 @@ export default function RegisterPage() {
             )}
             <div className="product-grid">
               {filtered.map((p) => (
-                <button key={p.id} onClick={() => addToCart(p)} style={{ backgroundColor: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'center', transition: 'transform 0.1s', width: '100%' }}>
+                <button key={p.id} onClick={() => addToCart(p)} style={{ backgroundColor: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 14, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', textAlign: 'center', width: '100%' }}>
                   {p.image_url
                     ? <img src={p.image_url} alt={p.name} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8 }} />
                     : <span style={{ fontSize: 32 }}>{CATEGORY_EMOJI[p.category] || '📦'}</span>
@@ -422,11 +451,15 @@ export default function RegisterPage() {
 
         {/* CART — Desktop */}
         <div className="pos-cart-desktop">
-          <CartPanel />
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#1a2e5a', flexShrink: 0 }}>
+            <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 16 }}>Current Sale</div>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
+          </div>
+          <CartContent />
         </div>
 
         {/* CART — Mobile FAB */}
-        <button className="pos-cart-fab" onClick={() => setCartOpen(true)} style={{ position: 'fixed', bottom: 24, right: 20 }}>
+        <button className="pos-cart-fab" onClick={() => setCartOpen(true)}>
           🛒
           {cartCount > 0 && <span className="pos-cart-fab-badge">{cartCount}</span>}
         </button>
@@ -434,68 +467,16 @@ export default function RegisterPage() {
         {/* CART — Mobile Sheet */}
         {cartOpen && (
           <>
-            <div className="pos-cart-mobile-overlay" onClick={() => setCartOpen(false)} />
-            <div className="pos-cart-mobile-sheet">
-              <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0' }}>
+            <div className="mobile-cart-overlay" onClick={() => setCartOpen(false)} />
+            <div className="mobile-cart-sheet">
+              <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', flexShrink: 0 }}>
                 <div>
                   <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 16 }}>Current Sale</div>
                   <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{cartCount} item{cartCount !== 1 ? 's' : ''}</div>
                 </div>
                 <button onClick={() => setCartOpen(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 24, cursor: 'pointer', padding: '0 4px' }}>✕</button>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <input type="text" placeholder="Customer name (optional)" value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none' }} />
-                  <input type="tel" placeholder="Phone (optional)" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 14, outline: 'none' }} />
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
-                  {cart.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px 0', color: '#ccc' }}>
-                      <div style={{ fontSize: 40, marginBottom: 10 }}>🛒</div>
-                      <div style={{ fontSize: 14 }}>Tap a product to add</div>
-                    </div>
-                  ) : cart.map((item) => (
-                    <div key={item.product_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                        <div style={{ color: '#999', fontSize: 12 }}>${item.unit_price.toFixed(2)} / {item.unit_of_measure}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button onClick={() => changeQty(item.product_id, -1)} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e5e7eb', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                        <span style={{ fontWeight: 800, fontSize: 15, minWidth: 28, textAlign: 'center' }}>{item.qty}</span>
-                        <button onClick={() => changeQty(item.product_id, 1)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', backgroundColor: '#1a2e5a', color: '#fff', cursor: 'pointer', fontWeight: 900, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                      </div>
-                      <div style={{ minWidth: 60, textAlign: 'right' }}>
-                        <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: 15 }}>${(item.unit_price * item.qty).toFixed(2)}</div>
-                        <button onClick={() => removeItem(item.product_id)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', padding: 0 }}>remove</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding: '14px 16px', borderTop: '1px solid #e2e8f0', backgroundColor: '#fafafa' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: '#666', fontSize: 15 }}>Subtotal</span>
-                  <span style={{ color: '#1a2e5a', fontWeight: 700, fontSize: 15 }}>${subtotal.toFixed(2)}</span>
-                </div>
-                {costTotal > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, padding: '8px 10px', backgroundColor: '#e8f5e9', borderRadius: 8 }}>
-                    <span style={{ color: '#2e7d32', fontSize: 14, fontWeight: 700 }}>Real Profit</span>
-                    <span style={{ color: '#2e7d32', fontWeight: 900, fontSize: 15 }}>${realProfit.toFixed(2)}</span>
-                  </div>
-                )}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 10 }}>
-                  {(['cash', 'card', 'transfer'] as const).map((m) => (
-                    <button key={m} onClick={() => setPaymentMethod(m)} style={{ padding: 10, borderRadius: 8, border: '2px solid', borderColor: paymentMethod === m ? '#1a2e5a' : '#e5e7eb', backgroundColor: paymentMethod === m ? '#1a2e5a' : '#fff', color: paymentMethod === m ? '#f4c842' : '#666', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                      {m === 'cash' ? '💵' : m === 'card' ? '💳' : '🏦'} {m}
-                    </button>
-                  ))}
-                </div>
-                {paymentMethod === 'card' && <CardSection />}
-                <button onClick={completeSale} disabled={cart.length === 0 || completing} style={{ width: '100%', backgroundColor: cart.length === 0 || completing ? '#e5e7eb' : '#f4c842', color: cart.length === 0 || completing ? '#999' : '#1a2e5a', border: 'none', borderRadius: 12, padding: 16, fontWeight: 900, fontSize: 17, cursor: cart.length === 0 || completing ? 'not-allowed' : 'pointer' }}>
-                  {completing ? 'Saving…' : cart.length === 0 ? 'Add Items First' : `Complete Sale · $${subtotal.toFixed(2)}`}
-                </button>
-              </div>
+              <CartContent />
             </div>
           </>
         )}
@@ -504,7 +485,7 @@ export default function RegisterPage() {
         {lastSale && (
           <>
             <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 70 }} />
-            <div style={{ position: 'fixed', inset: 16, maxWidth: 440, margin: '0 auto', backgroundColor: '#fff', borderRadius: 20, zIndex: 71, overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.3)', height: 'fit-content', maxHeight: 'calc(100dvh - 32px)' }}>
+            <div style={{ position: 'fixed', inset: 16, maxWidth: 440, margin: '0 auto', backgroundColor: '#fff', borderRadius: 20, zIndex: 71, overflowY: 'auto', WebkitOverflowScrolling: 'touch' as never, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', height: 'fit-content', maxHeight: 'calc(100dvh - 32px)' }}>
               <div style={{ backgroundColor: '#1a2e5a', padding: 24, textAlign: 'center', borderRadius: '20px 20px 0 0' }}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
                 <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 22 }}>Sale Complete</div>
