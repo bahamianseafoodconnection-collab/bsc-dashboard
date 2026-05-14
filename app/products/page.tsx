@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
@@ -17,10 +17,10 @@ function getSupabase() {
 const FOUNDER_ID = '7b62672c-9259-4c1b-98d4-3b78369a52ab';
 
 const CHANNELS = [
-  { key: 'nassau_pos',    label: 'Nassau POS',    emoji: '🟡', margin: 0.38 },
-  { key: 'andros_pos',    label: 'Andros POS',    emoji: '🟣', margin: 0.43 },
-  { key: 'online_market', label: 'Online Market', emoji: '🛒', margin: 0.12 },
-  { key: 'local_wholesale', label: 'Wholesale',   emoji: '📦', margin: 0.12 },
+  { key: 'nassau_pos',     label: 'Nassau POS',    emoji: '🟡', margin: 0.38 },
+  { key: 'andros_pos',     label: 'Andros POS',    emoji: '🟣', margin: 0.43 },
+  { key: 'online_market',  label: 'Online Market', emoji: '🛒', margin: 0.12 },
+  { key: 'local_wholesale',label: 'Wholesale',     emoji: '📦', margin: 0.12 },
 ];
 
 const CATEGORIES = [
@@ -52,7 +52,7 @@ interface Product {
   sell_online: boolean;
   sell_wholesale: boolean;
   image_url: string | null;
-  pricing: Record<string, number>; // channel -> price
+  pricing: Record<string, number>;
 }
 
 interface NewProduct {
@@ -68,6 +68,8 @@ interface NewProduct {
   sell_wholesale: boolean;
   cost_per_unit: string;
   prices: Record<string, string>;
+  image_file: File | null;
+  image_preview: string;
 }
 
 const BLANK_NEW: NewProduct = {
@@ -76,27 +78,33 @@ const BLANK_NEW: NewProduct = {
   sell_nassau: true, sell_andros: false, sell_online: true, sell_wholesale: false,
   cost_per_unit: '',
   prices: { nassau_pos: '', andros_pos: '', online_market: '', local_wholesale: '' },
+  image_file: null,
+  image_preview: '',
 };
 
 export default function ProductsPage() {
   const supabase = getSupabase();
-  const [products, setProducts]       = useState<Product[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState('');
-  const [filterCat, setFilterCat]     = useState('all');
-  const [filterChan, setFilterChan]   = useState('all');
-  const [selected, setSelected]       = useState<Product | null>(null);
-  const [editPrices, setEditPrices]   = useState<Record<string, string>>({});
-  const [editChannels, setEditChannels] = useState<Record<string, boolean>>({});
-  const [saving, setSaving]           = useState(false);
-  const [showAdd, setShowAdd]         = useState(false);
-  const [newProduct, setNewProduct]   = useState<NewProduct>(BLANK_NEW);
-  const [adding, setAdding]           = useState(false);
-  const [toast, setToast]             = useState<string | null>(null);
-  const [tab, setTab]                 = useState<'list' | 'add'>('list');
+  const [products, setProducts]           = useState<Product[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [search, setSearch]               = useState('');
+  const [filterCat, setFilterCat]         = useState('all');
+  const [filterChan, setFilterChan]       = useState('all');
+  const [selected, setSelected]           = useState<Product | null>(null);
+  const [editPrices, setEditPrices]       = useState<Record<string, string>>({});
+  const [editChannels, setEditChannels]   = useState<Record<string, boolean>>({});
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState('');
+  const [saving, setSaving]               = useState(false);
+  const [newProduct, setNewProduct]       = useState<NewProduct>(BLANK_NEW);
+  const [adding, setAdding]               = useState(false);
+  const [toast, setToast]                 = useState<{ msg: string; ok: boolean } | null>(null);
+  const [tab, setTab]                     = useState<'list' | 'add'>('list');
 
-  function showToast(msg: string) {
-    setToast(msg);
+  const newImageRef  = useRef<HTMLInputElement>(null);
+  const editImageRef = useRef<HTMLInputElement>(null);
+
+  function showToast(msg: string, ok = true) {
+    setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
   }
 
@@ -120,10 +128,7 @@ export default function ProductsPage() {
       priceMap[row.product_id][row.channel] = Number(row.manual_unit_price);
     }
 
-    setProducts((prods ?? []).map((p: any) => ({
-      ...p,
-      pricing: priceMap[p.id] ?? {},
-    })));
+    setProducts((prods ?? []).map((p: any) => ({ ...p, pricing: priceMap[p.id] ?? {} })));
     setLoading(false);
   }, [supabase]);
 
@@ -132,21 +137,26 @@ export default function ProductsPage() {
   function openProduct(p: Product) {
     setSelected(p);
     setEditPrices({
-      nassau_pos:     String(p.pricing['nassau_pos']     ?? ''),
-      andros_pos:     String(p.pricing['andros_pos']     ?? ''),
-      online_market:  String(p.pricing['online_market']  ?? ''),
-      local_wholesale:String(p.pricing['local_wholesale']?? ''),
+      nassau_pos:      String(p.pricing['nassau_pos']      ?? ''),
+      andros_pos:      String(p.pricing['andros_pos']      ?? ''),
+      online_market:   String(p.pricing['online_market']   ?? ''),
+      local_wholesale: String(p.pricing['local_wholesale'] ?? ''),
     });
     setEditChannels({
-      nassau_pos:     p.sell_nassau,
-      andros_pos:     p.sell_andros,
-      online_market:  p.sell_online,
-      local_wholesale:p.sell_wholesale,
+      nassau_pos:      p.sell_nassau,
+      andros_pos:      p.sell_andros,
+      online_market:   p.sell_online,
+      local_wholesale: p.sell_wholesale,
     });
+    setEditImageFile(null);
+    setEditImagePreview('');
   }
 
-  // Auto-calculate prices from cost
-  function calcFromCost(cost: string, setter: (prices: Record<string, string>) => void, current: Record<string, string>) {
+  function calcFromCost(
+    cost: string,
+    setter: (prices: Record<string, string>) => void,
+    current: Record<string, string>
+  ) {
     const c = parseFloat(cost);
     if (isNaN(c) || c <= 0) return;
     setter({
@@ -158,37 +168,47 @@ export default function ProductsPage() {
     });
   }
 
+  async function uploadImage(file: File, sku: string): Promise<string | null> {
+    const ext  = file.name.split('.').pop() ?? 'jpg';
+    const path = `products/${sku.toLowerCase()}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+      .from('site-images')
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (error) { showToast('Image upload failed: ' + error.message, false); return null; }
+    const { data } = supabase.storage.from('site-images').getPublicUrl(path);
+    return data.publicUrl;
+  }
+
   async function saveProduct() {
     if (!selected) return;
     setSaving(true);
     try {
-      // Update channel flags
+      let imageUrl = selected.image_url;
+
+      // Upload new image if selected
+      if (editImageFile) {
+        const url = await uploadImage(editImageFile, selected.sku);
+        if (url) imageUrl = url;
+      }
+
       await supabase.from('products').update({
         sell_nassau:    editChannels['nassau_pos'],
         sell_andros:    editChannels['andros_pos'],
         sell_online:    editChannels['online_market'],
         sell_wholesale: editChannels['local_wholesale'],
+        image_url:      imageUrl,
       }).eq('id', selected.id);
 
-      // Update prices — delete old then insert new (unique constraint workaround)
       for (const ch of CHANNELS) {
         const price = parseFloat(editPrices[ch.key]);
         if (isNaN(price) || price <= 0) continue;
-
-        await supabase.from('product_pricing')
-          .delete()
-          .eq('product_id', selected.id)
-          .eq('channel', ch.key);
-
+        await supabase.from('product_pricing').delete()
+          .eq('product_id', selected.id).eq('channel', ch.key);
         await supabase.from('product_pricing').insert({
-          product_id:        selected.id,
-          channel:           ch.key,
-          pricing_mode:      'manual',
-          manual_unit_price: price,
-          is_current:        true,
-          is_active:         true,
-          recorded_by:       FOUNDER_ID,
-          recorded_at:       new Date().toISOString(),
+          product_id: selected.id, channel: ch.key,
+          pricing_mode: 'manual', manual_unit_price: price,
+          is_current: true, is_active: true,
+          recorded_by: FOUNDER_ID, recorded_at: new Date().toISOString(),
         });
       }
 
@@ -196,7 +216,7 @@ export default function ProductsPage() {
       setSelected(null);
       loadProducts();
     } catch (err: any) {
-      alert('Save failed: ' + err.message);
+      showToast('Save failed: ' + err.message, false);
     } finally {
       setSaving(false);
     }
@@ -204,11 +224,17 @@ export default function ProductsPage() {
 
   async function handleAddProduct() {
     if (!newProduct.name.trim() || !newProduct.sku.trim()) {
-      alert('Name and SKU are required');
+      showToast('Name and SKU are required', false);
       return;
     }
     setAdding(true);
     try {
+      // Upload image first if provided
+      let imageUrl: string | null = null;
+      if (newProduct.image_file) {
+        imageUrl = await uploadImage(newProduct.image_file, newProduct.sku);
+      }
+
       const { data: inserted, error: insertErr } = await supabase
         .from('products')
         .insert({
@@ -223,6 +249,7 @@ export default function ProductsPage() {
           sell_andros:      newProduct.sell_andros,
           sell_online:      newProduct.sell_online,
           sell_wholesale:   newProduct.sell_wholesale,
+          image_url:        imageUrl,
           status:           'active',
           created_by:       FOUNDER_ID,
         })
@@ -231,22 +258,14 @@ export default function ProductsPage() {
 
       if (insertErr) throw insertErr;
 
-      const productId = inserted.id;
-
-      // Insert pricing for each enabled channel with a price
       for (const ch of CHANNELS) {
         const price = parseFloat(newProduct.prices[ch.key]);
         if (isNaN(price) || price <= 0) continue;
-
         await supabase.from('product_pricing').insert({
-          product_id:        productId,
-          channel:           ch.key,
-          pricing_mode:      'manual',
-          manual_unit_price: price,
-          is_current:        true,
-          is_active:         true,
-          recorded_by:       FOUNDER_ID,
-          recorded_at:       new Date().toISOString(),
+          product_id: inserted.id, channel: ch.key,
+          pricing_mode: 'manual', manual_unit_price: price,
+          is_current: true, is_active: true,
+          recorded_by: FOUNDER_ID, recorded_at: new Date().toISOString(),
         });
       }
 
@@ -255,7 +274,7 @@ export default function ProductsPage() {
       setTab('list');
       loadProducts();
     } catch (err: any) {
-      alert('Failed to add product: ' + err.message);
+      showToast('Failed: ' + err.message, false);
     } finally {
       setAdding(false);
     }
@@ -265,20 +284,21 @@ export default function ProductsPage() {
     const matchSearch = !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.sku.toLowerCase().includes(search.toLowerCase());
-    const matchCat = filterCat === 'all' || p.category === filterCat;
+    const matchCat  = filterCat === 'all' || p.category === filterCat;
     const matchChan =
       filterChan === 'all' ||
-      (filterChan === 'nassau_pos'     && p.sell_nassau) ||
-      (filterChan === 'andros_pos'     && p.sell_andros) ||
-      (filterChan === 'online_market'  && p.sell_online) ||
-      (filterChan === 'local_wholesale'&& p.sell_wholesale);
+      (filterChan === 'nassau_pos'      && p.sell_nassau) ||
+      (filterChan === 'andros_pos'      && p.sell_andros) ||
+      (filterChan === 'online_market'   && p.sell_online) ||
+      (filterChan === 'local_wholesale' && p.sell_wholesale);
     return matchSearch && matchCat && matchChan;
   });
 
-  const activeCount  = products.filter(p => p.status === 'active').length;
-  const nassauCount  = products.filter(p => p.sell_nassau).length;
-  const onlineCount  = products.filter(p => p.sell_online).length;
-  const androsCount  = products.filter(p => p.sell_andros).length;
+  const activeCount = products.filter(p => p.status === 'active').length;
+  const nassauCount = products.filter(p => p.sell_nassau).length;
+  const onlineCount = products.filter(p => p.sell_online).length;
+  const androsCount = products.filter(p => p.sell_andros).length;
+  const noImageCount = products.filter(p => !p.image_url).length;
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: '#060d1f', fontFamily: "'DM Sans', sans-serif" }}>
@@ -286,8 +306,8 @@ export default function ProductsPage() {
       {/* Toast */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-xl"
-          style={{ backgroundColor: '#16a34a', color: 'white' }}>
-          {toast}
+          style={{ backgroundColor: toast.ok ? '#16a34a' : '#dc2626', color: 'white' }}>
+          {toast.msg}
         </div>
       )}
 
@@ -299,6 +319,7 @@ export default function ProductsPage() {
             <h1 className="font-bold text-lg" style={{ color: '#f5c518' }}>Product Management</h1>
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
               {activeCount} active · {nassauCount} Nassau · {onlineCount} Online · {androsCount} Andros
+              {noImageCount > 0 && <span style={{ color: '#f5c518' }}> · {noImageCount} missing images</span>}
             </p>
           </div>
           <button onClick={() => setTab(tab === 'add' ? 'list' : 'add')}
@@ -307,12 +328,10 @@ export default function ProductsPage() {
             {tab === 'add' ? '← Back' : '+ Add Product'}
           </button>
         </div>
-
-        {/* Tabs */}
         <div className="flex gap-2">
           {(['list', 'add'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold capitalize"
+              className="px-4 py-1.5 rounded-lg text-xs font-bold"
               style={tab === t
                 ? { backgroundColor: '#f5c518', color: '#060d1f' }
                 : { backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}>
@@ -325,6 +344,55 @@ export default function ProductsPage() {
       {/* ── ADD PRODUCT TAB ── */}
       {tab === 'add' && (
         <div className="p-4 max-w-xl mx-auto space-y-4">
+
+          {/* Image upload — top of form */}
+          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#0f1f3d' }}>
+            <input ref={newImageRef} type="file" accept="image/*" className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                setNewProduct(p => ({ ...p, image_file: f, image_preview: URL.createObjectURL(f) }));
+              }} />
+            <button onClick={() => newImageRef.current?.click()}
+              className="w-full relative"
+              style={{ minHeight: '180px' }}>
+              {newProduct.image_preview ? (
+                <div className="relative">
+                  <img src={newProduct.image_preview} alt="Preview"
+                    className="w-full object-cover" style={{ maxHeight: '220px' }} />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <span className="text-white font-bold text-sm">📷 Change Photo</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-3 py-12"
+                  style={{ backgroundColor: '#1a2e5a' }}>
+                  <div className="text-5xl">📷</div>
+                  <div>
+                    <p className="font-bold text-white text-sm">Add Product Photo</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      Camera · Gallery · Files
+                    </p>
+                  </div>
+                  <div className="px-4 py-2 rounded-xl text-xs font-bold"
+                    style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                    Choose Photo
+                  </div>
+                </div>
+              )}
+            </button>
+            {newProduct.image_preview && (
+              <div className="px-4 py-2 flex items-center justify-between border-t"
+                style={{ borderColor: 'rgba(245,197,24,0.15)' }}>
+                <span className="text-xs" style={{ color: '#4ade80' }}>✓ Photo selected</span>
+                <button onClick={() => setNewProduct(p => ({ ...p, image_file: null, image_preview: '' }))}
+                  className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>Remove</button>
+              </div>
+            )}
+          </div>
+
+          {/* Product details */}
           <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: '#0f1f3d' }}>
             <h2 className="font-bold text-white">Product Details</h2>
 
@@ -381,7 +449,6 @@ export default function ProductsPage() {
               </select>
             </div>
 
-            {/* BSC Processed toggle */}
             <div className="flex items-center justify-between rounded-xl px-4 py-3"
               style={{ backgroundColor: '#1a2e5a' }}>
               <div>
@@ -397,20 +464,21 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Channel toggles */}
+          {/* Sales channels */}
           <div className="rounded-2xl p-5 space-y-3" style={{ backgroundColor: '#0f1f3d' }}>
             <h2 className="font-bold text-white">Sales Channels</h2>
             {CHANNELS.map(ch => {
-              const chanKey = ch.key as keyof NewProduct;
-              const isOn = newProduct[chanKey] as boolean;
+              const isOn =
+                ch.key === 'nassau_pos'      ? newProduct.sell_nassau :
+                ch.key === 'andros_pos'      ? newProduct.sell_andros :
+                ch.key === 'online_market'   ? newProduct.sell_online :
+                newProduct.sell_wholesale;
               return (
                 <div key={ch.key} className="flex items-center justify-between rounded-xl px-4 py-3"
                   style={{ backgroundColor: '#1a2e5a' }}>
                   <div>
                     <p className="text-sm font-bold text-white">{ch.emoji} {ch.label}</p>
-                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      Margin: {(ch.margin * 100).toFixed(0)}%
-                    </p>
+                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Margin: {(ch.margin * 100).toFixed(0)}%</p>
                   </div>
                   <button
                     onClick={() => {
@@ -431,19 +499,13 @@ export default function ProductsPage() {
 
           {/* Pricing */}
           <div className="rounded-2xl p-5 space-y-3" style={{ backgroundColor: '#0f1f3d' }}>
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold text-white">Pricing</h2>
-            </div>
-
-            {/* Cost auto-calc */}
+            <h2 className="font-bold text-white">Pricing</h2>
             <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#1a2e5a' }}>
               <label className="text-xs font-bold mb-2 block" style={{ color: '#f5c518' }}>
-                Cost Per Unit (auto-calculate prices)
+                Cost Per Unit → auto-calculate all prices
               </label>
               <div className="flex gap-2">
-                <input
-                  type="number" step="0.01" min="0"
-                  placeholder="e.g. 6.50"
+                <input type="number" step="0.01" min="0" placeholder="e.g. 6.50"
                   value={newProduct.cost_per_unit}
                   onChange={e => setNewProduct(p => ({ ...p, cost_per_unit: e.target.value }))}
                   className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
@@ -460,20 +522,14 @@ export default function ProductsPage() {
                 </button>
               </div>
             </div>
-
             {CHANNELS.map(ch => (
               <div key={ch.key}>
                 <label className="text-xs font-bold mb-1 block" style={{ color: 'rgba(255,255,255,0.6)' }}>
                   {ch.emoji} {ch.label} Price (BSD $)
                 </label>
-                <input
-                  type="number" step="0.01" min="0"
-                  placeholder="0.00"
+                <input type="number" step="0.01" min="0" placeholder="0.00"
                   value={newProduct.prices[ch.key]}
-                  onChange={e => setNewProduct(p => ({
-                    ...p,
-                    prices: { ...p.prices, [ch.key]: e.target.value }
-                  }))}
+                  onChange={e => setNewProduct(p => ({ ...p, prices: { ...p.prices, [ch.key]: e.target.value } }))}
                   className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
                   style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }} />
               </div>
@@ -491,14 +547,11 @@ export default function ProductsPage() {
       {/* ── PRODUCT LIST TAB ── */}
       {tab === 'list' && (
         <div className="p-4 space-y-3">
-
-          {/* Search + filters */}
           <input type="search" placeholder="Search by name or SKU…"
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
             style={{ backgroundColor: '#0f1f3d', border: '1px solid rgba(245,197,24,0.2)' }} />
 
-          {/* Channel filter */}
           <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
             {[{ key: 'all', label: 'All' }, ...CHANNELS].map(ch => (
               <button key={ch.key} onClick={() => setFilterChan(ch.key)}
@@ -511,7 +564,6 @@ export default function ProductsPage() {
             ))}
           </div>
 
-          {/* Category filter */}
           <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
             <button onClick={() => setFilterCat('all')}
               className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold"
@@ -531,9 +583,7 @@ export default function ProductsPage() {
             ))}
           </div>
 
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            {filtered.length} products
-          </p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{filtered.length} products</p>
 
           {loading ? (
             <div className="text-center py-12 text-sm animate-pulse" style={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -543,41 +593,52 @@ export default function ProductsPage() {
             <div className="space-y-2">
               {filtered.map(p => (
                 <button key={p.id} onClick={() => openProduct(p)}
-                  className="w-full text-left rounded-xl p-4 border transition"
+                  className="w-full text-left rounded-xl border transition"
                   style={{ backgroundColor: '#0f1f3d', borderColor: 'rgba(245,197,24,0.15)' }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
-                          style={{ backgroundColor: '#1a2e5a', color: 'rgba(255,255,255,0.5)' }}>
-                          {p.sku}
-                        </span>
-                        {p.is_bsc_processed && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900 text-blue-300">BSC</span>
-                        )}
-                        {p.unit_type === 'lb' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900 text-amber-300">/lb</span>
-                        )}
-                      </div>
-                      <p className="text-sm font-bold text-white truncate">{p.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                        {CATEGORY_LABELS[p.category] ?? p.category}
-                      </p>
+                  <div className="flex items-stretch">
+                    {/* Product image thumbnail */}
+                    <div className="shrink-0 w-20 h-20 rounded-l-xl overflow-hidden"
+                      style={{ backgroundColor: '#1a2e5a' }}>
+                      {p.image_url ? (
+                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-2xl">📦</div>
+                      )}
                     </div>
-                    <div className="shrink-0 text-right">
-                      {/* Channel badges */}
-                      <div className="flex gap-1 flex-wrap justify-end mb-1">
-                        {p.sell_nassau    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-900 text-yellow-300">🟡 Nassau</span>}
-                        {p.sell_andros    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-900 text-purple-300">🟣 Andros</span>}
-                        {p.sell_online    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900 text-blue-300">🛒 Online</span>}
-                        {p.sell_wholesale && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-900 text-green-300">📦 Wholesale</span>}
+
+                    <div className="flex flex-1 items-start justify-between gap-3 p-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                            style={{ backgroundColor: '#1a2e5a', color: 'rgba(255,255,255,0.5)' }}>
+                            {p.sku}
+                          </span>
+                          {p.is_bsc_processed && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900 text-blue-300">BSC</span>
+                          )}
+                          {p.unit_type === 'lb' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900 text-amber-300">/lb</span>
+                          )}
+                          {!p.image_url && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-300">No image</span>
+                          )}
+                        </div>
+                        <p className="text-sm font-bold text-white truncate">{p.name}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                          {CATEGORY_LABELS[p.category] ?? p.category}
+                        </p>
                       </div>
-                      {/* Prices */}
-                      <div className="text-xs space-y-0.5" style={{ color: '#f5c518' }}>
-                        {p.sell_nassau    && p.pricing['nassau_pos']     && <div>🟡 ${p.pricing['nassau_pos'].toFixed(2)}</div>}
-                        {p.sell_online    && p.pricing['online_market']  && <div>🛒 ${p.pricing['online_market'].toFixed(2)}</div>}
-                        {p.sell_andros    && p.pricing['andros_pos']     && <div>🟣 ${p.pricing['andros_pos'].toFixed(2)}</div>}
-                        {p.sell_wholesale && p.pricing['local_wholesale']&& <div>📦 ${p.pricing['local_wholesale'].toFixed(2)}</div>}
+                      <div className="shrink-0 text-right">
+                        <div className="flex gap-1 flex-wrap justify-end mb-1">
+                          {p.sell_nassau    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-900 text-yellow-300">🟡</span>}
+                          {p.sell_andros    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-900 text-purple-300">🟣</span>}
+                          {p.sell_online    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900 text-blue-300">🛒</span>}
+                          {p.sell_wholesale && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-900 text-green-300">📦</span>}
+                        </div>
+                        <div className="text-xs space-y-0.5" style={{ color: '#f5c518' }}>
+                          {p.sell_nassau    && p.pricing['nassau_pos']      && <div>${p.pricing['nassau_pos'].toFixed(2)}</div>}
+                          {p.sell_online    && p.pricing['online_market']   && <div>${p.pricing['online_market'].toFixed(2)}</div>}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -607,6 +668,48 @@ export default function ProductsPage() {
 
             <div className="p-5 space-y-5">
 
+              {/* Image section */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
+                  Product Photo
+                </h3>
+                <input ref={editImageRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setEditImageFile(f);
+                    setEditImagePreview(URL.createObjectURL(f));
+                  }} />
+                <button onClick={() => editImageRef.current?.click()}
+                  className="w-full overflow-hidden rounded-xl relative"
+                  style={{ minHeight: '140px', backgroundColor: '#1a2e5a' }}>
+                  {editImagePreview || selected.image_url ? (
+                    <div className="relative">
+                      <img
+                        src={editImagePreview || selected.image_url!}
+                        alt={selected.name}
+                        className="w-full object-cover"
+                        style={{ maxHeight: '180px' }} />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition"
+                        style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
+                        <span className="text-white font-bold text-sm bg-black/40 px-4 py-2 rounded-xl">
+                          📷 Change Photo
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-2 py-8">
+                      <div className="text-4xl">📷</div>
+                      <p className="text-sm font-bold text-white">Add Photo</p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Camera · Gallery · Files</p>
+                    </div>
+                  )}
+                </button>
+                {editImagePreview && (
+                  <p className="text-xs mt-1.5" style={{ color: '#4ade80' }}>✓ New photo selected — save to apply</p>
+                )}
+              </div>
+
               {/* Channel toggles */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
@@ -629,28 +732,24 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Price editing */}
+              {/* Pricing */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
                   Prices (BSD $)
                 </h3>
-
-                {/* Auto-calc from cost */}
                 <div className="rounded-xl px-4 py-3 mb-3" style={{ backgroundColor: '#1a2e5a' }}>
                   <label className="text-xs font-bold mb-2 block" style={{ color: 'rgba(255,255,255,0.6)' }}>
                     Recalculate from cost
                   </label>
                   <div className="flex gap-2">
-                    <input
-                      id="cost-input-edit"
-                      type="number" step="0.01" min="0"
+                    <input id="cost-input-edit" type="number" step="0.01" min="0"
                       placeholder="Cost per unit"
                       className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
                       style={{ backgroundColor: '#060d1f', border: '1px solid rgba(245,197,24,0.3)' }} />
                     <button
                       onClick={() => {
-                        const costEl = document.getElementById('cost-input-edit') as HTMLInputElement;
-                        calcFromCost(costEl?.value ?? '', setEditPrices, editPrices);
+                        const el = document.getElementById('cost-input-edit') as HTMLInputElement;
+                        calcFromCost(el?.value ?? '', setEditPrices, editPrices);
                       }}
                       className="px-4 py-2 rounded-xl text-xs font-bold"
                       style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
@@ -658,16 +757,14 @@ export default function ProductsPage() {
                     </button>
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   {CHANNELS.map(ch => (
                     <div key={ch.key} className="flex items-center gap-3">
-                      <label className="text-xs font-semibold w-28 shrink-0" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                      <label className="text-xs font-semibold w-28 shrink-0"
+                        style={{ color: 'rgba(255,255,255,0.6)' }}>
                         {ch.emoji} {ch.label}
                       </label>
-                      <input
-                        type="number" step="0.01" min="0"
-                        placeholder="0.00"
+                      <input type="number" step="0.01" min="0" placeholder="0.00"
                         value={editPrices[ch.key]}
                         onChange={e => setEditPrices(prev => ({ ...prev, [ch.key]: e.target.value }))}
                         className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
