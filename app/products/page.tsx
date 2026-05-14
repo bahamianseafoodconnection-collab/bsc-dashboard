@@ -37,6 +37,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   snack: 'Snack', household: 'Household', toiletry: 'Toiletry', other: 'Other',
 };
 
+interface Supplier {
+  id: string;
+  name: string;
+  code: string;
+}
+
 interface Product {
   id: string;
   sku: string;
@@ -52,6 +58,8 @@ interface Product {
   sell_online: boolean;
   sell_wholesale: boolean;
   image_url: string | null;
+  primary_supplier_id: string | null;
+  supplier_sku: string | null;
   pricing: Record<string, number>;
 }
 
@@ -70,6 +78,8 @@ interface NewProduct {
   prices: Record<string, string>;
   image_file: File | null;
   image_preview: string;
+  primary_supplier_id: string;
+  supplier_sku: string;
 }
 
 const BLANK_NEW: NewProduct = {
@@ -78,27 +88,30 @@ const BLANK_NEW: NewProduct = {
   sell_nassau: true, sell_andros: false, sell_online: true, sell_wholesale: false,
   cost_per_unit: '',
   prices: { nassau_pos: '', andros_pos: '', online_market: '', local_wholesale: '' },
-  image_file: null,
-  image_preview: '',
+  image_file: null, image_preview: '',
+  primary_supplier_id: '', supplier_sku: '',
 };
 
 export default function ProductsPage() {
   const supabase = getSupabase();
-  const [products, setProducts]           = useState<Product[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [search, setSearch]               = useState('');
-  const [filterCat, setFilterCat]         = useState('all');
-  const [filterChan, setFilterChan]       = useState('all');
-  const [selected, setSelected]           = useState<Product | null>(null);
-  const [editPrices, setEditPrices]       = useState<Record<string, string>>({});
-  const [editChannels, setEditChannels]   = useState<Record<string, boolean>>({});
-  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [products, setProducts]               = useState<Product[]>([]);
+  const [suppliers, setSuppliers]             = useState<Supplier[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [search, setSearch]                   = useState('');
+  const [filterCat, setFilterCat]             = useState('all');
+  const [filterChan, setFilterChan]           = useState('all');
+  const [selected, setSelected]               = useState<Product | null>(null);
+  const [editPrices, setEditPrices]           = useState<Record<string, string>>({});
+  const [editChannels, setEditChannels]       = useState<Record<string, boolean>>({});
+  const [editImageFile, setEditImageFile]     = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState('');
-  const [saving, setSaving]               = useState(false);
-  const [newProduct, setNewProduct]       = useState<NewProduct>(BLANK_NEW);
-  const [adding, setAdding]               = useState(false);
-  const [toast, setToast]                 = useState<{ msg: string; ok: boolean } | null>(null);
-  const [tab, setTab]                     = useState<'list' | 'add'>('list');
+  const [editSupplierId, setEditSupplierId]   = useState('');
+  const [editSupplierSku, setEditSupplierSku] = useState('');
+  const [saving, setSaving]                   = useState(false);
+  const [newProduct, setNewProduct]           = useState<NewProduct>(BLANK_NEW);
+  const [adding, setAdding]                   = useState(false);
+  const [toast, setToast]                     = useState<{ msg: string; ok: boolean } | null>(null);
+  const [tab, setTab]                         = useState<'list' | 'add'>('list');
 
   const newImageRef  = useRef<HTMLInputElement>(null);
   const editImageRef = useRef<HTMLInputElement>(null);
@@ -108,11 +121,20 @@ export default function ProductsPage() {
     setTimeout(() => setToast(null), 3000);
   }
 
+  const loadSuppliers = useCallback(async () => {
+    const { data } = await supabase
+      .from('suppliers')
+      .select('id, name, code')
+      .eq('is_active', true)
+      .order('name');
+    setSuppliers(data ?? []);
+  }, [supabase]);
+
   const loadProducts = useCallback(async () => {
     setLoading(true);
     const { data: prods } = await supabase
       .from('products')
-      .select('id, sku, name, description, category, is_bsc_processed, unit_type, unit_of_measure, status, sell_nassau, sell_andros, sell_online, sell_wholesale, image_url')
+      .select('id, sku, name, description, category, is_bsc_processed, unit_type, unit_of_measure, status, sell_nassau, sell_andros, sell_online, sell_wholesale, image_url, primary_supplier_id, supplier_sku')
       .in('status', ['active', 'draft', 'pending_approval'])
       .order('name');
 
@@ -132,7 +154,10 @@ export default function ProductsPage() {
     setLoading(false);
   }, [supabase]);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => {
+    loadProducts();
+    loadSuppliers();
+  }, [loadProducts, loadSuppliers]);
 
   function openProduct(p: Product) {
     setSelected(p);
@@ -150,13 +175,11 @@ export default function ProductsPage() {
     });
     setEditImageFile(null);
     setEditImagePreview('');
+    setEditSupplierId(p.primary_supplier_id ?? '');
+    setEditSupplierSku(p.supplier_sku ?? '');
   }
 
-  function calcFromCost(
-    cost: string,
-    setter: (prices: Record<string, string>) => void,
-    current: Record<string, string>
-  ) {
+  function calcFromCost(cost: string, setter: (p: Record<string, string>) => void, current: Record<string, string>) {
     const c = parseFloat(cost);
     if (isNaN(c) || c <= 0) return;
     setter({
@@ -184,19 +207,19 @@ export default function ProductsPage() {
     setSaving(true);
     try {
       let imageUrl = selected.image_url;
-
-      // Upload new image if selected
       if (editImageFile) {
         const url = await uploadImage(editImageFile, selected.sku);
         if (url) imageUrl = url;
       }
 
       await supabase.from('products').update({
-        sell_nassau:    editChannels['nassau_pos'],
-        sell_andros:    editChannels['andros_pos'],
-        sell_online:    editChannels['online_market'],
-        sell_wholesale: editChannels['local_wholesale'],
-        image_url:      imageUrl,
+        sell_nassau:         editChannels['nassau_pos'],
+        sell_andros:         editChannels['andros_pos'],
+        sell_online:         editChannels['online_market'],
+        sell_wholesale:      editChannels['local_wholesale'],
+        image_url:           imageUrl,
+        primary_supplier_id: editSupplierId || null,
+        supplier_sku:        editSupplierSku.trim() || null,
       }).eq('id', selected.id);
 
       for (const ch of CHANNELS) {
@@ -229,7 +252,6 @@ export default function ProductsPage() {
     }
     setAdding(true);
     try {
-      // Upload image first if provided
       let imageUrl: string | null = null;
       if (newProduct.image_file) {
         imageUrl = await uploadImage(newProduct.image_file, newProduct.sku);
@@ -238,20 +260,22 @@ export default function ProductsPage() {
       const { data: inserted, error: insertErr } = await supabase
         .from('products')
         .insert({
-          sku:              newProduct.sku.trim().toUpperCase(),
-          name:             newProduct.name.trim(),
-          description:      newProduct.description.trim() || null,
-          category:         newProduct.category,
-          is_bsc_processed: newProduct.is_bsc_processed,
-          unit_type:        newProduct.unit_type,
-          unit_of_measure:  newProduct.unit_type,
-          sell_nassau:      newProduct.sell_nassau,
-          sell_andros:      newProduct.sell_andros,
-          sell_online:      newProduct.sell_online,
-          sell_wholesale:   newProduct.sell_wholesale,
-          image_url:        imageUrl,
-          status:           'active',
-          created_by:       FOUNDER_ID,
+          sku:                 newProduct.sku.trim().toUpperCase(),
+          name:                newProduct.name.trim(),
+          description:         newProduct.description.trim() || null,
+          category:            newProduct.category,
+          is_bsc_processed:    newProduct.is_bsc_processed,
+          unit_type:           newProduct.unit_type,
+          unit_of_measure:     newProduct.unit_type,
+          sell_nassau:         newProduct.sell_nassau,
+          sell_andros:         newProduct.sell_andros,
+          sell_online:         newProduct.sell_online,
+          sell_wholesale:      newProduct.sell_wholesale,
+          image_url:           imageUrl,
+          primary_supplier_id: newProduct.primary_supplier_id || null,
+          supplier_sku:        newProduct.supplier_sku.trim() || null,
+          status:              'active',
+          created_by:          FOUNDER_ID,
         })
         .select('id')
         .single();
@@ -294,16 +318,63 @@ export default function ProductsPage() {
     return matchSearch && matchCat && matchChan;
   });
 
-  const activeCount = products.filter(p => p.status === 'active').length;
-  const nassauCount = products.filter(p => p.sell_nassau).length;
-  const onlineCount = products.filter(p => p.sell_online).length;
-  const androsCount = products.filter(p => p.sell_andros).length;
+  const activeCount  = products.filter(p => p.status === 'active').length;
+  const nassauCount  = products.filter(p => p.sell_nassau).length;
+  const onlineCount  = products.filter(p => p.sell_online).length;
+  const androsCount  = products.filter(p => p.sell_andros).length;
   const noImageCount = products.filter(p => !p.image_url).length;
+
+  // Supplier selector component used in both add + edit
+  function SupplierSection({
+    supplierId, supplierSku,
+    onSupplierChange, onSkuChange,
+  }: {
+    supplierId: string; supplierSku: string;
+    onSupplierChange: (v: string) => void; onSkuChange: (v: string) => void;
+  }) {
+    const selectedSupplier = suppliers.find(s => s.id === supplierId);
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#f5c518' }}>
+            Supplier (Internal Only)
+          </h3>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+            style={{ backgroundColor: '#1a2e5a', color: 'rgba(255,255,255,0.5)' }}>
+            🔒 Never shown to customers
+          </span>
+        </div>
+
+        <select value={supplierId} onChange={e => onSupplierChange(e.target.value)}
+          className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+          style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }}>
+          <option value="">— No supplier assigned —</option>
+          {suppliers.map(s => (
+            <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+          ))}
+        </select>
+
+        {supplierId && (
+          <div>
+            <label className="text-xs font-bold mb-1 block" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              {selectedSupplier?.name} SKU / Item Code
+            </label>
+            <input value={supplierSku} onChange={e => onSkuChange(e.target.value)}
+              placeholder="Supplier's own code for this product"
+              className="w-full rounded-xl px-3 py-2.5 text-sm text-white font-mono outline-none"
+              style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }} />
+            <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              Used on purchase orders and order fulfillment — not visible to customers
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: '#060d1f', fontFamily: "'DM Sans', sans-serif" }}>
 
-      {/* Toast */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-xl"
           style={{ backgroundColor: toast.ok ? '#16a34a' : '#dc2626', color: 'white' }}>
@@ -311,7 +382,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b px-4 py-3"
         style={{ backgroundColor: '#1a2e5a', borderColor: 'rgba(245,197,24,0.2)' }}>
         <div className="flex items-center justify-between mb-3">
@@ -345,7 +415,7 @@ export default function ProductsPage() {
       {tab === 'add' && (
         <div className="p-4 max-w-xl mx-auto space-y-4">
 
-          {/* Image upload — top of form */}
+          {/* Image upload */}
           <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#0f1f3d' }}>
             <input ref={newImageRef} type="file" accept="image/*" className="hidden"
               onChange={e => {
@@ -353,32 +423,27 @@ export default function ProductsPage() {
                 if (!f) return;
                 setNewProduct(p => ({ ...p, image_file: f, image_preview: URL.createObjectURL(f) }));
               }} />
-            <button onClick={() => newImageRef.current?.click()}
-              className="w-full relative"
-              style={{ minHeight: '180px' }}>
+            <button onClick={() => newImageRef.current?.click()} className="w-full relative"
+              style={{ minHeight: '160px' }}>
               {newProduct.image_preview ? (
                 <div className="relative">
                   <img src={newProduct.image_preview} alt="Preview"
-                    className="w-full object-cover" style={{ maxHeight: '220px' }} />
+                    className="w-full object-cover" style={{ maxHeight: '200px' }} />
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition"
                     style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
                     <span className="text-white font-bold text-sm">📷 Change Photo</span>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center gap-3 py-12"
+                <div className="flex flex-col items-center justify-center gap-3 py-10"
                   style={{ backgroundColor: '#1a2e5a' }}>
                   <div className="text-5xl">📷</div>
                   <div>
                     <p className="font-bold text-white text-sm">Add Product Photo</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                      Camera · Gallery · Files
-                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>Camera · Gallery · Files</p>
                   </div>
                   <div className="px-4 py-2 rounded-xl text-xs font-bold"
-                    style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
-                    Choose Photo
-                  </div>
+                    style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>Choose Photo</div>
                 </div>
               )}
             </button>
@@ -395,10 +460,9 @@ export default function ProductsPage() {
           {/* Product details */}
           <div className="rounded-2xl p-5 space-y-4" style={{ backgroundColor: '#0f1f3d' }}>
             <h2 className="font-bold text-white">Product Details</h2>
-
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold mb-1 block" style={{ color: '#f5c518' }}>SKU *</label>
+                <label className="text-xs font-bold mb-1 block" style={{ color: '#f5c518' }}>BSC SKU *</label>
                 <input value={newProduct.sku}
                   onChange={e => setNewProduct(p => ({ ...p, sku: e.target.value }))}
                   placeholder="e.g. LBTAIL-P3"
@@ -464,7 +528,17 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Sales channels */}
+          {/* Supplier — internal only */}
+          <div className="rounded-2xl p-5" style={{ backgroundColor: '#0f1f3d' }}>
+            <SupplierSection
+              supplierId={newProduct.primary_supplier_id}
+              supplierSku={newProduct.supplier_sku}
+              onSupplierChange={v => setNewProduct(p => ({ ...p, primary_supplier_id: v }))}
+              onSkuChange={v => setNewProduct(p => ({ ...p, supplier_sku: v }))}
+            />
+          </div>
+
+          {/* Channels */}
           <div className="rounded-2xl p-5 space-y-3" style={{ backgroundColor: '#0f1f3d' }}>
             <h2 className="font-bold text-white">Sales Channels</h2>
             {CHANNELS.map(ch => {
@@ -478,7 +552,9 @@ export default function ProductsPage() {
                   style={{ backgroundColor: '#1a2e5a' }}>
                   <div>
                     <p className="text-sm font-bold text-white">{ch.emoji} {ch.label}</p>
-                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Margin: {(ch.margin * 100).toFixed(0)}%</p>
+                    <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      Margin: {(ch.margin * 100).toFixed(0)}%
+                    </p>
                   </div>
                   <button
                     onClick={() => {
@@ -591,59 +667,62 @@ export default function ProductsPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {filtered.map(p => (
-                <button key={p.id} onClick={() => openProduct(p)}
-                  className="w-full text-left rounded-xl border transition"
-                  style={{ backgroundColor: '#0f1f3d', borderColor: 'rgba(245,197,24,0.15)' }}>
-                  <div className="flex items-stretch">
-                    {/* Product image thumbnail */}
-                    <div className="shrink-0 w-20 h-20 rounded-l-xl overflow-hidden"
-                      style={{ backgroundColor: '#1a2e5a' }}>
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-2xl">📦</div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-1 items-start justify-between gap-3 p-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
-                            style={{ backgroundColor: '#1a2e5a', color: 'rgba(255,255,255,0.5)' }}>
-                            {p.sku}
-                          </span>
-                          {p.is_bsc_processed && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900 text-blue-300">BSC</span>
-                          )}
-                          {p.unit_type === 'lb' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900 text-amber-300">/lb</span>
-                          )}
-                          {!p.image_url && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-300">No image</span>
-                          )}
-                        </div>
-                        <p className="text-sm font-bold text-white truncate">{p.name}</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                          {CATEGORY_LABELS[p.category] ?? p.category}
-                        </p>
+              {filtered.map(p => {
+                const supplier = suppliers.find(s => s.id === p.primary_supplier_id);
+                return (
+                  <button key={p.id} onClick={() => openProduct(p)}
+                    className="w-full text-left rounded-xl border transition"
+                    style={{ backgroundColor: '#0f1f3d', borderColor: 'rgba(245,197,24,0.15)' }}>
+                    <div className="flex items-stretch">
+                      <div className="shrink-0 w-20 h-20 rounded-l-xl overflow-hidden"
+                        style={{ backgroundColor: '#1a2e5a' }}>
+                        {p.image_url ? (
+                          <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-2xl">📦</div>
+                        )}
                       </div>
-                      <div className="shrink-0 text-right">
-                        <div className="flex gap-1 flex-wrap justify-end mb-1">
-                          {p.sell_nassau    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-900 text-yellow-300">🟡</span>}
-                          {p.sell_andros    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-900 text-purple-300">🟣</span>}
-                          {p.sell_online    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900 text-blue-300">🛒</span>}
-                          {p.sell_wholesale && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-900 text-green-300">📦</span>}
+                      <div className="flex flex-1 items-start justify-between gap-3 p-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: '#1a2e5a', color: 'rgba(255,255,255,0.5)' }}>
+                              {p.sku}
+                            </span>
+                            {p.is_bsc_processed && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900 text-blue-300">BSC</span>
+                            )}
+                            {p.unit_type === 'lb' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900 text-amber-300">/lb</span>
+                            )}
+                            {!p.image_url && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900 text-red-300">No image</span>
+                            )}
+                          </div>
+                          <p className="text-sm font-bold text-white truncate">{p.name}</p>
+                          {supplier && (
+                            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                              🔒 {supplier.name}{p.supplier_sku ? ` · ${p.supplier_sku}` : ''}
+                            </p>
+                          )}
                         </div>
-                        <div className="text-xs space-y-0.5" style={{ color: '#f5c518' }}>
-                          {p.sell_nassau    && p.pricing['nassau_pos']      && <div>${p.pricing['nassau_pos'].toFixed(2)}</div>}
-                          {p.sell_online    && p.pricing['online_market']   && <div>${p.pricing['online_market'].toFixed(2)}</div>}
+                        <div className="shrink-0 text-right">
+                          <div className="flex gap-1 flex-wrap justify-end mb-1">
+                            {p.sell_nassau    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-900 text-yellow-300">🟡</span>}
+                            {p.sell_andros    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-900 text-purple-300">🟣</span>}
+                            {p.sell_online    && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900 text-blue-300">🛒</span>}
+                            {p.sell_wholesale && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-900 text-green-300">📦</span>}
+                          </div>
+                          <div className="text-xs space-y-0.5" style={{ color: '#f5c518' }}>
+                            {p.sell_nassau  && p.pricing['nassau_pos']    && <div>${p.pricing['nassau_pos'].toFixed(2)}</div>}
+                            {p.sell_online  && p.pricing['online_market']  && <div>${p.pricing['online_market'].toFixed(2)}</div>}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -668,7 +747,7 @@ export default function ProductsPage() {
 
             <div className="p-5 space-y-5">
 
-              {/* Image section */}
+              {/* Image */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
                   Product Photo
@@ -682,24 +761,19 @@ export default function ProductsPage() {
                   }} />
                 <button onClick={() => editImageRef.current?.click()}
                   className="w-full overflow-hidden rounded-xl relative"
-                  style={{ minHeight: '140px', backgroundColor: '#1a2e5a' }}>
+                  style={{ minHeight: '120px', backgroundColor: '#1a2e5a' }}>
                   {editImagePreview || selected.image_url ? (
                     <div className="relative">
-                      <img
-                        src={editImagePreview || selected.image_url!}
-                        alt={selected.name}
-                        className="w-full object-cover"
-                        style={{ maxHeight: '180px' }} />
+                      <img src={editImagePreview || selected.image_url!} alt={selected.name}
+                        className="w-full object-cover" style={{ maxHeight: '160px' }} />
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition"
                         style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
-                        <span className="text-white font-bold text-sm bg-black/40 px-4 py-2 rounded-xl">
-                          📷 Change Photo
-                        </span>
+                        <span className="text-white font-bold text-sm bg-black/40 px-4 py-2 rounded-xl">📷 Change Photo</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center gap-2 py-8">
-                      <div className="text-4xl">📷</div>
+                    <div className="flex flex-col items-center justify-center gap-2 py-6">
+                      <div className="text-3xl">📷</div>
                       <p className="text-sm font-bold text-white">Add Photo</p>
                       <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Camera · Gallery · Files</p>
                     </div>
@@ -710,7 +784,17 @@ export default function ProductsPage() {
                 )}
               </div>
 
-              {/* Channel toggles */}
+              {/* Supplier */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: '#1a2e5a' }}>
+                <SupplierSection
+                  supplierId={editSupplierId}
+                  supplierSku={editSupplierSku}
+                  onSupplierChange={setEditSupplierId}
+                  onSkuChange={setEditSupplierSku}
+                />
+              </div>
+
+              {/* Channels */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
                   Sales Channels
@@ -774,7 +858,6 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Save */}
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setSelected(null)}
                   className="flex-1 py-3 rounded-xl text-sm font-bold"
