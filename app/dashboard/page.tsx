@@ -28,18 +28,18 @@ const NAV_GROUPS = [
   {
     label: 'Inventory & Supply',
     items: [
-      { icon: '📦', label: 'Inventory',        href: '/inventory' },
-      { icon: '🚢', label: 'Suppliers',        href: '/supplier' },
-      { icon: '🧮', label: 'Landed-cost calc', href: '/landed-cost' },
-      { icon: '🧾', label: 'Purchase Orders',  href: '/purchase-orders' },
-      { icon: '📥', label: 'Buy Next (auto)',   href: '/supplier-purchases' },
-      { icon: '⚖️', label: 'Yield Calculator', href: '/yield' },
-      { icon: '🏷️', label: 'Print Labels',     href: '/labels' },
-      { icon: '🎣', label: 'Captains',          href: '/captains' },
-      { icon: '🦞', label: 'Lobster Intake',    href: '/lobster-intake' },
-      { icon: '⚖️', label: 'Yield Measurement', href: '/yield-measure' },
-      { icon: '🏷️', label: 'Lobster Labels',    href: '/lobster-labels' },
-      { icon: '🧊', label: 'Igloo Integration', href: '/igloo' },
+      { icon: '📦', label: 'Inventory',         href: '/inventory' },
+      { icon: '🚢', label: 'Suppliers',         href: '/supplier' },
+      { icon: '🧮', label: 'Landed-cost calc',  href: '/landed-cost' },
+      { icon: '🧾', label: 'Purchase Orders',   href: '/purchase-orders' },
+      { icon: '📥', label: 'Buy Next (auto)',    href: '/supplier-purchases' },
+      { icon: '⚖️', label: 'Yield Calculator',  href: '/yield' },
+      { icon: '🏷️', label: 'Print Labels',      href: '/labels' },
+      { icon: '🎣', label: 'Captains',           href: '/captains' },
+      { icon: '🦞', label: 'Lobster Intake',     href: '/lobster-intake' },
+      { icon: '⚖️', label: 'Yield Measurement',  href: '/yield-measure' },
+      { icon: '🏷️', label: 'Lobster Labels',     href: '/lobster-labels' },
+      { icon: '🧊', label: 'Igloo Integration',  href: '/igloo' },
     ],
   },
   {
@@ -65,6 +65,7 @@ const NAV_GROUPS = [
       { icon: '⚡', label: 'Bill Payments',     href: '/utilities' },
       { icon: '🛒', label: 'Public Market',     href: '/market' },
       { icon: '🖼️', label: 'Product Images',   href: '/admin/images' },
+      { icon: '🏷️', label: 'Products',         href: '/products' },
     ],
   },
   {
@@ -89,7 +90,7 @@ const REVENUE_STREAMS = [
 ];
 
 const WHOLESALERS = [
-  { key: 'asa-h-pritchard',            name: 'Asa H Pritchard',           color: '#1B4F72', logo: '🏪' },
+  { key: 'asa-h-pritchard',            name: 'Asa H Pritchard',            color: '#1B4F72', logo: '🏪' },
   { key: 'bahamas-international-food', name: 'Bahamas International Food', color: '#1E5C2E', logo: '🍱' },
   { key: 'dalbenas',                   name: "D'Albenas",                  color: '#784212', logo: '🏭' },
   { key: 'bahamas-wholesale-agencies', name: 'Bahamas Wholesale Agencies', color: '#1A5276', logo: '📦' },
@@ -140,19 +141,19 @@ function timeAgo(iso: string) {
 }
 
 export default function DashboardPage() {
-  const [sidebarOpen, setSidebarOpen]           = useState(false);
-  const [activeTab, setActiveTab]               = useState('overview');
-  const [authChecked, setAuthChecked]           = useState(false);
-  const [aiMessages, setAiMessages]             = useState<Message[]>([
+  const [sidebarOpen, setSidebarOpen]         = useState(false);
+  const [activeTab, setActiveTab]             = useState('overview');
+  const [authChecked, setAuthChecked]         = useState(false);
+  const [aiMessages, setAiMessages]           = useState<Message[]>([
     { role: 'assistant', content: "Good morning. I'm Founder AI — I see your live BSC database, know your principles, and apply your sacred pricing rules. Ask anything: today's numbers, a margin call, a strategy question, a pricing decision." },
   ]);
-  const [aiInput, setAiInput]                   = useState('');
-  const [aiLoading, setAiLoading]               = useState(false);
-  const [spinyTailsStock]                       = useState(9310);
-  const messagesEndRef                          = useRef<HTMLDivElement>(null);
-  const [todaySales, setTodaySales]             = useState<SaleRecord[]>([]);
-  const [salesLoading, setSalesLoading]         = useState(true);
-  const [wholesaleOrders, setWholesaleOrders]   = useState<WholesaleOrder[]>([]);
+  const [aiInput, setAiInput]                 = useState('');
+  const [aiLoading, setAiLoading]             = useState(false);
+  const [spinyTailsStock]                     = useState(9310);
+  const messagesEndRef                        = useRef<HTMLDivElement>(null);
+  const [todaySales, setTodaySales]           = useState<SaleRecord[]>([]);
+  const [salesLoading, setSalesLoading]       = useState(true);
+  const [wholesaleOrders, setWholesaleOrders] = useState<WholesaleOrder[]>([]);
   const [wholesaleLoading, setWholesaleLoading] = useState(true);
 
   useEffect(() => {
@@ -215,6 +216,7 @@ export default function DashboardPage() {
     { icon: '🧾', label: 'Purchase Orders', href: '/purchase-orders',   color: '#fef9e7', badge: 0 },
     { icon: '🚗', label: 'Vehicles',        href: '/vehicles',           color: '#fff3e8', badge: 0 },
     { icon: '🖼️', label: 'Product Images', href: '/admin/images',       color: '#fef9e7', badge: 0 },
+    { icon: '🏷️', label: 'Products',       href: '/products',           color: '#fef9e7', badge: 0 },
     { icon: '🇺🇸', label: 'US Products',  href: '/us-products',        color: '#e8f4fd', badge: 0 },
     { icon: '🏭', label: 'Wholesale Prod', href: '/wholesale-products', color: '#f0fde8', badge: 0 },
     { icon: '⚡', label: 'Pay Bills',       href: '/utilities',          color: '#e8f8fd', badge: 0 },
@@ -624,10 +626,8 @@ export default function DashboardPage() {
                   <div style={{ color: '#fff', fontWeight: 800, fontSize: '14px' }}>Founder AI</div>
                   <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>Live database · sacred rules · founder principles</div>
                 </div>
-                <button
-                  onClick={() => { window.location.href = '/founder-ai'; }}
-                  style={{ color: '#f4c842', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(244,200,66,0.15)', padding: '5px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
+                <button onClick={() => { window.location.href = '/founder-ai'; }}
+                  style={{ color: '#f4c842', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(244,200,66,0.15)', padding: '5px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   Open full ↗
                 </button>
               </div>
