@@ -433,4 +433,218 @@ export default function POSPage() {
               type="number" step="0.01" min="0.01"
               placeholder="e.g. 2.45"
               value={weightInput.weight}
-              onChange={e => setWeightInput(prev => prev ?​​​​​​​​​​​​​​​​
+              onChange={e => setWeightInput(prev => prev ? { ...prev, weight: e.target.value } : null)}
+              onKeyDown={e => e.key === 'Enter' && confirmWeight()}
+              className="w-full bg-gray-800 text-white text-2xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 text-center"
+              autoFocus />
+            <p className="text-xs text-gray-500 text-center mt-1">pounds — enter decimal e.g. 2.45</p>
+            {weightInput.weight && !isNaN(parseFloat(weightInput.weight)) && parseFloat(weightInput.weight) > 0 && (() => {
+              const product = products.find(p => p.id === weightInput.productId)
+              const price   = product?.promo_price ?? product?.sell_price ?? 0
+              const lbs     = parseFloat(weightInput.weight)
+              return (
+                <div className="mt-3 rounded-xl p-3 text-center" style={{ backgroundColor: '#0f1f3d' }}>
+                  <p className="text-xs text-gray-400">{lbs.toFixed(2)} lbs × ${price.toFixed(2)}/lb</p>
+                  <p className="text-xl font-bold mt-0.5" style={{ color: '#f5c518' }}>
+                    ${(price * lbs).toFixed(2)}
+                  </p>
+                </div>
+              )
+            })()}
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setWeightInput(null)}
+                className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">
+                Cancel
+              </button>
+              <button onClick={confirmWeight}
+                className="flex-1 rounded-xl py-3 text-sm font-bold"
+                style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cart drawer ── */}
+      {showCart && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCart(false)} />
+          <div className="relative bg-gray-900 rounded-t-3xl border-t border-gray-700 flex flex-col" style={{ maxHeight: '95dvh' }}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-800 shrink-0">
+              <h2 className="font-bold text-lg" style={{ fontFamily: "'Playfair Display', serif" }}>Cart ({cartCount})</h2>
+              <button onClick={() => setShowCart(false)} className="text-gray-400 text-2xl leading-none w-8 h-8 flex items-center justify-center">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {cart.length === 0 ? (
+                <p className="text-center text-gray-500 py-12 text-sm">Cart is empty</p>
+              ) : (
+                <div className="space-y-3">
+                  {cart.map((item, i) => {
+                    const lineTotal = item.product.is_per_lb && item.weight_lb
+                      ? item.unit_price * item.weight_lb
+                      : item.unit_price * item.quantity
+                    return (
+                      <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-xl p-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{item.product.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            ${item.unit_price.toFixed(2)}/lb
+                            {item.product.is_per_lb && item.weight_lb
+                              ? ` × ${item.weight_lb.toFixed(2)} lbs`
+                              : item.quantity > 1 ? ` × ${item.quantity}` : ''}
+                            {item.product.promo_price !== null && (
+                              <span className="ml-1.5" style={{ color: '#f5c518' }}>★ Special</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!item.product.is_per_lb && (
+                            <>
+                              <button onClick={() => adjustQty(i, -1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold flex items-center justify-center">−</button>
+                              <span className="text-sm w-4 text-center">{item.quantity}</span>
+                              <button onClick={() => adjustQty(i, 1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold flex items-center justify-center">+</button>
+                            </>
+                          )}
+                          <span className="text-sm font-bold ml-1" style={{ color: '#f5c518' }}>${lineTotal.toFixed(2)}</span>
+                          <button onClick={() => removeFromCart(i)} className="text-red-400 text-xl ml-1 leading-none">×</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="px-5 pb-6 pt-3 border-t border-gray-800 shrink-0">
+              <div className="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm text-gray-400 mb-3"><span>VAT (0% — food items)</span><span>$0.00</span></div>
+              <div className="flex justify-between font-bold text-xl mb-4"><span>Total</span><span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span></div>
+              <button onClick={() => setShowCheckout(true)} disabled={cart.length === 0}
+                className="w-full py-4 rounded-2xl font-bold text-base disabled:opacity-40"
+                style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                Charge ${total.toFixed(2)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Checkout modal ── */}
+      {showCheckout && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700 overflow-y-auto" style={{ maxHeight: '95dvh' }}>
+            <h3 className="font-bold text-xl mb-5" style={{ fontFamily: "'Playfair Display', serif" }}>Checkout</h3>
+
+            {/* Customer lookup */}
+            <div className="mb-5 rounded-xl p-4" style={{ backgroundColor: '#0d1117', border: '1px solid #374151' }}>
+              <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Customer Phone</label>
+              <input type="tel" placeholder="e.g. 242-555-0100"
+                value={customerPhone} onChange={e => handlePhoneChange(e.target.value)}
+                className="w-full bg-gray-800 text-white rounded-xl px-4 py-2.5 mb-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+
+              {customerLookingUp && <p className="text-xs text-gray-400 animate-pulse">Looking up customer...</p>}
+
+              {customerStatus === 'found' && foundCustomer && (
+                <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: '#052e16' }}>
+                  <p className="text-xs font-bold" style={{ color: '#4ade80' }}>✓ Returning Customer</p>
+                  <p className="text-sm font-semibold text-white mt-0.5">{foundCustomer.full_name}</p>
+                  <p className="text-xs text-gray-400">{foundCustomer.total_orders} orders · ${Number(foundCustomer.total_spent).toFixed(2)} lifetime</p>
+                </div>
+              )}
+
+              {customerStatus === 'new' && (
+                <>
+                  <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: '#1c1200' }}>
+                    <p className="text-xs font-bold" style={{ color: '#f5c518' }}>✦ New Customer</p>
+                    <p className="text-xs text-gray-400">Enter name to save to database</p>
+                  </div>
+                  <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Customer Name</label>
+                  <input type="text" placeholder="Full name" value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    className="w-full bg-gray-800 text-white rounded-xl px-4 py-2.5 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                </>
+              )}
+
+              {customerStatus === 'idle' && !customerLookingUp && (
+                <p className="text-xs text-gray-500">Optional — enter phone to look up or create customer</p>
+              )}
+            </div>
+
+            {/* Payment method */}
+            <label className="block text-xs text-gray-400 mb-2 uppercase tracking-wide">Payment Method</label>
+            <div className="grid grid-cols-3 gap-2 mb-5">
+              {PAYMENT_METHODS.map(pm => (
+                <button key={pm.value} onClick={() => setPaymentMethod(pm.value)}
+                  className="py-3 rounded-xl text-xs font-bold transition-colors"
+                  style={paymentMethod === pm.value
+                    ? { backgroundColor: '#f5c518', color: '#060d1f' }
+                    : { backgroundColor: '#1f2937', color: '#9ca3af' }}>
+                  {pm.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Card */}
+            {paymentMethod === 'card' && (
+              <>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Terminal</label>
+                <select value={terminal} onChange={e => setTerminal(e.target.value)}
+                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400">
+                  {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # (optional)</label>
+                <input type="text" placeholder="e.g. 4521" value={cardRef} onChange={e => setCardRef(e.target.value)}
+                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+              </>
+            )}
+
+            {/* Cash */}
+            {paymentMethod === 'cash' && (
+              <>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Cash Tendered ($)</label>
+                <input type="number" step="0.01" min="0" placeholder={total.toFixed(2)}
+                  value={cashTendered} onChange={e => setCashTendered(e.target.value)}
+                  className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 mb-3 border border-gray-700 text-center focus:outline-none focus:border-yellow-400"
+                  autoFocus />
+                {cashTenderedNum >= total && total > 0 && (
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#052e16' }}>
+                    <p className="text-xs text-gray-400">Change Due</p>
+                    <p className="text-2xl font-bold" style={{ color: '#4ade80' }}>${changeDue.toFixed(2)}</p>
+                  </div>
+                )}
+                {cashTenderedNum > 0 && cashTenderedNum < total && (
+                  <p className="text-xs text-red-400 text-center mb-4">Amount is less than total</p>
+                )}
+              </>
+            )}
+
+            {/* Wire */}
+            {paymentMethod === 'wire' && (
+              <>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Wire Ref # (optional)</label>
+                <input type="text" placeholder="e.g. TRF-20260513" value={wireRef} onChange={e => setWireRef(e.target.value)}
+                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+              </>
+            )}
+
+            <div className="flex justify-between font-bold text-xl mb-5">
+              <span>Total</span>
+              <span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setShowCheckout(false); resetCheckout() }} disabled={submitting}
+                className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">
+                Back
+              </button>
+              <button onClick={handleCheckout} disabled={submitting || !checkoutReady}
+                className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50"
+                style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                {submitting ? 'Saving...' : 'Confirm Sale'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
