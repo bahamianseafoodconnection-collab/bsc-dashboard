@@ -13,9 +13,6 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const STORAGE_BASE =
-  'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
-
 const BRANDS: Record<
   string,
   { name: string; color: string; light: string; emoji: string }
@@ -326,18 +323,22 @@ function MarketPageInner() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
+
       {/* ─── Header ─── */}
       <header className="sticky top-0 z-40 bg-navy shadow-md">
         <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-3 px-3 sm:h-16 sm:gap-4 sm:px-6">
+
+          {/* ── Bahamian identity badge ── */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <img
-              src={`${STORAGE_BASE}/logo.jpg`}
-              alt="BSC"
-              className="h-9 w-9 rounded-full border-2 border-gold object-cover sm:h-10 sm:w-10"
-            />
-            <div className="hidden text-white sm:block">
-              <div className="text-sm font-extrabold tracking-wide text-gold">BSC Marketplace</div>
-              <div className="text-[10px] text-slate-300">Nassau · Bahamas 🇧🇸</div>
+            <div className="flex items-center justify-center h-9 w-9 rounded-full sm:h-10 sm:w-10 text-xl font-black shrink-0"
+              style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+              🇧🇸
+            </div>
+            <div className="text-white">
+              <div className="text-sm font-extrabold tracking-wide" style={{ color: '#f5c518' }}>
+                BSC Marketplace
+              </div>
+              <div className="text-[10px] text-slate-300">Shop Local · Nassau 🌊</div>
             </div>
           </Link>
 
@@ -356,31 +357,21 @@ function MarketPageInner() {
             </div>
           </div>
 
-          <Link
-            href="/wishlist"
-            aria-label="Open wishlist"
+          <Link href="/wishlist" aria-label="Open wishlist"
             className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-base text-white transition hover:bg-white/20 sm:flex sm:h-11"
-            title="Wishlist"
-          >
-            ♡
-          </Link>
-          <Link
-            href="/my-orders"
-            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/20 sm:flex sm:h-11"
-          >
+            title="Wishlist">♡</Link>
+          <Link href="/my-orders"
+            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/20 sm:flex sm:h-11">
             My orders
           </Link>
-          <Link
-            href="/account"
-            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/20 sm:flex sm:h-11"
-          >
+          <Link href="/account"
+            className="hidden h-10 shrink-0 items-center justify-center rounded-lg bg-white/10 px-3 text-xs font-bold text-white transition hover:bg-white/20 sm:flex sm:h-11">
             Account
           </Link>
           <button
             onClick={() => setShowCart(true)}
             className="relative flex h-10 shrink-0 items-center gap-2 rounded-lg bg-gold px-3 text-sm font-bold text-navy transition hover:bg-gold-300 sm:h-11 sm:px-4"
-            aria-label={`Open cart — ${cartCount} items`}
-          >
+            aria-label={`Open cart — ${cartCount} items`}>
             <span className="text-lg">🛒</span>
             <span className="hidden sm:inline">
               {cartCount > 0 ? `BSD $${cartTotal.toFixed(2)}` : 'Cart'}
@@ -396,32 +387,17 @@ function MarketPageInner() {
         {/* Brand strip */}
         <div className="border-t border-white/5 bg-navy-700">
           <div className="mx-auto flex max-w-screen-2xl gap-2 overflow-x-auto px-3 py-2 sm:px-6 [&::-webkit-scrollbar]:hidden">
-            <BrandPill
-              active={activeBrand === 'all'}
-              onClick={() => setBrand('all')}
-              label={`All (${brandCounts.all})`}
-              activeBg="#f4c842"
-              activeFg="#1a2e5a"
-            />
-            <BrandPill
-              active={activeBrand === 'bsc'}
-              onClick={() => setBrand('bsc')}
-              label={`🇧🇸 BSC Direct (${brandCounts.bsc})`}
-              activeBg="#1a2e5a"
-              activeFg="#f4c842"
-              withBorder
-            />
+            <BrandPill active={activeBrand === 'all'} onClick={() => setBrand('all')}
+              label={`All (${brandCounts.all})`} activeBg="#f4c842" activeFg="#1a2e5a" />
+            <BrandPill active={activeBrand === 'bsc'} onClick={() => setBrand('bsc')}
+              label={`🇧🇸 BSC Direct (${brandCounts.bsc})`} activeBg="#1a2e5a" activeFg="#f4c842" withBorder />
             {BRAND_KEYS.filter((k) => brandCounts[k] > 0).map((k) => {
               const b = BRANDS[k];
               return (
-                <BrandPill
-                  key={k}
-                  active={activeBrand === k}
+                <BrandPill key={k} active={activeBrand === k}
                   onClick={() => setBrand(activeBrand === k ? 'all' : k)}
                   label={`${b.emoji} ${b.name} (${brandCounts[k]})`}
-                  activeBg={b.color}
-                  activeFg="#fff"
-                />
+                  activeBg={b.color} activeFg="#fff" />
               );
             })}
           </div>
@@ -448,19 +424,16 @@ function MarketPageInner() {
         <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
             {[
-              { slug: 'seafood',    label: 'Seafood',    emoji: '🦐' },
-              { slug: 'meat',       label: 'Meat',       emoji: '🥩' },
-              { slug: 'produce',    label: 'Produce',    emoji: '🥦' },
-              { slug: 'beverages',  label: 'Beverages',  emoji: '🥤' },
-              { slug: 'dairy',      label: 'Dairy',      emoji: '🥛' },
-              { slug: 'frozen',     label: 'Frozen',     emoji: '🧊' },
-              { slug: 'dry-goods',  label: 'Dry Goods',  emoji: '🌾' },
+              { slug: 'seafood',   label: 'Seafood',   emoji: '🦐' },
+              { slug: 'meat',      label: 'Meat',      emoji: '🥩' },
+              { slug: 'produce',   label: 'Produce',   emoji: '🥦' },
+              { slug: 'beverages', label: 'Beverages', emoji: '🥤' },
+              { slug: 'dairy',     label: 'Dairy',     emoji: '🥛' },
+              { slug: 'frozen',    label: 'Frozen',    emoji: '🧊' },
+              { slug: 'dry-goods', label: 'Dry Goods', emoji: '🌾' },
             ].map((c) => (
-              <Link
-                key={c.slug}
-                href={`/category/${c.slug}`}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-navy transition hover:border-navy hover:bg-navy hover:text-gold"
-              >
+              <Link key={c.slug} href={`/category/${c.slug}`}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-navy transition hover:border-navy hover:bg-navy hover:text-gold">
                 <span>{c.emoji}</span>
                 <span>{c.label}</span>
               </Link>
@@ -470,20 +443,15 @@ function MarketPageInner() {
       </section>
 
       <div className="mx-auto flex max-w-screen-2xl gap-6 px-3 py-5 sm:px-6">
+
         {/* ─── Sidebar (desktop) ─── */}
         <aside className="hidden w-56 shrink-0 lg:block">
-          <FilterPanel
-            activeCategory={activeCategory}
-            setCategory={setCategory}
-            sort={sort}
-            setSort={setSort}
-            products={filtered}
-          />
+          <FilterPanel activeCategory={activeCategory} setCategory={setCategory}
+            sort={sort} setSort={setSort} products={filtered} />
         </aside>
 
         {/* ─── Main column ─── */}
         <main className="min-w-0 flex-1">
-          {/* Toolbar */}
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="text-sm text-slate-600">
               {loading ? (
@@ -500,17 +468,12 @@ function MarketPageInner() {
                 </span>
               )}
             </div>
-            <button
-              onClick={() => setShowFilters(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 lg:hidden"
-            >
+            <button onClick={() => setShowFilters(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 lg:hidden">
               <span>≡</span> Filters
             </button>
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortOption)}
-              className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-navy lg:block"
-            >
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortOption)}
+              className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-navy lg:block">
               <option value="featured">Featured first</option>
               <option value="price-asc">Price: Low → High</option>
               <option value="price-desc">Price: High → Low</option>
@@ -518,68 +481,46 @@ function MarketPageInner() {
             </select>
           </div>
 
-          {/* Order success */}
           {orderDone && (
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
               <span className="text-xl">✅</span>
               <div className="flex-1">
                 <div className="font-bold">Order placed!</div>
-                <div className="text-xs text-emerald-700">
-                  BSC will confirm your order and arrange delivery.
-                </div>
+                <div className="text-xs text-emerald-700">BSC will confirm your order and arrange delivery.</div>
               </div>
-              <button
-                onClick={() => setOrderDone(false)}
-                className="text-emerald-900 hover:text-emerald-700"
-                aria-label="Dismiss"
-              >
-                ×
-              </button>
+              <button onClick={() => setOrderDone(false)} className="text-emerald-900 hover:text-emerald-700" aria-label="Dismiss">×</button>
             </div>
           )}
 
           {/* Featured carousel */}
-          {!loading &&
-            activeBrand === 'all' &&
-            activeCategory === 'All' &&
-            !search.trim() &&
-            (() => {
-              const featured = products.filter((p) => p.featured && p.in_stock);
-              if (featured.length === 0) return null;
-              return (
-                <div className="mb-5">
-                  <div className="mb-2 flex items-end justify-between">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600">
-                        Daily picks
-                      </div>
-                      <h2 className="font-display text-lg font-bold text-navy">
-                        Featured today
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-                    {featured.slice(0, 12).map((p) => {
-                      const inCart = cart.find((i) => i.id === p.id && i.source === p.source);
-                      return (
-                        <div key={`feat-${p.source}-${p.id}`} className="w-44 shrink-0 sm:w-52">
-                          <ProductCard
-                            product={p}
-                            inCartQty={inCart?.qty ?? 0}
-                            onAdd={() => addToCart(p)}
-                            showBrand={false}
-                            onCardClick={() => {
-                              if (p.source === 'market') router.push(`/product/${p.id}`);
-                              else if (p.wholesaler) router.push(`/local-wholesale/${p.wholesaler}`);
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
+          {!loading && activeBrand === 'all' && activeCategory === 'All' && !search.trim() && (() => {
+            const featured = products.filter((p) => p.featured && p.in_stock);
+            if (featured.length === 0) return null;
+            return (
+              <div className="mb-5">
+                <div className="mb-2 flex items-end justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600">Daily picks</div>
+                    <h2 className="font-display text-lg font-bold text-navy">Featured today</h2>
                   </div>
                 </div>
-              );
-            })()}
+                <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+                  {featured.slice(0, 12).map((p) => {
+                    const inCart = cart.find((i) => i.id === p.id && i.source === p.source);
+                    return (
+                      <div key={`feat-${p.source}-${p.id}`} className="w-44 shrink-0 sm:w-52">
+                        <ProductCard product={p} inCartQty={inCart?.qty ?? 0} onAdd={() => addToCart(p)}
+                          showBrand={false} onCardClick={() => {
+                            if (p.source === 'market') router.push(`/product/${p.id}`);
+                            else if (p.wholesaler) router.push(`/local-wholesale/${p.wholesaler}`);
+                          }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Grid */}
           {loading ? (
@@ -591,57 +532,37 @@ function MarketPageInner() {
               {filtered.map((p) => {
                 const inCart = cart.find((i) => i.id === p.id && i.source === p.source);
                 return (
-                  <ProductCard
-                    key={`${p.source}-${p.id}`}
-                    product={p}
-                    inCartQty={inCart?.qty ?? 0}
-                    onAdd={() => addToCart(p)}
+                  <ProductCard key={`${p.source}-${p.id}`} product={p}
+                    inCartQty={inCart?.qty ?? 0} onAdd={() => addToCart(p)}
                     showBrand={activeBrand !== 'all'}
                     onCardClick={() => {
                       if (p.source === 'market') router.push(`/product/${p.id}`);
-                      else if (p.wholesaler)     router.push(`/local-wholesale/${p.wholesaler}`);
-                    }}
-                  />
+                      else if (p.wholesaler) router.push(`/local-wholesale/${p.wholesaler}`);
+                    }} />
                 );
               })}
             </div>
           )}
 
-          {/* Trust bar */}
           {!loading && filtered.length > 0 && <TrustBar />}
         </main>
       </div>
 
       {/* ─── Mobile filter drawer ─── */}
       {showFilters && (
-        <div
-          className="fixed inset-0 z-50 flex bg-black/50 lg:hidden"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowFilters(false);
-          }}
-        >
+        <div className="fixed inset-0 z-50 flex bg-black/50 lg:hidden"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowFilters(false); }}>
           <div className="flex h-full w-72 max-w-[80%] flex-col bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="font-display text-lg font-bold text-navy">Filters</div>
-              <button
-                onClick={() => setShowFilters(false)}
+              <button onClick={() => setShowFilters(false)}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-700"
-                aria-label="Close filters"
-              >
-                ×
-              </button>
+                aria-label="Close filters">×</button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <FilterPanel
-                activeCategory={activeCategory}
-                setCategory={(c) => {
-                  setCategory(c);
-                  setShowFilters(false);
-                }}
-                sort={sort}
-                setSort={(s) => setSort(s)}
-                products={filtered}
-              />
+              <FilterPanel activeCategory={activeCategory}
+                setCategory={(c) => { setCategory(c); setShowFilters(false); }}
+                sort={sort} setSort={(s) => setSort(s)} products={filtered} />
             </div>
           </div>
         </div>
@@ -649,19 +570,10 @@ function MarketPageInner() {
 
       {/* ─── Cart drawer ─── */}
       {showCart && (
-        <CartDrawer
-          cart={cart}
-          cartCount={cartCount}
-          cartTotal={cartTotal}
-          onClose={() => setShowCart(false)}
-          onUpdateQty={updateQty}
-          onPlaceOrder={placeOrder}
-          placing={placing}
-          onCheckout={() => {
-            setShowCart(false);
-            router.push('/checkout');
-          }}
-        />
+        <CartDrawer cart={cart} cartCount={cartCount} cartTotal={cartTotal}
+          onClose={() => setShowCart(false)} onUpdateQty={updateQty}
+          onPlaceOrder={placeOrder} placing={placing}
+          onCheckout={() => { setShowCart(false); router.push('/checkout'); }} />
       )}
     </div>
   );
@@ -669,87 +581,50 @@ function MarketPageInner() {
 
 /* ─────────────────────── Subcomponents ─────────────────────── */
 
-function BrandPill({
-  active,
-  onClick,
-  label,
-  activeBg,
-  activeFg,
-  withBorder,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  activeBg: string;
-  activeFg: string;
-  withBorder?: boolean;
+function BrandPill({ active, onClick, label, activeBg, activeFg, withBorder }: {
+  active: boolean; onClick: () => void; label: string;
+  activeBg: string; activeFg: string; withBorder?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
         active ? '' : 'bg-white/10 text-slate-200 hover:bg-white/15'
       } ${withBorder && active ? 'ring-2 ring-gold' : ''}`}
-      style={active ? { backgroundColor: activeBg, color: activeFg } : undefined}
-    >
+      style={active ? { backgroundColor: activeBg, color: activeFg } : undefined}>
       {label}
     </button>
   );
 }
 
-function FilterPanel({
-  activeCategory,
-  setCategory,
-  sort,
-  setSort,
-  products,
-}: {
-  activeCategory: string;
-  setCategory: (c: string) => void;
-  sort: SortOption;
-  setSort: (s: SortOption) => void;
-  products: MarketProduct[];
+function FilterPanel({ activeCategory, setCategory, sort, setSort, products }: {
+  activeCategory: string; setCategory: (c: string) => void;
+  sort: SortOption; setSort: (s: SortOption) => void; products: MarketProduct[];
 }) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-          Category
-        </div>
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Category</div>
         <div className="space-y-1">
           {CATEGORIES.map((cat) => {
-            const count =
-              cat === 'All'
-                ? products.length
-                : products.filter((p) => p.category === cat).length;
+            const count = cat === 'All' ? products.length : products.filter((p) => p.category === cat).length;
             if (count === 0 && cat !== 'All') return null;
             const active = activeCategory === cat;
             return (
-              <button
-                key={cat}
-                onClick={() => setCategory(cat)}
+              <button key={cat} onClick={() => setCategory(cat)}
                 className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition ${
                   active ? 'bg-navy text-gold font-bold' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
+                }`}>
                 <span>{cat}</span>
-                <span className={`text-xs ${active ? 'text-gold-200' : 'text-slate-400'}`}>
-                  {count}
-                </span>
+                <span className={`text-xs ${active ? 'text-gold-200' : 'text-slate-400'}`}>{count}</span>
               </button>
             );
           })}
         </div>
       </div>
       <div>
-        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-          Sort
-        </div>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortOption)}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-navy"
-        >
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Sort</div>
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortOption)}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-navy">
           <option value="featured">Featured first</option>
           <option value="price-asc">Price: Low → High</option>
           <option value="price-desc">Price: High → Low</option>
@@ -760,46 +635,27 @@ function FilterPanel({
   );
 }
 
-function ProductCard({
-  product,
-  inCartQty,
-  onAdd,
-  onCardClick,
-  showBrand,
-}: {
-  product: MarketProduct;
-  inCartQty: number;
-  onAdd: () => void;
-  onCardClick: () => void;
-  showBrand: boolean;
+function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
+  product: MarketProduct; inCartQty: number; onAdd: () => void;
+  onCardClick: () => void; showBrand: boolean;
 }) {
   const brand = product.wholesaler ? BRANDS[product.wholesaler] : null;
   const inCart = inCartQty > 0;
-
   return (
     <article className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100 transition hover:shadow-card-hover">
-      <div
-        className="relative aspect-square cursor-pointer overflow-hidden"
-        style={{ backgroundColor: brand?.light ?? '#f0f9ff' }}
-        onClick={onCardClick}
-      >
+      <div className="relative aspect-square cursor-pointer overflow-hidden"
+        style={{ backgroundColor: brand?.light ?? '#f0f9ff' }} onClick={onCardClick}>
         {product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            loading="lazy"
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-          />
+          <img src={product.image_url} alt={product.name} loading="lazy"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-5xl">
             {CATEGORY_EMOJI[product.category] || '📦'}
           </div>
         )}
         {showBrand && brand ? (
-          <div
-            className="absolute left-2 top-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white shadow-sm"
-            style={{ backgroundColor: brand.color }}
-          >
+          <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white shadow-sm"
+            style={{ backgroundColor: brand.color }}>
             <span>{brand.emoji}</span>
             <span className="hidden xs:inline">{brand.name}</span>
           </div>
@@ -819,22 +675,15 @@ function ProductCard({
           </div>
         )}
       </div>
-
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           {product.sku && (
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
-              {product.sku}
-            </span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{product.sku}</span>
           )}
           <span>{product.category}</span>
         </div>
-        <h3
-          className="clamp-2 cursor-pointer text-sm font-bold leading-snug text-navy hover:text-navy-700 sm:text-base"
-          onClick={onCardClick}
-        >
-          {product.name}
-        </h3>
+        <h3 className="clamp-2 cursor-pointer text-sm font-bold leading-snug text-navy hover:text-navy-700 sm:text-base"
+          onClick={onCardClick}>{product.name}</h3>
         {typeof product.avg_rating === 'number' && (product.review_count ?? 0) > 0 && (
           <div className="flex items-center gap-1 text-[11px] text-slate-500">
             <span className="text-gold">★</span>
@@ -842,28 +691,18 @@ function ProductCard({
             <span>({product.review_count})</span>
           </div>
         )}
-        {product.description && (
-          <p className="clamp-2 text-xs text-slate-500">{product.description}</p>
-        )}
+        {product.description && <p className="clamp-2 text-xs text-slate-500">{product.description}</p>}
         <div className="mt-auto flex items-baseline gap-1 pt-1">
-          <span className="text-lg font-extrabold text-navy sm:text-xl">
-            BSD ${product.price.toFixed(2)}
-          </span>
+          <span className="text-lg font-extrabold text-navy sm:text-xl">BSD ${product.price.toFixed(2)}</span>
           <span className="text-xs text-slate-400">/ {product.unit}</span>
         </div>
         {product.min_qty > 1 && (
-          <div className="text-[10px] text-slate-400">
-            Min order: {product.min_qty} {product.unit}
-          </div>
+          <div className="text-[10px] text-slate-400">Min order: {product.min_qty} {product.unit}</div>
         )}
-        <button
-          onClick={onAdd}
+        <button onClick={onAdd}
           className={`mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition sm:text-sm ${
-            inCart
-              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-              : 'bg-navy text-gold hover:bg-navy-600'
-          }`}
-        >
+            inCart ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-navy text-gold hover:bg-navy-600'
+          }`}>
           {inCart ? `✓ In cart (${inCartQty})` : '+ Add to cart'}
         </button>
       </div>
@@ -894,13 +733,9 @@ function EmptyState({ onReset }: { onReset: () => void }) {
     <div className="flex flex-col items-center rounded-xl bg-white px-6 py-16 text-center shadow-card">
       <div className="mb-3 text-5xl">🔍</div>
       <h3 className="mb-1 text-base font-bold text-navy">No products found</h3>
-      <p className="mb-4 text-sm text-slate-500">
-        Try a different search, brand, or category.
-      </p>
-      <button
-        onClick={onReset}
-        className="rounded-lg bg-navy px-4 py-2 text-sm font-bold text-gold transition hover:bg-navy-600"
-      >
+      <p className="mb-4 text-sm text-slate-500">Try a different search, brand, or category.</p>
+      <button onClick={onReset}
+        className="rounded-lg bg-navy px-4 py-2 text-sm font-bold text-gold transition hover:bg-navy-600">
         Clear all filters
       </button>
     </div>
@@ -909,10 +744,10 @@ function EmptyState({ onReset }: { onReset: () => void }) {
 
 function TrustBar() {
   const items = [
-    { icon: '🇧🇸', title: 'Bahamian-owned', sub: 'Family-run from Nassau' },
-    { icon: '🚚', title: 'Fast delivery', sub: 'Nassau & Andros, same-day' },
-    { icon: '❄️', title: 'Cold-chain fresh', sub: 'Spiny Tail processing' },
-    { icon: '💬', title: 'WhatsApp support', sub: '+1 (242) 558-4495' },
+    { icon: '🇧🇸', title: 'Bahamian-owned',  sub: 'Family-run from Nassau' },
+    { icon: '🚚', title: 'Fast delivery',     sub: 'Nassau & Andros, same-day' },
+    { icon: '❄️', title: 'Cold-chain fresh',  sub: 'Spiny Tail processing' },
+    { icon: '💬', title: 'WhatsApp support',  sub: '+1 (242) 558-4495' },
   ];
   return (
     <div className="mt-10 grid grid-cols-2 gap-3 rounded-2xl bg-white p-5 shadow-card sm:grid-cols-4">
@@ -929,47 +764,24 @@ function TrustBar() {
   );
 }
 
-function CartDrawer({
-  cart,
-  cartCount,
-  cartTotal,
-  onClose,
-  onUpdateQty,
-  onPlaceOrder,
-  placing,
-  onCheckout,
-}: {
-  cart: CartItem[];
-  cartCount: number;
-  cartTotal: number;
-  onClose: () => void;
+function CartDrawer({ cart, cartCount, cartTotal, onClose, onUpdateQty, onPlaceOrder, placing, onCheckout }: {
+  cart: CartItem[]; cartCount: number; cartTotal: number; onClose: () => void;
   onUpdateQty: (id: string, source: string, qty: number) => void;
-  onPlaceOrder: () => void;
-  placing: boolean;
-  onCheckout: () => void;
+  onPlaceOrder: () => void; placing: boolean; onCheckout: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/50"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/50"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-navy px-5 py-4">
           <div>
             <div className="font-display text-lg font-bold text-white">Your Cart</div>
-            <div className="text-xs text-slate-300">
-              {cartCount} item{cartCount !== 1 ? 's' : ''} · BSD ${cartTotal.toFixed(2)}
-            </div>
+            <div className="text-xs text-slate-300">{cartCount} item{cartCount !== 1 ? 's' : ''} · BSD ${cartTotal.toFixed(2)}</div>
           </div>
-          <button
-            onClick={onClose}
+          <button onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25"
-            aria-label="Close cart"
-          >
-            ×
-          </button>
+            aria-label="Close cart">×</button>
         </div>
-
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -981,29 +793,21 @@ function CartDrawer({
             <CartGroups cart={cart} onUpdateQty={onUpdateQty} />
           )}
         </div>
-
         {cart.length > 0 && (
           <div className="border-t border-slate-200 p-4">
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm font-semibold text-slate-600">Total</span>
               <span className="text-2xl font-extrabold text-navy">BSD ${cartTotal.toFixed(2)}</span>
             </div>
-            <button
-              onClick={onCheckout}
-              className="mb-2 w-full rounded-lg bg-gold py-3 text-sm font-bold text-navy transition hover:bg-gold-300"
-            >
+            <button onClick={onCheckout}
+              className="mb-2 w-full rounded-lg bg-gold py-3 text-sm font-bold text-navy transition hover:bg-gold-300">
               Proceed to checkout →
             </button>
-            <button
-              onClick={onPlaceOrder}
-              disabled={placing}
-              className="w-full rounded-lg bg-navy py-3 text-sm font-bold text-white transition hover:bg-navy-600 disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
+            <button onClick={onPlaceOrder} disabled={placing}
+              className="w-full rounded-lg bg-navy py-3 text-sm font-bold text-white transition hover:bg-navy-600 disabled:cursor-not-allowed disabled:bg-slate-400">
               {placing ? 'Placing…' : '✅ Quick order (cash on delivery)'}
             </button>
-            <p className="mt-2 text-center text-[10px] text-slate-400">
-              Cart is grouped by supplier for sourcing.
-            </p>
+            <p className="mt-2 text-center text-[10px] text-slate-400">Cart is grouped by supplier for sourcing.</p>
           </div>
         )}
       </div>
@@ -1011,48 +815,32 @@ function CartDrawer({
   );
 }
 
-function CartGroups({
-  cart,
-  onUpdateQty,
-}: {
-  cart: CartItem[];
-  onUpdateQty: (id: string, source: string, qty: number) => void;
+function CartGroups({ cart, onUpdateQty }: {
+  cart: CartItem[]; onUpdateQty: (id: string, source: string, qty: number) => void;
 }) {
   const groups = ['market', ...BRAND_KEYS];
   return (
     <>
       {groups.map((group) => {
-        const items =
-          group === 'market'
-            ? cart.filter((i) => i.source === 'market')
-            : cart.filter((i) => i.wholesaler === group);
+        const items = group === 'market'
+          ? cart.filter((i) => i.source === 'market')
+          : cart.filter((i) => i.wholesaler === group);
         if (items.length === 0) return null;
         const brand = group !== 'market' ? BRANDS[group] : null;
         return (
           <div key={group} className="mb-5">
-            <div
-              className="mb-2 border-b pb-1.5 text-[11px] font-bold uppercase tracking-wider"
-              style={{
-                color: brand?.color ?? '#1a2e5a',
-                borderBottomColor: brand ? `${brand.color}33` : '#e2e8f0',
-              }}
-            >
+            <div className="mb-2 border-b pb-1.5 text-[11px] font-bold uppercase tracking-wider"
+              style={{ color: brand?.color ?? '#1a2e5a', borderBottomColor: brand ? `${brand.color}33` : '#e2e8f0' }}>
               {brand ? `${brand.emoji} ${brand.name}` : '🇧🇸 BSC Direct'}
             </div>
             {items.map((item) => (
-              <div
-                key={`${item.source}-${item.id}`}
-                className="flex items-start gap-3 border-b border-slate-100 py-3 last:border-b-0"
-              >
+              <div key={`${item.source}-${item.id}`}
+                className="flex items-start gap-3 border-b border-slate-100 py-3 last:border-b-0">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-navy">{item.name}</div>
                   {item.sku && brand && (
-                    <span
-                      className="mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px]"
-                      style={{ backgroundColor: brand.light, color: brand.color }}
-                    >
-                      {item.sku}
-                    </span>
+                    <span className="mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px]"
+                      style={{ backgroundColor: brand.light, color: brand.color }}>{item.sku}</span>
                   )}
                   <div className="mt-1 text-xs text-slate-500">
                     BSD ${item.price.toFixed(2)} × {item.qty}{' '}
@@ -1075,10 +863,8 @@ function CartGroups({
 
 function QtyButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-base font-bold text-navy transition hover:border-navy hover:bg-slate-50"
-    >
+    <button onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 bg-white text-base font-bold text-navy transition hover:border-navy hover:bg-slate-50">
       {children}
     </button>
   );
