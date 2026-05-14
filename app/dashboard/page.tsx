@@ -64,6 +64,7 @@ const NAV_GROUPS = [
       { icon: '🚗', label: 'Vehicles & Parts',  href: '/vehicles' },
       { icon: '⚡', label: 'Bill Payments',     href: '/utilities' },
       { icon: '🛒', label: 'Public Market',     href: '/market' },
+      { icon: '🖼️', label: 'Product Images',   href: '/admin/images' },
     ],
   },
   {
@@ -154,14 +155,10 @@ export default function DashboardPage() {
   const [wholesaleOrders, setWholesaleOrders]   = useState<WholesaleOrder[]>([]);
   const [wholesaleLoading, setWholesaleLoading] = useState(true);
 
-  // AUTH GATE
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/staff-login';
-        return;
-      }
+      if (!session) { window.location.href = '/staff-login'; return; }
       setAuthChecked(true);
     }
     checkAuth();
@@ -217,7 +214,7 @@ export default function DashboardPage() {
     { icon: '⚖️', label: 'Yield Calc',     href: '/yield',              color: '#fef9e7', badge: 0 },
     { icon: '🧾', label: 'Purchase Orders', href: '/purchase-orders',   color: '#fef9e7', badge: 0 },
     { icon: '🚗', label: 'Vehicles',        href: '/vehicles',           color: '#fff3e8', badge: 0 },
-    { icon: '🖼️', label: 'Products',       href: '/products',           color: '#fef9e7', badge: 0 },
+    { icon: '🖼️', label: 'Product Images', href: '/admin/images',       color: '#fef9e7', badge: 0 },
     { icon: '🇺🇸', label: 'US Products',  href: '/us-products',        color: '#e8f4fd', badge: 0 },
     { icon: '🏭', label: 'Wholesale Prod', href: '/wholesale-products', color: '#f0fde8', badge: 0 },
     { icon: '⚡', label: 'Pay Bills',       href: '/utilities',          color: '#e8f8fd', badge: 0 },
