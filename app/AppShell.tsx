@@ -25,62 +25,67 @@ function isStaffCustomerRoute(pathname: string): boolean {
 }
 
 const NO_NAV_PREFIXES = [
-  '/login','/staff-login','/reset-password','/legal','/supplier',
-  '/purchase-orders','/pos-andros','/pos','/dashboard','/ashley',
-  '/jaquel','/report','/yield','/inventory','/staff','/cash',
-  '/customers/dashboard'
+  // Auth & legal
+  '/login','/staff-login','/reset-password','/legal',
+  // Staff-only pages (have their own nav)
+  '/supplier','/purchase-orders','/pos-andros','/pos','/dashboard',
+  '/ashley','/jaquel','/report','/yield','/inventory','/staff','/cash',
+  '/customers/dashboard',
+  // Public-facing pages — clean layout, no bottom bar
+  '/market','/product','/category','/checkout','/my-orders',
+  '/account','/wishlist','/contact','/admin','/founder-ai',
 ];
 
 const CUSTOMER_NAV = [
-  { label: 'Home', href: '/', icon: '🏠' },
-  { label: 'Shop', href: '/market', icon: '🛒' },
-  { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
-  { label: 'Vehicles', href: '/vehicles', icon: '🚗' },
-  { label: 'Account', href: '/customers/dashboard', icon: '👤' },
+  { label: 'Home',     href: '/',                  icon: '🏠' },
+  { label: 'Shop',     href: '/market',             icon: '🛒' },
+  { label: 'Pay Bills',href: '/utilities',          icon: '⚡' },
+  { label: 'Vehicles', href: '/vehicles',           icon: '🚗' },
+  { label: 'Account',  href: '/customers/dashboard',icon: '👤' },
 ];
 
 const STAFF_NAV: Record<string, { label: string; href: string; icon: string }[]> = {
   control_admin: [
-    { label: 'Control', href: '/dashboard', icon: '📊' },
-    { label: 'POS', href: '/pos', icon: '🛒' },
-    { label: 'Market', href: '/market', icon: '🏪' },
-    { label: 'Vehicles', href: '/vehicles', icon: '🚗' },
-    { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
+    { label: 'Control',  href: '/dashboard', icon: '📊' },
+    { label: 'POS',      href: '/pos',       icon: '🛒' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
   ],
   basic_admin: [
-    { label: 'Dashboard', href: '/jaquel', icon: '📊' },
-    { label: 'POS', href: '/pos', icon: '🛒' },
-    { label: 'Market', href: '/market', icon: '🏪' },
-    { label: 'Vehicles', href: '/vehicles', icon: '🚗' },
-    { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
+    { label: 'Dashboard',href: '/jaquel',    icon: '📊' },
+    { label: 'POS',      href: '/pos',       icon: '🛒' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
   ],
   manager: [
-    { label: 'Dashboard', href: '/ashley', icon: '📊' },
-    { label: 'POS', href: '/pos', icon: '🛒' },
-    { label: 'Orders', href: '/orders', icon: '📦' },
-    { label: 'Market', href: '/market', icon: '🏪' },
-    { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
+    { label: 'Dashboard',href: '/ashley',    icon: '📊' },
+    { label: 'POS',      href: '/pos',       icon: '🛒' },
+    { label: 'Orders',   href: '/orders',    icon: '📦' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
   ],
   cashier: [
-    { label: 'POS', href: '/pos', icon: '🛒' },
-    { label: 'Market', href: '/market', icon: '🏪' },
-    { label: 'Vehicles', href: '/vehicles', icon: '🚗' },
-    { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
-    { label: 'Orders', href: '/orders', icon: '📦' },
+    { label: 'POS',      href: '/pos',       icon: '🛒' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
+    { label: 'Orders',   href: '/orders',    icon: '📦' },
   ],
   andros_staff: [
-    { label: 'Andros POS', href: '/pos-andros', icon: '🛒' },
-    { label: 'Market', href: '/market', icon: '🏪' },
+    { label: 'Andros POS',href: '/pos-andros',icon: '🛒' },
+    { label: 'Market',    href: '/market',    icon: '🏪' },
     { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
-    { label: 'Orders', href: '/orders', icon: '📦' },
-    { label: 'Yield', href: '/yield', icon: '🧮' },
+    { label: 'Orders',    href: '/orders',    icon: '📦' },
+    { label: 'Yield',     href: '/yield',     icon: '🧮' },
   ],
   supplier: [
-    { label: 'Supplier', href: '/supplier', icon: '🚢' },
-    { label: 'Market', href: '/market', icon: '🏪' },
-    { label: 'Yield', href: '/yield', icon: '🧮' },
-    { label: 'Pay Bills', href: '/utilities', icon: '⚡' },
-    { label: 'Vehicles', href: '/vehicles', icon: '🚗' },
+    { label: 'Supplier', href: '/supplier',  icon: '🚢' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Yield',    href: '/yield',     icon: '🧮' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
+    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
   ],
 };
 
@@ -88,7 +93,7 @@ type RoleState = 'loading' | 'unauthenticated' | string;
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
   const [roleState, setRoleState] = useState<RoleState>('loading');
 
   useEffect(() => {
@@ -103,7 +108,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           const blocked =
             STAFF_ONLY_PREFIXES.some(p => pathname.startsWith(p)) ||
             isStaffCustomerRoute(pathname);
-
           if (blocked) router.replace('/staff-login');
           return;
         }
@@ -117,21 +121,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const role = profile?.role || 'customer';
         setRoleState(role);
 
-        // Customer protection — keep customers out of staff-only routes
         if (!STAFF_ROLES.has(role)) {
           const blocked =
             STAFF_ONLY_PREFIXES.some(p => pathname.startsWith(p)) ||
             isStaffCustomerRoute(pathname);
-
-          if (blocked) {
-            router.replace('/market');
-            return;
-          }
+          if (blocked) { router.replace('/market'); return; }
         }
-
-        // Staff are authenticated and authorized — let them navigate freely.
-        // Login pages handle initial landing; AppShell only protects boundaries.
-
       } catch {
         setRoleState('unauthenticated');
       }
@@ -165,7 +160,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             left: 0,
             right: 0,
             background: '#070e1d',
-            borderTop: '1px solid rgba(245,197,24,0.15)'
+            borderTop: '1px solid rgba(245,197,24,0.15)',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-around' }}>
               {navItems.map(item => (
