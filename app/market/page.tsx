@@ -32,7 +32,6 @@ const BRAND_KEYS = Object.keys(BRANDS);
 
 const CATEGORIES = ['All', 'Seafood', 'Meat', 'Produce', 'Dry Goods', 'Beverages', 'Dairy', 'Frozen', 'Other'];
 
-// Map BSC product_category enum → display category
 const CATEGORY_MAP: Record<string, string> = {
   fresh_seafood: 'Seafood',
   frozen_seafood: 'Seafood',
@@ -86,9 +85,6 @@ const CATEGORY_EMOJI: Record<string, string> = {
   Other: '📦',
 };
 
-// useSearchParams() requires a Suspense boundary in Next 15 production
-// builds (otherwise prerender bails). Default export wraps the inner
-// component so the build succeeds without changing runtime behavior.
 export default function MarketPage() {
   return (
     <Suspense fallback={null}>
@@ -141,33 +137,29 @@ function MarketPageInner() {
 
   useEffect(() => {
     (async () => {
-      // ── FIXED DATA FETCH: two-step query using correct BSC schema ──
-      // Old code queried 'in_stock' and 'local_wholesale_products' which
-      // don't exist. Now uses sell_online + status + product_pricing join.
-
       // Step 1: Get all current online_market prices
       const { data: pricingData, error: pricingErr } = await supabase
         .from('product_pricing')
         .select('product_id, manual_unit_price')
         .eq('channel', 'online_market')
-        .eq('is_current', true);
+        .eq('is_current', true)
+        .eq('is_active', true);
 
       if (pricingErr || !pricingData || pricingData.length === 0) {
         setLoading(false);
         return;
       }
 
-      // Build price lookup map
       const priceMap = new Map<string, number>();
       for (const row of pricingData as any[]) {
         priceMap.set(row.product_id, row.manual_unit_price);
       }
       const productIds = [...priceMap.keys()];
 
-      // Step 2: Fetch active online products by those IDs
+      // Step 2: Fetch active online products — column is 'category' not 'product_category'
       const { data: mp, error: mpErr } = await supabase
         .from('products')
-        .select('id, sku, name, description, product_category, image_url, sell_online, status')
+        .select('id, sku, name, description, category, image_url, sell_online, status')
         .eq('sell_online', true)
         .eq('status', 'active')
         .in('id', productIds)
@@ -184,7 +176,7 @@ function MarketPageInner() {
         sku: p.sku ?? '',
         name: p.name,
         description: p.description || '',
-        category: CATEGORY_MAP[p.product_category ?? 'other'] ?? 'Other',
+        category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
         price: priceMap.get(p.id) ?? 0,
         unit: 'each',
         min_qty: 1,
@@ -196,7 +188,6 @@ function MarketPageInner() {
       setProducts(market);
       setLoading(false);
 
-      // Best-effort aggregate of approved reviews per BSC product.
       const marketIds = market.map((m) => m.id);
       if (marketIds.length > 0) {
         try {
@@ -223,7 +214,6 @@ function MarketPageInner() {
           }
         } catch { /* ignore */ }
 
-        // Best-effort inventory snapshot from batches
         try {
           const { data: inv } = await supabase
             .from('inventory_batches')
@@ -403,7 +393,7 @@ function MarketPageInner() {
           </button>
         </div>
 
-        {/* Brand strip — horizontal scroll on mobile, wraps on desktop */}
+        {/* Brand strip */}
         <div className="border-t border-white/5 bg-navy-700">
           <div className="mx-auto flex max-w-screen-2xl gap-2 overflow-x-auto px-3 py-2 sm:px-6 [&::-webkit-scrollbar]:hidden">
             <BrandPill
@@ -453,7 +443,7 @@ function MarketPageInner() {
         </div>
       </section>
 
-      {/* ─── Shop by category strip — links to SEO landing pages ─── */}
+      {/* ─── Shop by category strip ─── */}
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
@@ -700,11 +690,7 @@ function BrandPill({
       className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
         active ? '' : 'bg-white/10 text-slate-200 hover:bg-white/15'
       } ${withBorder && active ? 'ring-2 ring-gold' : ''}`}
-      style={
-        active
-          ? { backgroundColor: activeBg, color: activeFg }
-          : undefined
-      }
+      style={active ? { backgroundColor: activeBg, color: activeFg } : undefined}
     >
       {label}
     </button>
@@ -743,9 +729,7 @@ function FilterPanel({
                 key={cat}
                 onClick={() => setCategory(cat)}
                 className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition ${
-                  active
-                    ? 'bg-navy text-gold font-bold'
-                    : 'text-slate-700 hover:bg-slate-100'
+                  active ? 'bg-navy text-gold font-bold' : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <span>{cat}</span>
@@ -757,7 +741,6 @@ function FilterPanel({
           })}
         </div>
       </div>
-
       <div>
         <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
           Sort
@@ -795,7 +778,6 @@ function ProductCard({
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100 transition hover:shadow-card-hover">
-      {/* Image */}
       <div
         className="relative aspect-square cursor-pointer overflow-hidden"
         style={{ backgroundColor: brand?.light ?? '#f0f9ff' }}
@@ -813,7 +795,6 @@ function ProductCard({
             {CATEGORY_EMOJI[product.category] || '📦'}
           </div>
         )}
-
         {showBrand && brand ? (
           <div
             className="absolute left-2 top-2 flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white shadow-sm"
@@ -827,13 +808,11 @@ function ProductCard({
             🇧🇸 BSC
           </div>
         )}
-
         {product.featured && (
           <div className="absolute right-2 top-2 rounded-md bg-gold px-2 py-0.5 text-[10px] font-extrabold text-navy shadow-sm">
             ★ FEATURED
           </div>
         )}
-
         {typeof product.stock_qty === 'number' && product.stock_qty > 0 && product.stock_qty <= 5 && (
           <div className="absolute bottom-2 left-2 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
             Only {Math.floor(product.stock_qty)} left
@@ -841,7 +820,6 @@ function ProductCard({
         )}
       </div>
 
-      {/* Body */}
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           {product.sku && (
@@ -851,14 +829,12 @@ function ProductCard({
           )}
           <span>{product.category}</span>
         </div>
-
         <h3
           className="clamp-2 cursor-pointer text-sm font-bold leading-snug text-navy hover:text-navy-700 sm:text-base"
           onClick={onCardClick}
         >
           {product.name}
         </h3>
-
         {typeof product.avg_rating === 'number' && (product.review_count ?? 0) > 0 && (
           <div className="flex items-center gap-1 text-[11px] text-slate-500">
             <span className="text-gold">★</span>
@@ -866,24 +842,20 @@ function ProductCard({
             <span>({product.review_count})</span>
           </div>
         )}
-
         {product.description && (
           <p className="clamp-2 text-xs text-slate-500">{product.description}</p>
         )}
-
         <div className="mt-auto flex items-baseline gap-1 pt-1">
           <span className="text-lg font-extrabold text-navy sm:text-xl">
             BSD ${product.price.toFixed(2)}
           </span>
           <span className="text-xs text-slate-400">/ {product.unit}</span>
         </div>
-
         {product.min_qty > 1 && (
           <div className="text-[10px] text-slate-400">
             Min order: {product.min_qty} {product.unit}
           </div>
         )}
-
         <button
           onClick={onAdd}
           className={`mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition sm:text-sm ${
@@ -903,10 +875,7 @@ function ProductGridSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {Array.from({ length: 10 }).map((_, i) => (
-        <div
-          key={i}
-          className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100"
-        >
+        <div key={i} className="overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-slate-100">
           <div className="aspect-square animate-pulse bg-slate-200" />
           <div className="space-y-2 p-3">
             <div className="h-3 w-1/3 animate-pulse rounded bg-slate-200" />
@@ -982,9 +951,7 @@ function CartDrawer({
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-navy px-5 py-4">
@@ -1008,9 +975,7 @@ function CartDrawer({
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-3 text-5xl">🛒</div>
               <div className="text-sm font-bold text-slate-700">Your cart is empty</div>
-              <div className="mt-1 text-xs text-slate-500">
-                Browse the market and add some products.
-              </div>
+              <div className="mt-1 text-xs text-slate-500">Browse the market and add some products.</div>
             </div>
           ) : (
             <CartGroups cart={cart} onUpdateQty={onUpdateQty} />
@@ -1021,9 +986,7 @@ function CartDrawer({
           <div className="border-t border-slate-200 p-4">
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm font-semibold text-slate-600">Total</span>
-              <span className="text-2xl font-extrabold text-navy">
-                BSD ${cartTotal.toFixed(2)}
-              </span>
+              <span className="text-2xl font-extrabold text-navy">BSD ${cartTotal.toFixed(2)}</span>
             </div>
             <button
               onClick={onCheckout}
@@ -1093,25 +1056,13 @@ function CartGroups({
                   )}
                   <div className="mt-1 text-xs text-slate-500">
                     BSD ${item.price.toFixed(2)} × {item.qty}{' '}
-                    <span className="font-bold text-navy">
-                      = ${(item.price * item.qty).toFixed(2)}
-                    </span>
+                    <span className="font-bold text-navy">= ${(item.price * item.qty).toFixed(2)}</span>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <QtyButton
-                    onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}
-                  >
-                    −
-                  </QtyButton>
-                  <span className="min-w-6 text-center text-sm font-bold text-navy">
-                    {item.qty}
-                  </span>
-                  <QtyButton
-                    onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}
-                  >
-                    +
-                  </QtyButton>
+                  <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}>−</QtyButton>
+                  <span className="min-w-6 text-center text-sm font-bold text-navy">{item.qty}</span>
+                  <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}>+</QtyButton>
                 </div>
               </div>
             ))}
