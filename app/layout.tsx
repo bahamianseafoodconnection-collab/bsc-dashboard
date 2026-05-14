@@ -10,4 +10,84 @@ export const metadata: Metadata = {
   authors: [{ name: 'Dedrick Storr Snr' }],
   creator: 'Bahamian Seafood Connection',
   publisher: 'BSC Marketplace',
-  keywords: ['Bahamas seafood', 'Nassau food delivery​​​​​​​​​​​​​​​​
+  keywords: ['Bahamas seafood', 'Nassau food delivery', 'Bahamian marketplace', 'BSC', 'Andros delivery'],
+  manifest: '/manifest.json',
+  icons: { icon: '/favicon.ico', apple: '/apple-touch-icon.png' },
+  openGraph: {
+    title: 'BSC Marketplace — Fresh. Local. Bahamian.',
+    description: 'Fresh seafood, local food, vehicles, and bill payments across the Bahamas.',
+    type: 'website',
+    locale: 'en_BS',
+    siteName: 'BSC Marketplace',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#1a2e5a',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://qgcaxkyuhwmpvpbooaqw.supabase.co" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="dns-prefetch" href="https://api.whatsapp.com" />
+        <link rel="dns-prefetch" href="https://api.qrserver.com" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <style>{`
+          *, *::before, *::after {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+          }
+          html {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+            height: 100%;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            scrollbar-gutter: stable;
+            height: 100%;
+            background-color: #f8f9fa;
+          }
+          input, select, textarea, button {
+            font-family: inherit;
+            touch-action: manipulation;
+          }
+          /* Smooth scrolling for all scrollable containers */
+          [data-scroll], .overflow-y-auto, .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+          }
+          /* Hide scrollbars on mobile cleanly */
+          ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+          }
+          ::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          ::-webkit-scrollbar-thumb {
+            background: rgba(245,197,24,0.3);
+            border-radius: 99px;
+          }
+          @keyframes bsc-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+          }
+        `}</style>
+      </head>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
+    </html>
+  );
+}
