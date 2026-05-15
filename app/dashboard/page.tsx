@@ -6,6 +6,7 @@ import { createBrowserClient } from '@supabase/ssr';
 import InvoiceScanner from '@/components/InvoiceScanner';
 import DashboardSnapshot from './snapshot';
 import { fetchOverheadMetrics, type OverheadMetrics } from '@/lib/profit';
+import { useUserRole, canLock } from '@/lib/role';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -176,6 +177,14 @@ export default function DashboardPage() {
     raw_weight_lb: number | null;
     created_at: string;
   }[] | null>(null);
+  const [freezerStockLb, setFreezerStockLb] = useState<number | null>(null);
+  const [showStockEdit, setShowStockEdit] = useState(false);
+  const [stockProducts, setStockProducts] = useState<{ id: string; sku: string; name: string; stock_lbs: number }[] | null>(null);
+  const [stockEdits, setStockEdits] = useState<Record<string, string>>({});
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockSaveMsg, setStockSaveMsg] = useState<string | null>(null);
+  const { role: userRole } = useUserRole();
+  const canEditStock = canLock(userRole); // founder + co_founder only
 
   useEffect(() => {
     async function checkAuth() {
@@ -304,6 +313,87 @@ export default function DashboardPage() {
       created_at: string;
     }[]);
     setRecentBatches(recent);
+
+    // Live freezer stock = SUM(products.stock_lbs) for active products.
+    // Manual per-product edits happen via the modal below; the dashboard
+    // total stays a derived value, never stored separately, so it can
+    // never disagree with the products table.
+    const stockTotal = await safe(async () => {
+      const { data } = await supabase
+        .from('products')
+        .select('stock_lbs')
+        .eq('status', 'active');
+      return (data ?? []).reduce(
+        (s: number, r: { stock_lbs: number | null }) => s + Number(r.stock_lbs ?? 0),
+        0,
+      );
+    }, null as number | null);
+    setFreezerStockLb(stockTotal);
+  }
+
+  // ── Per-product stock edit modal (founder / co_founder only) ──────────
+  async function openStockEdit() {
+    setShowStockEdit(true);
+    setStockSaveMsg(null);
+    setStockEdits({});
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, sku, name, stock_lbs')
+      .eq('status', 'active')
+      .order('name');
+    if (error) {
+      setStockProducts([]);
+      setStockSaveMsg('Could not load products. Please close and try again.');
+      return;
+    }
+    setStockProducts(((data ?? []) as { id: string; sku: string; name: string; stock_lbs: number | null }[]).map((p) => ({
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      stock_lbs: Number(p.stock_lbs ?? 0),
+    })));
+  }
+
+  async function saveStockEdits() {
+    if (!stockProducts) return;
+    const dirtyIds = Object.keys(stockEdits).filter((id) => {
+      const orig = stockProducts.find((p) => p.id === id)?.stock_lbs ?? 0;
+      const next = Number(stockEdits[id]);
+      return !Number.isNaN(next) && next !== orig;
+    });
+    if (dirtyIds.length === 0) {
+      setStockSaveMsg('Nothing changed.');
+      return;
+    }
+    setStockSaving(true);
+    setStockSaveMsg(null);
+    let okCount = 0;
+    let failCount = 0;
+    for (const id of dirtyIds) {
+      const next = Number(stockEdits[id]);
+      const { error } = await supabase
+        .from('products')
+        .update({ stock_lbs: next })
+        .eq('id', id);
+      if (error) failCount++; else okCount++;
+    }
+    setStockSaving(false);
+    setStockSaveMsg(failCount === 0
+      ? `Updated ${okCount} product${okCount === 1 ? '' : 's'}.`
+      : `Updated ${okCount}, ${failCount} failed. Please check those rows.`);
+    if (okCount > 0) {
+      // Refresh dashboard total + the modal list.
+      loadLogWidgets();
+      const { data } = await supabase
+        .from('products')
+        .select('id, sku, name, stock_lbs')
+        .eq('status', 'active')
+        .order('name');
+      setStockProducts(((data ?? []) as { id: string; sku: string; name: string; stock_lbs: number | null }[]).map((p) => ({
+        id: p.id, sku: p.sku, name: p.name, stock_lbs: Number(p.stock_lbs ?? 0),
+      })));
+      setStockEdits({});
+    }
   }
 
   async function loadTodaySales() {
@@ -724,27 +814,41 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>🧊 Spiny Tails Freezer</h2>
-                  <Link href="/inventory" style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>View All →</Link>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
-                  {[
-                    { label: 'In Stock', value: `${spinyTailsStock.toLocaleString()} lbs`, bg: '#e8f4fd', text: '#1a2e5a' },
-                    { label: 'Capacity', value: '30,000 lbs',                              bg: '#e8f5e9', text: '#2e7d32' },
-                    { label: 'Used',     value: '31%',                                     bg: '#fef9e7', text: '#d97706' },
-                  ].map((s) => (
-                    <div key={s.label} style={{ backgroundColor: s.bg, borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
-                      <div style={{ color: '#999', fontSize: '10px', marginBottom: '4px' }}>{s.label}</div>
-                      <div style={{ color: s.text, fontWeight: 900, fontSize: '15px' }}>{s.value}</div>
+              {(() => {
+                const FREEZER_CAPACITY_LB = 30000;
+                const stock = freezerStockLb ?? 0;
+                const usedPct = freezerStockLb === null ? 0 : Math.min(100, (stock / FREEZER_CAPACITY_LB) * 100);
+                return (
+                  <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                      <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', margin: 0 }}>🧊 Spiny Tails Freezer</h2>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {canEditStock && (
+                          <button onClick={openStockEdit} style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, backgroundColor: '#fff8e7', border: '1px solid #f5c518', padding: '5px 10px', borderRadius: '8px', cursor: 'pointer' }}>
+                            ✎ Edit stock
+                          </button>
+                        )}
+                        <Link href="/inventory" style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>View All →</Link>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <div style={{ height: '8px', backgroundColor: '#f0f0f0', borderRadius: '20px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: '31%', backgroundColor: '#1a2e5a', borderRadius: '20px' }} />
-                </div>
-              </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                      {[
+                        { label: 'In Stock', value: freezerStockLb === null ? '—' : `${Math.round(stock).toLocaleString()} lbs`, bg: '#e8f4fd', text: '#1a2e5a' },
+                        { label: 'Capacity', value: `${FREEZER_CAPACITY_LB.toLocaleString()} lbs`,                                bg: '#e8f5e9', text: '#2e7d32' },
+                        { label: 'Used',     value: freezerStockLb === null ? '—' : `${usedPct.toFixed(1)}%`,                     bg: '#fef9e7', text: '#d97706' },
+                      ].map((s) => (
+                        <div key={s.label} style={{ backgroundColor: s.bg, borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+                          <div style={{ color: '#999', fontSize: '10px', marginBottom: '4px' }}>{s.label}</div>
+                          <div style={{ color: s.text, fontWeight: 900, fontSize: '15px' }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ height: '8px', backgroundColor: '#f0f0f0', borderRadius: '20px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${usedPct.toFixed(1)}%`, backgroundColor: '#1a2e5a', borderRadius: '20px', transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -859,33 +963,46 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === 'inventory' && (
-            <div>
-              <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '20px' }}>🧊 Freezer Inventory</h2>
-              <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '16px' }}>
-                <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', marginBottom: '14px' }}>Spiny Tails Cold Storage — Mastic Point</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '16px' }}>
-                  {[
-                    { label: 'Current Stock',   value: `${spinyTailsStock.toLocaleString()} lbs`,          color: '#e8f4fd', text: '#1a2e5a' },
-                    { label: 'Total Capacity',  value: '30,000 lbs',                                       color: '#f0fde8', text: '#2e7d32' },
-                    { label: 'Available Space', value: `${(30000 - spinyTailsStock).toLocaleString()} lbs`, color: '#fef9e7', text: '#d97706' },
-                    { label: 'Capacity Used',   value: '31%',                                              color: '#fde8e8', text: '#dc2626' },
-                  ].map((s) => (
-                    <div key={s.label} style={{ backgroundColor: s.color, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-                      <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>{s.label}</div>
-                      <div style={{ color: s.text, fontWeight: 900, fontSize: '16px' }}>{s.value}</div>
-                    </div>
-                  ))}
+          {activeTab === 'inventory' && (() => {
+            const FREEZER_CAPACITY_LB = 30000;
+            const stock = freezerStockLb ?? 0;
+            const usedPct = freezerStockLb === null ? 0 : Math.min(100, (stock / FREEZER_CAPACITY_LB) * 100);
+            const available = Math.max(0, FREEZER_CAPACITY_LB - stock);
+            return (
+              <div>
+                <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '20px' }}>🧊 Freezer Inventory</h2>
+                <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <h3 style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px', margin: 0 }}>Spiny Tails Cold Storage — Mastic Point</h3>
+                    {canEditStock && (
+                      <button onClick={openStockEdit} style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, backgroundColor: '#fff8e7', border: '1px solid #f5c518', padding: '5px 10px', borderRadius: '8px', cursor: 'pointer' }}>
+                        ✎ Edit stock
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                    {[
+                      { label: 'Current Stock',   value: freezerStockLb === null ? '—' : `${Math.round(stock).toLocaleString()} lbs`,    color: '#e8f4fd', text: '#1a2e5a' },
+                      { label: 'Total Capacity',  value: `${FREEZER_CAPACITY_LB.toLocaleString()} lbs`,                                   color: '#f0fde8', text: '#2e7d32' },
+                      { label: 'Available Space', value: freezerStockLb === null ? '—' : `${Math.round(available).toLocaleString()} lbs`,  color: '#fef9e7', text: '#d97706' },
+                      { label: 'Capacity Used',   value: freezerStockLb === null ? '—' : `${usedPct.toFixed(1)}%`,                         color: '#fde8e8', text: '#dc2626' },
+                    ].map((s) => (
+                      <div key={s.label} style={{ backgroundColor: s.color, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                        <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>{s.label}</div>
+                        <div style={{ color: s.text, fontWeight: 900, fontSize: '16px' }}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ height: '10px', backgroundColor: '#f0f0f0', borderRadius: '20px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${usedPct.toFixed(1)}%`, backgroundColor: '#1a2e5a', borderRadius: '20px', transition: 'width 0.4s ease' }} />
+                  </div>
                 </div>
-                <div style={{ height: '10px', backgroundColor: '#f0f0f0', borderRadius: '20px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: '31%', backgroundColor: '#1a2e5a', borderRadius: '20px' }} />
-                </div>
+                <Link href="/purchase-orders" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: 800, fontSize: '14px' }}>
+                  + New Purchase Order
+                </Link>
               </div>
-              <Link href="/purchase-orders" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: '12px', padding: '12px 20px', fontWeight: 800, fontSize: '14px' }}>
-                + New Purchase Order
-              </Link>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === 'ai' && (
             <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)' }}>
@@ -950,6 +1067,85 @@ export default function DashboardPage() {
           ))}
         </nav>
       </div>
+
+      {/* ── Edit-stock modal (founder / co_founder only) ───────────────── */}
+      {showStockEdit && canEditStock && (
+        <div
+          onClick={() => !stockSaving && setShowStockEdit(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 14, padding: 18, width: '100%', maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: 16, margin: 0 }}>Edit product stock (lbs)</h3>
+              <button onClick={() => !stockSaving && setShowStockEdit(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: stockSaving ? 'not-allowed' : 'pointer', color: '#999' }}>×</button>
+            </div>
+            <p style={{ color: '#666', fontSize: 12, margin: '0 0 12px' }}>
+              Founder + co_founder only. Updates products.stock_lbs and refreshes the dashboard total.
+            </p>
+            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #ebebeb', borderRadius: 10 }}>
+              {stockProducts === null ? (
+                <div style={{ padding: 20, color: '#999', textAlign: 'center', fontSize: 13 }}>Loading…</div>
+              ) : stockProducts.length === 0 ? (
+                <div style={{ padding: 20, color: '#999', textAlign: 'center', fontSize: 13 }}>No active products to edit.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: '#f8f9fa' }}>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', color: '#666', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>SKU</th>
+                      <th style={{ textAlign: 'left', padding: '8px 10px', color: '#666', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Name</th>
+                      <th style={{ textAlign: 'right', padding: '8px 10px', color: '#666', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Stock (lb)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stockProducts.map((p) => {
+                      const dirty = stockEdits[p.id] !== undefined;
+                      const current = dirty ? stockEdits[p.id] : String(p.stock_lbs);
+                      return (
+                        <tr key={p.id} style={{ borderTop: '1px solid #ebebeb', background: dirty ? '#fff8e7' : '#fff' }}>
+                          <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 11, color: '#666' }}>{p.sku}</td>
+                          <td style={{ padding: '8px 10px', color: '#1a2e5a', fontWeight: 600 }}>{p.name}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={current}
+                              onChange={(e) => setStockEdits((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                              style={{ width: 90, padding: '4px 8px', textAlign: 'right', borderRadius: 6, border: '1px solid #ccc', fontSize: 13 }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {stockSaveMsg && (
+              <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: stockSaveMsg.includes('failed') ? '#fde8e8' : '#e8f5e9', color: stockSaveMsg.includes('failed') ? '#dc2626' : '#2e7d32', fontSize: 12, fontWeight: 700 }}>
+                {stockSaveMsg}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button
+                onClick={() => !stockSaving && setShowStockEdit(false)}
+                disabled={stockSaving}
+                style={{ background: '#f0f0f0', color: '#666', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: stockSaving ? 'not-allowed' : 'pointer' }}
+              >
+                Close
+              </button>
+              <button
+                onClick={saveStockEdits}
+                disabled={stockSaving || stockProducts === null}
+                style={{ background: stockSaving ? '#94a3b8' : '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 800, fontSize: 13, cursor: stockSaving ? 'not-allowed' : 'pointer' }}
+              >
+                {stockSaving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
