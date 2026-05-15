@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import InvoiceScanner from '@/components/InvoiceScanner';
 import DashboardSnapshot from './snapshot';
+import { fetchOverheadMetrics, type OverheadMetrics } from '@/lib/profit';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -159,6 +160,9 @@ export default function DashboardPage() {
   const [weeklyProcessedLb, setWeeklyProcessedLb] = useState<number | null>(null);
   const [weeklyYieldPct, setWeeklyYieldPct]       = useState<number | null>(null);
   const [overdueCreditCount, setOverdueCreditCount] = useState<number | null>(null);
+  const [overhead, setOverhead] = useState<OverheadMetrics | null>(null);
+  const [mtdNetProfit, setMtdNetProfit] = useState<number | null>(null);
+  const [todayNetProfit, setTodayNetProfit] = useState<number | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -226,6 +230,39 @@ export default function DashboardPage() {
       return count ?? 0;
     }, null as number | null);
     setOverdueCreditCount(overdue);
+
+    // Live monthly fixed overhead from the expenses table (replaces the
+    // old hardcoded $20,590 placeholder).
+    const oh = await safe(() => fetchOverheadMetrics(), null as OverheadMetrics | null);
+    setOverhead(oh);
+
+    // Today's net profit (sum of orders.net_profit since midnight).
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayNet = await safe(async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('net_profit')
+        .gte('created_at', today.toISOString());
+      return (data ?? []).reduce(
+        (s: number, r: { net_profit: number | null }) => s + Number(r.net_profit ?? 0),
+        0,
+      );
+    }, null as number | null);
+    setTodayNetProfit(todayNet);
+
+    // Month-to-date net profit (drives the expense-coverage progress bar).
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const mtdNet = await safe(async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('net_profit')
+        .gte('created_at', monthStart.toISOString());
+      return (data ?? []).reduce(
+        (s: number, r: { net_profit: number | null }) => s + Number(r.net_profit ?? 0),
+        0,
+      );
+    }, null as number | null);
+    setMtdNetProfit(mtdNet);
   }
 
   async function loadTodaySales() {
@@ -395,20 +432,60 @@ export default function DashboardPage() {
 
           {activeTab === 'overview' && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '14px' }}>
                 <div style={{ backgroundColor: '#1a2e5a', borderRadius: '14px', padding: '14px', textAlign: 'center' }}>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px', marginBottom: '4px' }}>Today Revenue</div>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px', marginBottom: '4px' }}>Gross Revenue</div>
                   <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todayRevenue)}</div>
                 </div>
                 <div style={{ backgroundColor: '#e8f5e9', borderRadius: '14px', padding: '14px', textAlign: 'center' }}>
-                  <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>BSC Keeps</div>
+                  <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>BSC Keeps (after COGS)</div>
                   <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todayProfit)}</div>
+                </div>
+                <div style={{ backgroundColor: '#fff8e7', borderRadius: '14px', padding: '14px', textAlign: 'center', borderTop: '3px solid #f5c518' }}>
+                  <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>Net Profit (after expenses + Bill 5%)</div>
+                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>
+                    {todayNetProfit === null ? '—' : fmtBSD(todayNetProfit)}
+                  </div>
                 </div>
                 <div style={{ backgroundColor: '#fde8e8', borderRadius: '14px', padding: '14px', textAlign: 'center' }}>
                   <div style={{ color: '#666', fontSize: '10px', marginBottom: '4px' }}>Supplier Owed</div>
                   <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySupplier)}</div>
                 </div>
               </div>
+
+              {/* Expense coverage progress — month-to-date net profit vs monthly fixed overhead. */}
+              {overhead !== null && overhead.monthly_overhead > 0 && (() => {
+                const mtd = mtdNetProfit ?? 0;
+                const target = overhead.monthly_overhead;
+                const ratio = Math.max(0, Math.min(1, mtd / target));
+                const fullyCovered = mtd >= target;
+                const barColor = fullyCovered ? '#f5c518' : '#22c55e';
+                return (
+                  <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                      <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '13px' }}>
+                        Expense coverage this month
+                        {fullyCovered && <span style={{ marginLeft: 8, color: '#f5c518', fontWeight: 900 }}>✓ FULLY COVERED</span>}
+                      </div>
+                      <div style={{ color: '#666', fontSize: '12px' }}>
+                        {fmtBSD(mtd)} of {fmtBSD(target)}
+                      </div>
+                    </div>
+                    <div style={{ height: '10px', backgroundColor: '#f0f0f0', borderRadius: '20px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${(ratio * 100).toFixed(1)}%`,
+                        backgroundColor: barColor,
+                        borderRadius: '20px',
+                        transition: 'width 0.4s ease, background-color 0.4s ease',
+                      }} />
+                    </div>
+                    <div style={{ color: '#999', fontSize: '11px', marginTop: '4px' }}>
+                      {(ratio * 100).toFixed(1)}% of monthly overhead covered by net profit so far
+                    </div>
+                  </div>
+                );
+              })()}
 
               <DashboardSnapshot />
 
@@ -650,8 +727,12 @@ export default function DashboardPage() {
               </div>
               <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px', padding: '18px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12px', marginBottom: '6px' }}>Monthly Fixed Expenses</div>
-                <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '28px' }}>$20,590</div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '4px' }}>Nassau rent · Andros · Staff · Utilities</div>
+                <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '28px' }}>
+                  {overhead === null ? '—' : `$${Number(overhead.monthly_overhead).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '4px' }}>
+                  Live from expenses · salaries + utilities + rent + operations + maintenance
+                </div>
               </div>
             </div>
           )}
