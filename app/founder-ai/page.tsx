@@ -1,382 +1,260 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useRef } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect } from 'react'
 
-const LOGO = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/A0EF44D5-D0F6-4D15-9826-4FED851A2719.png';
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  webSearchUsed?: boolean
+  timestamp?: Date
+}
 
-type Message = { id: string; role: 'user' | 'assistant'; content: string; created_at: string; };
-type Chat = { id: string; title: string; created_at: string; };
+const INTELLIGENCE_LAYERS = [
+  { id: 'bsc', label: 'BSC Core', description: 'Operations, pricing, processing, export', color: '#f5c518', icon: '🦞' },
+  { id: 'species', label: 'Species Intel', description: 'Identification, arbitrage, regional pricing', color: '#4ade80', icon: '🐟' },
+  { id: 'trace', label: 'Traceability', description: 'Chain of custody, compliance, audit', color: '#60a5fa', icon: '📍' },
+  { id: 'cultivate', label: 'Cultivation', description: 'R&D intelligence, cost reduction, demand', color: '#c084fc', icon: '🔬' }
+]
 
-const SUGGESTIONS = [
-  'Where do we stand financially today?',
-  'What is my path from current debt to wealth?',
-  'What is the biggest opportunity I should work on this week?',
-  'What is blocking the lobster pipeline build?',
-  'Show me my current A/P snapshot and Tom Gotthelf schedule.',
-  'Which SKUs am I underpricing under sacred rules?',
-  'How does Igloo Express change our lobster economics?',
-  'What questions should I get answered first to unlock the next tier?',
-  'Teach me how to use my dashboard, section by section.',
-  'Walk me through the lobster pipeline pages in order.',
-];
+const SUGGESTED_QUESTIONS = [
+  'What seafood species has the highest arbitrage opportunity from the Bahamas right now?',
+  'How do I trace a batch of spiny lobster from boat to US export?',
+  'What is the current global price of wahoo and where should BSC sell it?',
+  'Which species should BSC consider for cultivation to reduce COGS?',
+  'What are the CITES regulations for queen conch export to the US?',
+  'How does lionfish compare to grouper in flavor and what restaurants want it?',
+  'What are BSC\'s pricing margins and how do I calculate them?',
+  'When does lobster season open and how should BSC pre-sell?'
+]
+
+function generateSessionId(): string {
+  return `bsc-founder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+}
 
 export default function FounderAIPage() {
-  const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const supabaseRef = useRef(
-    createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-  );
-  const supabase = supabaseRef.current;
-
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [sessionId] = useState(generateSessionId)
+  const [isSearching, setIsSearching] = useState(false)
+  const [conversationHistory, setConversationHistory] = useState<Array<{ role: string; content: string }>>([])
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    loadChats();
-  }, []);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+    if (!loading && inputRef.current) inputRef.current.focus()
+  }, [loading])
 
-  async function loadChats() {
-    const { data } = await supabase
-      .from('founder_chats')
-      .select('id, title, created_at')
-      .order('created_at', { ascending: false })
-      .limit(30);
-    if (data) setChats(data);
-  }
+  async function sendMessage(text?: string) {
+    const messageText = text || input.trim()
+    if (!messageText || loading) return
 
-  async function loadMessages(chatId: string) {
-    const { data } = await supabase
-      .from('founder_messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data);
-    setCurrentChatId(chatId);
-    setSidebarOpen(false);
-  }
+    setMessages(prev => [...prev, { role: 'user', content: messageText, timestamp: new Date() }])
+    setInput('')
+    setLoading(true)
+    setIsSearching(false)
 
-  async function startNewChat() {
-    setMessages([]);
-    setCurrentChatId(null);
-    setSidebarOpen(false);
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }
-
-  async function deleteChat(chatId: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!confirm('Delete this chat?')) return;
-    await supabase.from('founder_messages').delete().eq('chat_id', chatId);
-    await supabase.from('founder_chats').delete().eq('id', chatId);
-    if (chatId === currentChatId) { setMessages([]); setCurrentChatId(null); }
-    await loadChats();
-  }
-
-  async function sendMessage(textOverride?: string) {
-    const userText = (textOverride ?? input).trim();
-    if (!userText || loading) return;
-    setInput('');
-    setLoading(true);
-
-    let chatId = currentChatId;
-    if (!chatId) {
-      const { data: newChat } = await supabase
-        .from('founder_chats')
-        .insert([{ title: userText.slice(0, 60), created_at: new Date().toISOString() }])
-        .select()
-        .single();
-      if (newChat) { chatId = newChat.id; setCurrentChatId(chatId); loadChats(); }
-    }
-
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: userText,
-      created_at: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, userMsg]);
-
-    if (chatId) {
-      await supabase.from('founder_messages').insert([{
-        chat_id: chatId,
-        role: 'user',
-        content: userText,
-        created_at: userMsg.created_at,
-      }]);
-    }
+    const searchTimer = setTimeout(() => setIsSearching(true), 1500)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token ?? '';
-
-      const res = await fetch('/api/founder-ai', {
+      const response = await fetch('/api/founder-ai', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          chatId,
-          message: userText,
-          history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
-        }),
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: messageText, sessionId, conversationHistory })
+      })
 
-      const data = await res.json();
-      const aiText = data.reply || data.error || 'No response received.';
-      const aiMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: aiText,
-        created_at: new Date().toISOString(),
-      };
+      const data = await response.json()
+      if (data.error) throw new Error(data.error)
 
-      if (chatId) {
-        await supabase.from('founder_messages').insert([{
-          chat_id: chatId,
-          role: 'assistant',
-          content: aiText,
-          created_at: aiMsg.created_at,
-        }]);
-      }
-      setMessages(prev => [...prev, aiMsg]);
-    } catch {
       setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
         role: 'assistant',
-        content: 'Connection error. Please try again.',
-        created_at: new Date().toISOString(),
-      }]);
+        content: data.message,
+        webSearchUsed: data.webSearchUsed,
+        timestamp: new Date()
+      }])
+
+      setConversationHistory(prev => [
+        ...prev,
+        { role: 'user', content: messageText },
+        { role: 'assistant', content: data.message }
+      ])
+
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Intelligence engine encountered an error. Please try again.',
+        timestamp: new Date()
+      }])
+    } finally {
+      clearTimeout(searchTimer)
+      setLoading(false)
+      setIsSearching(false)
     }
-    setLoading(false);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  }
-
-  function formatTime(iso: string) {
-    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  }
-  function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-  function greeting() {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
-  function fmt(text: string): string {
-    return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`(.+?)`/g, '<code>$1</code>')
-      .replace(/\n/g, '<br />');
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
   }
 
   return (
-    <>
+    <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', color: '#ffffff', fontFamily: "'DM Sans', sans-serif", display: 'flex', flexDirection: 'column' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
-        * { margin:0; padding:0; box-sizing:border-box; }
-        html,body { height:100%; overflow:hidden; }
-        body { font-family:'DM Sans',sans-serif; background:#060e1c; color:#fff; -webkit-font-smoothing:antialiased; }
-        .fai-shell { display:flex; height:100dvh; background:linear-gradient(180deg,#060e1c 0%,#0a1520 100%); position:relative; overflow:hidden; }
-        .fai-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); z-index:10; animation:fadeIn .25s ease; }
-        @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
-        .fai-sidebar { position:fixed; top:0; left:0; bottom:0; width:300px; background:linear-gradient(180deg,#0a1520 0%,#060e1c 100%); border-right:1px solid rgba(212,168,67,.15); z-index:20; display:flex; flex-direction:column; transition:transform .28s cubic-bezier(.25,.46,.45,.94); box-shadow:8px 0 32px rgba(0,0,0,.4); }
-        .fai-sidebar-header { display:flex; justify-content:space-between; align-items:center; padding:20px 18px 14px; border-bottom:1px solid rgba(212,168,67,.12); }
-        .fai-sidebar-title { color:#f5c842; font-family:'Playfair Display',serif; font-weight:700; font-size:16px; }
-        .fai-sidebar-icon { background:none; border:none; color:rgba(255,255,255,.55); font-size:22px; cursor:pointer; padding:6px 10px; border-radius:8px; }
-        .fai-new-btn { margin:14px 16px; padding:12px 16px; background:linear-gradient(130deg,#f5c842,#c8860f); color:#060e1c; border:none; border-radius:10px; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; box-shadow:0 4px 18px rgba(212,168,67,.3); font-family:inherit; }
-        .fai-chat-list { flex:1; overflow-y:auto; padding:0 10px 20px; }
-        .fai-chat-list::-webkit-scrollbar { width:6px; }
-        .fai-chat-list::-webkit-scrollbar-thumb { background:rgba(212,168,67,.2); border-radius:6px; }
-        .fai-empty { color:rgba(255,255,255,.35); font-size:12px; padding:18px 10px; text-align:center; line-height:1.5; }
-        .fai-chat-item { width:100%; padding:11px 13px; background:transparent; border:1px solid transparent; border-radius:10px; cursor:pointer; text-align:left; display:flex; flex-direction:column; gap:3px; margin-bottom:3px; position:relative; font-family:inherit; }
-        .fai-chat-item:hover { background:rgba(255,255,255,.04); border-color:rgba(212,168,67,.12); }
-        .fai-chat-item.active { background:rgba(212,168,67,.08); border-color:rgba(212,168,67,.25); }
-        .fai-chat-item-title { color:#e8d5a3; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:230px; }
-        .fai-chat-item-date { color:rgba(255,255,255,.35); font-size:10.5px; }
-        .fai-chat-del { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:rgba(255,255,255,.3); font-size:14px; cursor:pointer; padding:4px 6px; border-radius:5px; opacity:0; }
-        .fai-chat-item:hover .fai-chat-del { opacity:1; }
-        .fai-chat-del:hover { color:#fca5a5; background:rgba(239,68,68,.1); }
-        .fai-main { flex:1; display:flex; flex-direction:column; height:100dvh; min-width:0; }
-        .fai-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:rgba(6,14,28,.7); backdrop-filter:blur(12px); border-bottom:1px solid rgba(212,168,67,.18); flex-shrink:0; gap:12px; }
-        .fai-header-left, .fai-header-right { display:flex; align-items:center; gap:8px; }
-        .fai-icon-btn { background:none; border:none; color:rgba(255,255,255,.6); font-size:20px; cursor:pointer; padding:8px 10px; border-radius:8px; line-height:1; }
-        .fai-header-center { display:flex; align-items:center; gap:11px; flex:1; min-width:0; justify-content:center; }
-        .fai-logo { width:36px; height:36px; border-radius:50%; background:#fafaf6; display:flex; align-items:center; justify-content:center; padding:4px; flex-shrink:0; box-shadow:0 2px 12px rgba(212,168,67,.3); border:1.5px solid rgba(212,168,67,.4); }
-        .fai-logo img { width:100%; height:100%; object-fit:contain; }
-        .fai-header-text { display:flex; flex-direction:column; }
-        .fai-header-name { font-family:'Playfair Display',serif; color:#f5c842; font-weight:900; font-size:17px; line-height:1; }
-        .fai-header-sub { color:rgba(212,168,67,.55); font-size:9.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; margin-top:3px; }
-        .fai-status { display:flex; align-items:center; gap:6px; padding:5px 11px; border-radius:30px; background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.25); }
-        .fai-status-dot { width:6px; height:6px; border-radius:50%; background:#22c55e; box-shadow:0 0 10px rgba(34,197,94,.7); animation:pulse 2s ease-in-out infinite; }
-        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.5;} }
-        .fai-status-text { font-size:9.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#22c55e; }
-        .fai-messages { flex:1; overflow-y:auto; padding:24px 16px; display:flex; flex-direction:column; gap:14px; max-width:880px; width:100%; margin:0 auto; }
-        .fai-welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; padding:30px 20px; gap:14px; flex:1; text-align:center; }
-        .fai-welcome-logo { width:90px; height:90px; border-radius:50%; background:#fafaf6; display:flex; align-items:center; justify-content:center; padding:10px; margin-bottom:14px; box-shadow:0 12px 40px rgba(212,168,67,.45); border:2px solid rgba(212,168,67,.5); }
-        .fai-welcome-logo img { width:100%; height:100%; object-fit:contain; }
-        .fai-welcome-title { font-family:'Playfair Display',serif; color:#fff; font-size:clamp(24px,3.6vw,34px); font-weight:900; line-height:1.15; max-width:480px; }
-        .fai-welcome-title .gold { background:linear-gradient(130deg,#f5c842,#c8860f); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; font-style:italic; }
-        .fai-welcome-text { color:rgba(255,255,255,.55); font-size:14.5px; line-height:1.65; max-width:440px; font-weight:300; }
-        .fai-suggestions { display:grid; grid-template-columns:1fr 1fr; gap:9px; max-width:680px; width:100%; margin-top:18px; }
-        .fai-sugg { background:rgba(255,255,255,.04); border:1px solid rgba(212,168,67,.15); border-radius:12px; padding:13px 16px; cursor:pointer; text-align:left; font-family:inherit; color:rgba(255,255,255,.78); font-size:12.5px; line-height:1.5; }
-        .fai-sugg:hover { background:rgba(212,168,67,.08); border-color:rgba(212,168,67,.4); transform:translateY(-2px); color:#fff; }
-        .fai-msg-row { display:flex; align-items:flex-end; gap:9px; animation:fadeUp .3s ease both; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
-        .fai-msg-row.user { justify-content:flex-end; }
-        .fai-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0; margin-bottom:2px; display:flex; align-items:center; justify-content:center; }
-        .fai-avatar-ai { background:#fafaf6; padding:3px; box-shadow:0 3px 12px rgba(212,168,67,.35); border:1.5px solid rgba(212,168,67,.4); }
-        .fai-avatar-ai img { width:100%; height:100%; object-fit:contain; }
-        .fai-avatar-user { background:rgba(212,168,67,.15); color:#f5c842; font-weight:900; font-size:14px; border:1px solid rgba(212,168,67,.3); }
-        .fai-bubble { max-width:78%; padding:11px 15px; border-radius:16px; display:flex; flex-direction:column; gap:5px; }
-        .fai-bubble-user { background:linear-gradient(135deg,rgba(212,168,67,.18),rgba(212,168,67,.1)); border:1px solid rgba(212,168,67,.3); border-bottom-right-radius:4px; color:#fff; }
-        .fai-bubble-ai { background:rgba(255,255,255,.04); border:1px solid rgba(212,168,67,.15); border-bottom-left-radius:4px; }
-        .fai-bubble-text { color:#f1f5f9; font-size:14.5px; line-height:1.65; white-space:pre-wrap; word-wrap:break-word; }
-        .fai-bubble-text strong { color:#f5c842; font-weight:700; }
-        .fai-bubble-text code { background:rgba(0,0,0,.3); padding:2px 6px; border-radius:4px; font-size:13px; color:#f5c842; font-family:ui-monospace,monospace; }
-        .fai-bubble-time { color:rgba(255,255,255,.3); font-size:10px; align-self:flex-end; }
-        .fai-typing { display:flex; gap:5px; padding:6px 0; align-items:center; }
-        .fai-dot { width:7px; height:7px; border-radius:50%; background:#d4a843; animation:typing 1.3s ease-in-out infinite; }
-        .fai-dot:nth-child(2) { animation-delay:.18s; }
-        .fai-dot:nth-child(3) { animation-delay:.36s; }
-        @keyframes typing { 0%,100%{opacity:.3;transform:scale(.85);} 50%{opacity:1;transform:scale(1);} }
-        .fai-input-wrap { padding:14px 16px 18px; background:rgba(6,14,28,.7); backdrop-filter:blur(12px); border-top:1px solid rgba(212,168,67,.15); flex-shrink:0; }
-        .fai-input-inner { max-width:880px; margin:0 auto; display:flex; gap:10px; align-items:flex-end; }
-        .fai-textarea { flex:1; background:rgba(255,255,255,.05); border:1.5px solid rgba(212,168,67,.2); border-radius:14px; padding:13px 16px; color:#fff; font-family:inherit; font-size:14.5px; resize:none; outline:none; line-height:1.5; max-height:120px; min-height:48px; }
-        .fai-textarea::placeholder { color:rgba(255,255,255,.35); }
-        .fai-textarea:focus { border-color:rgba(212,168,67,.5); box-shadow:0 0 0 3px rgba(212,168,67,.1); }
-        .fai-send { background:linear-gradient(130deg,#f5c842,#c8860f); border:none; color:#060e1c; width:48px; height:48px; border-radius:13px; cursor:pointer; font-size:18px; font-weight:900; flex-shrink:0; box-shadow:0 4px 18px rgba(212,168,67,.35); display:flex; align-items:center; justify-content:center; }
-        .fai-send:disabled { opacity:.35; cursor:not-allowed; }
-        .fai-hint { max-width:880px; margin:8px auto 0; text-align:center; font-size:9.5px; letter-spacing:.12em; color:rgba(255,255,255,.28); text-transform:uppercase; font-weight:600; }
-        @media(max-width:640px){
-          .fai-suggestions{grid-template-columns:1fr;}
-          .fai-bubble{max-width:88%;}
-          .fai-welcome-title{font-size:24px;}
-          .fai-header-center{justify-content:flex-start;}
-          .fai-sidebar{width:280px;}
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0a1628; }
+        ::-webkit-scrollbar-thumb { background: #f5c518; border-radius: 2px; }
+        .user-bubble { background: linear-gradient(135deg, #f5c518 0%, #e6b000 100%); color: #060d1f; border-radius: 18px 18px 4px 18px; padding: 12px 16px; max-width: 80%; margin-left: auto; font-weight: 500; line-height: 1.5; }
+        .assistant-bubble { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px 18px 18px 18px; padding: 16px; max-width: 90%; line-height: 1.7; font-size: 14px; color: rgba(255,255,255,0.9); white-space: pre-wrap; }
+        .assistant-bubble strong { color: #f5c518; font-weight: 600; }
+        .send-btn { background: linear-gradient(135deg, #f5c518, #e6b000); border: none; border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+        .send-btn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 4px 12px rgba(245,197,24,0.4); }
+        .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .layer-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); font-size: 11px; font-weight: 500; white-space: nowrap; }
+        .pulse-dot { width: 6px; height: 6px; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.8); } }
+        .loading-dots span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #f5c518; margin: 0 2px; animation: bounce 1.4s infinite; }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-6px); opacity: 1; } }
+        .web-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.2); border-radius: 10px; padding: 2px 7px; font-size: 10px; color: #60a5fa; margin-bottom: 8px; }
+        textarea { background: transparent; border: none; outline: none; color: white; font-family: 'DM Sans', sans-serif; font-size: 14px; resize: none; flex: 1; min-height: 24px; max-height: 120px; line-height: 1.5; }
+        textarea::placeholder { color: rgba(255,255,255,0.3); }
       `}</style>
 
-      <div className="fai-shell">
-        {sidebarOpen && <div className="fai-overlay" onClick={() => setSidebarOpen(false)} />}
-        <div className="fai-sidebar" style={{ transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}>
-          <div className="fai-sidebar-header">
-            <span className="fai-sidebar-title">💬 Past Chats</span>
-            <button className="fai-sidebar-icon" onClick={() => setSidebarOpen(false)}>✕</button>
+      {/* Header */}
+      <header style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(6,13,31,0.95)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #f5c518, #e6b000)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>🦞</div>
+            <div>
+              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: '18px', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.3px', lineHeight: 1 }}>
+                BSC Founder <span style={{ color: '#f5c518' }}>AI</span>
+              </h1>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>Global Seafood Intelligence Engine</p>
+            </div>
           </div>
-          <button className="fai-new-btn" onClick={startNewChat}>+ New Chat</button>
-          <div className="fai-chat-list">
-            {chats.length === 0 ? (
-              <p className="fai-empty">No chats yet.<br />Start a conversation.</p>
-            ) : chats.map(chat => (
-              <button key={chat.id} className={`fai-chat-item ${chat.id === currentChatId ? 'active' : ''}`} onClick={() => loadMessages(chat.id)}>
-                <span className="fai-chat-item-title">{chat.title || 'Untitled'}</span>
-                <span className="fai-chat-item-date">{formatDate(chat.created_at)}</span>
-                <button className="fai-chat-del" onClick={(e) => deleteChat(chat.id, e)}>🗑</button>
-              </button>
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
+            {INTELLIGENCE_LAYERS.map(layer => (
+              <div key={layer.id} className="layer-pill" style={{ borderColor: `${layer.color}30`, background: `${layer.color}08` }}>
+                <div className="pulse-dot" style={{ background: layer.color }} />
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>{layer.icon} {layer.label}</span>
+              </div>
             ))}
           </div>
         </div>
+      </header>
 
-        <div className="fai-main">
-          <div className="fai-header">
-            <div className="fai-header-left">
-              <button className="fai-icon-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-              <button className="fai-icon-btn" onClick={() => { window.location.href = '/dashboard'; }}>←</button>
-            </div>
-            <div className="fai-header-center">
-              <div className="fai-logo"><img src={LOGO} alt="BSC" /></div>
-              <div className="fai-header-text">
-                <div className="fai-header-name">Founder AI</div>
-                <div className="fai-header-sub">Your private BSC assistant</div>
-              </div>
-            </div>
-            <div className="fai-header-right">
-              <div className="fai-status">
-                <span className="fai-status-dot" />
-                <span className="fai-status-text">Online</span>
-              </div>
-              <button className="fai-icon-btn" onClick={startNewChat}>✏️</button>
-            </div>
-          </div>
+      {/* Messages */}
+      <main style={{ flex: 1, overflowY: 'auto', padding: '24px 16px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
 
-          <div className="fai-messages">
-            {messages.length === 0 ? (
-              <div className="fai-welcome">
-                <div className="fai-welcome-logo"><img src={LOGO} alt="BSC Marketplace" /></div>
-                <h2 className="fai-welcome-title">{greeting()}, <span className="gold">Dedrick.</span></h2>
-                <p className="fai-welcome-text">I know your business inside and out — pricing rules, supplier costs, margins, inventory, the whole thing. Ask me anything.</p>
-                <div className="fai-suggestions">
-                  {SUGGESTIONS.map(s => (
-                    <button key={s} className="fai-sugg" onClick={() => sendMessage(s)}>{s}</button>
-                  ))}
+        {messages.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 0 32px' }}>
+            <div style={{ width: '72px', height: '72px', borderRadius: '20px', background: 'linear-gradient(135deg, rgba(245,197,24,0.15), rgba(245,197,24,0.05))', border: '1px solid rgba(245,197,24,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', margin: '0 auto 20px' }}>🦞</div>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '22px', fontWeight: '600', color: '#ffffff', marginBottom: '8px' }}>Bahamian Seafood Intelligence</h2>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', marginBottom: '8px', lineHeight: 1.6 }}>Species · Traceability · Arbitrage · Cultivation</p>
+            <p style={{ fontSize: '12px', color: 'rgba(245,197,24,0.6)', marginBottom: '32px' }}>Built in Nassau. Powered by AI. Ready for the world.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '32px', textAlign: 'left' }}>
+              {INTELLIGENCE_LAYERS.map(layer => (
+                <div key={layer.id} style={{ background: `${layer.color}06`, border: `1px solid ${layer.color}20`, borderRadius: '12px', padding: '12px' }}>
+                  <div style={{ fontSize: '18px', marginBottom: '4px' }}>{layer.icon}</div>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: layer.color, marginBottom: '3px' }}>{layer.label}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>{layer.description}</div>
                 </div>
-              </div>
-            ) : (
-              <>
-                {messages.map(m => (
-                  <div key={m.id} className={`fai-msg-row ${m.role}`}>
-                    {m.role === 'assistant' && <div className="fai-avatar fai-avatar-ai"><img src={LOGO} alt="" /></div>}
-                    <div className={`fai-bubble ${m.role === 'user' ? 'fai-bubble-user' : 'fai-bubble-ai'}`}>
-                      <div className="fai-bubble-text" dangerouslySetInnerHTML={{ __html: fmt(m.content) }} />
-                      <span className="fai-bubble-time">{formatTime(m.created_at)}</span>
-                    </div>
-                    {m.role === 'user' && <div className="fai-avatar fai-avatar-user">D</div>}
-                  </div>
-                ))}
-                {loading && (
-                  <div className="fai-msg-row">
-                    <div className="fai-avatar fai-avatar-ai"><img src={LOGO} alt="" /></div>
-                    <div className="fai-bubble fai-bubble-ai">
-                      <div className="fai-typing">
-                        <span className="fai-dot" /><span className="fai-dot" /><span className="fai-dot" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-            <div ref={bottomRef} />
-          </div>
-
-          <div className="fai-input-wrap">
-            <div className="fai-input-inner">
-              <textarea
-                ref={inputRef}
-                className="fai-textarea"
-                placeholder="Ask Founder AI anything about your business..."
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                disabled={loading}
-              />
-              <button className="fai-send" onClick={() => sendMessage()} disabled={!input.trim() || loading}>↑</button>
+              ))}
             </div>
-            <div className="fai-hint">🔒 Private · Powered by Claude · Chat history saved</div>
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '1px' }}>Try asking</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {SUGGESTED_QUESTIONS.slice(0, 4).map((q, i) => (
+                  <button key={i} onClick={() => sendMessage(q)}
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px', padding: '10px 14px', color: 'rgba(255,255,255,0.6)', fontSize: '12px', cursor: 'pointer', textAlign: 'left', lineHeight: 1.4 }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.06)'; e.currentTarget.style.borderColor = 'rgba(245,197,24,0.2)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}>
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {messages.map((msg, i) => (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              {msg.role === 'assistant' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <div style={{ width: '20px', height: '20px', borderRadius: '6px', background: 'linear-gradient(135deg, #f5c518, #e6b000)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px' }}>🦞</div>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: '500' }}>BSC Intelligence</span>
+                  {msg.timestamp && <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>{formatTime(msg.timestamp)}</span>}
+                </div>
+              )}
+              <div className={msg.role === 'user' ? 'user-bubble' : 'assistant-bubble'}>
+                {msg.role === 'assistant' && msg.webSearchUsed && <div className="web-badge">🔍 Live data retrieved</div>}
+                {msg.content}
+              </div>
+              {msg.role === 'user' && msg.timestamp && <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginTop: '4px' }}>{formatTime(msg.timestamp)}</span>}
+            </div>
+          ))}
+
+          {loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '6px', background: 'linear-gradient(135deg, #f5c518, #e6b000)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px' }}>🦞</div>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>BSC Intelligence</span>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px 18px 18px 18px', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {isSearching && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}><span>🔍</span><span>Searching live seafood data...</span></div>}
+                <div className="loading-dots"><span /><span /><span /></div>
+              </div>
+            </div>
+          )}
         </div>
+        <div ref={messagesEndRef} />
+      </main>
+
+      {/* Suggestion chips after first message */}
+      {messages.length > 0 && (
+        <div style={{ overflowX: 'auto', padding: '12px 16px 0', display: 'flex', gap: '8px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
+          {SUGGESTED_QUESTIONS.slice(4).map((q, i) => (
+            <button key={i} onClick={() => sendMessage(q)}
+              style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.2)', borderRadius: '20px', padding: '8px 14px', fontSize: '12px', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.15)'; e.currentTarget.style.color = '#f5c518' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,197,24,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}>
+              {q.length > 50 ? q.slice(0, 50) + '…' : q}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div style={{ padding: '12px 16px 24px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '12px 14px' }}>
+          <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
+            placeholder="Ask anything about seafood, species, markets, traceability, or BSC operations…"
+            rows={1} disabled={loading} />
+          <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13" stroke="#060d1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="#060d1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: '8px' }}>
+          BSC Global Seafood Intelligence · Nassau, Bahamas · bscbahamas.com
+        </p>
       </div>
-    </>
-  );
+    </div>
+  )
 }
