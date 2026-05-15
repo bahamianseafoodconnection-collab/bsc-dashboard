@@ -78,16 +78,21 @@ const NAV_GROUPS = [
   },
 ];
 
-const REVENUE_STREAMS = [
-  { label: 'Nassau POS Sales', icon: '🟡', value: '$0.00', profit: '38%',      color: '#fef9e7' },
-  { label: 'Andros POS Sales', icon: '🟣', value: '$0.00', profit: '43%',      color: '#f5f0ff' },
-  { label: 'Online Market',    icon: '🛒', value: '$0.00', profit: '25%',      color: '#e8f4fd' },
-  { label: 'Wholesale',        icon: '📦', value: '$0.00', profit: '12%',      color: '#f0fde8' },
-  { label: 'Vehicle Sales',    icon: '🚗', value: '$0.00', profit: '$650/car', color: '#fff3e8' },
-  { label: 'Vehicle Rentals',  icon: '🔑', value: '$0.00', profit: '$10/day',  color: '#fff3e8' },
-  { label: 'Auto Parts',       icon: '🔧', value: '$0.00', profit: '10%',      color: '#fde8e8' },
-  { label: 'Bill Payments',    icon: '⚡', value: '$0.00', profit: '4.5%',     color: '#e8f8fd' },
-  { label: 'Supplier Fees',    icon: '🚢', value: '$0.00', profit: 'Varies',   color: '#f0fde8' },
+// Revenue streams. The first four map to orders.order_type values and
+// pull live month-to-date totals from Supabase. The last five reference
+// services/products that don't live in the orders table (yet) — they
+// render as "—" with a "Not yet tracked" caption so staff aren't shown
+// fake $0.00 numbers.
+const REVENUE_STREAMS: { label: string; icon: string; profit: string; color: string; orderType: string | null }[] = [
+  { label: 'Nassau POS Sales', icon: '🟡', profit: '38%',      color: '#fef9e7', orderType: 'pos_sale_nassau' },
+  { label: 'Andros POS Sales', icon: '🟣', profit: '43%',      color: '#f5f0ff', orderType: 'pos_sale_andros' },
+  { label: 'Online Market',    icon: '🛒', profit: '25%',      color: '#e8f4fd', orderType: 'online_market'   },
+  { label: 'Wholesale',        icon: '📦', profit: '12%',      color: '#f0fde8', orderType: 'wholesale'       },
+  { label: 'Vehicle Sales',    icon: '🚗', profit: '$650/car', color: '#fff3e8', orderType: null },
+  { label: 'Vehicle Rentals',  icon: '🔑', profit: '$10/day',  color: '#fff3e8', orderType: null },
+  { label: 'Auto Parts',       icon: '🔧', profit: '10%',      color: '#fde8e8', orderType: null },
+  { label: 'Bill Payments',    icon: '⚡', profit: '4.5%',     color: '#e8f8fd', orderType: null },
+  { label: 'Supplier Fees',    icon: '🚢', profit: 'Varies',   color: '#f0fde8', orderType: null },
 ];
 
 const WHOLESALERS = [
@@ -163,6 +168,7 @@ export default function DashboardPage() {
   const [overhead, setOverhead] = useState<OverheadMetrics | null>(null);
   const [mtdNetProfit, setMtdNetProfit] = useState<number | null>(null);
   const [todayNetProfit, setTodayNetProfit] = useState<number | null>(null);
+  const [revenueByType, setRevenueByType] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -250,19 +256,24 @@ export default function DashboardPage() {
     }, null as number | null);
     setTodayNetProfit(todayNet);
 
-    // Month-to-date net profit (drives the expense-coverage progress bar).
+    // Month-to-date aggregates: net profit AND per-channel revenue.
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-    const mtdNet = await safe(async () => {
+    const mtdRows = await safe(async () => {
       const { data } = await supabase
         .from('orders')
-        .select('net_profit')
+        .select('order_type, total, net_profit')
         .gte('created_at', monthStart.toISOString());
-      return (data ?? []).reduce(
-        (s: number, r: { net_profit: number | null }) => s + Number(r.net_profit ?? 0),
-        0,
-      );
-    }, null as number | null);
-    setMtdNetProfit(mtdNet);
+      return (data ?? []) as { order_type: string | null; total: number | null; net_profit: number | null }[];
+    }, [] as { order_type: string | null; total: number | null; net_profit: number | null }[]);
+
+    setMtdNetProfit(mtdRows.length ? mtdRows.reduce((s, r) => s + Number(r.net_profit ?? 0), 0) : null);
+
+    const byType: Record<string, number> = {};
+    for (const r of mtdRows) {
+      if (!r.order_type) continue;
+      byType[r.order_type] = (byType[r.order_type] ?? 0) + Number(r.total ?? 0);
+    }
+    setRevenueByType(byType);
   }
 
   async function loadTodaySales() {
@@ -710,20 +721,34 @@ export default function DashboardPage() {
           {activeTab === 'revenue' && (
             <div>
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>All 9 Revenue Streams</h2>
-              <p style={{ color: '#999', fontSize: '12px', marginBottom: '18px' }}>Live profit tracking across every BSC channel</p>
+              <p style={{ color: '#999', fontSize: '12px', marginBottom: '18px' }}>
+                Live month-to-date totals from the orders table. Streams that don't yet flow through orders are marked "Not yet tracked".
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-                {REVENUE_STREAMS.map((stream) => (
-                  <div key={stream.label} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <div style={{ width: '46px', height: '46px', borderRadius: '12px', backgroundColor: stream.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>{stream.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ color: '#666', fontSize: '12px', marginBottom: '2px' }}>{stream.label}</div>
-                      <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>{stream.value}</div>
+                {REVENUE_STREAMS.map((stream) => {
+                  const hasData    = stream.orderType !== null;
+                  const liveAmount = hasData ? (revenueByType?.[stream.orderType!] ?? 0) : null;
+                  const valueText  = !hasData
+                    ? '—'
+                    : revenueByType === null
+                      ? 'Loading…'
+                      : fmtBSD(liveAmount ?? 0);
+                  return (
+                    <div key={stream.label} style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{ width: '46px', height: '46px', borderRadius: '12px', backgroundColor: stream.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', flexShrink: 0 }}>{stream.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#666', fontSize: '12px', marginBottom: '2px' }}>{stream.label}</div>
+                        <div style={{ color: hasData ? '#1a2e5a' : '#94a3b8', fontWeight: 900, fontSize: '18px' }}>{valueText}</div>
+                        {!hasData && (
+                          <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '2px', fontStyle: 'italic' }}>Not yet tracked in orders</div>
+                        )}
+                      </div>
+                      <div style={{ backgroundColor: '#e8f5e9', borderRadius: '8px', padding: '4px 10px' }}>
+                        <span style={{ color: '#2e7d32', fontWeight: 800, fontSize: '13px' }}>{stream.profit}</span>
+                      </div>
                     </div>
-                    <div style={{ backgroundColor: '#e8f5e9', borderRadius: '8px', padding: '4px 10px' }}>
-                      <span style={{ color: '#2e7d32', fontWeight: 800, fontSize: '13px' }}>{stream.profit}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px', padding: '18px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '12px', marginBottom: '6px' }}>Monthly Fixed Expenses</div>
