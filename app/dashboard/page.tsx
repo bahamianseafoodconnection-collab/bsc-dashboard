@@ -155,6 +155,10 @@ export default function DashboardPage() {
   const [salesLoading, setSalesLoading]       = useState(true);
   const [wholesaleOrders, setWholesaleOrders] = useState<WholesaleOrder[]>([]);
   const [wholesaleLoading, setWholesaleLoading] = useState(true);
+  const [weeklyCatchLb, setWeeklyCatchLb]         = useState<number | null>(null);
+  const [weeklyProcessedLb, setWeeklyProcessedLb] = useState<number | null>(null);
+  const [weeklyYieldPct, setWeeklyYieldPct]       = useState<number | null>(null);
+  const [overdueCreditCount, setOverdueCreditCount] = useState<number | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -173,8 +177,52 @@ export default function DashboardPage() {
     if (activeTab === 'overview') {
       loadTodaySales();
       loadWholesaleOrders();
+      loadLogWidgets();
     }
   }, [activeTab]);
+
+  async function loadLogWidgets() {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoIso = weekAgo.toISOString();
+
+    // Each query is wrapped so one missing table (e.g. before migration runs)
+    // doesn't blank out the other widgets. Staff see "—" instead of an error.
+    const safe = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try { return await fn(); } catch { return fallback; }
+    };
+
+    const catchLb = await safe(async () => {
+      const { data } = await supabase
+        .from('catch_logs')
+        .select('raw_weight_lb')
+        .gte('created_at', weekAgoIso);
+      return (data ?? []).reduce((s: number, r: { raw_weight_lb: number | null }) => s + Number(r.raw_weight_lb ?? 0), 0);
+    }, null as number | null);
+    setWeeklyCatchLb(catchLb);
+
+    const procRows = await safe(async () => {
+      const { data } = await supabase
+        .from('processing_logs')
+        .select('finished_weight_lb, yield_pct')
+        .gte('created_at', weekAgoIso);
+      return (data ?? []) as { finished_weight_lb: number | null; yield_pct: number | null }[];
+    }, [] as { finished_weight_lb: number | null; yield_pct: number | null }[]);
+    const processedLb = procRows.reduce((s, r) => s + Number(r.finished_weight_lb ?? 0), 0);
+    setWeeklyProcessedLb(procRows.length ? processedLb : null);
+    const yieldValues = procRows.map((r) => Number(r.yield_pct ?? 0)).filter((v) => v > 0);
+    setWeeklyYieldPct(yieldValues.length ? yieldValues.reduce((a, b) => a + b, 0) / yieldValues.length : null);
+
+    const overdue = await safe(async () => {
+      const { count } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .lt('created_at', weekAgoIso)
+        .in('payment_status', ['pending', 'unpaid', 'overdue']);
+      return count ?? 0;
+    }, null as number | null);
+    setOverdueCreditCount(overdue);
+  }
 
   async function loadTodaySales() {
     setSalesLoading(true);
@@ -359,6 +407,46 @@ export default function DashboardPage() {
               </div>
 
               <DashboardSnapshot />
+
+              {/* Log widgets — catch / processing / yield / overdue credit */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+                <Link href="/logs/catch" style={{ textDecoration: 'none' }}>
+                  <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #f5c518' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Catch this week</div>
+                    <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '22px', marginTop: 4, fontFamily: "'Playfair Display', serif" }}>
+                      {weeklyCatchLb === null ? '—' : `${Number(weeklyCatchLb).toFixed(0)} lb`}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>Log a new catch →</div>
+                  </div>
+                </Link>
+                <Link href="/logs/processing" style={{ textDecoration: 'none' }}>
+                  <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #1a2e5a' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Processed this week</div>
+                    <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '22px', marginTop: 4, fontFamily: "'Playfair Display', serif" }}>
+                      {weeklyProcessedLb === null ? '—' : `${Number(weeklyProcessedLb).toFixed(0)} lb`}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>Log a batch →</div>
+                  </div>
+                </Link>
+                <Link href="/logs/traceability" style={{ textDecoration: 'none' }}>
+                  <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #16a34a' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Avg yield this week</div>
+                    <div style={{ color: '#16a34a', fontWeight: 900, fontSize: '22px', marginTop: 4, fontFamily: "'Playfair Display', serif" }}>
+                      {weeklyYieldPct === null ? '—' : `${weeklyYieldPct.toFixed(1)}%`}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>Traceability →</div>
+                  </div>
+                </Link>
+                <Link href="/orders?filter=overdue" style={{ textDecoration: 'none' }}>
+                  <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #dc2626' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Overdue credit</div>
+                    <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '22px', marginTop: 4, fontFamily: "'Playfair Display', serif" }}>
+                      {overdueCreditCount === null ? '—' : overdueCreditCount}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>Open accounts →</div>
+                  </div>
+                </Link>
+              </div>
 
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px', borderLeft: pendingWholesale > 0 ? '5px solid #ef4444' : '5px solid #e5e7eb' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
