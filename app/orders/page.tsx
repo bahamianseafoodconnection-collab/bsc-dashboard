@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { notifyOrderStatusChange } from '@/lib/notify-status-change';
+import LockButton from '@/components/LockButton';
 
 // Skip prerendering. Orders page is per-user, runtime-only.
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,8 @@ type Order = {
   address?: string;
   created_at: string;
   order_type?: string;
+  locked_by: string | null;
+  locked_at: string | null;
 };
 
 // Map an `orders` row from Supabase into the shape the UI expects.
@@ -101,6 +104,8 @@ function mapOrder(row: Record<string, unknown>): Order {
     type,
     address: (row.customer_address as string) || undefined,
     created_at: String(row.created_at ?? new Date().toISOString()),
+    locked_by: (row.locked_by as string | null) ?? null,
+    locked_at: (row.locked_at as string | null) ?? null,
     order_type: orderType || undefined,
   };
 }
@@ -153,6 +158,10 @@ export default function OrdersPage() {
   });
 
   async function advanceStatus(order: Order) {
+    if (order.locked_by) {
+      alert('This order is locked. Unlock it first to change status.');
+      return;
+    }
     const flow = order.type === 'pickup' ? PICKUP_FLOW : STATUS_FLOW;
     const idx  = flow.indexOf(order.status);
     if (idx === -1 || idx === flow.length - 1) return;
@@ -181,6 +190,10 @@ export default function OrdersPage() {
   }
 
   async function cancelOrder(order: Order) {
+    if (order.locked_by) {
+      alert('This order is locked. Unlock it first to cancel.');
+      return;
+    }
     const { error } = await supabase
       .from('orders')
       .update({ status: 'Cancelled' })
@@ -289,7 +302,23 @@ export default function OrdersPage() {
                     <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px' }}>{order.customer_name}</div>
                     <div style={{ color: '#999', fontSize: '11px' }}>{order.id} - {timeAgo(order.created_at)}</div>
                   </div>
-                  {statusBadge(order.status)}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <LockButton
+                        table="orders"
+                        id={order.id}
+                        lockedBy={order.locked_by}
+                        lockedAt={order.locked_at}
+                        onChange={(next) => {
+                          setOrders((prev) => prev.map((o) =>
+                            o.id === order.id ? { ...o, ...next } : o
+                          ));
+                          if (selected?.id === order.id) setSelected({ ...order, ...next });
+                        }}
+                      />
+                    </span>
+                    {statusBadge(order.status)}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ color: '#666', fontSize: '12px' }}>
