@@ -1,6 +1,8 @@
 -- Replaces the three "salary cap" placeholder rows with per-person
 -- detail, locks in the current month's utility costs for Nassau and
--- Andros, and records the Nassau monthly rent.
+-- Andros, the Nassau monthly rent, and the operations caps for
+-- software + fuel. Founder salaries (Dedrick, Jaquel) intentionally
+-- stay low — profit share is a separate concept, not an expense line.
 --
 -- Monthly = hourly_rate × hours_per_week × 52 / 12  (4.333 weeks/mo)
 --
@@ -26,7 +28,9 @@ WHERE description IN (
   'Nassau Internet — monthly',
   'Andros Electricity — monthly',
   'Andros Internet — monthly',
-  'Nassau Rental — monthly'
+  'Nassau Rental — monthly',
+  'Software Subscriptions — Monthly Cap',
+  'Fuel Budget — Monthly Cap'
 );
 
 -- 2. Nassau staff (hourly × weekly hours × 52 / 12 = monthly)
@@ -53,16 +57,21 @@ INSERT INTO expenses (amount, category, description) VALUES
 INSERT INTO expenses (amount, category, description) VALUES
   (4150.00, 'rent', 'Nassau Rental — monthly');
 
--- 6. Verification — see the new totals grouped by category.
+-- 6. Operations — software + fuel monthly caps
+INSERT INTO expenses (amount, category, description) VALUES
+  (250.00, 'operations', 'Software Subscriptions — Monthly Cap'),
+  (600.00, 'operations', 'Fuel Budget — Monthly Cap');
+
+-- 7. Verification — see the new totals grouped by category.
 SELECT category, COUNT(*) AS rows, SUM(amount) AS monthly_total
 FROM expenses
-WHERE category IN ('salaries', 'utilities', 'rent')
+WHERE category IN ('salaries', 'utilities', 'rent', 'operations')
 GROUP BY category
 ORDER BY category;
 
 SELECT amount, category, description
 FROM expenses
-WHERE category IN ('salaries', 'utilities', 'rent')
+WHERE category IN ('salaries', 'utilities', 'rent', 'operations')
 ORDER BY category, amount DESC;
 
 COMMIT;
