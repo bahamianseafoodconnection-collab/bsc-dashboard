@@ -243,6 +243,15 @@ export default function POSPage() {
 
   async function handleCheckout() {
     if (!cart.length) return
+
+    if (paymentMethod === 'cash' && cashTenderedNum < total) {
+      alert(
+        `Cash tendered ($${cashTenderedNum.toFixed(2)}) is less than the order total ` +
+        `($${total.toFixed(2)}). Sale blocked — collect $${(total - cashTenderedNum).toFixed(2)} more.`
+      )
+      return
+    }
+
     setSubmitting(true)
     try {
       let customerId: string | null = null
@@ -295,6 +304,7 @@ export default function POSPage() {
         wholesale_items: items,
         subtotal, vat_amount: vatAmount, total,
         payment_method: paymentMethod,
+        payment_status: 'paid_in_full',
         terminal_type:  paymentMethod === 'card' ? terminal : null,
         admin_notes: adminNotes, status: 'completed',
         customer_id:    customerId,
@@ -620,7 +630,12 @@ export default function POSPage() {
                   </div>
                 )}
                 {cashTenderedNum > 0 && cashTenderedNum < total && (
-                  <p className="text-xs text-red-400 text-center mb-4">Amount is less than total</p>
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#3f1010', border: '1px solid #dc2626' }}>
+                    <p className="text-sm font-bold" style={{ color: '#fca5a5' }}>⛔ Cash Insufficient — Sale Blocked</p>
+                    <p className="text-xs mt-1" style={{ color: '#fca5a5' }}>
+                      Need ${(total - cashTenderedNum).toFixed(2)} more to complete this sale
+                    </p>
+                  </div>
                 )}
               </>
             )}

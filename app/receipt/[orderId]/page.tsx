@@ -83,13 +83,13 @@ export default function ReceiptPage() {
   const invoiceNo = `INV-${order.id.slice(0, 8).toUpperCase()}`;
 
   return (
-    <div style={pgStyle}>
+    <div className="receipt-page" style={pgStyle}>
       <div className="no-print" style={topBarStyle}>
         <span>Receipt for {order.customer_name || 'Customer'}</span>
         <button onClick={() => window.print()} style={printBtnStyle}>🖨 Print</button>
       </div>
 
-      <div style={cardStyle}>
+      <div className="receipt-card" style={cardStyle}>
         {/* Header */}
         <div style={{ textAlign: 'center', borderBottom: '2px solid #1a2e5a', paddingBottom: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: '#1a2e5a' }}>🐟 BSC Marketplace</div>
@@ -215,7 +215,9 @@ export default function ReceiptPage() {
             {' · '}
             <span
               style={{
-                color: order.payment_status === 'approved' || order.status === 'processing'
+                color: order.payment_status === 'paid_in_full'
+                  || order.payment_status === 'approved'
+                  || order.status === 'processing'
                   ? '#22c55e'
                   : order.payment_status === 'pending'
                     ? '#d97706'
@@ -241,8 +243,47 @@ export default function ReceiptPage() {
 
       <style>{`
         @media print {
-          body { background: white !important; }
+          /* Thermal-printer paper: 80mm wide, height auto-trimmed to content.
+             Without an explicit @page size, the browser assumes Letter/A4 and the
+             printer feeds blank paper to clear the rest of the "page". */
+          @page { size: 80mm auto; margin: 0; }
+
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            height: auto !important;
+            min-height: 0 !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
           .no-print { display: none !important; }
+
+          .receipt-page {
+            padding: 0 !important;
+            margin: 0 !important;
+            min-height: 0 !important;
+            background: #fff !important;
+          }
+
+          .receipt-card {
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            padding: 6mm 4mm !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            page-break-after: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Kill any trailing whitespace the layout might add. */
+          .receipt-card > *:last-child {
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+          }
         }
       `}</style>
     </div>
