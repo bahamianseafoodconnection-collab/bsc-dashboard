@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 type CustomerRow = {
   id: string;
@@ -65,7 +66,7 @@ export default function CustomersPage() {
         .limit(500);
       if (cancelled) return;
       if (err) {
-        setError(err.message);
+        setError(plainError(err));
         setRows([]);
       } else {
         setRows((data || []) as CustomerRow[]);

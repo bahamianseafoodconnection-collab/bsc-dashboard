@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,7 +91,7 @@ export default function ExpensesPage() {
       .order('created_at', { ascending: false })
       .limit(500);
     if (err) {
-      setError(err.message);
+      setError(plainError(err));
       setRows([]);
     } else {
       setRows((data || []) as Expense[]);
@@ -147,7 +148,7 @@ export default function ExpensesPage() {
     const { error: err } = await supabase.from('expenses').insert(payload);
     setSubmitting(false);
     if (err) {
-      setSubmitError(err.message);
+      setSubmitError(plainError(err));
       return;
     }
     resetForm();
@@ -169,7 +170,7 @@ export default function ExpensesPage() {
       })
       .eq('id', id);
     if (err) {
-      alert(`Could not mark paid: ${err.message}`);
+      alert(`Could not mark paid: ${plainError(err)}`);
       return;
     }
     await load();

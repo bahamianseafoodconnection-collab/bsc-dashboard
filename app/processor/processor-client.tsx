@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 import NewBatchForm from './new-batch-form';
 import ApprovalQueue from './approval-queue';
 
@@ -120,7 +121,7 @@ export default function ProcessorClient({
       .order('created_at', { ascending: false })
       .limit(20);
     if (error) {
-      setFetchError(error.message);
+      setFetchError(plainError(error));
       setBatches([]);
     } else {
       setBatches((data || []).map((r) => pickBatch(r as Record<string, unknown>)));

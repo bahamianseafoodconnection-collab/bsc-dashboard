@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,7 +130,7 @@ export default function SupplierPurchasesPage() {
       .lte('created_at', to)
       .limit(2000);
     if (orderErr) {
-      setError(orderErr.message);
+      setError(plainError(orderErr));
       setOrders([]);
       setLoading(false);
       return;
