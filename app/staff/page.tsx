@@ -24,6 +24,10 @@ type Staff = {
   activation_token: string | null;
   created_at?: string;
   last_login_at?: string | null;
+  hourly_rate?: number | null;
+  hours_per_week?: number | null;
+  monthly_salary?: number | null;
+  expense_id?: string | null;
 };
 
 // Singleton Supabase client — prevents multiple GoTrueClient instances
@@ -64,13 +68,22 @@ export default function StaffAdminPage() {
   const [origin, setOrigin] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const [aEmail, setAEmail] = useState('');
-  const [aName, setAName] = useState('');
-  const [aRole, setARole] = useState('cashier');
+  const [aEmail, setAEmail]     = useState('');
+  const [aName, setAName]       = useState('');
+  const [aRole, setARole]       = useState('cashier');
   const [aLocation, setALocation] = useState('Nassau');
-  const [aBusy, setABusy] = useState(false);
-  const [aError, setAError] = useState<string | null>(null);
+  const [aHourly, setAHourly]   = useState('');
+  const [aHours, setAHours]     = useState('40');
+  const [aBusy, setABusy]       = useState(false);
+  const [aError, setAError]     = useState<string | null>(null);
   const [newToken, setNewToken] = useState<{ name: string; link: string } | null>(null);
+
+  const aMonthlyPreview = (() => {
+    const hr  = Number(aHourly);
+    const hpw = Number(aHours);
+    if (!hr || !hpw || hr <= 0 || hpw <= 0) return null;
+    return Math.round(hr * hpw * 52 / 12 * 100) / 100;
+  })();
 
   useEffect(() => { setOrigin(window.location.origin); load(); }, []);
 
@@ -91,17 +104,26 @@ export default function StaffAdminPage() {
     e.preventDefault();
     setAError(null);
     if (!aEmail.trim() || !aName.trim()) { setAError('Name and email required'); return; }
+    const hr  = aHourly ? Number(aHourly) : null;
+    const hpw = aHours  ? Number(aHours)  : null;
+    if ((aHourly && (!hr || hr <= 0)) || (aHours && (!hpw || hpw <= 0))) {
+      setAError('Hourly rate and hours per week must be positive numbers.');
+      return;
+    }
     setABusy(true);
     const j = await authedFetch('create', {
       email: aEmail.trim(),
       full_name: aName.trim(),
       role: aRole,
       primary_location: aLocation,
+      hourly_rate: hr,
+      hours_per_week: hpw,
     });
     setABusy(false);
     if (!j.ok) { setAError(j.error || 'Create failed'); return; }
     setNewToken({ name: aName.trim(), link: `${origin}/staff/activate?token=${j.activation_token}` });
     setAEmail(''); setAName(''); setARole('cashier'); setALocation('Nassau');
+    setAHourly(''); setAHours('40');
     load();
   }
 
@@ -238,6 +260,34 @@ export default function StaffAdminPage() {
               {LOCATIONS.map((l) => <option key={l}>{l}</option>)}
             </select>
           </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={aHourly}
+              onChange={(e) => setAHourly(e.target.value)}
+              placeholder="Hourly rate ($)"
+              type="number" step="0.01" min="0"
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <input
+              value={aHours}
+              onChange={(e) => setAHours(e.target.value)}
+              placeholder="Hours per week"
+              type="number" step="0.5" min="0"
+              style={{ ...inputStyle, flex: 1 }}
+            />
+          </div>
+          {aMonthlyPreview !== null && (
+            <div style={{
+              background: '#0f1f3d', border: '1px solid rgba(245,197,24,0.4)', borderRadius: 8,
+              padding: '10px 12px', marginBottom: 8, fontSize: 13, color: '#fff',
+            }}>
+              <span style={{ color: '#94a3b8' }}>Auto-calculated monthly salary:</span>{' '}
+              <span style={{ color: '#f5c518', fontWeight: 900 }}>${aMonthlyPreview.toFixed(2)}</span>
+              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4 }}>
+                ${Number(aHourly).toFixed(2)}/hr × {aHours} hr/wk × 52 ÷ 12. A row with this amount will be added to expenses (category=salaries) and linked to this staff member.
+              </div>
+            </div>
+          )}
           {aError && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 6 }}>{aError}</div>}
           <button
             onClick={create}
@@ -302,6 +352,22 @@ export default function StaffAdminPage() {
                 {LOCATIONS.map((l) => <option key={l}>{l}</option>)}
               </select>
             </div>
+
+            {(s.hourly_rate != null || s.monthly_salary != null) && (
+              <div style={{ marginTop: 8, padding: '6px 10px', background: '#0f1f3d', borderRadius: 8, fontSize: 11, color: '#cbd5e1' }}>
+                {s.hourly_rate != null && s.hours_per_week != null && (
+                  <span>${Number(s.hourly_rate).toFixed(2)}/hr × {Number(s.hours_per_week)} hr/wk</span>
+                )}
+                {s.monthly_salary != null && (
+                  <span style={{ marginLeft: 8, color: '#f5c518', fontWeight: 800 }}>
+                    = ${Number(s.monthly_salary).toFixed(2)}/mo
+                  </span>
+                )}
+                {s.expense_id && (
+                  <span style={{ marginLeft: 8, color: '#94a3b8', fontSize: 10 }}>· linked expense</span>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
               <button onClick={() => setActive(s, !s.is_active)} disabled={busyId === s.id} style={miniBtn(s.is_active ? '#94a3b8' : '#22c55e')}>
