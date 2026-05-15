@@ -49,7 +49,7 @@ type RedemptionRow = {
 type CustomerRow = {
   id: string;
   created_at: string;
-  name: string | null;
+  full_name: string | null;
   source: string | null;
 };
 
@@ -124,7 +124,7 @@ export default function PulsePage() {
           .limit(50),
         supabase
           .from('customers')
-          .select('id, created_at, name, source')
+          .select('id, created_at, full_name, source')
           .gte('created_at', start)
           .order('created_at', { ascending: false })
           .limit(50),
@@ -339,7 +339,7 @@ export default function PulsePage() {
             customers.slice(0, 8).map((c) => (
               <div key={c.id} style={statusRow}>
                 <span style={{ color: '#cbd5e1', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c.name || '(unnamed)'}
+                  {c.full_name || '(unnamed)'}
                 </span>
                 <span style={{ color: '#a78bfa', fontWeight: 800, fontSize: 10, textTransform: 'uppercase' }}>
                   {c.source || 'manual'}

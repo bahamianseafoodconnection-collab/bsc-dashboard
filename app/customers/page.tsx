@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase';
 
 type CustomerRow = {
   id: string;
-  name: string;
+  full_name: string;
   phone: string | null;
   email: string | null;
   source: string;
@@ -59,7 +59,7 @@ export default function CustomersPage() {
       const { data, error: err } = await supabase
         .from('customers')
         .select(
-          'id, name, phone, email, source, first_seen_at, last_seen_at, total_orders, total_spent_bsd'
+          'id, full_name, phone, email, source, first_seen_at, last_seen_at, total_orders, total_spent_bsd'
         )
         .order('total_spent_bsd', { ascending: false })
         .limit(500);
@@ -82,7 +82,7 @@ export default function CustomersPage() {
     const out = rows.filter((c) => {
       if (!q) return true;
       return (
-        c.name.toLowerCase().includes(q) ||
+        c.full_name.toLowerCase().includes(q) ||
         (c.phone && c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, ''))) ||
         (c.email && c.email.toLowerCase().includes(q))
       );
@@ -90,7 +90,7 @@ export default function CustomersPage() {
     out.sort((a, b) => {
       if (sort === 'spent') return Number(b.total_spent_bsd) - Number(a.total_spent_bsd);
       if (sort === 'visits') return b.total_orders - a.total_orders;
-      if (sort === 'name') return a.name.localeCompare(b.name);
+      if (sort === 'name') return a.full_name.localeCompare(b.full_name);
       // recent
       return new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime();
     });
@@ -223,7 +223,7 @@ export default function CustomersPage() {
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 14 }}>{c.name}</div>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>{c.full_name}</div>
             <div style={{ color: '#94a3b8', fontSize: 11 }}>
               {c.phone || c.email || '—'} · {c.source.replace('_', ' ')}
             </div>
@@ -321,7 +321,7 @@ function CustomerDetail({
         }}
       >
         <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
-          {customer.name}
+          {customer.full_name}
         </div>
         <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>
           {customer.phone || '—'}

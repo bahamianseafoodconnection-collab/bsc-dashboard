@@ -28,7 +28,7 @@ type Order = {
   wholesale_cost_total: number | null;
 };
 type Expense = { id: string; category: string; amount_bsd: number; created_at: string; paid_at: string | null };
-type Customer = { id: string; name: string; phone: string | null; total_orders: number; total_spent_bsd: number; last_seen_at: string };
+type Customer = { id: string; full_name: string; phone: string | null; total_orders: number; total_spent_bsd: number; last_seen_at: string };
 
 const CHANNEL_LABEL: Record<string, string> = {
   pos_sale_nassau: 'Nassau POS',
@@ -77,7 +77,7 @@ export default function ReportsPage() {
         .limit(5000),
       supabase
         .from('customers')
-        .select('id, name, phone, total_orders, total_spent_bsd, last_seen_at')
+        .select('id, full_name, phone, total_orders, total_spent_bsd, last_seen_at')
         .order('total_spent_bsd', { ascending: false })
         .limit(50),
     ]);
@@ -334,7 +334,7 @@ export default function ReportsPage() {
             <Table
               cols={['Customer', 'Phone', 'Orders', 'Lifetime spend', 'Last seen']}
               rows={customers.map((r) => [
-                r.name,
+                r.full_name,
                 r.phone || '—',
                 r.total_orders,
                 fmt$(Number(r.total_spent_bsd)),

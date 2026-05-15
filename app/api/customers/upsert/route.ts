@@ -102,7 +102,7 @@ export async function POST(req: Request) {
       );
     }
     const insertPayload: Record<string, unknown> = {
-      name,
+      full_name: name,
       phone,
       email,
       source,
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
     updated_at: nowIso,
   };
   // Backfill missing fields without overwriting existing ones.
-  if (name && !existing?.name) update.name = name;
+  if (name && !existing?.full_name) update.full_name = name;
   if (phone && !existing?.phone) update.phone = phone;
   if (email && !existing?.email) update.email = email;
   if (authUserId && !existing?.auth_user_id) update.auth_user_id = authUserId;
