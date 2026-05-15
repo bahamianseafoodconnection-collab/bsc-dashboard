@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
-
 const SYSTEM_PROMPT = `You are the BSC Global Seafood Intelligence Engine — the AI brain of Bahamian Seafood Connection (BSC), the world's first AI-powered Caribbean seafood supply chain platform, founded by Dedrick Tamico Storr Snr and co-founded with his wife Jaquel Rolle-Storr, based in Nassau, The Bahamas.
 
 You operate across four intelligence layers and answer every question about the global seafood industry with precision, authority, and the operational intelligence of a platform that sources, processes, exports, and sells seafood across the Caribbean and into the United States.
@@ -146,6 +141,11 @@ You are the most comprehensive seafood intelligence system in the Caribbean. Bui
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!
+    )
+
     const { message, sessionId, conversationHistory } = await req.json()
 
     if (!message || !sessionId) {
@@ -205,6 +205,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!
+    )
+
     const { searchParams } = new URL(req.url)
     const sessionId = searchParams.get('sessionId')
 
