@@ -36,7 +36,34 @@ const COLOR_OPTIONS = [
 '#047857','#b45309','#be123c','#6d28d9','#0f766e',
 ];
 
-const BLANK = {
+interface SupplierForm {
+code: string;
+name: string;
+supplier_type: string;
+brand_color: string;
+brand_emoji: string;
+brand_name: string;
+contact_name: string;
+contact_email: string;
+contact_phone: string;
+contact_whatsapp: string;
+address: string;
+country: string;
+payment_terms: string;
+website: string;
+phone: string;
+is_active: boolean;
+notes: string;
+}
+
+interface Supplier extends SupplierForm {
+id: string;
+product_count?: number;
+}
+
+interface Toast { msg: string; ok: boolean; }
+
+const BLANK: SupplierForm = {
 code: '', name: '', supplier_type: 'wholesale_partner',
 brand_color: '#1a2e5a', brand_emoji: '🏪', brand_name: '',
 contact_name: '', contact_email: '', contact_phone: '',
@@ -46,17 +73,17 @@ payment_terms: '', website: '', phone: '', is_active: true, notes: '',
 
 export default function SupplierPage() {
 const supabase = getSupabase();
-const [suppliers, setSuppliers] = useState([]);
+const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 const [loading, setLoading] = useState(true);
 const [search, setSearch] = useState('');
 const [filterType, setFilterType] = useState('all');
-const [selected, setSelected] = useState(null);
-const [form, setForm] = useState({ ...BLANK });
-const [tab, setTab] = useState('list');
+const [selected, setSelected] = useState<Supplier | null>(null);
+const [form, setForm] = useState<SupplierForm>({ ...BLANK });
+const [tab, setTab] = useState<'list' | 'add'>('list');
 const [saving, setSaving] = useState(false);
-const [toast, setToast] = useState(null);
+const [toast, setToast] = useState<Toast | null>(null);
 
-function showToast(msg, ok = true) {
+function showToast(msg: string, ok = true) {
 setToast({ msg, ok });
 setTimeout(() => setToast(null), 3000);
 }
@@ -67,20 +94,21 @@ const { data: sups } = await supabase.from('suppliers').select('*').order('name'
 const { data: prodCounts } = await supabase
 .from('products').select('primary_supplier_id')
 .not('primary_supplier_id', 'is', null);
-const countMap = {};
-for (const p of prodCounts ?? []) {
+const countMap: Record<string, number> = {};
+for (const p of (prodCounts ?? []) as { primary_supplier_id: string | null }[]) {
 if (p.primary_supplier_id) {
 countMap[p.primary_supplier_id] = (countMap[p.primary_supplier_id] ?? 0) + 1;
 }
 }
-setSuppliers((sups ?? []).map(s => ({ ...s, product_count: countMap[s.id] ?? 0 })));
+const list = (sups ?? []) as Supplier[];
+setSuppliers(list.map((s: Supplier) => ({ ...s, product_count: countMap[s.id] ?? 0 })));
 setLoading(false);
 }, [supabase]);
 
 useEffect(() => { loadSuppliers(); }, [loadSuppliers]);
 
 function openAdd() { setForm({ ...BLANK }); setTab('add'); setSelected(null); }
-function openEdit(s) { setSelected(s); setForm({ ...s }); setTab('add'); }
+function openEdit(s: Supplier) { setSelected(s); setForm({ ...s }); setTab('add'); }
 
 async function handleSave() {
 if (!form.name?.trim() || !form.code?.trim()) {
@@ -119,20 +147,20 @@ showToast('Supplier added');
 }
 setTab('list'); setSelected(null); setForm({ ...BLANK }); loadSuppliers();
 } catch (err) {
-showToast('Failed: ' + err.message, false);
+showToast('Failed: ' + (err instanceof Error ? err.message : String(err)), false);
 } finally {
 setSaving(false);
 }
 }
 
-async function toggleActive(s) {
+async function toggleActive(s: Supplier) {
 await supabase.from('suppliers')
 .update({ is_active: !s.is_active, updated_at: new Date().toISOString() })
 .eq('id', s.id);
 loadSuppliers();
 }
 
-const filtered = suppliers.filter(s => {
+const filtered = suppliers.filter((s: Supplier) => {
 const matchSearch = !search ||
 s.name.toLowerCase().includes(search.toLowerCase()) ||
 s.code.toLowerCase().includes(search.toLowerCase()) ||
@@ -141,18 +169,18 @@ const matchType = filterType === 'all' || s.supplier_type === filterType;
 return matchSearch && matchType;
 });
 
-const activeCount = suppliers.filter(s => s.is_active).length;
-const totalProducts = suppliers.reduce((n, s) => n + (s.product_count ?? 0), 0);
+const activeCount = suppliers.filter((s: Supplier) => s.is_active).length;
+const totalProducts = suppliers.reduce((n: number, s: Supplier) => n + (s.product_count ?? 0), 0);
 
-function F(label, field, placeholder = '', type = 'text') {
+function F(label: string, field: keyof SupplierForm, placeholder = '', type = 'text') {
 return (
 <div>
 <label className="text-xs font-bold mb-1 block" style={{ color: '#f5c518' }}>{label}</label>
 <input
 type={type}
 placeholder={placeholder}
-value={form[field] ?? ''}
-onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
+value={String(form[field] ?? '')}
+onChange={e => setForm(p => ({ ...p, [field]: e.target.value } as SupplierForm))}
 className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
 style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }}
 />
@@ -347,7 +375,7 @@ Loading suppliers...
 </p>
 </div>
 )}
-{!loading && filtered.map(s => (
+{!loading && filtered.map((s: Supplier) => (
 <div key={s.id} className="rounded-2xl overflow-hidden"
 style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
 <div className="px-4 py-3 flex items-center gap-3"
