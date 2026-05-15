@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import LockButton from '@/components/LockButton';
 
 const SPECIES_OPTIONS = ['Conch', 'Lobster', 'Snapper', 'Grouper', 'Other'] as const;
 type Species = typeof SPECIES_OPTIONS[number];
@@ -22,6 +23,18 @@ type Condition = typeof CONDITION_OPTIONS[number]['value'];
 interface SupplierOption {
   id: string;
   name: string;
+}
+
+interface CatchEntry {
+  id: string;
+  catch_date: string;
+  supplier_name: string | null;
+  species: string;
+  raw_weight_lb: number;
+  condition: string | null;
+  locked_by: string | null;
+  locked_at: string | null;
+  created_at: string;
 }
 
 interface Toast {
@@ -43,6 +56,16 @@ export default function CatchLogPage() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [entries, setEntries] = useState<CatchEntry[] | null>(null);
+
+  async function loadEntries() {
+    const { data } = await supabase
+      .from('catch_logs')
+      .select('id, catch_date, supplier_name, species, raw_weight_lb, condition, locked_by, locked_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setEntries((data ?? []) as CatchEntry[]);
+  }
 
   useEffect(() => {
     (async () => {
@@ -53,6 +76,7 @@ export default function CatchLogPage() {
         .order('name');
       setSuppliers((data ?? []) as SupplierOption[]);
     })();
+    loadEntries();
   }, []);
 
   function showToast(msg: string, ok = true) {
@@ -94,6 +118,7 @@ export default function CatchLogPage() {
       if (error) throw error;
       showToast('Catch saved. Thank you!');
       resetForm();
+      loadEntries();
     } catch {
       showToast('Could not save the catch. Please try again.', false);
     } finally {
@@ -252,6 +277,47 @@ export default function CatchLogPage() {
         >
           {submitting ? 'Saving…' : 'SUBMIT'}
         </button>
+
+        {/* Recent entries — newest first, lockable by founder/co_founder */}
+        <div style={{ marginTop: 32 }}>
+          <h2 style={{ color: GOLD, fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 900, marginBottom: 4 }}>Recent catches</h2>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, marginBottom: 12 }}>Last 20 entries. Locked entries cannot be edited.</p>
+          {entries === null ? (
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>Loading…</p>
+          ) : entries.length === 0 ? (
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>No catches logged yet. Add one above.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {entries.map((e) => (
+                <div key={e.id} style={{ background: '#0d1f3c', border: '1px solid rgba(245,197,24,0.18)', borderRadius: 12, padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>
+                        {e.species} · {Number(e.raw_weight_lb).toFixed(2)} lb
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                        {e.catch_date} · {e.supplier_name || '—'}
+                        {e.condition && ` · ${e.condition}`}
+                      </div>
+                    </div>
+                    <LockButton
+                      table="catch_logs"
+                      id={e.id}
+                      lockedBy={e.locked_by}
+                      lockedAt={e.locked_at}
+                      onChange={(next) => {
+                        setEntries((prev) => prev
+                          ? prev.map((row) => row.id === e.id ? { ...row, ...next } : row)
+                          : prev,
+                        );
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

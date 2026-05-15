@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import LockButton from '@/components/LockButton';
 
 const PROCESS_TYPES = ['Cleaned', 'Portioned', 'Frozen', 'Packaged'] as const;
 type ProcessType = typeof PROCESS_TYPES[number];
@@ -28,6 +29,19 @@ interface CatchOption {
   catch_date: string;
 }
 
+interface ProcessingEntry {
+  id: string;
+  species: string | null;
+  raw_weight_lb: number | null;
+  finished_weight_lb: number;
+  yield_pct: number | null;
+  process_type: string | null;
+  quality_grade: string | null;
+  locked_by: string | null;
+  locked_at: string | null;
+  created_at: string;
+}
+
 interface Toast {
   ok: boolean;
   msg: string;
@@ -45,6 +59,16 @@ export default function ProcessingLogPage() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [entries, setEntries] = useState<ProcessingEntry[] | null>(null);
+
+  async function loadEntries() {
+    const { data } = await supabase
+      .from('processing_logs')
+      .select('id, species, raw_weight_lb, finished_weight_lb, yield_pct, process_type, quality_grade, locked_by, locked_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setEntries((data ?? []) as ProcessingEntry[]);
+  }
 
   useEffect(() => {
     (async () => {
@@ -55,6 +79,7 @@ export default function ProcessingLogPage() {
         .limit(50);
       setCatches((data ?? []) as CatchOption[]);
     })();
+    loadEntries();
   }, []);
 
   const selected = useMemo(
@@ -118,6 +143,7 @@ export default function ProcessingLogPage() {
 
       showToast('Batch saved. Yield logged.');
       resetForm();
+      loadEntries();
     } catch {
       showToast('Could not save the batch. Please try again.', false);
     } finally {
@@ -299,6 +325,58 @@ export default function ProcessingLogPage() {
         >
           {submitting ? 'Saving…' : 'SUBMIT'}
         </button>
+
+        {/* Recent entries — newest first, lockable by founder/co_founder */}
+        <div style={{ marginTop: 32 }}>
+          <h2 style={{ color: GOLD, fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 900, marginBottom: 4 }}>Recent batches</h2>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, marginBottom: 12 }}>Last 20 batches. Locked entries cannot be edited.</p>
+          {entries === null ? (
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>Loading…</p>
+          ) : entries.length === 0 ? (
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>No processing batches logged yet. Add one above.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {entries.map((e) => {
+                const yp = e.yield_pct === null ? null : Number(e.yield_pct);
+                const yieldColor = yp === null ? 'rgba(255,255,255,0.6)' : yp >= 80 ? '#4ade80' : yp >= 60 ? '#fbbf24' : '#f87171';
+                return (
+                  <div key={e.id} style={{ background: '#0d1f3c', border: '1px solid rgba(245,197,24,0.18)', borderRadius: 12, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>
+                          {e.species || 'Unknown'} · {e.process_type || '—'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                          {e.raw_weight_lb ? `${Number(e.raw_weight_lb).toFixed(2)} lb in` : '—'}
+                          {' → '}
+                          {e.finished_weight_lb ? `${Number(e.finished_weight_lb).toFixed(2)} lb out` : '—'}
+                          {e.quality_grade && ` · Grade ${e.quality_grade}`}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <span style={{ color: yieldColor, fontWeight: 900, fontSize: 14 }}>
+                          {yp === null ? '—' : `${yp.toFixed(1)}%`}
+                        </span>
+                        <LockButton
+                          table="processing_logs"
+                          id={e.id}
+                          lockedBy={e.locked_by}
+                          lockedAt={e.locked_at}
+                          onChange={(next) => {
+                            setEntries((prev) => prev
+                              ? prev.map((row) => row.id === e.id ? { ...row, ...next } : row)
+                              : prev,
+                            );
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
