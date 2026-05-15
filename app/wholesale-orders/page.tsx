@@ -164,7 +164,7 @@ export default function WholesaleOrdersPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px' }}>
 
         {/* ── STATS ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
           {[
             { label: 'Total Orders',   value: orders.length, color: '#e8f4fd', text: '#1a2e5a', fmt: false },
             { label: 'Pending Pickup', value: pendingCount,  color: '#fde8e8', text: '#dc2626', fmt: false },
@@ -336,7 +336,7 @@ export default function WholesaleOrdersPage() {
                     </div>
 
                     {/* ── FINANCIAL SPLIT ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10, marginBottom: 16 }}>
                       <div style={{ backgroundColor: '#fde8e8', borderRadius: 10, padding: '12px', textAlign: 'center' }}>
                         <div style={{ color: '#666', fontSize: 10, marginBottom: 4 }}>💸 Pay Wholesaler</div>
                         <div style={{ color: '#dc2626', fontWeight: 900, fontSize: 18 }}>{fmtBSD(order.wholesale_cost_total)}</div>

@@ -117,7 +117,7 @@ export default function ReviewsAdminPage() {
         Approve, hide, or delete what shows on each product page.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 12 }}>
         <Stat label="Approved" value={counts.approved} accent="#22c55e" />
         <Stat label="Pending"  value={counts.pending}  accent="#f5c518" />
         <Stat label="Rejected" value={counts.rejected} accent="#f87171" />

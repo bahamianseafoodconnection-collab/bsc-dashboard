@@ -132,7 +132,7 @@ export default function PosSalesHistoryPage() {
         Every Nassau + Andros POS sale, filterable.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
         <Stat label="Sales"       value={totals.count}                            accent="#f5c518" />
         <Stat label="Revenue"     value={`$${totals.revenue.toFixed(2)}`}         accent="#22c55e" />
         <Stat label="Nassau"      value={totals.nassau}                           accent="#1a6fb5" />

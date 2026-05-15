@@ -282,7 +282,7 @@ function VehicleDetail({
           {' · '}{vehicle.vehicle_type.replace('_', ' ')}
           {' · '}<span style={{ color: vehicle.status === 'active' ? '#22c55e' : vehicle.status === 'retired' ? '#94a3b8' : '#f5c518', fontWeight: 700 }}>{vehicle.status}</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginTop: 14 }}>
           <Stat label="Lifetime maint" value={`$${lifetimeMaint.toFixed(2)}`} />
           <Stat label="Lifetime fuel" value={`$${lifetimeFuel.toFixed(2)}`} />
           <Stat label="Gallons" value={totalGallons.toFixed(0)} />

@@ -822,7 +822,7 @@ export default function DashboardPage() {
               </div>
 
               <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '15px', marginBottom: '12px' }}>Quick Actions</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '24px' }}>
                 {QUICK_ACTIONS.map((action) => (
                   <Link key={action.label} href={action.href} style={{ backgroundColor: '#fff', border: '1px solid #ebebeb', borderRadius: '14px', padding: '14px 8px', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)', position: 'relative' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: action.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>{action.icon}</div>
@@ -849,7 +849,7 @@ export default function DashboardPage() {
                         <Link href="/inventory" style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>View All →</Link>
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '12px' }}>
                       {[
                         { label: 'In Stock', value: freezerStockLb === null ? '—' : `${Math.round(stock).toLocaleString()} lbs`, bg: '#e8f4fd', text: '#1a2e5a' },
                         { label: 'Capacity', value: `${FREEZER_CAPACITY_LB.toLocaleString()} lbs`,                                bg: '#e8f5e9', text: '#2e7d32' },

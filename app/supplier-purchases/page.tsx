@@ -371,7 +371,7 @@ export default function SupplierPurchasesPage() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Suppliers to pay" value={String(grouped.filter((g) => g.supplier_id).length)} />
         <Stat label="Total units" value={totalUnits.toFixed(0)} />
         <Stat label="Total cost" value={`$${grandTotal.toFixed(2)}`} />

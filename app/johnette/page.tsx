@@ -83,7 +83,7 @@ Sign Out
 <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 18px' }}>
 
 {/* KPI STRIP */}
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
 {[
 { label: 'FOR SALE', value: String(forSale.length), color: '#f5c518' },
 { label: 'SOLD', value: String(sold.length), color: '#4ade80' },

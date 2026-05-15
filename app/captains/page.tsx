@@ -159,7 +159,7 @@ export default function CaptainsPage() {
         Every fisherman BSC sources from. Powers traceability from boat → batch → label.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Captains" value={String(totalCaptains)} />
         <Stat label="Lbs delivered" value={totalLbs.toFixed(0)} />
         <Stat label="Total paid" value={`$${totalPaid.toFixed(2)}`} />

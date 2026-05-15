@@ -132,7 +132,7 @@ export default function NotificationsPage() {
         mark as <em>stub_sent</em> instead of actually sending.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Queued" value={counts.queued} accent={counts.queued > 0 ? '#f5c518' : '#94a3b8'} />
         <Stat label="Stub sent" value={counts.stub_sent} accent="#a78bfa" />
         <Stat label="Sent" value={counts.sent} accent="#22c55e" />

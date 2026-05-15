@@ -215,7 +215,7 @@ export default function PickupQueuePage() {
         </div>
       </div>
 
-      <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10, marginBottom: 14 }}>
+      <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginTop: 10, marginBottom: 14 }}>
         <Stat label="Open"       value={counts.open}     accent="#f5c518" />
         <Stat label="Today"      value={counts.today}    accent="#22c55e" />
         <Stat label="Mailboat"   value={counts.mailboat} accent="#a78bfa" />

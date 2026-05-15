@@ -256,7 +256,7 @@ fontWeight: activeStore === store.key ? 800 : 500, fontSize: 14,
 </div>
 
 {/* STATS */}
-<div style={{ maxWidth: 1200, margin: '16px auto 0', padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+<div style={{ maxWidth: 1200, margin: '16px auto 0', padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10 }}>
 {[
 { label: 'Products', value: products.length, color: '#e8f4fd', text: '#1a2e5a' },
 { label: 'In Stock', value: products.filter(p => p.in_stock).length, color: '#e8f5e9', text: '#2e7d32' },

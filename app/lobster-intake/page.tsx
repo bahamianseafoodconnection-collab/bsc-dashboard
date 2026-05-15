@@ -229,7 +229,7 @@ export default function LobsterIntakePage() {
         Boat receive at Spiny Tail door. Capture intake, lot # auto-generates. Yield gets measured later (real data only, no assumptions).
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Today's intakes" value={todayStats.count}                accent="#f5c518" />
         <Stat label="Today's lbs"     value={`${todayStats.lbs.toFixed(1)}`} accent="#22c55e" />
         <Stat label="Today's cost"    value={`$${todayStats.cost.toFixed(2)}`} accent="#a78bfa" />
@@ -312,7 +312,7 @@ export default function LobsterIntakePage() {
             <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>
               Size grade breakdown (optional — lbs per grade)
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
               {TAIL_SIZES.map((sz) => (
                 <div key={sz}>
                   <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 2 }}>{sz}</div>

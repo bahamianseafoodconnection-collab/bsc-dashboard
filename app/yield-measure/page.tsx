@@ -210,7 +210,7 @@ export default function YieldMeasurePage() {
         Real measurements only — no assumptions. Updates yield_pct + true_cost_per_lb on each lot from actual finished weight.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Pending"     value={stats.pending}                accent="#f5c518" />
         <Stat label="Measured"    value={stats.measured}               accent="#22c55e" />
         <Stat label="Avg yield %" value={`${stats.avgYield.toFixed(1)}%`} accent="#a78bfa" />
@@ -293,7 +293,7 @@ export default function YieldMeasurePage() {
                     <div style={{ fontSize: 10, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>
                       Output by grade (optional)
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
                       {TAIL_SIZES.map((sz) => (
                         <div key={sz}>
                           <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 2 }}>{sz}</div>

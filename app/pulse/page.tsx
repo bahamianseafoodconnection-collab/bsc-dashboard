@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -150,7 +151,7 @@ export default function PulsePage() {
       if (!rRes.error) setRedemptions((rRes.data || []) as RedemptionRow[]);
       if (!cRes.error) setCustomers((cRes.data || []) as CustomerRow[]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Load failed');
+      setError(plainError(e));
     } finally {
       setLoading(false);
       setLastRefresh(new Date());
@@ -228,7 +229,7 @@ export default function PulsePage() {
       {error && <ErrorBox text={error} />}
 
       {/* Top stats — today */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Revenue today"  value={`$${totalToday.toFixed(2)}`} accent="#22c55e" />
         <Stat label="Orders today"   value={orders.length}              accent="#f5c518" />
         <Stat label="Open orders"    value={openByStatus.reduce((s, [, n]) => s + n, 0)} accent="#fb923c" />

@@ -403,7 +403,7 @@ Sign Out
 )}
 
 {/* KPI STRIP */}
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10, marginBottom: 20 }}>
 {[
 { label: 'MY PRODUCTS', value: String(myProducts.length), color: '#f5c518' },
 { label: 'LOBSTER LBS', value: lobsterAvail.toFixed(1) + ' lbs', color: '#4ade80' },
@@ -642,7 +642,7 @@ return (
 }
 </div>
 </div>
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 10 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6, marginTop: 10 }}>
 {[
 { label: 'MY COST', value: '$' + p.case_cost?.toFixed(2) + '/lb', color: '#fff' },
 { label: 'LANDED', value: '$' + p.unit_cost?.toFixed(2) + '/lb', color: '#4ade80' },
@@ -687,7 +687,7 @@ lobsterBatches.map(b => (
 <p style={{ margin: '0 0 10px', color: '#4a5568', fontSize: 12 }}>
 Producer: {b.producer_name} · {new Date(b.date_received).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 </p>
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
 {[
 { label: 'AVAILABLE', value: b.weight_out_lbs + ' lbs', color: '#4ade80' },
 { label: 'COST/LB', value: '$' + (b.cost_per_lb_processed?.toFixed(2) || '0.00'), color: '#f5c518' },

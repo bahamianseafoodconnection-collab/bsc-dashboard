@@ -228,7 +228,7 @@ export default function StaffAdminPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginTop: 10, marginBottom: 12 }}>
         <Stat label="Total"    value={counts.all}     accent="#cbd5e1" />
         <Stat label="Active"   value={counts.active}  accent="#22c55e" />
         <Stat label="Pending"  value={counts.pending} accent="#f5c518" />

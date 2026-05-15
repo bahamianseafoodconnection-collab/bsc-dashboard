@@ -342,7 +342,7 @@ export default function YieldPage() {
             <label style={{ display: 'block', color: '#374151', fontSize: '11px', fontWeight: 700, marginBottom: '5px' }}>Product Name</label>
             <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="e.g. Fresh Grouper" style={{ width: '100%', padding: '9px 12px', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
             {[
               { label: 'Weight In (lbs)', value: weightIn, setter: setWeightIn, placeholder: '100', hint: 'Raw weight' },
               { label: 'Weight Out (lbs)', value: weightOut, setter: setWeightOut, placeholder: '35', hint: 'Processed' },
@@ -469,7 +469,7 @@ export default function YieldPage() {
             </div>
 
             {/* Weight/yield */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', marginBottom: '10px' }}>
               {[
                 { label: 'In',    value: `${result.weightIn} lbs` },
                 { label: 'Out',   value: `${result.weightOut} lbs` },

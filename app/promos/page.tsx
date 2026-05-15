@@ -148,7 +148,7 @@ export default function PromosPage() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginTop: 10, marginBottom: 14 }}>
         <Stat label="Active codes" value={promos.filter((p) => p.active).length} />
         <Stat label="Total uses" value={totals.totalUses} />
         <Stat label="Discount given" value={totals.totalDiscount} money />

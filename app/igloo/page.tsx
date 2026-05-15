@@ -271,7 +271,7 @@ export default function IglooPage() {
         BSC ↔ Igloo Express (Miami): shipments out, sales executed, per-shipment P&L. Net Igloo deductions: $1.75/lb processing + commission + storage.
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 6, marginBottom: 14 }}>
         <Stat label="Shipped" value={`${totals.shippedLbs} lb`} accent="#1a6fb5" />
         <Stat label="Sold" value={`${totals.soldLbs} lb`} accent="#22c55e" />
         <Stat label="At Igloo" value={`${totals.inventoryLbs} lb`} accent="#a78bfa" />
@@ -539,7 +539,7 @@ export default function IglooPage() {
                     {profit >= 0 ? '+' : '−'}${Math.abs(profit).toFixed(2)}
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px dashed #1e3a5f', fontSize: 11 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6, marginTop: 8, paddingTop: 8, borderTop: '1px dashed #1e3a5f', fontSize: 11 }}>
                   <PnlBlock label="Cost (BSD)" value={`$${costBasisBsd.toFixed(0)}`} />
                   <PnlBlock label="Gross (USD)" value={`$${grossUsd.toFixed(0)}`} />
                   <PnlBlock label="Net to BSC" value={`$${netUsd.toFixed(0)}`} />

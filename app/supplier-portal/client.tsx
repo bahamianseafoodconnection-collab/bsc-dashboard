@@ -247,7 +247,7 @@ export default function SupplierPortalClient({
         </div>
 
         {/* Money summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 22 }}>
           <Stat label="Lifetime invoiced" value={`$${totalInvoiced.toFixed(2)}`} />
           <Stat label="Lifetime paid" value={`$${totalPaid.toFixed(2)}`} accent={GREEN} />
           <Stat

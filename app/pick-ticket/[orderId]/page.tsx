@@ -102,7 +102,7 @@ export default function PickTicketPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14, fontSize: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 14, fontSize: 12 }}>
           <div>
             <div style={refLabel}>Created</div>
             <div style={{ fontWeight: 700 }}>{fmtDate(order.created_at)}</div>

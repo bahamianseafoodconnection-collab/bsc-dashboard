@@ -164,7 +164,7 @@ export default function ReportPage() {
       </div>
 
       {/* KPI STRIP */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 14 }}>
         {[
           { label: 'REVENUE',   value: '$' + totalRevenue.toFixed(2), color: '#4ade80' },
           { label: 'PROFIT',    value: '$' + totalProfit.toFixed(2),  color: '#f5c518' },

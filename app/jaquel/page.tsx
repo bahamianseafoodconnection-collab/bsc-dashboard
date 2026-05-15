@@ -97,7 +97,7 @@ return (
 
 <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 18px' }}>
 {/* KPI */}
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
 {[
 { label: 'PENDING ORDERS', value: String(pendingOrders.length), color: '#f5c518' },
 { label: 'SUPPLIER OWED', value: '$' + totalOwed.toFixed(0), color: '#f87171' },

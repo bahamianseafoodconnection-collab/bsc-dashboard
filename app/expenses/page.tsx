@@ -248,7 +248,7 @@ export default function ExpensesPage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
           gap: 8,
           marginBottom: 14,
         }}

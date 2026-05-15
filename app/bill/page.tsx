@@ -88,7 +88,7 @@ Sign Out
 <div style={{ maxWidth: 640, margin: '0 auto', padding: '16px 18px' }}>
 
 {/* KPI STRIP */}
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 10, marginBottom: 20 }}>
 {[
 { label: 'PRODUCTS', value: String(products.length), color: '#f5c518' },
 { label: 'BATCHES', value: String(batches.length), color: '#60a5fa' },
@@ -200,7 +200,7 @@ batches.map(b => (
 <p style={{ margin: '0 0 4px', color: '#f5c518', fontSize: 12, fontFamily: 'monospace' }}>{b.batch_number}</p>
 <p style={{ margin: '0 0 2px', fontWeight: 'bold', fontSize: 14 }}>{b.product_name}</p>
 <p style={{ margin: '0 0 10px', color: '#4a5568', fontSize: 12 }}>Producer: {b.producer_name} · {new Date(b.date_received).toLocaleDateString()}</p>
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8 }}>
 {[
 { label: 'YIELD', value: b.yield_pct + '%', color: '#4ade80' },
 { label: 'OUT', value: b.weight_out_lbs + ' lbs', color: '#60a5fa' },

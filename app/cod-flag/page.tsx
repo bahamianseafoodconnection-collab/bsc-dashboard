@@ -170,7 +170,7 @@ return (
 {/* RULES CARD */}
 <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px', padding: '18px', marginBottom: '16px' }}>
 <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '14px', marginBottom: '12px' }}>📋 COD Flag Rules</div>
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
 {[
 { emoji: '✅', count: '0x', label: 'Clean', desc: 'COD available', color: '#e8f5e9', text: '#2e7d32' },
 { emoji: '⚠️', count: '1x', label: 'Warning', desc: 'Warning issued', color: '#fef9e7', text: '#d97706' },
@@ -188,7 +188,7 @@ return (
 </div>
 
 {/* STATS */}
-<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '16px' }}>
 {[
 { label: 'COD Blocked', value: blockedCount, color: '#fde8e8', text: '#dc2626', emoji: '🚫' },
 { label: 'Flagged', value: warningCount, color: '#fef9e7', text: '#d97706', emoji: '⚠️' },
