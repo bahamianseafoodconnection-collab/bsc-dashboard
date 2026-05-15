@@ -1,4 +1,5 @@
 'use client';
+// trigger rebuild
 
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
