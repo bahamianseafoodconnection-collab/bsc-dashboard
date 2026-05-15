@@ -213,12 +213,16 @@ export default function DashboardPage() {
     const yieldValues = procRows.map((r) => Number(r.yield_pct ?? 0)).filter((v) => v > 0);
     setWeeklyYieldPct(yieldValues.length ? yieldValues.reduce((a, b) => a + b, 0) / yieldValues.length : null);
 
+    // Counts customers with an open credit balance. Without per-customer
+    // overdue logic (would need to parse credit_terms vs last-invoice date)
+    // this is a strict "owes BSC money on credit" count, which matches the
+    // schema: customers.is_credit_customer + current_balance > 0.
     const overdue = await safe(async () => {
       const { count } = await supabase
-        .from('orders')
+        .from('customers')
         .select('id', { count: 'exact', head: true })
-        .lt('created_at', weekAgoIso)
-        .in('payment_status', ['pending', 'unpaid', 'overdue']);
+        .eq('is_credit_customer', true)
+        .gt('current_balance', 0);
       return count ?? 0;
     }, null as number | null);
     setOverdueCreditCount(overdue);
@@ -437,7 +441,7 @@ export default function DashboardPage() {
                     <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>Traceability →</div>
                   </div>
                 </Link>
-                <Link href="/orders?filter=overdue" style={{ textDecoration: 'none' }}>
+                <Link href="/customers?credit=open" style={{ textDecoration: 'none' }}>
                   <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid #dc2626' }}>
                     <div style={{ fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Overdue credit</div>
                     <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '22px', marginTop: 4, fontFamily: "'Playfair Display', serif" }}>
