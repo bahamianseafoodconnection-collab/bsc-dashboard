@@ -58,14 +58,14 @@ LIMIT 1;
 INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, unit_of_measure, shipping_per_lb, customs_duty_pct, vat_levy_pct, processing_fee, effective_from, is_current, recorded_by)
 VALUES (
   (SELECT id FROM products WHERE sku = 'LS-KIT-30'),
-  NULL, 'standard', 180.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
+  NULL, (SELECT cost_type FROM product_costs WHERE is_current = TRUE LIMIT 1), 180.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
 INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, unit_of_measure, shipping_per_lb, customs_duty_pct, vat_levy_pct, processing_fee, effective_from, is_current, recorded_by)
 VALUES (
   (SELECT id FROM products WHERE sku = 'LS-KIT-15'),
-  NULL, 'standard', 90.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
+  NULL, (SELECT cost_type FROM product_costs WHERE is_current = TRUE LIMIT 1), 90.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
@@ -73,7 +73,7 @@ INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, un
 VALUES (
   (SELECT id FROM products WHERE sku = 'CHK-CASE-BB'),
   (SELECT id FROM suppliers WHERE name ILIKE '%bahama breeze%' LIMIT 1),
-  'standard', 57.93, 'case', 0, 0, 0, 0, NOW(), TRUE,
+  (SELECT cost_type FROM product_costs WHERE is_current = TRUE LIMIT 1), 57.93, 'case', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
