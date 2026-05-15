@@ -169,6 +169,13 @@ export default function DashboardPage() {
   const [mtdNetProfit, setMtdNetProfit] = useState<number | null>(null);
   const [todayNetProfit, setTodayNetProfit] = useState<number | null>(null);
   const [revenueByType, setRevenueByType] = useState<Record<string, number> | null>(null);
+  const [recentBatches, setRecentBatches] = useState<{
+    species: string | null;
+    yield_pct: number | null;
+    finished_weight_lb: number | null;
+    raw_weight_lb: number | null;
+    created_at: string;
+  }[] | null>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -274,6 +281,29 @@ export default function DashboardPage() {
       byType[r.order_type] = (byType[r.order_type] ?? 0) + Number(r.total ?? 0);
     }
     setRevenueByType(byType);
+
+    // Five most recent processing batches — drives the Yield tab list.
+    const recent = await safe(async () => {
+      const { data } = await supabase
+        .from('processing_logs')
+        .select('species, yield_pct, finished_weight_lb, raw_weight_lb, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      return (data ?? []) as {
+        species: string | null;
+        yield_pct: number | null;
+        finished_weight_lb: number | null;
+        raw_weight_lb: number | null;
+        created_at: string;
+      }[];
+    }, [] as {
+      species: string | null;
+      yield_pct: number | null;
+      finished_weight_lb: number | null;
+      raw_weight_lb: number | null;
+      created_at: string;
+    }[]);
+    setRecentBatches(recent);
   }
 
   async function loadTodaySales() {
@@ -764,26 +794,67 @@ export default function DashboardPage() {
 
           {activeTab === 'yield' && (
             <div>
-              <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>⚖️ Yield Calculator</h2>
-              <p style={{ color: '#999', fontSize: '12px', marginBottom: '20px' }}>Weight in → Weight out → True cost/lb → Channel prices</p>
+              <h2 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '17px', marginBottom: '6px' }}>⚖️ Yield</h2>
+              <p style={{ color: '#999', fontSize: '12px', marginBottom: '20px' }}>Live yield from processing_logs — last 7 days + most recent batches.</p>
+
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '14px', textAlign: 'center' }}>
                 <div style={{ fontSize: '48px', marginBottom: '14px' }}>⚖️</div>
                 <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px', marginBottom: '8px' }}>Full Yield Calculator</div>
                 <div style={{ color: '#666', fontSize: '13px', marginBottom: '20px', lineHeight: 1.6 }}>Generate lot batch numbers · Track weight in/out · Calculate Nassau, Andros, Online and Wholesale prices automatically</div>
                 <Link href="/yield" style={{ display: 'inline-block', backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: '12px', padding: '14px 32px', fontWeight: 900, fontSize: '15px' }}>Open Yield Calculator →</Link>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                {[
-                  { label: '100 lbs in / 35 lbs out', result: '35% yield · $7.14/lb', color: '#fef9e7' },
-                  { label: 'Nassau (38%)',             result: '$9.86/lb',             color: '#fef9e7' },
-                  { label: 'Andros (43%)',             result: '$10.21/lb',            color: '#f5f0ff' },
-                  { label: 'Online (25%)',             result: '$8.93/lb',             color: '#e8f4fd' },
-                ].map((ex) => (
-                  <div key={ex.label} style={{ backgroundColor: ex.color, borderRadius: '12px', padding: '14px' }}>
-                    <div style={{ color: '#666', fontSize: '11px', marginBottom: '4px' }}>{ex.label}</div>
-                    <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '14px' }}>{ex.result}</div>
+
+              {/* Live week summary */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                <div style={{ backgroundColor: '#e8f5e9', borderRadius: '12px', padding: '14px' }}>
+                  <div style={{ color: '#666', fontSize: '11px', marginBottom: '4px' }}>Avg yield this week</div>
+                  <div style={{ color: '#16a34a', fontWeight: 900, fontSize: '20px' }}>
+                    {weeklyYieldPct === null ? '—' : `${weeklyYieldPct.toFixed(1)}%`}
                   </div>
-                ))}
+                </div>
+                <div style={{ backgroundColor: '#fef9e7', borderRadius: '12px', padding: '14px' }}>
+                  <div style={{ color: '#666', fontSize: '11px', marginBottom: '4px' }}>Processed this week</div>
+                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px' }}>
+                    {weeklyProcessedLb === null ? '—' : `${Number(weeklyProcessedLb).toFixed(0)} lb`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent batches */}
+              <div style={{ backgroundColor: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h3 style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '14px', margin: 0 }}>Recent processing batches</h3>
+                  <Link href="/logs/processing" style={{ color: '#1a2e5a', fontSize: '12px', fontWeight: 700, textDecoration: 'none', backgroundColor: '#f0f4ff', padding: '5px 10px', borderRadius: '8px' }}>Log batch →</Link>
+                </div>
+                {recentBatches === null ? (
+                  <div style={{ color: '#999', fontSize: '13px', textAlign: 'center', padding: '14px' }}>Loading…</div>
+                ) : recentBatches.length === 0 ? (
+                  <div style={{ color: '#999', fontSize: '13px', textAlign: 'center', padding: '14px' }}>No processing batches logged yet. Log one at /logs/processing.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {recentBatches.map((b, i) => {
+                      const yp = b.yield_pct === null ? null : Number(b.yield_pct);
+                      const yieldColor = yp === null ? '#999' : yp >= 80 ? '#16a34a' : yp >= 60 ? '#d97706' : '#dc2626';
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', backgroundColor: '#f8f9fa', borderRadius: '10px' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ color: '#1a2e5a', fontWeight: 700, fontSize: '13px' }}>{b.species || 'Unknown species'}</div>
+                            <div style={{ color: '#999', fontSize: '11px', marginTop: '2px' }}>
+                              {b.raw_weight_lb ? `${Number(b.raw_weight_lb).toFixed(2)} lb in` : '—'}
+                              {' · '}
+                              {b.finished_weight_lb ? `${Number(b.finished_weight_lb).toFixed(2)} lb out` : '—'}
+                              {' · '}
+                              {timeAgo(b.created_at)}
+                            </div>
+                          </div>
+                          <div style={{ color: yieldColor, fontWeight: 900, fontSize: '15px', flexShrink: 0, marginLeft: '10px' }}>
+                            {yp === null ? '—' : `${yp.toFixed(1)}%`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
