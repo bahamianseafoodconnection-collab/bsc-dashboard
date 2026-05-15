@@ -289,7 +289,7 @@ export default function POSPage() {
         promo_label:   item.product.promo_label ?? null,
       }))
 
-      const { error: orderErr } = await supabase.from('orders').insert({
+      const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
         location: 'bsc_marketplace_nassau', channel: 'nassau_pos', items,
         subtotal, vat_amount: vatAmount, total,
         payment_method: paymentMethod,
@@ -298,8 +298,13 @@ export default function POSPage() {
         customer_id:    customerId,
         customer_name:  nameClean || null,
         customer_phone: phoneClean || null,
-      })
+      }).select('id').single()
       if (orderErr) throw orderErr
+
+      const orderId = newOrder?.id
+      if (orderId) {
+        window.open(`/receipt/${orderId}`, '_blank')
+      }
 
       setOrderSuccess(true)
       setCart([])
