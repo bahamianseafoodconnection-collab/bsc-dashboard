@@ -201,18 +201,31 @@ export default function StaffAdminPage() {
     <div style={pgStyle}>
       <Link href="/dashboard" style={backStyle}>← BSC Control</Link>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 8, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f5c518', margin: 0 }}>Staff</h1>
-        <button
-          onClick={() => { setShowAdd((v) => !v); setNewToken(null); }}
-          style={{
-            background: showAdd ? '#4b5563' : '#f5c518',
-            color:      showAdd ? '#fff'    : '#060d1f',
-            border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 800, fontSize: 12, cursor: 'pointer',
-          }}
-        >
-          {showAdd ? 'Cancel' : '+ Add staff'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link
+            href="/staff/audit"
+            style={{
+              background: 'rgba(245,197,24,0.1)',
+              color: '#f5c518',
+              border: '1px solid rgba(245,197,24,0.4)',
+              borderRadius: 8, padding: '8px 14px', fontWeight: 800, fontSize: 12, textDecoration: 'none',
+            }}
+          >
+            📜 Audit log
+          </Link>
+          <button
+            onClick={() => { setShowAdd((v) => !v); setNewToken(null); }}
+            style={{
+              background: showAdd ? '#4b5563' : '#f5c518',
+              color:      showAdd ? '#fff'    : '#060d1f',
+              border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 800, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            {showAdd ? 'Cancel' : '+ Add staff'}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 10, marginBottom: 12 }}>
