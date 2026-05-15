@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 import { notifyOrderStatusChange } from '@/lib/notify-status-change';
 
 export const dynamic = 'force-dynamic';
@@ -120,7 +121,7 @@ export default function PickupQueuePage() {
       .order('created_at', { ascending: false })
       .limit(300);
     if (err) {
-      setError(err.message);
+      setError(plainError(err));
       setOrders([]);
     } else {
       setOrders((data || []) as Order[]);
@@ -136,7 +137,7 @@ export default function PickupQueuePage() {
     setBusyId(o.id);
     const { error: err } = await supabase.from('orders').update({ status: next }).eq('id', o.id);
     setBusyId(null);
-    if (err) { alert(`Could not advance: ${err.message}`); return; }
+    if (err) { alert(`Could not advance: ${plainError(err)}`); return; }
     setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
     notifyOrderStatusChange({
       orderId: o.id,

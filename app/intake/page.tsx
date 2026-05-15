@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { plainError } from '@/lib/plain-error'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -138,7 +139,7 @@ is_active: true,
 created_by: FOUNDER_ID,
 }).select('id, full_name, boat_name, boat_registration, registration_expiry, location').single()
 
-if (error) { alert('Failed to save captain: ' + error.message); return }
+if (error) { alert('Failed to save captain: ' + plainError(error)); return }
 if (data) {
 setCaptains(prev => [...prev, data])
 setSelectedCaptainId(data.id)
@@ -233,7 +234,7 @@ if (lotsErr) throw lotsErr
 setSubmittedRef(invoiceNum)
 setSubmitted(true)
 } catch (err: any) {
-alert('Intake failed: ' + err.message)
+alert('Intake failed: ' + plainError(err))
 } finally {
 setSubmitting(false)
 }

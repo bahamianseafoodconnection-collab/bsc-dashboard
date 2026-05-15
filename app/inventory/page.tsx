@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { plainError } from '@/lib/plain-error'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -140,7 +141,7 @@ export default function InventoryPage() {
       setEdits(prev => { const e = { ...prev }; delete e[productId]; return e })
       await loadInventory()
     } else {
-      alert('Save failed: ' + error.message)
+      alert('Save failed: ' + plainError(error))
     }
     setSaving(null)
   }

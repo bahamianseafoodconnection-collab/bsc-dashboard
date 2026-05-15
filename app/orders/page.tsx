@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 import { notifyOrderStatusChange } from '@/lib/notify-status-change';
 import LockButton from '@/components/LockButton';
 
@@ -139,7 +140,7 @@ export default function OrdersPage() {
         .limit(200);
       if (cancelled) return;
       if (error) {
-        setFetchError(error.message);
+        setFetchError(plainError(error));
         setOrders([]);
       } else {
         setOrders((data || []).map((row) => mapOrder(row as Record<string, unknown>)));
@@ -172,7 +173,7 @@ export default function OrdersPage() {
       .update({ status: next })
       .eq('id', order.id);
     if (error) {
-      alert(`Could not advance status: ${error.message}`);
+      alert(`Could not advance status: ${plainError(error)}`);
       setLoading(false);
       return;
     }
@@ -199,7 +200,7 @@ export default function OrdersPage() {
       .update({ status: 'Cancelled' })
       .eq('id', order.id);
     if (error) {
-      alert(`Could not cancel order: ${error.message}`);
+      alert(`Could not cancel order: ${plainError(error)}`);
       return;
     }
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: 'Cancelled' } : o));

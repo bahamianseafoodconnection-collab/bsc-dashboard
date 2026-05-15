@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +72,7 @@ export default function PayrollPage() {
       supabase.from('users').select('id, full_name, email, role').limit(200),
     ]);
     if (entryRes.error) {
-      setError(entryRes.error.message);
+      setError(plainError(entryRes.error));
       setEntries([]);
     } else {
       setEntries((entryRes.data || []) as PayrollEntry[]);
@@ -149,7 +150,7 @@ export default function PayrollPage() {
         updated_at: nowIso,
       })
       .eq('id', entry.id);
-    if (payErr) { alert(`Could not mark paid: ${payErr.message}`); return; }
+    if (payErr) { alert(`Could not mark paid: ${plainError(payErr)}`); return; }
 
     // Mirror as an expenses row in the payroll category. Fails-soft.
     await supabase.from('expenses').insert({

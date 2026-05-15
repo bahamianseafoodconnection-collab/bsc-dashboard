@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,7 +114,7 @@ export default function IglooPage() {
         .order('processed_at', { ascending: false })
         .limit(100),
     ]);
-    if (s.error) setError(s.error.message);
+    if (s.error) setError(plainError(s.error));
     setShipments((s.data || []) as Shipment[]);
     setSales((sa.data || []) as Sale[]);
     setLots((l.data || []) as Lot[]);
@@ -217,7 +218,7 @@ export default function IglooPage() {
 
     const { error: ierr } = await supabase.from('igloo_sales').insert(row);
     if (ierr) {
-      setError(ierr.message);
+      setError(plainError(ierr));
       setSaleBusy(false);
       return;
     }

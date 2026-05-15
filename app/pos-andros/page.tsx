@@ -17,6 +17,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { plainError } from '@/lib/plain-error';
 import { splitSale, recordSaleFinancials } from '@/lib/finance';
 import {
   fetchOverheadMetrics,
@@ -340,7 +341,7 @@ export default function AndrosPOSPage() {
         .select('id')
         .single();
       if (insertError) {
-        alert('Sale could not be saved: ' + insertError.message);
+        alert('Sale could not be saved: ' + plainError(insertError));
         setCompleting(false);
         return;
       }
@@ -416,7 +417,7 @@ export default function AndrosPOSPage() {
       setCustomerPhone('');
       setCardRef('');
     } catch (e) {
-      alert('Sale failed: ' + (e instanceof Error ? e.message : 'unknown error'));
+      alert('Sale failed: ' + plainError(e));
     } finally {
       setCompleting(false);
     }

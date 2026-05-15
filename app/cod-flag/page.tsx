@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { plainError } from '@/lib/plain-error';
 
 const supabase = createBrowserClient(
 process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,7 +70,7 @@ useEffect(() => {
       .limit(500);
     if (cancelled) return;
     if (error) {
-      setFetchError(error.message);
+      setFetchError(plainError(error));
       setFlags([]);
     } else {
       setFlags((data || []) as CustomerFlag[]);

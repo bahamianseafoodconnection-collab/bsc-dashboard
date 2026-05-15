@@ -23,6 +23,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,7 +100,7 @@ export default function YieldMeasurePage() {
       .order('received_date', { ascending: false, nullsFirst: false })
       .limit(100);
     if (err) {
-      setError(err.message);
+      setError(plainError(err));
       setLots([]);
     } else {
       setLots(((data || []) as Array<Lot>).map((l) => ({
@@ -170,7 +171,7 @@ export default function YieldMeasurePage() {
     const { error: err } = await supabase.from('yield_lots').update(update).eq('id', lot.id);
     setSaving(false);
     if (err) {
-      alert(`Save failed: ${err.message}\n\nIf 'column' error, run sql/2026-05-09-yield-measure.sql in Supabase.`);
+      alert(`Save failed: ${plainError(err)}\n\nIf 'column' error, run sql/2026-05-09-yield-measure.sql in Supabase.`);
       return;
     }
     cancelEdit();

@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +66,7 @@ export default function PromosPage() {
       supabase.from('promo_codes').select('*').order('created_at', { ascending: false }),
       supabase.from('promo_redemptions').select('*').order('created_at', { ascending: false }).limit(50),
     ]);
-    if (pErr) setError(pErr.message);
+    if (pErr) setError(plainError(pErr));
     setPromos((pData || []) as Promo[]);
     setRedemptions((rData || []) as Redemption[]);
     setLoading(false);

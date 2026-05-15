@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,7 +64,7 @@ export default function CaptainsPage() {
       supabase.from('vessels').select('*').order('name').limit(500),
     ]);
     if (cap.error) {
-      setError(cap.error.message);
+      setError(plainError(cap.error));
     } else {
       setCaptains((cap.data || []) as Captain[]);
     }
@@ -97,7 +98,7 @@ export default function CaptainsPage() {
       : await supabase.from('captains').insert(payload);
     setSubmitting(false);
     if (err) {
-      alert(`Save failed: ${err.message}`);
+      alert(`Save failed: ${plainError(err)}`);
       return;
     }
     setShowCaptainForm(false);
@@ -114,7 +115,7 @@ export default function CaptainsPage() {
       registration: vesselReg.trim() || null,
     });
     if (err) {
-      alert(`Vessel save failed: ${err.message}`);
+      alert(`Vessel save failed: ${plainError(err)}`);
       return;
     }
     setVesselName(''); setVesselReg(''); setShowVesselForm(null);

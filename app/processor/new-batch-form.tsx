@@ -22,6 +22,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 const NAVY = '#060e1c';
 const PANEL = '#0f1a2e';
@@ -89,7 +90,7 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
       ]);
       if (cancelled) return;
       if (prodRes.error) {
-        setRefError(`Could not load products: ${prodRes.error.message}`);
+        setRefError(`Could not load products: ${plainError(prodRes.error)}`);
       } else {
         setProducts((prodRes.data || []) as Product[]);
       }
@@ -193,7 +194,7 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
       .select('id')
       .single();
     if (error) {
-      setSubmitError(error.message);
+      setSubmitError(plainError(error));
       setSubmitting(false);
       return;
     }
@@ -227,7 +228,7 @@ export default function NewBatchForm({ userId, onCancel, onSubmitted }: Props) {
           // Non-fatal — batch saved, outputs failed. Tell the user but
           // still onSubmitted() so the queue refreshes.
           setSubmitError(
-            `Batch saved, but per-output detail failed: ${outErr.message}`
+            `Batch saved, but per-output detail failed: ${plainError(outErr)}`
           );
         }
       }

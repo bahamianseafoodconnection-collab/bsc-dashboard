@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { plainError } from '@/lib/plain-error'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -85,7 +86,7 @@ export default function PurchaseOrdersPage() {
         .getPublicUrl(path)
       setForm(prev => ({ ...prev, invoice_photo_url: urlData.publicUrl }))
     } catch (err: any) {
-      alert('Upload failed: ' + err.message)
+      alert('Upload failed: ' + plainError(err))
     } finally {
       setUploading(false)
     }
@@ -146,7 +147,7 @@ export default function PurchaseOrdersPage() {
       await loadData()
       setTimeout(() => setSavedId(null), 4000)
     } catch (err: any) {
-      alert('Save failed: ' + err.message)
+      alert('Save failed: ' + plainError(err))
     } finally {
       setSaving(false)
     }

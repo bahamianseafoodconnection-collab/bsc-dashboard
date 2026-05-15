@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 const PANEL = '#0f1a2e';
 const GOLD = '#c8860f';
@@ -69,7 +70,7 @@ export default function ApprovalQueue({ onChanged }: { onChanged?: () => void })
       .order('created_at', { ascending: false })
       .limit(50);
     if (err) {
-      setError(err.message);
+      setError(plainError(err));
       setDrafts([]);
       setLoading(false);
       return;

@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 import Link from 'next/link';
 
 // ── CONSTANTS ──
@@ -339,7 +340,7 @@ status: 'pending', // Dedrick approves before going live
 };
 
 const { error: err } = await supabase.from('supplier_products').insert(payload);
-if (err) { setError(err.message); setSaving(false); return; }
+if (err) { setError(plainError(err)); setSaving(false); return; }
 
 setSuccess('✅ Product submitted! Dedrick will review and approve.');
 setProdName(''); setProdCategory('seafood'); setProdCostPerLb('');

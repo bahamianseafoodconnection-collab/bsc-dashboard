@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,7 @@ export default function NotificationsPage() {
       .order('created_at', { ascending: false })
       .limit(500);
     if (err) {
-      setError(err.message);
+      setError(plainError(err));
       setRows([]);
     } else {
       setRows((data || []) as Notification[]);

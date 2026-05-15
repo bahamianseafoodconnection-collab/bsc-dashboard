@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { plainError } from '@/lib/plain-error';
 import JSZip from 'jszip';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
@@ -136,7 +137,7 @@ export default function AdminImagesPage() {
       newMatches.sort((a, b) => a.filename.localeCompare(b.filename));
       setMatches(newMatches);
     } catch (err: any) {
-      alert('Zip processing failed: ' + err.message);
+      alert('Zip processing failed: ' + plainError(err));
     } finally {
       setZipProcessing(false);
     }
@@ -195,7 +196,7 @@ export default function AdminImagesPage() {
       setSaved(productId);
       setTimeout(() => setSaved(null), 3000);
     } catch (err: any) {
-      alert('Upload failed: ' + err.message);
+      alert('Upload failed: ' + plainError(err));
     } finally {
       setUploading(null);
     }

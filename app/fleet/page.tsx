@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +89,7 @@ export default function FleetPage() {
     ]);
 
     if (vRes.error) {
-      setError(vRes.error.message);
+      setError(plainError(vRes.error));
       setVehicles([]);
     } else {
       setVehicles((vRes.data || []) as Vehicle[]);

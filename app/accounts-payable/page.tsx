@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -178,7 +179,7 @@ export default function AccountsPayablePage() {
         })
         .eq('id', it.raw_id);
       if (error) {
-        alert(`Could not mark paid: ${error.message}`);
+        alert(`Could not mark paid: ${plainError(error)}`);
         setBusyId(null);
         return;
       }
@@ -205,7 +206,7 @@ export default function AccountsPayablePage() {
         })
         .eq('id', it.raw_id);
       if (updErr) {
-        alert(`Could not mark invoice paid: ${updErr.message}`);
+        alert(`Could not mark invoice paid: ${plainError(updErr)}`);
         setBusyId(null);
         return;
       }

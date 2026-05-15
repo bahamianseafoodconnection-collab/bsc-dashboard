@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { plainError } from '@/lib/plain-error'
 import {
   fetchOverheadMetrics,
   computeProfitSplit,
@@ -151,7 +152,7 @@ export default function POSPage() {
 
       setProducts(merged)
     } catch (err: any) {
-      setError(err.message ?? 'Failed to load catalog')
+      setError(plainError(err) || 'Failed to load catalog')
     } finally {
       setLoading(false)
     }
@@ -346,7 +347,7 @@ export default function POSPage() {
       setShowCart(false)
       setTimeout(() => setOrderSuccess(false), 4000)
     } catch (err: any) {
-      alert('Order failed: ' + (err.message ?? 'Unknown error'))
+      alert('Order failed: ' + (plainError(err) || 'Unknown error'))
     } finally {
       setSubmitting(false)
     }

@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { plainError } from '@/lib/plain-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,7 +124,7 @@ export default function LobsterIntakePage() {
       .order('created_at', { ascending: false })
       .limit(50);
     if (err) {
-      setError(err.message);
+      setError(plainError(err));
       setIntakes([]);
     } else {
       const normalized = ((data || []) as Array<IntakeRow>).map((r) => ({
@@ -191,7 +192,7 @@ export default function LobsterIntakePage() {
     const { error: err } = await supabase.from('yield_lots').insert(row);
     setSubmitting(false);
     if (err) {
-      alert(`Save failed: ${err.message}\n\nIf 'relation' or 'column' error, run sql/2026-05-09-lobster-intake.sql in Supabase.`);
+      alert(`Save failed: ${plainError(err)}\n\nIf 'relation' or 'column' error, run sql/2026-05-09-lobster-intake.sql in Supabase.`);
       return;
     }
 
