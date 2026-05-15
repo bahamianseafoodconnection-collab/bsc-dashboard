@@ -290,7 +290,9 @@ export default function POSPage() {
       }))
 
       const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
-        location: 'bsc_marketplace_nassau', channel: 'nassau_pos', items,
+        order_type: 'pos_sale_nassau',
+        location: 'bsc_marketplace_nassau', channel: 'nassau_pos',
+        wholesale_items: items,
         subtotal, vat_amount: vatAmount, total,
         payment_method: paymentMethod,
         terminal_type:  paymentMethod === 'card' ? terminal : null,
