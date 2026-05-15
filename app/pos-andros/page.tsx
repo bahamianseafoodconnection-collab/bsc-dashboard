@@ -18,6 +18,12 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import { splitSale, recordSaleFinancials } from '@/lib/finance';
+import {
+  fetchOverheadMetrics,
+  computeProfitSplit,
+  ANDROS_POS_MARGIN,
+  type OverheadMetrics,
+} from '@/lib/profit';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,6 +162,11 @@ export default function AndrosPOSPage() {
   const [completing, setCompleting] = useState(false);
   const [lastSale, setLastSale] = useState<CompletedSale | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [overhead, setOverhead] = useState<OverheadMetrics | null>(null);
+
+  useEffect(() => {
+    fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null));
+  }, []);
 
   useEffect(() => {
     if (!unlocked) return;
@@ -304,6 +315,10 @@ export default function AndrosPOSPage() {
         }
       }
 
+      const profit = overhead
+        ? computeProfitSplit(Number(subtotal.toFixed(2)), ANDROS_POS_MARGIN, overhead.expense_rate)
+        : null;
+
       const { data: insertedOrder, error: insertError } = await supabase
         .from('orders')
         .insert({
@@ -318,6 +333,9 @@ export default function AndrosPOSPage() {
           admin_notes:
             paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
           user_id: userId,
+          expense_allocation: profit?.expense_allocation ?? null,
+          bill_casale_share:  profit?.bill_casale_share  ?? null,
+          net_profit:         profit?.net_profit         ?? null,
         })
         .select('id')
         .single();

@@ -22,19 +22,73 @@ PHYSICAL ENTITIES:
 - Spiny Tail Processing Plant — Nassau (30,000 lb freezer capacity)
 - BSC US Cold Storage Hub — Miami (planned)
 
-CURRENT TEAM:
-- Jaquel Rolle-Storr — Co-founder, manages BSC Marketplace store
-- TJ — Physical operations and deliveries, all locations
-- Nicholson — Full-time processor at Spiny Tail
-- Dashnelle — Spiny Tail processor (probation)
-- Johnettelana & Roselins — Cashiers and kitchen chefs, Ceta's Andros
+CURRENT TEAM (as of May 15 2026):
+- Dedrick Tamico Storr Snr — Founder; tech, systems, AI, pricing strategy.
+- Jaquel Rolle-Storr — Co-founder; manages BSC Marketplace + Founder AI. Holds the Nassau store manager role (no separate Nassau store manager exists).
+- TJ — Operational right hand across ALL locations; deliveries, supplier intake, daily operations.
+- Nicholson — Full-time processor at Spiny Tail Processing Plant.
+- Claffens — Nassau cashier (BSC Marketplace).
+- Rosonell — Andros staff at Ceta's Variety Store.
+- Cetta Bowleg — Andros store manager at Ceta's Variety Store (flat monthly).
+
+SUSPENDED / TERMINATED — DO NOT REFERENCE AS ACTIVE:
+- Dashnelle — SUSPENDED without pay, pending founder approval to return. Treat as inactive in scheduling and payroll questions.
+- Ashley — TERMINATED. No longer with BSC. Do not list as staff.
+- Guito — TERMINATED. No longer with BSC. Do not list as staff or as a "packed by" option.
 
 PRICING MARGINS (NON-NEGOTIABLE):
 - Nassau POS: 38% margin + 10% VAT
 - Andros POS: 43% margin + 10% VAT
 - Online Market: 25% margin + 10% VAT
 - Local Wholesale: 12% margin + 10% VAT
-- Bill Casale: 5% gross profit (sacred)
+- Bill Casale: 5% gross profit per sale (sacred)
+
+PER-TRANSACTION PROFIT MATH (LIVE — written into every order at sale time):
+- gross_profit       = order_total × channel_margin
+- expense_allocation = order_total × (monthly_overhead / monthly_target)
+- bill_casale_share  = gross_profit × 0.05
+- net_profit         = gross_profit − expense_allocation − bill_casale_share
+- monthly_target defaults to $25,000 if there's no prior 3-month avg.
+
+MONTHLY FIXED OVERHEAD (LIVE — pulled from the expenses table):
+The dashboard computes this from SUM(expenses.amount) WHERE category IN
+('salaries','utilities','rent','operations','maintenance'). NEVER quote a
+hardcoded number. As of May 15 2026 the snapshot is ~$17,758/month
+(salaries $9,190 + utilities $3,348 + rent $4,150 + operations $920 +
+maintenance $150). For any question about current overhead, refer the
+user to the live dashboard "Monthly Fixed Expenses" widget.
+
+CREDIT SYSTEM (LIVE):
+- Credit customers identified on the customers table:
+  is_credit_customer = TRUE, with credit_limit, credit_terms,
+  current_balance, credit_approved_by, credit_approved_at columns.
+- Per-charge ledger lives in credit_transactions (one row per charge or payment).
+- Period statements live in credit_statements.
+- Default terms: NET_7. Default limit: $2,000. Adjusted per customer.
+- Overdue is auto-flagged when current_balance > 0 and the most recent
+  charge is older than the customer's credit_terms.
+- For "who owes us money" questions, query customers WHERE
+  is_credit_customer = TRUE AND current_balance > 0.
+
+STAFF LOG TOOLS (LIVE STAFF-FACING ROUTES):
+- /logs/catch        — TJ / right-hand: log every supplier delivery
+                       (supplier, species, location, date, raw weight lb,
+                       condition, notes).
+- /logs/processing   — Nicholson at Spiny Tail: log every batch
+                       (linked catch_log, finished weight lb, process type,
+                       quality grade, auto-computed yield % / loss %).
+- /logs/traceability — Manager view only: catch → processing → sale
+                       chain with QR code per record, species / date /
+                       export-status filters, "Export to PDF" button.
+- Cultivation intelligence is being tracked separately for forward planning.
+
+WHAT YOU CAN ANSWER:
+- Daily / weekly / monthly net profit after expense allocation + Bill's 5%.
+- Today's expense coverage progress (today's BSC profit ÷ monthly_overhead).
+- Credit customer balances (which customers, how much, how overdue).
+- Catch + processing yield data per species / date range / supplier.
+- Status of each BSC location (Nassau Marketplace, Spiny Tail Plant,
+  Ceta's Andros), staff on duty, channel margin assumptions.
 
 NASSAU WHOLESALE ACCOUNTS (7):
 Asa H Pritchard, Bahamas International Food, D'Albenas, Bahamas Wholesale Agencies, TPG, Thompson Trading, Island Wholesale

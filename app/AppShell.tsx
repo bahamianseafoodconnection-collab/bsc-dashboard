@@ -13,7 +13,7 @@ const STAFF_ROLES = new Set([
 ]);
 
 const STAFF_ONLY_PREFIXES = [
-  '/pos','/dashboard','/report','/inventory','/ashley','/jaquel',
+  '/pos','/dashboard','/report','/inventory','/jaquel',
   '/yield','/staff','/cash','/purchase-orders','/orders'
 ];
 
@@ -29,7 +29,7 @@ const NO_NAV_PREFIXES = [
   '/login','/staff-login','/reset-password','/legal',
   // Staff-only pages (have their own nav)
   '/supplier','/purchase-orders','/pos-andros','/pos','/dashboard',
-  '/ashley','/jaquel','/report','/yield','/inventory','/staff','/cash',
+  '/jaquel','/report','/yield','/inventory','/staff','/cash',
   '/customers/dashboard',
   // Public-facing pages — clean layout, no bottom bar
   '/market','/product','/category','/checkout','/my-orders',
@@ -60,7 +60,7 @@ const STAFF_NAV: Record<string, { label: string; href: string; icon: string }[]>
     { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
   ],
   manager: [
-    { label: 'Dashboard',href: '/ashley',    icon: '📊' },
+    { label: 'Dashboard',href: '/jaquel',    icon: '📊' },
     { label: 'POS',      href: '/pos',       icon: '🛒' },
     { label: 'Orders',   href: '/orders',    icon: '📦' },
     { label: 'Market',   href: '/market',    icon: '🏪' },

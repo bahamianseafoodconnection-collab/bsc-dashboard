@@ -12,6 +12,12 @@ import {
   VAT_RATE,
   recordSaleFinancials,
 } from '@/lib/finance';
+import {
+  fetchOverheadMetrics,
+  computeProfitSplit,
+  ONLINE_MARGIN,
+  type OverheadMetrics,
+} from '@/lib/profit';
 import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +57,11 @@ export default function CheckoutPage() {
   const [view, setView] = useState<View>('summary');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [refNo, setRefNo] = useState('');
+  const [overhead, setOverhead] = useState<OverheadMetrics | null>(null);
+
+  useEffect(() => {
+    fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null));
+  }, []);
   const [last4, setLast4] = useState('');
   const [payMethod, setPayMethod] = useState<'card' | 'cod'>('card');
   // Where this order is going. 'nassau' = pickup or local delivery in
@@ -256,6 +267,13 @@ export default function CheckoutPage() {
     if (promoApplied && promoDiscount > 0) {
       orderRow.promo_code = promoApplied.code;
       orderRow.promo_discount = promoDiscount;
+    }
+
+    if (overhead) {
+      const profit = computeProfitSplit(Number(total) || 0, ONLINE_MARGIN, overhead.expense_rate);
+      orderRow.expense_allocation = profit.expense_allocation;
+      orderRow.bill_casale_share  = profit.bill_casale_share;
+      orderRow.net_profit         = profit.net_profit;
     }
 
     const { data } = await supabase

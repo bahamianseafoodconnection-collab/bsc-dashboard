@@ -82,7 +82,7 @@ export default function LabelsPage() {
     new Date().toISOString().split('T')[0]
   );
   const [lotSeq, setLotSeq] = useState('0074');
-  const [packedBy, setPackedBy] = useState('Guito');
+  const [packedBy, setPackedBy] = useState('Nicholson');
   const [copies, setCopies] = useState(10);
 
   function handleProductChange(productName: string) {
@@ -285,9 +285,9 @@ export default function LabelsPage() {
               <select value={packedBy} onChange={e => setPackedBy(e.target.value)}
                 className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
                 style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }}>
-                <option>Guito</option>
                 <option>Nicholson</option>
-                <option>Guito & Nicholson</option>
+                <option>Dedrick</option>
+                <option>TJ</option>
               </select>
             </div>
           </div>
