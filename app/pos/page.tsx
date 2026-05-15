@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import {
+  fetchOverheadMetrics,
+  computeProfitSplit,
+  NASSAU_POS_MARGIN,
+  type OverheadMetrics,
+} from '@/lib/profit'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -86,6 +92,7 @@ export default function POSPage() {
   const [orderSuccess, setOrderSuccess] = useState(false)
   const [submitting, setSubmitting]     = useState(false)
   const [weightInput, setWeightInput]   = useState<{ productId: string; weight: string } | null>(null)
+  const [overhead, setOverhead]         = useState<OverheadMetrics | null>(null)
 
   // Customer state
   const [customerPhone, setCustomerPhone]       = useState('')
@@ -151,6 +158,13 @@ export default function POSPage() {
   }, [supabase])
 
   useEffect(() => { loadCatalog() }, [loadCatalog])
+
+  // Fetch overhead metrics once per session so each sale can persist its
+  // expense_allocation / bill_casale_share / net_profit. Falls back silently
+  // if expenses table is empty — overhead stays null, profit fields write null.
+  useEffect(() => {
+    fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null))
+  }, [])
 
   // Phone lookup
   function handlePhoneChange(val: string) {
@@ -298,6 +312,10 @@ export default function POSPage() {
         promo_label:   item.product.promo_label ?? null,
       }))
 
+      const profit = overhead
+        ? computeProfitSplit(total, NASSAU_POS_MARGIN, overhead.expense_rate)
+        : null
+
       const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
         order_type: 'pos_sale_nassau',
         location: 'bsc_marketplace_nassau', channel: 'nassau_pos',
@@ -310,6 +328,9 @@ export default function POSPage() {
         customer_id:    customerId,
         customer_name:  nameClean || null,
         customer_phone: phoneClean || null,
+        expense_allocation: profit?.expense_allocation ?? null,
+        bill_casale_share:  profit?.bill_casale_share  ?? null,
+        net_profit:         profit?.net_profit         ?? null,
       }).select('id').single()
       if (orderErr) throw orderErr
 
