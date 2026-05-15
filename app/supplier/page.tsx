@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 
-let _supabase = null;
+let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
 if (!_supabase) {
 _supabase = createBrowserClient(
