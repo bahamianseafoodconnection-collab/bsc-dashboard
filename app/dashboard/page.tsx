@@ -199,12 +199,30 @@ export default function DashboardPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [aiMessages]);
 
+  // Auto-refresh: while the Overview tab is open, re-fetch every 60s.
+  // Pauses when the user switches tabs or backgrounds the browser tab,
+  // so we're not pinging Supabase in hidden windows.
   useEffect(() => {
-    if (activeTab === 'overview') {
+    if (activeTab !== 'overview') return;
+
+    let cancelled = false;
+    const refresh = () => {
+      if (cancelled) return;
       loadTodaySales();
       loadWholesaleOrders();
       loadLogWidgets();
-    }
+    };
+    refresh(); // initial load on mount / tab change
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      refresh();
+    }, 60_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [activeTab]);
 
   async function loadLogWidgets() {
