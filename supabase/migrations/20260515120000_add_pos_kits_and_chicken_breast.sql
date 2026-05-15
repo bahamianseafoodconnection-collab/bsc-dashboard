@@ -22,7 +22,7 @@ VALUES (
   'LS-KIT-30',
   '30lb Lane Snapper Kit',
   (SELECT category FROM products WHERE name ILIKE '%lane snapper%' AND status = 'active' LIMIT 1),
-  'kit',
+  'each',
   FALSE,
   'active', TRUE, FALSE, FALSE, FALSE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
@@ -33,7 +33,7 @@ VALUES (
   'LS-KIT-15',
   'Half Kit Lane Snapper (15 lb)',
   (SELECT category FROM products WHERE name ILIKE '%lane snapper%' AND status = 'active' LIMIT 1),
-  'kit',
+  'each',
   FALSE,
   'active', TRUE, FALSE, FALSE, FALSE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
@@ -58,14 +58,14 @@ LIMIT 1;
 INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, unit_of_measure, shipping_per_lb, customs_duty_pct, vat_levy_pct, processing_fee, effective_from, is_current, recorded_by)
 VALUES (
   (SELECT id FROM products WHERE sku = 'LS-KIT-30'),
-  NULL, 'standard', 180.00, 'kit', 0, 0, 0, 0, NOW(), TRUE,
+  NULL, 'standard', 180.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
 INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, unit_of_measure, shipping_per_lb, customs_duty_pct, vat_levy_pct, processing_fee, effective_from, is_current, recorded_by)
 VALUES (
   (SELECT id FROM products WHERE sku = 'LS-KIT-15'),
-  NULL, 'standard', 90.00, 'kit', 0, 0, 0, 0, NOW(), TRUE,
+  NULL, 'standard', 90.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
