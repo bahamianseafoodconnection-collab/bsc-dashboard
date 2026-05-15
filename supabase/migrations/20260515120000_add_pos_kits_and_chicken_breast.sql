@@ -1,7 +1,7 @@
 -- Adds three Nassau-POS-only products with fixed cost/sell prices:
 --   1. 30lb Lane Snapper Kit   (LS-KIT-30)   — 30 lb, cost $180.00, sell $240.00
 --   2. Half Kit Lane Snapper   (LS-KIT-15)   — 15 lb, cost $90.00,  sell $125.00
---   3. Case Chicken Breast     (CHK-CASE-BB) — supplier Bahama Breeze, cost $57.93, sell $64.90
+--   3. Case Chicken Breast     (CHK-CASE-BB) — supplier Bahama Breeze, cost $59.54, sell $64.90
 --
 -- Notes:
 --   • Supplier "Bahama Breeze" is matched by name (case-insensitive) on the
@@ -12,6 +12,21 @@
 
 BEGIN;
 
+-- Step 0: ensure Bahama Breeze supplier exists (idempotent)
+
+INSERT INTO suppliers (code, name, supplier_type, brand_color, brand_emoji, is_active, created_by)
+SELECT
+  'BAHAMA_BREEZE',
+  'Bahama Breeze',
+  'wholesale_partner',
+  '#1a2e5a',
+  '🍗',
+  TRUE,
+  '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
+WHERE NOT EXISTS (
+  SELECT 1 FROM suppliers WHERE name ILIKE '%bahama breeze%'
+);
+
 -- Step 1: insert the three product rows
 
 -- category is an enum (product_category) — inherit from an existing Lane Snapper row
@@ -21,7 +36,7 @@ INSERT INTO products (sku, name, category, unit_of_measure, is_bsc_processed, st
 VALUES (
   'LS-KIT-30',
   '30lb Lane Snapper Kit',
-  (SELECT category FROM products WHERE name ILIKE '%lane snapper%' AND status = 'active' LIMIT 1),
+  'fresh_seafood',
   'each',
   FALSE,
   'active', TRUE, FALSE, FALSE, FALSE,
@@ -32,7 +47,7 @@ INSERT INTO products (sku, name, category, unit_of_measure, is_bsc_processed, st
 VALUES (
   'LS-KIT-15',
   'Half Kit Lane Snapper (15 lb)',
-  (SELECT category FROM products WHERE name ILIKE '%lane snapper%' AND status = 'active' LIMIT 1),
+  'fresh_seafood',
   'each',
   FALSE,
   'active', TRUE, FALSE, FALSE, FALSE,
@@ -58,14 +73,14 @@ LIMIT 1;
 INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, unit_of_measure, shipping_per_lb, customs_duty_pct, vat_levy_pct, processing_fee, effective_from, is_current, recorded_by)
 VALUES (
   (SELECT id FROM products WHERE sku = 'LS-KIT-30'),
-  NULL, (SELECT cost_type FROM product_costs WHERE is_current = TRUE LIMIT 1), 180.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
+  NULL, 'opening_balance', 180.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
 INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, unit_of_measure, shipping_per_lb, customs_duty_pct, vat_levy_pct, processing_fee, effective_from, is_current, recorded_by)
 VALUES (
   (SELECT id FROM products WHERE sku = 'LS-KIT-15'),
-  NULL, (SELECT cost_type FROM product_costs WHERE is_current = TRUE LIMIT 1), 90.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
+  NULL, 'opening_balance', 90.00, 'each', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
@@ -73,7 +88,7 @@ INSERT INTO product_costs (product_id, supplier_id, cost_type, cost_per_unit, un
 VALUES (
   (SELECT id FROM products WHERE sku = 'CHK-CASE-BB'),
   (SELECT id FROM suppliers WHERE name ILIKE '%bahama breeze%' LIMIT 1),
-  (SELECT cost_type FROM product_costs WHERE is_current = TRUE LIMIT 1), 57.93, 'case', 0, 0, 0, 0, NOW(), TRUE,
+  'opening_balance', 59.54, 'case', 0, 0, 0, 0, NOW(), TRUE,
   '7b62672c-9259-4c1b-98d4-3b78369a52ab'::uuid
 );
 
