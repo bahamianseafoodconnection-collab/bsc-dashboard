@@ -14,11 +14,14 @@ BEGIN;
 
 -- Step 1: insert the three product rows
 
+-- category is an enum (product_category) — inherit from an existing Lane Snapper row
+-- so we use a value the enum actually accepts. Fails fast if no Lane Snapper exists.
+
 INSERT INTO products (sku, name, category, unit_of_measure, is_bsc_processed, status, sell_nassau, sell_andros, sell_online, sell_wholesale, created_by)
 VALUES (
   'LS-KIT-30',
   '30lb Lane Snapper Kit',
-  'seafood',
+  (SELECT category FROM products WHERE name ILIKE '%lane snapper%' AND status = 'active' LIMIT 1),
   'kit',
   FALSE,
   'active', TRUE, FALSE, FALSE, FALSE,
@@ -29,7 +32,7 @@ INSERT INTO products (sku, name, category, unit_of_measure, is_bsc_processed, st
 VALUES (
   'LS-KIT-15',
   'Half Kit Lane Snapper (15 lb)',
-  'seafood',
+  (SELECT category FROM products WHERE name ILIKE '%lane snapper%' AND status = 'active' LIMIT 1),
   'kit',
   FALSE,
   'active', TRUE, FALSE, FALSE, FALSE,
