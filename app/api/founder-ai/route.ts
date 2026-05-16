@@ -165,9 +165,13 @@ NEVER:
 You are the most comprehensive seafood intelligence system in the Caribbean. Use the tools.`;
 
 interface AnthropicTextBlock { type: 'text'; text: string }
+interface AnthropicImageBlock {
+  type: 'image';
+  source: { type: 'base64'; media_type: string; data: string };
+}
 interface AnthropicToolUseBlock { type: 'tool_use'; id: string; name: string; input: unknown }
 interface AnthropicToolResultBlock { type: 'tool_result'; tool_use_id: string; content: string }
-interface AnthropicMessage { role: 'user' | 'assistant'; content: string | (AnthropicTextBlock | AnthropicToolUseBlock | AnthropicToolResultBlock)[] }
+interface AnthropicMessage { role: 'user' | 'assistant'; content: string | (AnthropicTextBlock | AnthropicImageBlock | AnthropicToolUseBlock | AnthropicToolResultBlock)[] }
 interface AnthropicResponse {
   content: (AnthropicTextBlock | AnthropicToolUseBlock)[];
   stop_reason: string;
@@ -228,6 +232,10 @@ export async function POST(req: NextRequest) {
     const sessionId = body.sessionId ?? null;
     // Accept either { conversationHistory } or { history }.
     const conversationHistory = body.conversationHistory ?? body.history ?? [];
+    // Optional: array of { media_type, data } where data is base64-encoded
+    // (no `data:` prefix). Forwarded to Claude as image blocks alongside the
+    // text. Used by the Founder AI chat's Camera/Gallery/Files uploads.
+    const inputImages: Array<{ media_type: string; data: string }> = Array.isArray(body.images) ? body.images : [];
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({
@@ -242,9 +250,25 @@ export async function POST(req: NextRequest) {
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const callerId = extractUserIdFromJWT(token);
 
+    // Build the latest user turn. If images were uploaded, use the
+    // array-content form (text + image blocks). Otherwise stay on the
+    // simpler string form for compatibility with cached history.
+    const userTurn: AnthropicMessage = inputImages.length > 0
+      ? {
+          role: 'user',
+          content: [
+            { type: 'text', text: message },
+            ...inputImages.map<AnthropicImageBlock>((img) => ({
+              type:   'image',
+              source: { type: 'base64', media_type: img.media_type, data: img.data },
+            })),
+          ],
+        }
+      : { role: 'user', content: message };
+
     const messages: AnthropicMessage[] = [
       ...(Array.isArray(conversationHistory) ? conversationHistory : []),
-      { role: 'user', content: message },
+      userTurn,
     ];
 
     let toolCallsExecuted: string[] = [];

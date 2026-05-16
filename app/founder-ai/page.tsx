@@ -35,6 +35,27 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
 
+interface PendingImage {
+  preview: string       // object URL for thumbnail
+  media_type: string    // e.g. image/jpeg
+  data: string          // base64, no `data:` prefix
+}
+
+// Read a File as base64 (without the `data:...,` prefix).
+function fileToBase64(file: File): Promise<{ media_type: string; data: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error('file read failed'))
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      const comma  = result.indexOf(',')
+      if (comma < 0) { reject(new Error('unexpected dataURL format')); return }
+      resolve({ media_type: file.type || 'image/jpeg', data: result.slice(comma + 1) })
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function FounderAIPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -42,8 +63,35 @@ export default function FounderAIPage() {
   const [sessionId] = useState(generateSessionId)
   const [isSearching, setIsSearching] = useState(false)
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: string; content: string }>>([])
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const cameraRef  = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
+  const fileRef    = useRef<HTMLInputElement>(null)
+
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const { media_type, data } = await fileToBase64(file)
+      setPendingImages(prev => [...prev, { preview: URL.createObjectURL(file), media_type, data }])
+    } catch (err) {
+      console.error('image pick failed', err)
+    } finally {
+      // allow re-selecting the same file later
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  function removePendingImage(idx: number) {
+    setPendingImages(prev => {
+      const next = prev.slice()
+      const [removed] = next.splice(idx, 1)
+      if (removed) URL.revokeObjectURL(removed.preview)
+      return next
+    })
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -55,10 +103,16 @@ export default function FounderAIPage() {
 
   async function sendMessage(text?: string) {
     const messageText = text || input.trim()
-    if (!messageText || loading) return
+    // Allow image-only sends: as long as there's text OR at least one image.
+    if ((!messageText && pendingImages.length === 0) || loading) return
 
-    setMessages(prev => [...prev, { role: 'user', content: messageText, timestamp: new Date() }])
+    const imagesToSend = pendingImages.map(({ media_type, data }) => ({ media_type, data }))
+    const displayText = messageText || (pendingImages.length > 0 ? `📷 ${pendingImages.length} image${pendingImages.length === 1 ? '' : 's'} attached` : '')
+
+    setMessages(prev => [...prev, { role: 'user', content: displayText, timestamp: new Date() }])
     setInput('')
+    pendingImages.forEach(p => URL.revokeObjectURL(p.preview))
+    setPendingImages([])
     setLoading(true)
     setIsSearching(false)
 
@@ -68,7 +122,7 @@ export default function FounderAIPage() {
       const response = await fetch('/api/founder-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, sessionId, conversationHistory })
+        body: JSON.stringify({ message: messageText || '(image attached)', sessionId, conversationHistory, images: imagesToSend })
       })
 
       const data = await response.json()
@@ -240,11 +294,47 @@ export default function FounderAIPage() {
 
       {/* Input */}
       <div style={{ padding: '12px 16px 24px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
+        {/* Hidden inputs: 3 sources for image attach */}
+        <input ref={cameraRef}  type="file" accept="image/*" capture="environment" onChange={handleImagePick} style={{ display: 'none' }} />
+        <input ref={galleryRef} type="file" accept="image/*"                       onChange={handleImagePick} style={{ display: 'none' }} />
+        <input ref={fileRef}    type="file" accept="image/*"                       onChange={handleImagePick} style={{ display: 'none' }} />
+
+        {/* Thumbnail row when images are queued */}
+        {pendingImages.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            {pendingImages.map((img, i) => (
+              <div key={i} style={{ position: 'relative', width: 56, height: 56, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(245,197,24,0.3)' }}>
+                <img src={img.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <button onClick={() => removePendingImage(i)} aria-label="Remove image"
+                  style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', fontSize: 11, lineHeight: '18px', padding: 0, cursor: 'pointer' }}>
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '12px 14px' }}>
+          {/* Attach buttons — Camera / Gallery / Files */}
+          <div style={{ display: 'flex', gap: 4, alignSelf: 'center' }}>
+            <button type="button" onClick={() => cameraRef.current?.click()} disabled={loading} title="Take photo"
+              style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.2)', color: '#f5c518', cursor: 'pointer', fontSize: 16, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              📸
+            </button>
+            <button type="button" onClick={() => galleryRef.current?.click()} disabled={loading} title="From gallery"
+              style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.2)', color: '#f5c518', cursor: 'pointer', fontSize: 16, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              🖼️
+            </button>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={loading} title="Upload file"
+              style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.2)', color: '#f5c518', cursor: 'pointer', fontSize: 16, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              📁
+            </button>
+          </div>
+
           <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder="Ask anything about seafood, species, markets, traceability, or BSC operations…"
             rows={1} disabled={loading} />
-          <button className="send-btn" onClick={() => sendMessage()} disabled={loading || !input.trim()}>
+          <button className="send-btn" onClick={() => sendMessage()} disabled={loading || (!input.trim() && pendingImages.length === 0)}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M22 2L11 13" stroke="#060d1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="#060d1f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
