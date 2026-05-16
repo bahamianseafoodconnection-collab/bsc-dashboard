@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { canLock, useUserRole } from '@/lib/role';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
@@ -61,6 +62,23 @@ id: string;
 product_count?: number;
 }
 
+// Product summary used by the expanded "Products" section under each supplier card.
+interface SupplierProduct {
+id: string;
+sku: string;
+name: string;
+category: string | null;
+unit_of_measure: string | null;
+pack_size: string | null;
+status: string;
+sell_nassau: boolean;
+sell_andros: boolean;
+sell_online: boolean;
+sell_wholesale: boolean;
+cost_per_unit: number | null;
+online_sell_price: number | null;
+}
+
 interface Toast { msg: string; ok: boolean; }
 
 const BLANK: SupplierForm = {
@@ -82,6 +100,15 @@ const [form, setForm] = useState<SupplierForm>({ ...BLANK });
 const [tab, setTab] = useState<'list' | 'add'>('list');
 const [saving, setSaving] = useState(false);
 const [toast, setToast] = useState<Toast | null>(null);
+
+// Per-supplier products expansion state.
+const [expandedId, setExpandedId] = useState<string | null>(null);
+const [productsBySupplier, setProductsBySupplier] = useState<Record<string, SupplierProduct[]>>({});
+const [productsLoading, setProductsLoading] = useState<string | null>(null);
+
+// Role gate: only founder + co_founder can flip status / channel toggles.
+const { role } = useUserRole();
+const canEdit = canLock(role);
 
 function showToast(msg: string, ok = true) {
 setToast({ msg, ok });
@@ -158,6 +185,94 @@ await supabase.from('suppliers')
 .update({ is_active: !s.is_active, updated_at: new Date().toISOString() })
 .eq('id', s.id);
 loadSuppliers();
+}
+
+// ── Per-supplier product management ──
+
+async function loadProductsFor(supplierId: string) {
+setProductsLoading(supplierId);
+try {
+const { data: prods, error } = await supabase
+.from('products')
+.select('id, sku, name, category, unit_of_measure, pack_size, status, sell_nassau, sell_andros, sell_online, sell_wholesale')
+.eq('primary_supplier_id', supplierId)
+.order('status', { ascending: true })
+.order('sku',    { ascending: true });
+if (error) throw error;
+const rows = (prods ?? []) as Array<Omit<SupplierProduct, 'cost_per_unit' | 'online_sell_price'>>;
+const ids  = rows.map((r) => r.id);
+const costMap: Record<string, number> = {};
+const priceMap: Record<string, number> = {};
+if (ids.length > 0) {
+const { data: costs } = await supabase
+.from('product_costs')
+.select('product_id, cost_per_unit')
+.in('product_id', ids)
+.eq('is_current', true);
+for (const c of (costs ?? []) as { product_id: string; cost_per_unit: number | null }[]) {
+if (c.cost_per_unit !== null) costMap[c.product_id] = Number(c.cost_per_unit);
+}
+const { data: prices } = await supabase
+.from('product_pricing')
+.select('product_id, manual_unit_price, channel')
+.in('product_id', ids)
+.eq('channel', 'online_market')
+.eq('is_current', true);
+for (const p of (prices ?? []) as { product_id: string; manual_unit_price: number | null }[]) {
+if (p.manual_unit_price !== null) priceMap[p.product_id] = Number(p.manual_unit_price);
+}
+}
+const merged: SupplierProduct[] = rows.map((r) => ({
+...r,
+cost_per_unit:     costMap[r.id]  ?? null,
+online_sell_price: priceMap[r.id] ?? null,
+}));
+setProductsBySupplier((prev) => ({ ...prev, [supplierId]: merged }));
+} catch (err) {
+showToast('Failed to load products: ' + (err instanceof Error ? err.message : String(err)), false);
+} finally {
+setProductsLoading(null);
+}
+}
+
+function toggleExpanded(s: Supplier) {
+const isOpen = expandedId === s.id;
+if (isOpen) {
+setExpandedId(null);
+return;
+}
+setExpandedId(s.id);
+if (!productsBySupplier[s.id]) loadProductsFor(s.id);
+}
+
+async function setProductStatus(p: SupplierProduct, supplierId: string, newStatus: 'active' | 'inactive' | 'out_of_stock') {
+if (!canEdit) { showToast('Only founder/co-founder can change product status', false); return; }
+if (p.status === newStatus) return;
+const { error } = await supabase
+.from('products')
+.update({ status: newStatus, updated_at: new Date().toISOString() })
+.eq('id', p.id);
+if (error) { showToast('Update failed: ' + error.message, false); return; }
+setProductsBySupplier((prev) => ({
+...prev,
+[supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? { ...row, status: newStatus } : row),
+}));
+showToast(`${p.sku} → ${newStatus}`);
+}
+
+async function toggleChannel(p: SupplierProduct, supplierId: string, channel: 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale') {
+if (!canEdit) { showToast('Only founder/co-founder can change channels', false); return; }
+const newVal = !p[channel];
+const { error } = await supabase
+.from('products')
+.update({ [channel]: newVal, updated_at: new Date().toISOString() })
+.eq('id', p.id);
+if (error) { showToast('Update failed: ' + error.message, false); return; }
+setProductsBySupplier((prev) => ({
+...prev,
+[supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? { ...row, [channel]: newVal } : row),
+}));
+showToast(`${p.sku} · ${channel.replace('sell_', '')} → ${newVal ? 'ON' : 'OFF'}`);
 }
 
 const filtered = suppliers.filter((s: Supplier) => {
@@ -418,11 +533,16 @@ style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5
 {s.notes}
 </p>
 )}
-<div className="flex items-center justify-between pt-1">
+<div className="flex items-center justify-between pt-1 flex-wrap gap-2">
 <p className="text-xs font-bold" style={{ color: '#f5c518' }}>
 {s.product_count ?? 0} product{(s.product_count ?? 0) !== 1 ? 's' : ''} assigned
 </p>
-<div className="flex gap-2">
+<div className="flex gap-2 flex-wrap">
+<button onClick={() => toggleExpanded(s)}
+className="text-xs px-3 py-1.5 rounded-lg font-bold"
+style={{ backgroundColor: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>
+{expandedId === s.id ? '▴ Hide Products' : `▾ Products (${s.product_count ?? 0})`}
+</button>
 <button onClick={() => toggleActive(s)}
 className="text-xs px-3 py-1.5 rounded-lg font-bold"
 style={{
@@ -439,6 +559,104 @@ Edit
 </div>
 </div>
 </div>
+
+{expandedId === s.id && (
+<div className="px-4 py-3 border-t" style={{ backgroundColor: '#091632', borderColor: 'rgba(245,197,24,0.15)' }}>
+{!canEdit && (
+<p className="text-[11px] mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>
+View-only — founder or co-founder role required to change status or channels.
+</p>
+)}
+{productsLoading === s.id && (
+<p className="text-xs text-center py-4" style={{ color: 'rgba(255,255,255,0.4)' }}>Loading products…</p>
+)}
+{productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length === 0 && (
+<p className="text-xs text-center py-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
+No products assigned to this supplier yet.
+</p>
+)}
+{productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length > 0 && (
+<div className="space-y-2">
+{(productsBySupplier[s.id] ?? []).map((p) => {
+const statusColor =
+p.status === 'active'       ? { bg: 'rgba(22,163,74,0.18)',  fg: '#4ade80' } :
+p.status === 'out_of_stock' ? { bg: 'rgba(245,197,24,0.18)', fg: '#f5c518' } :
+                              { bg: 'rgba(220,38,38,0.18)',  fg: '#f87171' };
+return (
+<div key={p.id} className="rounded-lg px-3 py-2 space-y-2"
+style={{ backgroundColor: '#0b1d3f', border: '1px solid rgba(255,255,255,0.06)' }}>
+<div className="flex items-start justify-between gap-2">
+<div className="min-w-0 flex-1">
+<p className="text-xs font-bold text-white truncate">{p.name}</p>
+<p className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>
+{p.sku}{p.pack_size ? ` · ${p.pack_size}` : ''}{p.unit_of_measure ? ` · /${p.unit_of_measure}` : ''}
+</p>
+</div>
+<span className="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap"
+style={{ backgroundColor: statusColor.bg, color: statusColor.fg }}>
+{p.status === 'out_of_stock' ? 'OUT OF STOCK' : p.status.toUpperCase()}
+</span>
+</div>
+<div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 text-[11px]">
+<div style={{ color: 'rgba(255,255,255,0.55)' }}>
+{p.cost_per_unit !== null ? <>Cost <span style={{ color: '#f87171' }}>${p.cost_per_unit.toFixed(2)}</span></> : 'Cost —'}
+{' · '}
+{p.online_sell_price !== null ? <>Online <span style={{ color: '#7dd3a8' }}>${p.online_sell_price.toFixed(2)}</span></> : 'Online —'}
+</div>
+</div>
+
+{canEdit && (
+<div className="flex flex-wrap gap-1.5">
+{/* Status cycler */}
+<button onClick={() => setProductStatus(p, s.id, 'active')}
+disabled={p.status === 'active'}
+className="text-[10px] px-2.5 py-1 rounded-md font-bold"
+style={{
+backgroundColor: p.status === 'active' ? 'rgba(22,163,74,0.35)' : 'rgba(22,163,74,0.12)',
+color: '#4ade80', opacity: p.status === 'active' ? 1 : 0.7,
+}}>Active</button>
+<button onClick={() => setProductStatus(p, s.id, 'out_of_stock')}
+disabled={p.status === 'out_of_stock'}
+className="text-[10px] px-2.5 py-1 rounded-md font-bold"
+style={{
+backgroundColor: p.status === 'out_of_stock' ? 'rgba(245,197,24,0.35)' : 'rgba(245,197,24,0.12)',
+color: '#f5c518', opacity: p.status === 'out_of_stock' ? 1 : 0.7,
+}}>Out of Stock</button>
+<button onClick={() => setProductStatus(p, s.id, 'inactive')}
+disabled={p.status === 'inactive'}
+className="text-[10px] px-2.5 py-1 rounded-md font-bold"
+style={{
+backgroundColor: p.status === 'inactive' ? 'rgba(220,38,38,0.35)' : 'rgba(220,38,38,0.12)',
+color: '#f87171', opacity: p.status === 'inactive' ? 1 : 0.7,
+}}>Inactive</button>
+
+<span className="w-px self-stretch mx-1" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }} />
+
+{/* Channel toggles */}
+{[
+{ key: 'sell_nassau'   as const, label: 'Nassau' },
+{ key: 'sell_andros'   as const, label: 'Andros' },
+{ key: 'sell_online'   as const, label: 'Online' },
+{ key: 'sell_wholesale' as const, label: 'W-sale' },
+].map(({ key, label }) => (
+<button key={key} onClick={() => toggleChannel(p, s.id, key)}
+className="text-[10px] px-2.5 py-1 rounded-md font-bold"
+style={{
+backgroundColor: p[key] ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.06)',
+color: p[key] ? '#60a5fa' : 'rgba(255,255,255,0.4)',
+}}>
+{p[key] ? '✓' : '○'} {label}
+</button>
+))}
+</div>
+)}
+</div>
+);
+})}
+</div>
+)}
+</div>
+)}
 </div>
 ))}
 </div>
