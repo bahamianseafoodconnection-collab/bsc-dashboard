@@ -19,9 +19,32 @@ const FOUNDER_ID = '7b62672c-9259-4c1b-98d4-3b78369a52ab';
 const CHANNELS = [
   { key: 'nassau_pos',     label: 'Nassau POS',    emoji: '🟡', margin: 0.38 },
   { key: 'andros_pos',     label: 'Andros POS',    emoji: '🟣', margin: 0.43 },
-  { key: 'online_market',  label: 'Online Market', emoji: '🛒', margin: 0.15 },
+  { key: 'online_market',  label: 'Online Market', emoji: '🛒', margin: 0.25 },
   { key: 'local_wholesale',label: 'Wholesale',     emoji: '📦', margin: 0.15 },
 ];
+
+// Per-channel sell-price math.
+//   Nassau / Andros / Wholesale: sell = cost / (1 - margin)
+//   Online Market:               sell = cost / (1 - margin) * 1.10 (10% VAT on top)
+// Reverse (cost from a typed sell price) is the inverse.
+function chSellFromCost(channel: string, cost: number): number {
+  switch (channel) {
+    case 'nassau_pos':      return cost / 0.62;
+    case 'andros_pos':      return cost / 0.57;
+    case 'online_market':   return cost / 0.75 * 1.10;
+    case 'local_wholesale': return cost / 0.85;
+    default:                return cost;
+  }
+}
+function chCostFromSell(channel: string, sell: number): number {
+  switch (channel) {
+    case 'nassau_pos':      return sell * 0.62;
+    case 'andros_pos':      return sell * 0.57;
+    case 'online_market':   return sell / 1.10 * 0.75;
+    case 'local_wholesale': return sell * 0.85;
+    default:                return sell;
+  }
+}
 
 const CATEGORIES = [
   'fresh_seafood','frozen_seafood','processed_seafood',
@@ -102,6 +125,7 @@ export default function ProductsPage() {
   const [filterChan, setFilterChan]           = useState('all');
   const [selected, setSelected]               = useState<Product | null>(null);
   const [editPrices, setEditPrices]           = useState<Record<string, string>>({});
+  const [editCost, setEditCost]               = useState<string>('');
   const [editChannels, setEditChannels]       = useState<Record<string, boolean>>({});
   const [editImageFile, setEditImageFile]     = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState('');
@@ -113,8 +137,19 @@ export default function ProductsPage() {
   const [toast, setToast]                     = useState<{ msg: string; ok: boolean } | null>(null);
   const [tab, setTab]                         = useState<'list' | 'add'>('list');
 
-  const newImageRef  = useRef<HTMLInputElement>(null);
-  const editImageRef = useRef<HTMLInputElement>(null);
+  // 3 image-source refs per form: Files / Gallery / Camera. All three write to
+  // the same state — only the input element's `accept` + `capture` attributes
+  // change what the browser surfaces to the user.
+  const newFileRef    = useRef<HTMLInputElement>(null);
+  const newGalleryRef = useRef<HTMLInputElement>(null);
+  const newCameraRef  = useRef<HTMLInputElement>(null);
+  const editFileRef    = useRef<HTMLInputElement>(null);
+  const editGalleryRef = useRef<HTMLInputElement>(null);
+  const editCameraRef  = useRef<HTMLInputElement>(null);
+
+  // Legacy refs — some downstream callers still reference these names.
+  const newImageRef  = newGalleryRef;
+  const editImageRef = editGalleryRef;
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
@@ -177,18 +212,54 @@ export default function ProductsPage() {
     setEditImagePreview('');
     setEditSupplierId(p.primary_supplier_id ?? '');
     setEditSupplierSku(p.supplier_sku ?? '');
+    // Seed edit cost from any one channel's price (back-calc — use Nassau if available).
+    const seedFrom = p.pricing['nassau_pos'] ?? p.pricing['online_market'] ?? p.pricing['andros_pos'] ?? p.pricing['local_wholesale'];
+    if (seedFrom != null && Number(seedFrom) > 0) {
+      const seedChan = p.pricing['nassau_pos'] != null ? 'nassau_pos'
+                     : p.pricing['online_market'] != null ? 'online_market'
+                     : p.pricing['andros_pos'] != null ? 'andros_pos'
+                     : 'local_wholesale';
+      setEditCost(chCostFromSell(seedChan, Number(seedFrom)).toFixed(2));
+    } else {
+      setEditCost('');
+    }
   }
 
-  function calcFromCost(cost: string, setter: (p: Record<string, string>) => void, current: Record<string, string>) {
+  // Auto-fill all 4 channel prices from a cost string. Returns the new
+  // prices map; caller decides what to do (overwrite or merge).
+  function pricesFromCost(cost: string, current: Record<string, string>): Record<string, string> {
     const c = parseFloat(cost);
-    if (isNaN(c) || c <= 0) return;
-    setter({
+    if (isNaN(c) || c <= 0) return current;
+    return {
       ...current,
-      nassau_pos:      (c / (1 - 0.38)).toFixed(2),
-      andros_pos:      (c / (1 - 0.43)).toFixed(2),
-      online_market:   (c / (1 - 0.15)).toFixed(2),
-      local_wholesale: (c / (1 - 0.15)).toFixed(2),
-    });
+      nassau_pos:      chSellFromCost('nassau_pos',      c).toFixed(2),
+      andros_pos:      chSellFromCost('andros_pos',      c).toFixed(2),
+      online_market:   chSellFromCost('online_market',   c).toFixed(2),
+      local_wholesale: chSellFromCost('local_wholesale', c).toFixed(2),
+    };
+  }
+
+  // User typed in one channel's price → back-calc cost, then re-fill the OTHER
+  // 3 channel prices from that cost. Source channel keeps the user's exact
+  // input so they aren't fighting the calculator.
+  function recalcFromChannelPrice(
+    channel: string,
+    sellStr: string,
+    current: Record<string, string>,
+  ): { cost: string; prices: Record<string, string> } {
+    const s = parseFloat(sellStr);
+    if (isNaN(s) || s <= 0) {
+      return { cost: '', prices: { ...current, [channel]: sellStr } };
+    }
+    const cost = chCostFromSell(channel, s);
+    const filled = pricesFromCost(cost.toFixed(2), current);
+    return { cost: cost.toFixed(2), prices: { ...filled, [channel]: sellStr } };
+  }
+
+  // Back-compat shim for any callers that still pass `calcFromCost`.
+  function calcFromCost(cost: string, setter: (p: Record<string, string>) => void, current: Record<string, string>) {
+    const next = pricesFromCost(cost, current);
+    if (next !== current) setter(next);
   }
 
   async function uploadImage(file: File, sku: string): Promise<string | null> {
@@ -415,38 +486,50 @@ export default function ProductsPage() {
       {tab === 'add' && (
         <div className="p-4 max-w-xl mx-auto space-y-4">
 
-          {/* Image upload */}
+          {/* Image upload — Files / Gallery / Camera */}
           <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#0f1f3d' }}>
-            <input ref={newImageRef} type="file" accept="image/*" className="hidden"
-              onChange={e => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                setNewProduct(p => ({ ...p, image_file: f, image_preview: URL.createObjectURL(f) }));
-              }} />
-            <button onClick={() => newImageRef.current?.click()} className="w-full relative"
-              style={{ minHeight: '160px' }}>
-              {newProduct.image_preview ? (
-                <div className="relative">
-                  <img src={newProduct.image_preview} alt="Preview"
-                    className="w-full object-cover" style={{ maxHeight: '200px' }} />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition"
-                    style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <span className="text-white font-bold text-sm">📷 Change Photo</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-3 py-10"
-                  style={{ backgroundColor: '#1a2e5a' }}>
-                  <div className="text-5xl">📷</div>
-                  <div>
-                    <p className="font-bold text-white text-sm">Add Product Photo</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>Camera · Gallery · Files</p>
-                  </div>
-                  <div className="px-4 py-2 rounded-xl text-xs font-bold"
-                    style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>Choose Photo</div>
-                </div>
-              )}
-            </button>
+            <input ref={newFileRef}    type="file" accept="image/*"                       className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) setNewProduct(p => ({ ...p, image_file: f, image_preview: URL.createObjectURL(f) })); }} />
+            <input ref={newGalleryRef} type="file" accept="image/*"                       className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) setNewProduct(p => ({ ...p, image_file: f, image_preview: URL.createObjectURL(f) })); }} />
+            <input ref={newCameraRef}  type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) setNewProduct(p => ({ ...p, image_file: f, image_preview: URL.createObjectURL(f) })); }} />
+
+            {newProduct.image_preview ? (
+              <div className="relative">
+                <img src={newProduct.image_preview} alt="Preview"
+                  className="w-full object-cover" style={{ maxHeight: '240px' }} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 py-8"
+                style={{ backgroundColor: '#1a2e5a' }}>
+                <div className="text-5xl">📷</div>
+                <p className="font-bold text-white text-sm">Add Product Photo</p>
+                <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Pick a source below</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2 p-3" style={{ backgroundColor: '#0f1f3d' }}>
+              <button type="button" onClick={() => newCameraRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-xs font-bold"
+                style={{ backgroundColor: '#1a2e5a', color: '#f5c518', border: '1px solid rgba(245,197,24,0.25)' }}>
+                <span className="text-xl">📸</span>
+                <span>Camera</span>
+              </button>
+              <button type="button" onClick={() => newGalleryRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-xs font-bold"
+                style={{ backgroundColor: '#1a2e5a', color: '#f5c518', border: '1px solid rgba(245,197,24,0.25)' }}>
+                <span className="text-xl">🖼️</span>
+                <span>Gallery</span>
+              </button>
+              <button type="button" onClick={() => newFileRef.current?.click()}
+                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-xs font-bold"
+                style={{ backgroundColor: '#1a2e5a', color: '#f5c518', border: '1px solid rgba(245,197,24,0.25)' }}>
+                <span className="text-xl">📁</span>
+                <span>Files</span>
+              </button>
+            </div>
+
             {newProduct.image_preview && (
               <div className="px-4 py-2 flex items-center justify-between border-t"
                 style={{ borderColor: 'rgba(245,197,24,0.15)' }}>
@@ -573,30 +656,25 @@ export default function ProductsPage() {
             })}
           </div>
 
-          {/* Pricing */}
+          {/* Pricing — type in ANY field, the others auto-fill from channel margins */}
           <div className="rounded-2xl p-5 space-y-3" style={{ backgroundColor: '#0f1f3d' }}>
             <h2 className="font-bold text-white">Pricing</h2>
+            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              Type either the cost OR any channel price — the rest auto-calculate from BSC margins
+              (Nassau 38% · Andros 43% · Online 25% + 10% VAT · Wholesale 15%).
+            </p>
             <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#1a2e5a' }}>
               <label className="text-xs font-bold mb-2 block" style={{ color: '#f5c518' }}>
-                Cost Per Unit → auto-calculate all prices
+                Cost Per Unit
               </label>
-              <div className="flex gap-2">
-                <input type="number" step="0.01" min="0" placeholder="e.g. 6.50"
-                  value={newProduct.cost_per_unit}
-                  onChange={e => setNewProduct(p => ({ ...p, cost_per_unit: e.target.value }))}
-                  className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
-                  style={{ backgroundColor: '#060d1f', border: '1px solid rgba(245,197,24,0.3)' }} />
-                <button
-                  onClick={() => calcFromCost(
-                    newProduct.cost_per_unit,
-                    prices => setNewProduct(p => ({ ...p, prices })),
-                    newProduct.prices
-                  )}
-                  className="px-4 py-2 rounded-xl text-xs font-bold"
-                  style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
-                  Calculate
-                </button>
-              </div>
+              <input type="number" step="0.01" min="0" placeholder="e.g. 6.50"
+                value={newProduct.cost_per_unit}
+                onChange={e => {
+                  const v = e.target.value;
+                  setNewProduct(p => ({ ...p, cost_per_unit: v, prices: pricesFromCost(v, p.prices) }));
+                }}
+                className="w-full rounded-xl px-3 py-2 text-sm text-white outline-none"
+                style={{ backgroundColor: '#060d1f', border: '1px solid rgba(245,197,24,0.3)' }} />
             </div>
             {CHANNELS.map(ch => (
               <div key={ch.key}>
@@ -605,7 +683,13 @@ export default function ProductsPage() {
                 </label>
                 <input type="number" step="0.01" min="0" placeholder="0.00"
                   value={newProduct.prices[ch.key]}
-                  onChange={e => setNewProduct(p => ({ ...p, prices: { ...p.prices, [ch.key]: e.target.value } }))}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setNewProduct(p => {
+                      const { cost, prices } = recalcFromChannelPrice(ch.key, v, p.prices);
+                      return { ...p, cost_per_unit: cost || p.cost_per_unit, prices };
+                    });
+                  }}
                   className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none"
                   style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }} />
               </div>
@@ -747,38 +831,50 @@ export default function ProductsPage() {
 
             <div className="p-5 space-y-5">
 
-              {/* Image */}
+              {/* Image — Files / Gallery / Camera */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
                   Product Photo
                 </h3>
-                <input ref={editImageRef} type="file" accept="image/*" className="hidden"
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    setEditImageFile(f);
-                    setEditImagePreview(URL.createObjectURL(f));
-                  }} />
-                <button onClick={() => editImageRef.current?.click()}
-                  className="w-full overflow-hidden rounded-xl relative"
-                  style={{ minHeight: '120px', backgroundColor: '#1a2e5a' }}>
+                <input ref={editFileRef}    type="file" accept="image/*"                       className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setEditImageFile(f); setEditImagePreview(URL.createObjectURL(f)); } }} />
+                <input ref={editGalleryRef} type="file" accept="image/*"                       className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setEditImageFile(f); setEditImagePreview(URL.createObjectURL(f)); } }} />
+                <input ref={editCameraRef}  type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setEditImageFile(f); setEditImagePreview(URL.createObjectURL(f)); } }} />
+
+                <div className="overflow-hidden rounded-xl"
+                  style={{ backgroundColor: '#1a2e5a' }}>
                   {editImagePreview || selected.image_url ? (
-                    <div className="relative">
-                      <img src={editImagePreview || selected.image_url!} alt={selected.name}
-                        className="w-full object-cover" style={{ maxHeight: '160px' }} />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition"
-                        style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
-                        <span className="text-white font-bold text-sm bg-black/40 px-4 py-2 rounded-xl">📷 Change Photo</span>
-                      </div>
-                    </div>
+                    <img src={editImagePreview || selected.image_url!} alt={selected.name}
+                      className="w-full object-cover" style={{ maxHeight: '200px' }} />
                   ) : (
                     <div className="flex flex-col items-center justify-center gap-2 py-6">
                       <div className="text-3xl">📷</div>
                       <p className="text-sm font-bold text-white">Add Photo</p>
-                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Camera · Gallery · Files</p>
+                      <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Pick a source below</p>
                     </div>
                   )}
-                </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <button type="button" onClick={() => editCameraRef.current?.click()}
+                    className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-bold"
+                    style={{ backgroundColor: '#1a2e5a', color: '#f5c518', border: '1px solid rgba(245,197,24,0.25)' }}>
+                    <span className="text-lg">📸</span><span>Camera</span>
+                  </button>
+                  <button type="button" onClick={() => editGalleryRef.current?.click()}
+                    className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-bold"
+                    style={{ backgroundColor: '#1a2e5a', color: '#f5c518', border: '1px solid rgba(245,197,24,0.25)' }}>
+                    <span className="text-lg">🖼️</span><span>Gallery</span>
+                  </button>
+                  <button type="button" onClick={() => editFileRef.current?.click()}
+                    className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-bold"
+                    style={{ backgroundColor: '#1a2e5a', color: '#f5c518', border: '1px solid rgba(245,197,24,0.25)' }}>
+                    <span className="text-lg">📁</span><span>Files</span>
+                  </button>
+                </div>
+
                 {editImagePreview && (
                   <p className="text-xs mt-1.5" style={{ color: '#4ade80' }}>✓ New photo selected — save to apply</p>
                 )}
@@ -821,25 +917,23 @@ export default function ProductsPage() {
                 <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#f5c518' }}>
                   Prices (BSD $)
                 </h3>
+                <p className="text-[11px] mb-2" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                  Type cost OR any channel price — the rest auto-fill from BSC margins.
+                </p>
                 <div className="rounded-xl px-4 py-3 mb-3" style={{ backgroundColor: '#1a2e5a' }}>
-                  <label className="text-xs font-bold mb-2 block" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                    Recalculate from cost
+                  <label className="text-xs font-bold mb-2 block" style={{ color: '#f5c518' }}>
+                    Cost Per Unit
                   </label>
-                  <div className="flex gap-2">
-                    <input id="cost-input-edit" type="number" step="0.01" min="0"
-                      placeholder="Cost per unit"
-                      className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
-                      style={{ backgroundColor: '#060d1f', border: '1px solid rgba(245,197,24,0.3)' }} />
-                    <button
-                      onClick={() => {
-                        const el = document.getElementById('cost-input-edit') as HTMLInputElement;
-                        calcFromCost(el?.value ?? '', setEditPrices, editPrices);
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs font-bold"
-                      style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
-                      Calculate
-                    </button>
-                  </div>
+                  <input type="number" step="0.01" min="0"
+                    placeholder="Cost per unit"
+                    value={editCost}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setEditCost(v);
+                      setEditPrices(prev => pricesFromCost(v, prev));
+                    }}
+                    className="w-full rounded-xl px-3 py-2 text-sm text-white outline-none"
+                    style={{ backgroundColor: '#060d1f', border: '1px solid rgba(245,197,24,0.3)' }} />
                 </div>
                 <div className="space-y-2">
                   {CHANNELS.map(ch => (
@@ -850,7 +944,12 @@ export default function ProductsPage() {
                       </label>
                       <input type="number" step="0.01" min="0" placeholder="0.00"
                         value={editPrices[ch.key]}
-                        onChange={e => setEditPrices(prev => ({ ...prev, [ch.key]: e.target.value }))}
+                        onChange={e => {
+                          const v = e.target.value;
+                          const { cost, prices } = recalcFromChannelPrice(ch.key, v, editPrices);
+                          setEditPrices(prices);
+                          if (cost) setEditCost(cost);
+                        }}
                         className="flex-1 rounded-xl px-3 py-2 text-sm text-white outline-none"
                         style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }} />
                     </div>
