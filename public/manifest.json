@@ -1,0 +1,24 @@
+{
+  "name": "BSC Marketplace",
+  "short_name": "BSC",
+  "description": "Bahamian Seafood Connection — fresh seafood, local food, vehicles, and bill payments delivered across the Bahamas.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#060d1f",
+  "theme_color": "#060d1f",
+  "lang": "en-BS",
+  "scope": "/",
+  "categories": ["shopping", "food", "business"],
+  "icons": [
+    { "src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Marketplace", "short_name": "Shop", "url": "/market",   "description": "Browse fresh BSC products" },
+    { "name": "POS",         "short_name": "POS",  "url": "/pos",      "description": "Open the point-of-sale" },
+    { "name": "Dashboard",   "short_name": "Ctrl", "url": "/dashboard","description": "Founder control panel" }
+  ]
+}

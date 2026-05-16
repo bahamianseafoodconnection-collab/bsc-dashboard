@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import AppShell from './AppShell';
+import RegisterSW from './RegisterSW';
 import { siteUrl } from '@/lib/site-url';
 import './globals.css';
 
@@ -12,7 +13,17 @@ export const metadata: Metadata = {
   publisher: 'BSC Marketplace',
   keywords: ['Bahamas seafood', 'Nassau food delivery', 'Bahamian marketplace', 'BSC', 'Andros delivery'],
   manifest: '/manifest.json',
-  icons: { icon: '/favicon.ico', apple: '/apple-touch-icon.png' },
+  applicationName: 'BSC Marketplace',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'BSC',
+  },
+  icons: {
+    icon:    [{ url: '/favicon.png', type: 'image/png' }, { url: '/icon-192.svg', type: 'image/svg+xml' }],
+    apple:   [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    shortcut: ['/favicon.png'],
+  },
   openGraph: {
     title: 'BSC Marketplace — Fresh. Local. Bahamian.',
     description: 'Fresh seafood, local food, vehicles, and bill payments across the Bahamas.',
@@ -86,6 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         `}</style>
       </head>
       <body>
+        <RegisterSW />
         <AppShell>{children}</AppShell>
       </body>
     </html>
