@@ -239,14 +239,12 @@ WHERE NOT EXISTS (
   WHERE pc.product_id = p.id AND pc.is_current = TRUE
 );
 
--- Refresh cost on any existing cost row whose value drifted from source
-UPDATE product_costs pc
-SET cost_per_unit = s.cost
-FROM bwa_seed s
-JOIN products  p  ON p.sku = s.sku
-WHERE pc.product_id = p.id
-  AND pc.is_current = TRUE
-  AND pc.cost_per_unit IS DISTINCT FROM s.cost;
+-- NOTE: product_costs has a "no UPDATE" trigger (prevent_cost_modification)
+-- enforcing cost-history immutability. We cannot refresh existing cost rows
+-- in place — they would need to be superseded (new current row + old marked
+-- not-current). Skipping the refresh here keeps this migration purely
+-- additive and safe to re-run. If a stale cost value needs updating, do it
+-- via the products page Edit modal (which fans out to a proper supersede).
 
 -- ──────────────────────────────────────────────────────────────────
 -- 7. Insert online_market pricing rows for products that don't yet have one
