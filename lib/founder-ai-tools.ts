@@ -25,6 +25,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { healthCheck } from './health-check';
+import { buildBlastHtml, sendBatch } from './email';
 
 const REPO_ROOT = process.cwd();
 const ALLOWED_READ_PREFIXES = [
@@ -143,6 +144,22 @@ export const TOOLS = [
       required: ['sku'],
     },
   },
+  {
+    name: 'send_email_blast',
+    description:
+      'Send an email blast to BSC customers who opted in. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (recipient count + the rendered HTML); the founder must explicitly say YES; only then call again with confirmed=true. The blast body is wrapped in the standard BSC layout with a CAN-SPAM-compliant footer + one-click unsubscribe link. Filter the audience by `audience` — recommend `all_opted_in` unless the founder is targeting a specific cohort.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        subject:    { type: 'string', description: 'Email subject line. Keep under 60 chars for inbox preview.' },
+        headline:   { type: 'string', description: 'Big bold headline at the top of the email. e.g. "This Week\'s Catch."' },
+        body_html:  { type: 'string', description: 'HTML body (already in <p>/<a> tags). Will be wrapped in the BSC layout. Keep it short — 2-4 paragraphs max.' },
+        audience:   { type: 'string', description: 'Which opted-in customers to target. Options: "all_opted_in" (everyone with consent=true), "nassau_pos_opted_in" (consent_source=nassau_pos), "newsletter_opted_in" (consent_source=newsletter), "signup_opted_in" (consent_source=signup). Default: all_opted_in.' },
+        confirmed:  { type: 'boolean', description: 'MUST be true to actually send. False (or omitted) returns a preview only (recipient count + rendered HTML for first customer).' },
+      },
+      required: ['subject', 'headline', 'body_html'],
+    },
+  },
 ] as const;
 
 interface ReadFileInput { path?: unknown }
@@ -177,6 +194,13 @@ interface SetProductChannelsInput {
   sell_andros?: unknown;
   sell_online?: unknown;
   sell_wholesale?: unknown;
+  confirmed?: unknown;
+}
+interface SendEmailBlastInput {
+  subject?:   unknown;
+  headline?:  unknown;
+  body_html?: unknown;
+  audience?:  unknown;
   confirmed?: unknown;
 }
 
@@ -250,6 +274,7 @@ export async function dispatchTool(
       case 'health_check':         return JSON.stringify(await healthCheck(admin));
       case 'add_product':          return await addProductTool(input as AddProductInput, admin, callerId);
       case 'set_product_channels': return await setProductChannelsTool(input as SetProductChannelsInput, admin, callerId);
+      case 'send_email_blast':     return await sendEmailBlastTool(input as SendEmailBlastInput, admin, callerId);
       default:                     return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
   } catch (e) {
@@ -590,5 +615,97 @@ async function setProductChannelsTool(
 
   const result = { ok: true, sku, name: existing.name, applied: patch };
   await logWrite(admin, 'set_product_channels', callerId, input, result, 'success', null);
+  return JSON.stringify(result);
+}
+
+// ── send_email_blast ──────────────────────────────────────────────────
+//
+// Two-step write tool. confirmed=false returns a preview (recipient count
+// + rendered HTML for the first recipient). confirmed=true fans out via
+// Resend in batches of 100. Founder + co_founder only.
+async function sendEmailBlastTool(
+  input: SendEmailBlastInput,
+  admin: SupabaseClient,
+  callerId: string | null,
+): Promise<string> {
+  const perms = await checkWritePerms(admin, callerId);
+  if (!perms.ok) {
+    await logWrite(admin, 'send_email_blast', callerId, input, null, 'denied', perms.error ?? 'denied');
+    return JSON.stringify({ error: perms.error });
+  }
+
+  const subject   = typeof input.subject   === 'string' ? input.subject.trim()   : '';
+  const headline  = typeof input.headline  === 'string' ? input.headline.trim()  : '';
+  const body_html = typeof input.body_html === 'string' ? input.body_html        : '';
+  const audience  = typeof input.audience  === 'string' ? input.audience         : 'all_opted_in';
+  const confirmed = input.confirmed === true;
+
+  if (!subject)   return JSON.stringify({ error: 'subject is required' });
+  if (!headline)  return JSON.stringify({ error: 'headline is required' });
+  if (!body_html) return JSON.stringify({ error: 'body_html is required' });
+
+  // Resolve audience filter into a Supabase query.
+  let q = admin.from('customers')
+    .select('id, full_name, email')
+    .eq('email_marketing_consent', true)
+    .not('email', 'is', null);
+
+  if (audience === 'nassau_pos_opted_in') q = q.eq('email_consent_source', 'nassau_pos');
+  else if (audience === 'newsletter_opted_in') q = q.eq('email_consent_source', 'newsletter');
+  else if (audience === 'signup_opted_in')     q = q.eq('email_consent_source', 'signup');
+  // 'all_opted_in' (default) — no extra filter
+
+  const { data: recipients, error: qErr } = await q;
+  if (qErr) {
+    await logWrite(admin, 'send_email_blast', callerId, input, null, 'error', qErr.message);
+    return JSON.stringify({ error: 'customer query failed: ' + qErr.message });
+  }
+  const list = (recipients ?? []) as Array<{ id: string; full_name: string | null; email: string | null }>;
+  const valid = list.filter((c): c is { id: string; full_name: string | null; email: string } => !!c.email);
+
+  // PREVIEW
+  if (!confirmed) {
+    const sample = valid[0]
+      ? buildBlastHtml({ headline, body_html, customer_id: valid[0].id })
+      : buildBlastHtml({ headline, body_html });
+    const preview = {
+      preview: true,
+      audience,
+      recipient_count: valid.length,
+      sample_recipient: valid[0]?.email ?? null,
+      sample_subject:  subject,
+      sample_rendered_html: sample.slice(0, 2000) + (sample.length > 2000 ? '… [truncated]' : ''),
+      note: 'No emails sent. Confirm by calling again with confirmed=true to actually send.',
+    };
+    return JSON.stringify(preview);
+  }
+
+  // COMMIT — send in 100-recipient batches
+  if (valid.length === 0) {
+    await logWrite(admin, 'send_email_blast', callerId, input, { sent: 0 }, 'success', null);
+    return JSON.stringify({ ok: true, sent: 0, note: 'No opted-in customers matched this audience.' });
+  }
+
+  const errors: string[] = [];
+  let sent = 0;
+  const CHUNK = 100;
+  for (let i = 0; i < valid.length; i += CHUNK) {
+    const slice = valid.slice(i, i + CHUNK);
+    const emails = slice.map(c => ({
+      to:      c.email,
+      subject,
+      html:    buildBlastHtml({ headline, body_html, customer_id: c.id }),
+    }));
+    const { ids, error } = await sendBatch(emails);
+    if (error) {
+      errors.push(`batch ${i / CHUNK + 1}: ${error}`);
+    } else if (ids) {
+      sent += ids.length;
+    }
+  }
+
+  const status = errors.length === 0 ? 'success' : 'error';
+  const result = { ok: errors.length === 0, sent, attempted: valid.length, errors };
+  await logWrite(admin, 'send_email_blast', callerId, input, result, status, errors.join('; ') || null);
   return JSON.stringify(result);
 }
