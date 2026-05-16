@@ -51,6 +51,8 @@ interface Customer {
   id: string
   full_name: string
   phone: string
+  email?: string | null
+  email_marketing_consent?: boolean | null
   total_orders: number
   total_spent: number
 }
@@ -98,6 +100,8 @@ export default function POSPage() {
   // Customer state
   const [customerPhone, setCustomerPhone]       = useState('')
   const [customerName, setCustomerName]         = useState('')
+  const [customerEmail, setCustomerEmail]       = useState('')
+  const [emailConsent, setEmailConsent]         = useState(false)
   const [foundCustomer, setFoundCustomer]       = useState<Customer | null>(null)
   const [customerLookingUp, setCustomerLookingUp] = useState(false)
   const [customerStatus, setCustomerStatus]     = useState<'idle' | 'found' | 'new'>('idle')
@@ -173,19 +177,23 @@ export default function POSPage() {
     setFoundCustomer(null)
     setCustomerStatus('idle')
     setCustomerName('')
+    setCustomerEmail('')
+    setEmailConsent(false)
     if (phoneSearchTimeout.current) clearTimeout(phoneSearchTimeout.current)
     if (val.length < 7) return
     phoneSearchTimeout.current = setTimeout(async () => {
       setCustomerLookingUp(true)
       const { data } = await supabase
         .from('customers')
-        .select('id, full_name, phone, total_orders, total_spent')
+        .select('id, full_name, phone, email, email_marketing_consent, total_orders, total_spent')
         .eq('phone', val.trim())
         .maybeSingle()
       setCustomerLookingUp(false)
       if (data) {
         setFoundCustomer(data)
         setCustomerName(data.full_name)
+        setCustomerEmail(data.email ?? '')
+        setEmailConsent(Boolean(data.email_marketing_consent))
         setCustomerStatus('found')
       } else {
         setCustomerStatus('new')
@@ -196,6 +204,8 @@ export default function POSPage() {
   function resetCheckout() {
     setCustomerPhone('')
     setCustomerName('')
+    setCustomerEmail('')
+    setEmailConsent(false)
     setFoundCustomer(null)
     setCustomerStatus('idle')
     setCardRef('')
@@ -272,18 +282,34 @@ export default function POSPage() {
       let customerId: string | null = null
       const phoneClean = customerPhone.trim()
       const nameClean  = customerName.trim()
+      const emailClean = customerEmail.trim().toLowerCase()
+      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean) ? emailClean : ''
 
       if (phoneClean && nameClean) {
         if (foundCustomer) {
-          await supabase.from('customers').update({
+          // Update returning customer; only flip consent ON (never silently
+          // OFF — the cashier could have just left the checkbox unchecked).
+          const updates: Record<string, unknown> = {
             last_seen_at: new Date().toISOString(),
             total_orders: foundCustomer.total_orders + 1,
             total_spent:  Number(foundCustomer.total_spent) + total,
-          }).eq('id', foundCustomer.id)
+          }
+          if (validEmail) updates.email = validEmail
+          if (emailConsent && validEmail && !foundCustomer.email_marketing_consent) {
+            updates.email_marketing_consent = true
+            updates.email_consent_at        = new Date().toISOString()
+            updates.email_consent_source    = 'nassau_pos'
+          }
+          await supabase.from('customers').update(updates).eq('id', foundCustomer.id)
           customerId = foundCustomer.id
         } else {
+          const consentNow = emailConsent && !!validEmail
           const { data: newCust } = await supabase.from('customers').insert({
             full_name: nameClean, phone: phoneClean,
+            email: validEmail || null,
+            email_marketing_consent: consentNow,
+            email_consent_at:     consentNow ? new Date().toISOString() : null,
+            email_consent_source: consentNow ? 'nassau_pos' : null,
             total_orders: 1, total_spent: total,
             created_by: '7b62672c-9259-4c1b-98d4-3b78369a52ab',
           }).select('id').single()
@@ -602,6 +628,24 @@ export default function POSPage() {
                     onChange={e => setCustomerName(e.target.value)}
                     className="w-full bg-gray-800 text-white rounded-xl px-4 py-2.5 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
                 </>
+              )}
+
+              {(customerStatus === 'new' || customerStatus === 'found') && (
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Email (optional)</label>
+                  <input type="email" placeholder="customer@example.com" value={customerEmail}
+                    onChange={e => setCustomerEmail(e.target.value)}
+                    className="w-full bg-gray-800 text-white rounded-xl px-4 py-2.5 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                  <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                    <input type="checkbox" checked={emailConsent}
+                      onChange={e => setEmailConsent(e.target.checked)}
+                      disabled={!customerEmail.trim()}
+                      className="mt-0.5 accent-yellow-400" />
+                    <span className="text-xs text-gray-300 leading-snug">
+                      Opt in to BSC promotions, weekly catch reports, and special offers via email.
+                    </span>
+                  </label>
+                </div>
               )}
 
               {customerStatus === 'idle' && !customerLookingUp && (
