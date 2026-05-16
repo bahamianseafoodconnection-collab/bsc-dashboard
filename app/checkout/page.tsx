@@ -395,11 +395,18 @@ export default function CheckoutPage() {
       <header className="bg-navy shadow-md">
         <div className="mx-auto flex h-14 max-w-screen-md items-center justify-between px-4 sm:h-16 sm:px-6">
           <Link href="/" className="flex items-center gap-3">
-            <img
-              src={`${STORAGE_BASE}/logo.jpg`}
-              alt="BSC"
-              className="h-9 w-9 rounded-full border-2 border-gold object-cover sm:h-10 sm:w-10"
-            />
+            {/* Bahamian flag — inline SVG so it renders identically on every browser */}
+            <span
+              aria-label="Bahamas"
+              role="img"
+              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-gold bg-white shadow-sm sm:h-10 sm:w-10"
+            >
+              <svg viewBox="0 0 60 30" className="h-6 w-6 sm:h-7 sm:w-7" xmlns="http://www.w3.org/2000/svg">
+                <rect width="60" height="30" fill="#00778B" />
+                <rect y="10" width="60" height="10" fill="#FFC72C" />
+                <polygon points="0,0 18,15 0,30" fill="#000000" />
+              </svg>
+            </span>
             <div>
               <div className="text-sm font-extrabold tracking-wide text-gold sm:text-base">
                 BSC Checkout
