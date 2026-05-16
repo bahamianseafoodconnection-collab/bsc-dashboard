@@ -196,9 +196,16 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !serviceKey) {
+      return NextResponse.json({
+        error: 'Supabase env not configured (need NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)',
+        reply: 'AI is not configured (missing Supabase server key). Please contact Dedrick.',
+      }, { status: 500 });
+    }
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      serviceKey,
     );
 
     const body = await req.json();
@@ -292,9 +299,16 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !serviceKey) {
+      return NextResponse.json({
+        error: 'Supabase env not configured (need NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)',
+        reply: 'AI is not configured (missing Supabase server key). Please contact Dedrick.',
+      }, { status: 500 });
+    }
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      serviceKey,
     );
 
     const { searchParams } = new URL(req.url);
