@@ -33,6 +33,7 @@ interface InventoryRow {
 const LOCATIONS = [
   { value: 'bsc_marketplace_nassau', label: 'Nassau — BSC Marketplace' },
   { value: 'cetas_andros',           label: 'Andros — Ceta\'s Store' },
+  { value: 'spiny_tail_processing',  label: 'Spiny Tail — Processing' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
