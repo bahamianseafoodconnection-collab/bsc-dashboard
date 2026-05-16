@@ -36,7 +36,14 @@ const ALLOWED_READ_PREFIXES = [
 ];
 const MAX_FILE_CHARS = 50_000;
 
-const WRITE_ROLES = new Set(['founder', 'co_founder']);
+// Roles that can call write tools (add_product, set_product_channels,
+// send_email_blast, create_flyer, set_flyer_active).
+//
+// control_admin is the actual role on Dedrick's + Jaquel's profiles in
+// production (the AppShell STAFF_ROLES allowlist requires it for dashboard
+// access). 'founder' / 'co_founder' kept for forward-compat if the role
+// schema ever splits.
+const WRITE_ROLES = new Set(['founder', 'co_founder', 'control_admin']);
 const VALID_CHANNELS = new Set(['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale', 'wholesale']);
 
 export const TOOLS = [

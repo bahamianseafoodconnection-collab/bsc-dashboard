@@ -12,8 +12,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 
-const LOCK_ROLES      = new Set(['founder', 'co_founder']);
-const VIEW_LOCK_ROLES = new Set(['founder', 'co_founder', 'manager']);
+// control_admin is the de-facto top-tier role in production (the AppShell
+// STAFF_ROLES allowlist requires it for dashboard access). founder /
+// co_founder kept for forward-compat with any role-schema split.
+const LOCK_ROLES      = new Set(['founder', 'co_founder', 'control_admin']);
+const VIEW_LOCK_ROLES = new Set(['founder', 'co_founder', 'control_admin', 'manager']);
 
 let cachedRole: string | null | undefined = undefined; // undefined = unfetched
 let inflight: Promise<string | null> | null = null;
