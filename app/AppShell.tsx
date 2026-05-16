@@ -149,7 +149,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <PageErrorBoundary>
       <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', display: 'flex', flexDirection: 'column' }}>
-        <main style={{ flex: 1, paddingBottom: (hideNav || roleState === 'loading') ? 0 : 80 }}>
+        <main style={{ flex: 1, paddingBottom: (hideNav || roleState === 'loading') ? 0 : 'calc(64px + env(safe-area-inset-bottom))' }}>
           {children}
         </main>
 
@@ -159,16 +159,44 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             bottom: 0,
             left: 0,
             right: 0,
-            background: '#070e1d',
-            borderTop: '1px solid rgba(245,197,24,0.15)',
+            zIndex: 50,
+            background: 'rgba(7,14,29,0.92)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            borderTop: '1px solid rgba(245,197,24,0.18)',
+            paddingBottom: 'env(safe-area-inset-bottom)',
+            boxShadow: '0 -2px 12px rgba(0,0,0,0.25)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-              {navItems.map(item => (
-                <button key={item.href} onClick={() => router.push(item.href)}>
-                  {item.icon}
-                  <div>{item.label}</div>
-                </button>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
+              {navItems.map(item => {
+                const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'));
+                return (
+                  <button key={item.href} onClick={() => router.push(item.href)}
+                    aria-label={item.label}
+                    aria-current={active ? 'page' : undefined}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 2,
+                      padding: '8px 4px 10px',
+                      minHeight: 60,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: active ? '#f5c518' : 'rgba(255,255,255,0.62)',
+                      transition: 'color 120ms ease',
+                      position: 'relative',
+                    }}>
+                    {active && <span style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, borderRadius: '0 0 4px 4px', background: '#f5c518' }} />}
+                    <span style={{ fontSize: 22, lineHeight: 1, filter: active ? 'none' : 'grayscale(0.25)' }}>{item.icon}</span>
+                    <span style={{ fontSize: 10, fontWeight: active ? 700 : 500, letterSpacing: 0.2, lineHeight: 1.1, marginTop: 2 }}>
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </nav>
         )}
