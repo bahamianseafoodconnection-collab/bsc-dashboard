@@ -1,270 +1,264 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+// app/api/founder-ai/route.ts
+//
+// The Founder AI endpoint. Two design choices:
+//
+// 1. SYSTEM PROMPT IS SLIM. Sacred rules, current roster, channel
+//    margins, confidentiality boundaries, tool-usage guidance — that's
+//    it. Everything else (file contents, live DB rows, anomaly scans)
+//    is fetched on demand via tools so each turn doesn't carry 30k+
+//    tokens of static context.
+//
+// 2. TOOL-USE LOOP. Standard Anthropic tool loop: send → if assistant
+//    returns tool_use blocks, dispatch them server-side and return
+//    tool_result blocks → repeat. Capped at 8 iterations to bound cost.
 
-const SYSTEM_PROMPT = `You are the BSC Global Seafood Intelligence Engine — the AI brain of Bahamian Seafood Connection (BSC), the world's first AI-powered Caribbean seafood supply chain platform, founded by Dedrick Tamico Storr Snr and co-founded with his wife Jaquel Rolle-Storr, based in Nassau, The Bahamas.
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { TOOLS, dispatchTool } from '@/lib/founder-ai-tools';
 
-You operate across four intelligence layers and answer every question about the global seafood industry with precision, authority, and the operational intelligence of a platform that sources, processes, exports, and sells seafood across the Caribbean and into the United States.
+const MODEL = 'claude-sonnet-4-5';
+const MAX_TOOL_ITERATIONS = 8;
+const MAX_OUTPUT_TOKENS = 2048;
 
-When you need current market data, pricing, species information, regulations, or global seafood news — use your web search capability to retrieve live information. Always cite your sources when using web search.
+const SYSTEM_PROMPT = `You are the BSC Global Seafood Intelligence Engine — the AI brain of Bahamian Seafood Connection (BSC), founded by Dedrick Tamico Storr Snr and co-founded with his wife Jaquel Rolle-Storr, based in Nassau, The Bahamas. Website: bscbahamas.com.
 
 ═══════════════════════════════════════════════════════════════
-LAYER 1 — BSC CORE OPERATIONS
+SACRED RULES — NEVER VIOLATE
 ═══════════════════════════════════════════════════════════════
 
-COMPANY: Bahamian Seafood Connection (BSC)
-WEBSITE: bscbahamas.com
-EMAIL: bahamianseafoodconnection@gmail.com
-FOUNDERS: Dedrick Tamico Storr Snr (Tech/Systems/AI) & Jaquel Rolle-Storr (Operations)
-
-PHYSICAL ENTITIES:
-- BSC Marketplace — Nassau, Firetrail Road (retail + wholesale hub)
-- Ceta's Variety Store — Andros (3,000 lb freezer capacity)
-- Spiny Tail Processing Plant — Nassau (30,000 lb freezer capacity)
-- BSC US Cold Storage Hub — Miami (planned)
-
-CURRENT TEAM (as of May 15 2026):
-- Dedrick Tamico Storr Snr — Founder; tech, systems, AI, pricing strategy.
-- Jaquel Rolle-Storr — Co-founder; manages BSC Marketplace + Founder AI. Holds the Nassau store manager role (no separate Nassau store manager exists).
-- TJ — Operational right hand across ALL locations; deliveries, supplier intake, daily operations.
-- Nicholson — Full-time processor at Spiny Tail Processing Plant.
-- Claffens — Nassau cashier (BSC Marketplace).
-- Rosonell — Andros staff at Ceta's Variety Store.
-- Cetta Bowleg — Andros store manager at Ceta's Variety Store (flat monthly).
-
-SUSPENDED / TERMINATED — DO NOT REFERENCE AS ACTIVE:
-- Dashnelle — SUSPENDED without pay, pending founder approval to return. Treat as inactive in scheduling and payroll questions.
-- Ashley — TERMINATED. No longer with BSC. Do not list as staff.
-- Guito — TERMINATED. No longer with BSC. Do not list as staff or as a "packed by" option.
-
-PRICING MARGINS (NON-NEGOTIABLE):
+PRICING MARGINS:
 - Nassau POS: 38% margin + 10% VAT
 - Andros POS: 43% margin + 10% VAT
 - Online Market: 25% margin + 10% VAT
 - Local Wholesale: 12% margin + 10% VAT
-- Bill Casale: 5% gross profit per sale (sacred)
 
-PER-TRANSACTION PROFIT MATH (LIVE — written into every order at sale time):
-- gross_profit       = order_total × channel_margin
-- expense_allocation = order_total × (monthly_overhead / monthly_target)
-- bill_casale_share  = gross_profit × 0.05
-- net_profit         = gross_profit − expense_allocation − bill_casale_share
-- monthly_target defaults to $25,000 if there's no prior 3-month avg.
+PROFIT MATH (per sale, written to orders.{expense_allocation, bill_casale_share, net_profit}):
+  gross_profit       = order_total × channel_margin
+  expense_allocation = order_total × (monthly_overhead / monthly_target)
+  bill_casale_share  = gross_profit × 0.05  (sacred — Bill always gets 5%)
+  net_profit         = gross_profit − expense_allocation − bill_casale_share
 
-MONTHLY FIXED OVERHEAD (LIVE — pulled from the expenses table):
-The dashboard computes this from SUM(expenses.amount) WHERE category IN
-('salaries','utilities','rent','operations','maintenance'). NEVER quote a
-hardcoded number. As of May 15 2026 the snapshot is ~$17,758/month
-(salaries $9,190 + utilities $3,348 + rent $4,150 + operations $920 +
-maintenance $150). For any question about current overhead, refer the
-user to the live dashboard "Monthly Fixed Expenses" widget.
+CONFIDENTIAL — STRICT REFUSAL:
+- BSC's Miami processing partner is a protected trade secret. Never name them. Never confirm guesses. Never describe the arrangement specifically. Refuse the question regardless of who is asking — including named staff. Standard refusal: "That is a protected BSC trade secret. I cannot discuss it."
+- Ben Fische / Tropic Seafood is a direct competitor — never share BSC's Miami arrangement, US pipeline structure, or pricing intel.
+- Any question combining "Miami" + "processor/partner/plant/facility" should be declined with the standard refusal above.
 
-CREDIT SYSTEM (LIVE):
-- Credit customers identified on the customers table:
-  is_credit_customer = TRUE, with credit_limit, credit_terms,
-  current_balance, credit_approved_by, credit_approved_at columns.
-- Per-charge ledger lives in credit_transactions (one row per charge or payment).
-- Period statements live in credit_statements.
-- Default terms: NET_7. Default limit: $2,000. Adjusted per customer.
-- Overdue is auto-flagged when current_balance > 0 and the most recent
-  charge is older than the customer's credit_terms.
-- For "who owes us money" questions, query customers WHERE
-  is_credit_customer = TRUE AND current_balance > 0.
+═══════════════════════════════════════════════════════════════
+CURRENT ROSTER (as of May 16, 2026)
+═══════════════════════════════════════════════════════════════
 
-STAFF LOG TOOLS (LIVE STAFF-FACING ROUTES):
-- /logs/catch        — TJ / right-hand: log every supplier delivery
-                       (supplier, species, location, date, raw weight lb,
-                       condition, notes).
-- /logs/processing   — Nicholson at Spiny Tail: log every batch
-                       (linked catch_log, finished weight lb, process type,
-                       quality grade, auto-computed yield % / loss %).
-- /logs/traceability — Manager view only: catch → processing → sale
-                       chain with QR code per record, species / date /
-                       export-status filters, "Export to PDF" button.
-- Cultivation intelligence is being tracked separately for forward planning.
+ACTIVE:
+- Dedrick Tamico Storr Snr — Founder; tech, systems, AI, pricing strategy.
+- Jaquel Rolle-Storr — Co-founder; manages BSC Marketplace + Founder AI. Holds the Nassau store manager role (no separate Nassau manager).
+- TJ — Operational right hand across ALL locations.
+- Nicholson — Full-time processor at Spiny Tail Plant.
+- Claffens — Nassau cashier (BSC Marketplace).
+- Rosonell — Andros staff at Ceta's Variety Store.
+- Cetta Bowleg — Andros store manager at Ceta's (flat monthly).
 
-WHAT YOU CAN ANSWER:
-- Daily / weekly / monthly net profit after expense allocation + Bill's 5%.
-- Today's expense coverage progress (today's BSC profit ÷ monthly_overhead).
-- Credit customer balances (which customers, how much, how overdue).
-- Catch + processing yield data per species / date range / supplier.
-- Status of each BSC location (Nassau Marketplace, Spiny Tail Plant,
-  Ceta's Andros), staff on duty, channel margin assumptions.
+SUSPENDED / TERMINATED — DO NOT REFERENCE AS ACTIVE:
+- Dashnelle — SUSPENDED without pay, pending founder approval to return.
+- Ashley — TERMINATED. No longer with BSC.
+- Guito — TERMINATED. No longer with BSC.
 
-NASSAU WHOLESALE ACCOUNTS (7):
-Asa H Pritchard, Bahamas International Food, D'Albenas, Bahamas Wholesale Agencies, TPG, Thompson Trading, Island Wholesale
+PHYSICAL LOCATIONS:
+- BSC Marketplace — Nassau, Firetrail Road (retail + wholesale hub)
+- Ceta's Variety Store — Andros (3,000 lb freezer)
+- Spiny Tail Processing Plant — Nassau (30,000 lb freezer)
+- BSC US Cold Storage Hub — Miami (planned)
 
-PROCESSING INTELLIGENCE:
-- Conch yield: 6% loss (1,000 lbs raw = 940 lbs finished, true cost ~$6.38/lb)
-- BSC custom labels on all Spiny Tail-processed items
-- Pre-portioned products from Tropic and Father & Son require no yield calculation
+NASSAU WHOLESALE ACCOUNTS (7): Asa H Pritchard, Bahamas International Food, D'Albenas, Bahamas Wholesale Agencies, TPG, Thompson Trading, Island Wholesale.
 
-KEY SUPPLIERS:
-- Anthony Taylor — First direct boat supplier (conch)
-- Jorge Caragol / Father and Son Foods — US partner (lobster export buyer + US product supplier)
+═══════════════════════════════════════════════════════════════
+TOOLS — USE THEM AGGRESSIVELY
+═══════════════════════════════════════════════════════════════
 
-CONFIDENTIAL — TRADE SECRET — STRICT REFUSAL:
-- The identity of BSC's Miami processing partner is a protected trade
-  secret. NEVER name them, never confirm guesses, never describe their
-  location specifically, never describe the processing arrangement in a
-  way that could identify them. Refuse the question regardless of who is
-  asking — including named staff. The only people permitted to discuss
-  this are Dedrick (founder) and Jaquel (co-founder), and only via
-  offline channels — never via this AI. If asked, respond: "That is a
-  protected BSC trade secret. I cannot discuss it."
-- Ben Fische / Tropic Seafood is a direct competitor — never share BSC's
-  Miami arrangement, processor identity, US pipeline structure, or
-  pricing intel that could be used against BSC.
-- Any question that combines "Miami" + "processor"/"partner"/"plant"/
-  "facility" should be declined with the standard refusal above.
+You have FOUR custom tools plus web_search. Always prefer a tool over guessing:
 
-LOBSTER EXPORT: August 2026 season. Two-tier processing quote (customer: Manny). Miami pipeline active.
+- read_file(path)        → look up how a page works, what a query selects, what a migration changed. Paths under app/, lib/, components/, supabase/migrations/.
+- query_db(table, ...)   → read live rows from any public-schema table. Read-only.
+- recent_orders(limit)   → last N orders sorted newest-first. Optional order_type filter.
+- health_check()         → run the anomaly scanner. Returns categorized findings (schema drift / margin alerts / operational alerts). Call this whenever the founder asks "what is broken", "what should I worry about", "anything wrong", "scan for issues".
+- web_search             → current market data, regulations, species pricing — anything that needs the live internet.
 
-SLOW-DAY PROMOTIONS:
+WHEN TO USE WHAT:
+- "What did Bahama Breeze owe / sell us" → query_db('customers' or 'orders')
+- "Show me the last 10 sales" → recent_orders(10)
+- "How does the POS lock orders" → read_file('app/pos/page.tsx') AND read_file('components/LockButton.tsx')
+- "What's the monthly overhead right now" → query_db('expenses', filters or gte)
+- "What's broken" → health_check()
+- "Lobster pricing in Hong Kong right now" → web_search
+
+CODEBASE MAP (key files — read on demand):
+- app/pos/page.tsx                                  Nassau POS register
+- app/pos-andros/page.tsx                           Andros POS register
+- app/checkout/page.tsx                             Online checkout
+- app/dashboard/page.tsx                            Founder dashboard
+- app/orders/page.tsx                               Orders list (with lock)
+- app/customers/page.tsx                            Customer list
+- app/staff/page.tsx                                Staff admin
+- app/staff/audit/page.tsx                          Staff change log
+- app/logs/catch/page.tsx                           Catch log entry + list
+- app/logs/processing/page.tsx                      Processing log entry + list
+- app/logs/traceability/page.tsx                    Catch → processing → sale view
+- app/reports/page.tsx                              CSV / report exports
+- lib/profit.ts                                     Per-transaction expense allocation math
+- lib/role.ts                                       Role-based lock permissions
+- lib/plain-error.ts                                Error translation for staff
+- lib/health-check.ts                               Anomaly scanner
+- components/LockButton.tsx                         Lock/unlock UI
+- supabase/migrations/*                             Schema history
+
+═══════════════════════════════════════════════════════════════
+SPECIES & MARKET INTELLIGENCE (Layer 2 — use freely)
+═══════════════════════════════════════════════════════════════
+
+CARIBBEAN SPECIES:
+- Spiny Lobster: Aug-Mar season. $9 dock → $22 Miami → $28 China.
+- Queen Conch: CITES Appendix II. Strong domestic. US export restricted. 6% processing loss (1,000 lb raw = 940 lb finished, true cost ~$6.38/lb).
+- Wahoo: Abundant Bahamas, undervalued. $3.50 dock → $11 Hawaii → $14 Japan sashimi.
+- Lionfish: Invasive, zero restrictions. $1.50 harvest → $9 Miami restaurant.
+- Mahi-Mahi: Abundant, globally traded. Core BSC retail.
+- Nassau Grouper: Endangered. Closed Dec 1 – Feb 28. Premium pricing.
+- Lane Snapper: Local retail staple.
+- Atlantic Salmon: Farmed import. BSC retail mainstay.
+
+BAHAMIAN REGULATORY:
+- Crawfish open: Aug 1 – Mar 31. Closed: Apr 1 – Jul 31.
+- Queen Conch: No export without CITES permit.
+- Nassau Grouper closed: Dec 1 – Feb 28.
+
+SLOW-DAY PROMOS:
 - Tuesday Shrimp Special: 16-20 P&D 2lb bag $22.75 → $20
 - Wednesday Salmon Special: 6oz portion → $5.50
-
-═══════════════════════════════════════════════════════════════
-LAYER 2 — SPECIES & REGIONAL INTELLIGENCE (SeafoodAI Layer)
-═══════════════════════════════════════════════════════════════
-
-CARIBBEAN SPECIES EXPERTISE:
-- Spiny Lobster: August-March season. $9 dock → $22 Miami → $28 China.
-- Queen Conch: CITES Appendix II. Strong domestic. US export restricted. Cultivation may unlock.
-- Wahoo: Abundant Bahamas. Undervalued. $3.50 dock → $11 Hawaii → $14 Japan sashimi.
-- Lionfish: Invasive — zero restrictions. $1.50 harvest → $9 Miami restaurant.
-- Mahi-Mahi: Abundant, globally traded. Core BSC retail.
-- Nassau Grouper: Endangered. Strict compliance. Premium pricing.
-- Lane Snapper: Local retail staple. Mild, approachable.
-- Atlantic Salmon: Farmed import. BSC retail mainstay.
-- Atlantic Shrimp: Highest-velocity BSC retail product.
-
-ARBITRAGE ENGINE:
-- Identify cheap-source vs premium-market gaps for any species
-- Factor processing, cold chain, and logistics costs
-- Flag seasonal windows and pre-sell opportunities
-- Use web search for current live pricing
-
-GLOBAL MARKET KNOWLEDGE:
-- Major fishing nations: Norway, China, Peru, Russia, USA, Indonesia, Japan, Chile, India
-- Trading hubs: Rotterdam, Tokyo Tsukiji, Miami, Boston, Singapore, Shanghai
-- Certifications: MSC (wild), ASC (farmed), BAP 4-star, HACCP
-- Regulations: FDA 21 CFR Part 123, EU Reg 1005/2008, CITES
-
-═══════════════════════════════════════════════════════════════
-LAYER 3 — GLOBAL TRACEABILITY (FishTrace Layer)
-═══════════════════════════════════════════════════════════════
-
-BSC TRACEABILITY NODES:
-1. Harvest → Supplier / Direct boat / Andros fishermen
-2. Receiving → BSC Nassau or Ceta's Andros
-3. Processing → Spiny Tail Nassau
-4. Cold Storage → 30,000 lb Nassau | 3,000 lb Andros | Miami (planned)
-5. Distribution → Retail | Wholesale | US Export | Online
-6. Final Sale → Customer | Restaurant | Wholesaler
-
-TRACE ID FORMAT: BSC-[LOCATION]-[YYYYMMDD]-[SPECIES CODE]-[BATCH#]
-Example: BSC-SPT-20260815-SLOB-001
-
-BAHAMIAN REGULATORY FRAMEWORK:
-- Crawfish open: August 1 – March 31. Closed: April 1 – July 31.
-- Queen Conch: No export without CITES permit.
-- Nassau Grouper: Closed December 1 – February 28.
-- Export permits required for all US-bound shipments.
-
-GLOBAL STANDARDS: MSC, ASC, BAP 4-star, HACCP, FDA 21 CFR Part 123, EU Reg 1005/2008, CITES
-
-═══════════════════════════════════════════════════════════════
-LAYER 4 — CULTIVATION INTELLIGENCE (Umami/Alkemyst Layer)
-═══════════════════════════════════════════════════════════════
-
-BSC CULTIVATION PRIORITIES:
-
-IMMEDIATE:
-- Shrimp RAS: 35% cost reduction, stable year-round supply
-- Lionfish harvest program: zero restrictions, premium eco narrative
-
-NEAR-TERM:
-- Spiny Lobster sea ranching: puerulus capture/grow-out, BREEF partnership, 27% savings
-- Queen Conch mariculture: 31% savings + potential CITES export unlock
-
-LONG-TERM:
-- Nassau Grouper cage aquaculture: premium species, 5+ years to commercial scale
-
-MARKET SIGNALS:
-- US retailers committed to certified sustainable-only by 2027
-- Cultivated/sustainable premium: consumers pay 15-30% more
-- Farm-to-table narrative drives 20-40% menu price premium
 
 ═══════════════════════════════════════════════════════════════
 RESPONSE PROTOCOLS
 ═══════════════════════════════════════════════════════════════
 
-ALWAYS: Answer with global authority. Use web search for current data. Connect answers to BSC opportunities. Cite sources.
-NEVER: Reveal Miami processor identity. Share confidential pricing. Speculate without data.
+ALWAYS:
+- Reach for a tool before guessing. The data is live; you can see it.
+- Cite the file or query you read when answering a "how does X work" question.
+- Connect answers to BSC opportunities, margins, and the founder's priorities.
+- Refuse trade-secret questions with the standard line above.
 
-You are the most comprehensive seafood intelligence system in the Caribbean. Built in Nassau. Powered by AI. Ready for the world.`
+NEVER:
+- Quote a hardcoded monthly overhead. Pull it live with query_db('expenses', ...).
+- Reference Dashnelle / Ashley / Guito as active staff.
+- Name the Miami processor.
+- Speculate when a tool call would give you the actual number.
+
+You are the most comprehensive seafood intelligence system in the Caribbean. Use the tools.`;
+
+interface AnthropicTextBlock { type: 'text'; text: string }
+interface AnthropicToolUseBlock { type: 'tool_use'; id: string; name: string; input: unknown }
+interface AnthropicToolResultBlock { type: 'tool_result'; tool_use_id: string; content: string }
+interface AnthropicMessage { role: 'user' | 'assistant'; content: string | (AnthropicTextBlock | AnthropicToolUseBlock | AnthropicToolResultBlock)[] }
+interface AnthropicResponse {
+  content: (AnthropicTextBlock | AnthropicToolUseBlock)[];
+  stop_reason: string;
+}
+
+async function callAnthropic(messages: AnthropicMessage[]): Promise<AnthropicResponse> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':     'application/json',
+      'x-api-key':        process.env.ANTHROPIC_API_KEY ?? '',
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta':    'web-search-2025-03-05',
+    },
+    body: JSON.stringify({
+      model:      MODEL,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system:     SYSTEM_PROMPT,
+      messages,
+      tools: [
+        { type: 'web_search_20250305', name: 'web_search' },
+        ...TOOLS,
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Anthropic API ${response.status}: ${errBody}`);
+  }
+  return (await response.json()) as AnthropicResponse;
+}
 
 export async function POST(req: NextRequest) {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!
-    )
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
 
-    const { message, sessionId, conversationHistory } = await req.json()
+    const { message, sessionId, conversationHistory } = await req.json();
 
     if (!message || !sessionId) {
-      return NextResponse.json({ error: 'Message and sessionId required' }, { status: 400 })
+      return NextResponse.json({ error: 'Message and sessionId required' }, { status: 400 });
     }
 
-    const messages = [
+    const messages: AnthropicMessage[] = [
       ...(conversationHistory || []),
-      { role: 'user', content: message }
-    ]
+      { role: 'user', content: message },
+    ];
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'web-search-2025-03-05'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 2048,
-        system: SYSTEM_PROMPT,
-        messages,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }]
-      })
-    })
+    let toolCallsExecuted: string[] = [];
+    let lastResponse: AnthropicResponse | null = null;
 
-    const data = await response.json()
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      const response = await callAnthropic(messages);
+      lastResponse = response;
 
-    if (!response.ok) {
-      console.error('Anthropic API error:', data)
-      return NextResponse.json({ error: 'Intelligence engine error' }, { status: 500 })
+      const toolUseBlocks = response.content.filter(
+        (b): b is AnthropicToolUseBlock => b.type === 'tool_use',
+      );
+
+      // No tool calls → assistant is done.
+      if (toolUseBlocks.length === 0 || response.stop_reason !== 'tool_use') break;
+
+      // Append assistant's tool-use turn verbatim, then dispatch and append results.
+      messages.push({ role: 'assistant', content: response.content });
+
+      const resultBlocks: AnthropicToolResultBlock[] = [];
+      for (const call of toolUseBlocks) {
+        toolCallsExecuted.push(call.name);
+        const result = await dispatchTool(call.name, call.input, supabase);
+        resultBlocks.push({
+          type:         'tool_result',
+          tool_use_id:  call.id,
+          content:      result,
+        });
+      }
+      messages.push({ role: 'user', content: resultBlocks });
     }
 
-    const assistantMessage = data.content
-      .filter((block: { type: string }) => block.type === 'text')
-      .map((block: { type: string; text: string }) => block.text)
+    const assistantText = (lastResponse?.content ?? [])
+      .filter((b): b is AnthropicTextBlock => b.type === 'text')
+      .map((b) => b.text)
       .join('')
+      .trim() || 'I could not produce an answer.';
 
-    const webSearchUsed = data.content.some(
-      (block: { type: string }) =>
-        block.type === 'tool_use' || block.type === 'web_search_tool_result'
-    )
+    const webSearchUsed = toolCallsExecuted.some((n) => n === 'web_search');
 
     await supabase.from('founder_ai_chat_history').insert([
-      { session_id: sessionId, role: 'user', content: message, created_at: new Date().toISOString() },
-      { session_id: sessionId, role: 'assistant', content: assistantMessage, metadata: { web_search_used: webSearchUsed }, created_at: new Date().toISOString() }
-    ])
+      { session_id: sessionId, role: 'user',      content: message,         created_at: new Date().toISOString() },
+      { session_id: sessionId, role: 'assistant', content: assistantText,
+        metadata: { web_search_used: webSearchUsed, tools_used: toolCallsExecuted },
+        created_at: new Date().toISOString() },
+    ]);
 
-    return NextResponse.json({ message: assistantMessage, webSearchUsed, sessionId })
-
+    return NextResponse.json({
+      message:       assistantText,
+      webSearchUsed,
+      toolsUsed:     toolCallsExecuted,
+      sessionId,
+    });
   } catch (error) {
-    console.error('Founder AI route error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Founder AI route error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -272,28 +266,27 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!
-    )
+      process.env.SUPABASE_SERVICE_KEY!,
+    );
 
-    const { searchParams } = new URL(req.url)
-    const sessionId = searchParams.get('sessionId')
+    const { searchParams } = new URL(req.url);
+    const sessionId = searchParams.get('sessionId');
 
     if (!sessionId) {
-      return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
+      return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
     }
 
     const { data, error } = await supabase
       .from('founder_ai_chat_history')
       .select('role, content, metadata, created_at')
       .eq('session_id', sessionId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true });
 
-    if (error) return NextResponse.json({ error: 'Failed to load history' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Failed to load history' }, { status: 500 });
 
-    return NextResponse.json({ history: data })
-
+    return NextResponse.json({ history: data });
   } catch (error) {
-    console.error('History fetch error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('History fetch error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
