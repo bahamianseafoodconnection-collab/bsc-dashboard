@@ -9,7 +9,7 @@ const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const STAFF_ROLES = new Set([
-  'cashier','manager','basic_admin','control_admin','andros_staff','supplier'
+  'founder','co_founder','cashier','manager','basic_admin','control_admin','andros_staff','supplier'
 ]);
 
 const STAFF_ONLY_PREFIXES = [
@@ -45,6 +45,21 @@ const CUSTOMER_NAV = [
 ];
 
 const STAFF_NAV: Record<string, { label: string; href: string; icon: string }[]> = {
+  // founder + co_founder share the top-tier control_admin nav.
+  founder: [
+    { label: 'Control',  href: '/dashboard', icon: '📊' },
+    { label: 'POS',      href: '/pos',       icon: '🛒' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
+  ],
+  co_founder: [
+    { label: 'Control',  href: '/dashboard', icon: '📊' },
+    { label: 'POS',      href: '/pos',       icon: '🛒' },
+    { label: 'Market',   href: '/market',    icon: '🏪' },
+    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
+    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
+  ],
   control_admin: [
     { label: 'Control',  href: '/dashboard', icon: '📊' },
     { label: 'POS',      href: '/pos',       icon: '🛒' },
