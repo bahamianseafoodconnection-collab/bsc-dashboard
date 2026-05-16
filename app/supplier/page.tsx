@@ -245,34 +245,80 @@ setExpandedId(s.id);
 if (!productsBySupplier[s.id]) loadProductsFor(s.id);
 }
 
-async function setProductStatus(p: SupplierProduct, supplierId: string, newStatus: 'active' | 'inactive' | 'out_of_stock') {
-if (!canEdit) { showToast('Only founder/co-founder can change product status', false); return; }
-if (p.status === newStatus) return;
-const { error } = await supabase
-.from('products')
-.update({ status: newStatus, updated_at: new Date().toISOString() })
-.eq('id', p.id);
+// Single-tap toggle: status='active' ↔ 'inactive'. No out_of_stock (avoids
+// constraint errors), no updated_at (column not on products in current schema).
+async function toggleProductActive(p: SupplierProduct, supplierId: string) {
+if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+const newStatus = p.status === 'active' ? 'inactive' : 'active';
+const { error } = await supabase.from('products').update({ status: newStatus }).eq('id', p.id);
 if (error) { showToast('Update failed: ' + error.message, false); return; }
 setProductsBySupplier((prev) => ({
 ...prev,
 [supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? { ...row, status: newStatus } : row),
 }));
-showToast(`${p.sku} → ${newStatus}`);
+showToast(`${p.sku} → ${newStatus === 'active' ? 'Enabled' : 'Disabled'}`);
 }
 
-async function toggleChannel(p: SupplierProduct, supplierId: string, channel: 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale') {
-if (!canEdit) { showToast('Only founder/co-founder can change channels', false); return; }
-const newVal = !p[channel];
-const { error } = await supabase
-.from('products')
-.update({ [channel]: newVal, updated_at: new Date().toISOString() })
-.eq('id', p.id);
-if (error) { showToast('Update failed: ' + error.message, false); return; }
+// Edit modal: name / cost / online sell price. Save fans out to three tables.
+const [editing, setEditing] = useState<{ product: SupplierProduct; supplierId: string } | null>(null);
+const [editForm, setEditForm] = useState<{ name: string; cost: string; online_price: string }>({ name: '', cost: '', online_price: '' });
+const [editSaving, setEditSaving] = useState(false);
+
+function openEditProduct(p: SupplierProduct, supplierId: string) {
+if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+setEditing({ product: p, supplierId });
+setEditForm({
+name: p.name,
+cost: p.cost_per_unit !== null ? String(p.cost_per_unit) : '',
+online_price: p.online_sell_price !== null ? String(p.online_sell_price) : '',
+});
+}
+
+async function saveProductEdit() {
+if (!editing) return;
+const { product: p, supplierId } = editing;
+const newName  = editForm.name.trim();
+const newCost  = editForm.cost  === '' ? null : Number(editForm.cost);
+const newPrice = editForm.online_price === '' ? null : Number(editForm.online_price);
+if (!newName)                                              { showToast('Name is required', false); return; }
+if (newCost  !== null && (Number.isNaN(newCost)  || newCost  < 0)) { showToast('Cost must be a non-negative number', false); return; }
+if (newPrice !== null && (Number.isNaN(newPrice) || newPrice < 0)) { showToast('Online price must be a non-negative number', false); return; }
+
+setEditSaving(true);
+try {
+if (newName !== p.name) {
+const { error } = await supabase.from('products').update({ name: newName }).eq('id', p.id);
+if (error) throw new Error('products: ' + error.message);
+}
+if (newCost !== null && newCost !== p.cost_per_unit) {
+const { error } = await supabase.from('product_costs')
+.update({ cost_per_unit: newCost })
+.eq('product_id', p.id).eq('is_current', true);
+if (error) throw new Error('product_costs: ' + error.message);
+}
+if (newPrice !== null && newPrice !== p.online_sell_price) {
+const { error } = await supabase.from('product_pricing')
+.update({ manual_unit_price: newPrice })
+.eq('product_id', p.id).eq('channel', 'online_market').eq('is_current', true);
+if (error) throw new Error('product_pricing: ' + error.message);
+}
+
 setProductsBySupplier((prev) => ({
 ...prev,
-[supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? { ...row, [channel]: newVal } : row),
+[supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? {
+...row,
+name: newName,
+cost_per_unit:     newCost  ?? row.cost_per_unit,
+online_sell_price: newPrice ?? row.online_sell_price,
+} : row),
 }));
-showToast(`${p.sku} · ${channel.replace('sell_', '')} → ${newVal ? 'ON' : 'OFF'}`);
+showToast('Saved');
+setEditing(null);
+} catch (err) {
+showToast('Save failed: ' + (err instanceof Error ? err.message : String(err)), false);
+} finally {
+setEditSaving(false);
+}
 }
 
 const filtered = suppliers.filter((s: Supplier) => {
@@ -310,6 +356,76 @@ return (
 <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-xl"
 style={{ backgroundColor: toast.ok ? '#16a34a' : '#dc2626', color: 'white' }}>
 {toast.msg}
+</div>
+)}
+
+{editing && (
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+onClick={() => !editSaving && setEditing(null)}>
+<div className="w-full max-w-md rounded-lg bg-white"
+style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}
+onClick={(e) => e.stopPropagation()}>
+<div className="px-5 py-3 border-b" style={{ borderColor: '#e7e7e7' }}>
+<h2 className="text-base font-bold" style={{ color: '#0F1111' }}>Edit product</h2>
+<p className="text-xs font-mono mt-0.5" style={{ color: '#565959' }}>{editing.product.sku}</p>
+</div>
+<div className="px-5 py-4 space-y-3">
+<div>
+<label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>Name</label>
+<input type="text" value={editForm.name}
+onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+className="w-full text-sm px-3 py-2 rounded-md focus:outline-none focus:ring-2"
+style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+</div>
+<div className="grid grid-cols-2 gap-3">
+<div>
+<label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>
+Cost ({editing.product.unit_of_measure ?? 'each'})
+</label>
+<div className="relative">
+<span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
+<input type="number" step="0.01" min="0" value={editForm.cost}
+onChange={(e) => setEditForm((f) => ({ ...f, cost: e.target.value }))}
+className="w-full text-sm pl-7 pr-3 py-2 rounded-md focus:outline-none focus:ring-2"
+style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+</div>
+</div>
+<div>
+<label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>
+Online sell price
+</label>
+<div className="relative">
+<span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
+<input type="number" step="0.01" min="0" value={editForm.online_price}
+onChange={(e) => setEditForm((f) => ({ ...f, online_price: e.target.value }))}
+className="w-full text-sm pl-7 pr-3 py-2 rounded-md focus:outline-none focus:ring-2"
+style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+</div>
+</div>
+</div>
+<p className="text-[11px]" style={{ color: '#565959' }}>
+Suggested at 25% margin + 10% VAT:{' '}
+<span className="font-bold">
+{editForm.cost && !Number.isNaN(Number(editForm.cost))
+? '$' + (Number(editForm.cost) / 0.75 * 1.10).toFixed(2)
+: '—'}
+</span>
+</p>
+</div>
+<div className="px-5 py-3 flex justify-end gap-2 border-t" style={{ backgroundColor: '#f7f8f8', borderColor: '#e7e7e7' }}>
+<button onClick={() => setEditing(null)} disabled={editSaving}
+className="text-sm px-4 py-1.5 rounded-full bg-white"
+style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+Cancel
+</button>
+<button onClick={saveProductEdit} disabled={editSaving}
+className="text-sm font-bold px-5 py-1.5 rounded-full"
+style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
+{editSaving ? 'Saving…' : 'Save changes'}
+</button>
+</div>
+</div>
 </div>
 )}
 
@@ -561,93 +677,82 @@ Edit
 </div>
 
 {expandedId === s.id && (
-<div className="px-4 py-3 border-t" style={{ backgroundColor: '#091632', borderColor: 'rgba(245,197,24,0.15)' }}>
+<div className="px-3 py-3 border-t" style={{ backgroundColor: '#f5f5f7', borderColor: 'rgba(245,197,24,0.15)' }}>
 {!canEdit && (
-<p className="text-[11px] mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>
-View-only — founder or co-founder role required to change status or channels.
+<p className="text-xs mb-2 px-2" style={{ color: '#565959' }}>
+View-only — founder or co-founder role required to enable, disable, or edit products.
 </p>
 )}
 {productsLoading === s.id && (
-<p className="text-xs text-center py-4" style={{ color: 'rgba(255,255,255,0.4)' }}>Loading products…</p>
+<p className="text-xs text-center py-6" style={{ color: '#565959' }}>Loading products…</p>
 )}
 {productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length === 0 && (
-<p className="text-xs text-center py-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
+<p className="text-xs text-center py-6" style={{ color: '#565959' }}>
 No products assigned to this supplier yet.
 </p>
 )}
 {productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length > 0 && (
 <div className="space-y-2">
 {(productsBySupplier[s.id] ?? []).map((p) => {
-const statusColor =
-p.status === 'active'       ? { bg: 'rgba(22,163,74,0.18)',  fg: '#4ade80' } :
-p.status === 'out_of_stock' ? { bg: 'rgba(245,197,24,0.18)', fg: '#f5c518' } :
-                              { bg: 'rgba(220,38,38,0.18)',  fg: '#f87171' };
+const isActive = p.status === 'active';
 return (
-<div key={p.id} className="rounded-lg px-3 py-2 space-y-2"
-style={{ backgroundColor: '#0b1d3f', border: '1px solid rgba(255,255,255,0.06)' }}>
-<div className="flex items-start justify-between gap-2">
-<div className="min-w-0 flex-1">
-<p className="text-xs font-bold text-white truncate">{p.name}</p>
-<p className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>
-{p.sku}{p.pack_size ? ` · ${p.pack_size}` : ''}{p.unit_of_measure ? ` · /${p.unit_of_measure}` : ''}
+<div key={p.id} className="rounded-lg bg-white px-3 py-3"
+style={{ border: '1px solid #d5d9d9', boxShadow: '0 1px 2px rgba(15,17,17,0.05)' }}>
+<div className="flex items-start gap-3">
+{/* Thumbnail placeholder — emoji for now */}
+<div className="rounded-md flex-shrink-0 flex items-center justify-center text-2xl"
+style={{ width: 56, height: 56, backgroundColor: '#f7f8f8', border: '1px solid #e7e7e7' }}>
+{p.category?.includes('seafood') ? '🐟' : p.category === 'meat' ? '🥩' : '📦'}
+</div>
+<div className="flex-1 min-w-0">
+<a href="#" onClick={(e) => { e.preventDefault(); openEditProduct(p, s.id); }}
+className="text-sm font-medium leading-tight block hover:underline"
+style={{ color: '#007185' }}>
+{p.name}
+</a>
+<p className="text-[11px] mt-0.5" style={{ color: '#565959' }}>
+<span className="font-mono">{p.sku}</span>
+{p.pack_size && <span> · {p.pack_size}</span>}
+{p.unit_of_measure && <span> · /{p.unit_of_measure}</span>}
 </p>
-</div>
-<span className="text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap"
-style={{ backgroundColor: statusColor.bg, color: statusColor.fg }}>
-{p.status === 'out_of_stock' ? 'OUT OF STOCK' : p.status.toUpperCase()}
+<div className="flex items-baseline gap-3 mt-1.5 flex-wrap">
+{p.online_sell_price !== null && (
+<span className="text-base font-bold" style={{ color: '#0F1111' }}>
+<span className="text-xs align-top">$</span>{p.online_sell_price.toFixed(2)}
 </span>
+)}
+{p.cost_per_unit !== null && (
+<span className="text-xs" style={{ color: '#565959' }}>
+cost ${p.cost_per_unit.toFixed(2)}
+</span>
+)}
 </div>
-<div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-1 text-[11px]">
-<div style={{ color: 'rgba(255,255,255,0.55)' }}>
-{p.cost_per_unit !== null ? <>Cost <span style={{ color: '#f87171' }}>${p.cost_per_unit.toFixed(2)}</span></> : 'Cost —'}
-{' · '}
-{p.online_sell_price !== null ? <>Online <span style={{ color: '#7dd3a8' }}>${p.online_sell_price.toFixed(2)}</span></> : 'Online —'}
 </div>
+<span className="text-[11px] font-bold px-2 py-0.5 rounded whitespace-nowrap self-start"
+style={{
+backgroundColor: isActive ? '#067D62' : '#565959',
+color: '#fff',
+}}>
+{isActive ? 'Enabled' : 'Disabled'}
+</span>
 </div>
 
 {canEdit && (
-<div className="flex flex-wrap gap-1.5">
-{/* Status cycler */}
-<button onClick={() => setProductStatus(p, s.id, 'active')}
-disabled={p.status === 'active'}
-className="text-[10px] px-2.5 py-1 rounded-md font-bold"
+<div className="flex gap-2 mt-3 pt-3 border-t" style={{ borderColor: '#e7e7e7' }}>
+<button onClick={() => toggleProductActive(p, s.id)}
+className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
 style={{
-backgroundColor: p.status === 'active' ? 'rgba(22,163,74,0.35)' : 'rgba(22,163,74,0.12)',
-color: '#4ade80', opacity: p.status === 'active' ? 1 : 0.7,
-}}>Active</button>
-<button onClick={() => setProductStatus(p, s.id, 'out_of_stock')}
-disabled={p.status === 'out_of_stock'}
-className="text-[10px] px-2.5 py-1 rounded-md font-bold"
-style={{
-backgroundColor: p.status === 'out_of_stock' ? 'rgba(245,197,24,0.35)' : 'rgba(245,197,24,0.12)',
-color: '#f5c518', opacity: p.status === 'out_of_stock' ? 1 : 0.7,
-}}>Out of Stock</button>
-<button onClick={() => setProductStatus(p, s.id, 'inactive')}
-disabled={p.status === 'inactive'}
-className="text-[10px] px-2.5 py-1 rounded-md font-bold"
-style={{
-backgroundColor: p.status === 'inactive' ? 'rgba(220,38,38,0.35)' : 'rgba(220,38,38,0.12)',
-color: '#f87171', opacity: p.status === 'inactive' ? 1 : 0.7,
-}}>Inactive</button>
-
-<span className="w-px self-stretch mx-1" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }} />
-
-{/* Channel toggles */}
-{[
-{ key: 'sell_nassau'   as const, label: 'Nassau' },
-{ key: 'sell_andros'   as const, label: 'Andros' },
-{ key: 'sell_online'   as const, label: 'Online' },
-{ key: 'sell_wholesale' as const, label: 'W-sale' },
-].map(({ key, label }) => (
-<button key={key} onClick={() => toggleChannel(p, s.id, key)}
-className="text-[10px] px-2.5 py-1 rounded-md font-bold"
-style={{
-backgroundColor: p[key] ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.06)',
-color: p[key] ? '#60a5fa' : 'rgba(255,255,255,0.4)',
+backgroundColor: isActive ? '#fff' : '#FFD814',
+color:           isActive ? '#0F1111' : '#0F1111',
+border: `1px solid ${isActive ? '#d5d9d9' : '#FCD200'}`,
 }}>
-{p[key] ? '✓' : '○'} {label}
+{isActive ? 'Disable' : 'Enable'}
 </button>
-))}
+<button onClick={() => openEditProduct(p, s.id)}
+className="text-xs font-medium px-3 py-1.5 rounded-full bg-white"
+style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+Edit
+</button>
 </div>
 )}
 </div>
