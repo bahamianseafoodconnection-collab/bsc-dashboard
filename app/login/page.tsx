@@ -59,12 +59,28 @@ export default function LoginPage() {
         return;
       }
       if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          full_name: name,
-          phone,
-          role: 'customer',
-        });
+        // CRITICAL: never overwrite role on existing profiles. If a staff
+        // member (control_admin / manager / cashier / etc.) runs this
+        // signup flow with their own email, upserting role='customer'
+        // would silently demote them out of dashboard access.
+        // → Check first; only set role when creating a brand-new profile.
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        if (existing) {
+          await supabase.from('profiles')
+            .update({ full_name: name, phone })
+            .eq('id', data.user.id);
+        } else {
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            full_name: name,
+            phone,
+            role: 'customer',
+          });
+        }
         // Also seed the customer-tracking record. Fire-and-forget — the
         // signup is the authoritative event; this just gets them on the
         // tracking radar before their first order.

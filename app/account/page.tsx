@@ -97,12 +97,27 @@ export default function AccountPage() {
     if (!user) return;
     setSavingProfile(true);
     setProfileSaved(false);
-    await supabase.from('profiles').upsert({
-      id: user.id,
-      full_name: profileName.trim(),
-      phone: profilePhone.trim() || null,
-      role: 'customer',
-    });
+    // CRITICAL: never overwrite role here. If a staff member opens
+    // their own /account page, upserting role='customer' would
+    // silently demote them out of dashboard access.
+    // → Check first; only set role when creating a brand-new profile.
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from('profiles')
+        .update({ full_name: profileName.trim(), phone: profilePhone.trim() || null })
+        .eq('id', user.id);
+    } else {
+      await supabase.from('profiles').insert({
+        id: user.id,
+        full_name: profileName.trim(),
+        phone: profilePhone.trim() || null,
+        role: 'customer',
+      });
+    }
     setSavingProfile(false);
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2400);
