@@ -88,7 +88,7 @@ const REVENUE_STREAMS: { label: string; icon: string; profit: string; color: str
   { label: 'Nassau POS Sales', icon: '🟡', profit: '38%',      color: '#fef9e7', orderType: 'pos_sale_nassau' },
   { label: 'Andros POS Sales', icon: '🟣', profit: '43%',      color: '#f5f0ff', orderType: 'pos_sale_andros' },
   { label: 'Online Market',    icon: '🛒', profit: '25%',      color: '#e8f4fd', orderType: 'online_market'   },
-  { label: 'Wholesale',        icon: '📦', profit: '12%',      color: '#f0fde8', orderType: 'wholesale'       },
+  { label: 'Wholesale',        icon: '📦', profit: '15%',      color: '#f0fde8', orderType: 'wholesale'       },
   { label: 'Vehicle Sales',    icon: '🚗', profit: '$650/car', color: '#fff3e8', orderType: null },
   { label: 'Vehicle Rentals',  icon: '🔑', profit: '$10/day',  color: '#fff3e8', orderType: null },
   { label: 'Auto Parts',       icon: '🔧', profit: '10%',      color: '#fde8e8', orderType: null },
@@ -130,7 +130,7 @@ type WholesaleOrder = {
 };
 
 const MARGIN: Record<string, number> = {
-  nassau: 0.38, andros: 0.43, online: 0.25, wholesale: 0.12,
+  nassau: 0.38, andros: 0.43, online: 0.25, wholesale: 0.15,
 };
 
 function calcSplit(sale: SaleRecord) {

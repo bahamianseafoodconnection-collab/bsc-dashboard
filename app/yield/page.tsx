@@ -401,7 +401,7 @@ export default function YieldPage() {
                 { label: '🟡 Nassau POS',   sub: '38%', value: result.channels.nassau,    color: '#fef9e7', text: '#1a2e5a' },
                 { label: '🟣 Andros POS',   sub: '43%', value: result.channels.andros,    color: '#f5f0ff', text: '#4c1d95' },
                 { label: '🛒 Online',        sub: '25%', value: result.channels.online,    color: '#e8f4fd', text: '#1a6fb5' },
-                { label: '📦 Wholesale',     sub: '12%', value: result.channels.wholesale, color: '#f0fde8', text: '#2e7d32' },
+                { label: '📦 Wholesale',     sub: '15%', value: result.channels.wholesale, color: '#f0fde8', text: '#2e7d32' },
               ].map((ch) => (
                 <div key={ch.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: ch.color, borderRadius: '10px', padding: '10px 14px' }}>
                   <div>

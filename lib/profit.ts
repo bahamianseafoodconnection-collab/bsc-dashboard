@@ -18,7 +18,7 @@ import { supabase } from './supabase';
 export const NASSAU_POS_MARGIN = 0.38;
 export const ANDROS_POS_MARGIN = 0.43;
 export const ONLINE_MARGIN     = 0.25;
-export const WHOLESALE_MARGIN  = 0.12;
+export const WHOLESALE_MARGIN  = 0.15;
 
 export const BILL_CASALE_RATE       = 0.05;
 export const DEFAULT_MONTHLY_TARGET = 25_000;

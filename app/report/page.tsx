@@ -9,7 +9,7 @@ import Link from "next/link";
 
 const POS_MARGIN = 0.38;
 const MARKET_MARGIN = 0.25;
-const WHOLESALE_MARGIN = 0.12;
+const WHOLESALE_MARGIN = 0.15;
 
 function getInvoiceType(inv: Invoice): 'pos' | 'delivery' | 'pickup' | 'wholesale' {
   const name = inv.customerName.toUpperCase();
@@ -208,7 +208,7 @@ export default function ReportPage() {
                   { label: 'POS / Physical Store', revenue: posRevenue,      profit: posProfit,      margin: '38%', count: posInvoices.length,      icon: '🛒', color: '#4ade80' },
                   { label: 'Online Delivery',       revenue: deliveryRevenue, profit: deliveryProfit, margin: '25%', count: deliveryInvoices.length,  icon: '🚚', color: '#60a5fa' },
                   { label: 'Online Pickup',         revenue: pickupRevenue,   profit: pickupProfit,   margin: '25%', count: pickupInvoices.length,    icon: '📦', color: '#a78bfa' },
-                  { label: 'Wholesale',             revenue: wholesaleRevenue,profit: wholesaleProfit,margin: '12%', count: wholesaleInvoices.length, icon: '📦', color: '#f5c518' },
+                  { label: 'Wholesale',             revenue: wholesaleRevenue,profit: wholesaleProfit,margin: '15%', count: wholesaleInvoices.length, icon: '📦', color: '#f5c518' },
                 ].map(channel => (
                   <div key={channel.label} style={{ backgroundColor: '#060d1f', borderRadius: 12, padding: '12px 14px', marginBottom: 8, border: '1px solid #1e3a5f' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -239,7 +239,7 @@ export default function ReportPage() {
                 {[
                   { channel: 'POS Physical Store',  margin: '38%',    note: 'Walk-in customers',    color: '#4ade80' },
                   { channel: 'Online Marketplace',   margin: '25%',    note: 'Delivery + Pickup',    color: '#60a5fa' },
-                  { channel: 'Wholesale / Bulk',     margin: '12%',    note: 'Business orders 10lb+',color: '#f5c518' },
+                  { channel: 'Wholesale / Bulk',     margin: '15%',    note: 'Business orders 10lb+',color: '#f5c518' },
                   { channel: 'Utility Bills',        margin: '$5 + 5%',note: 'Service fee',          color: '#a78bfa' },
                 ].map(r => (
                   <div key={r.channel} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e3a5f' }}>

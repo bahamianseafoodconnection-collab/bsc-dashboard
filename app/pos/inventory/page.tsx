@@ -404,7 +404,7 @@ style={primaryBtn(saving)}
 <option value="nassau_pos">Nassau POS (38% margin)</option>
 <option value="andros_pos">Andros POS (43% margin)</option>
 <option value="online_market">Online (25% margin)</option>
-<option value="local_wholesale">Wholesale (12% margin)</option>
+<option value="local_wholesale">Wholesale (15% margin)</option>
 </select>
 
 <label style={lbl}>Pricing Mode</label>

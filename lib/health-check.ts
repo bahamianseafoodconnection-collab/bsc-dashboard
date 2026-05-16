@@ -37,7 +37,7 @@ const CHANNEL_MARGIN: Record<string, number> = {
   pos_sale_nassau: 0.38,
   pos_sale_andros: 0.43,
   online_market:   0.25,
-  wholesale:       0.12,
+  wholesale:       0.15,
 };
 
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {

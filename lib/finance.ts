@@ -33,7 +33,7 @@ export const CHANNEL_MARGIN: Record<PricingChannel, number> = {
   nassau_pos:      0.38,
   andros_pos:      0.43,
   online_market:   0.25,
-  local_wholesale: 0.12,
+  local_wholesale: 0.15,
   us_resale:       0.12,
   bill_payments:   0.045,
   bill_casale:     0.05,

@@ -19,8 +19,8 @@ const FOUNDER_ID = '7b62672c-9259-4c1b-98d4-3b78369a52ab';
 const CHANNELS = [
   { key: 'nassau_pos',     label: 'Nassau POS',    emoji: '🟡', margin: 0.38 },
   { key: 'andros_pos',     label: 'Andros POS',    emoji: '🟣', margin: 0.43 },
-  { key: 'online_market',  label: 'Online Market', emoji: '🛒', margin: 0.12 },
-  { key: 'local_wholesale',label: 'Wholesale',     emoji: '📦', margin: 0.12 },
+  { key: 'online_market',  label: 'Online Market', emoji: '🛒', margin: 0.15 },
+  { key: 'local_wholesale',label: 'Wholesale',     emoji: '📦', margin: 0.15 },
 ];
 
 const CATEGORIES = [
@@ -186,8 +186,8 @@ export default function ProductsPage() {
       ...current,
       nassau_pos:      (c / (1 - 0.38)).toFixed(2),
       andros_pos:      (c / (1 - 0.43)).toFixed(2),
-      online_market:   (c / (1 - 0.12)).toFixed(2),
-      local_wholesale: (c / (1 - 0.12)).toFixed(2),
+      online_market:   (c / (1 - 0.15)).toFixed(2),
+      local_wholesale: (c / (1 - 0.15)).toFixed(2),
     });
   }
 

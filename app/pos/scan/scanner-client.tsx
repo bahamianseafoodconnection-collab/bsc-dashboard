@@ -1413,7 +1413,7 @@ function ProductEdit({
           <option value="nassau_pos">Nassau POS (38%)</option>
           <option value="andros_pos">Andros POS (43%)</option>
           <option value="online_market">Online Market (25%)</option>
-          <option value="local_wholesale">Wholesale (12%)</option>
+          <option value="local_wholesale">Wholesale (15%)</option>
         </select>
 
         <label style={lbl}>Mode</label>
@@ -2089,7 +2089,7 @@ function ProductOnboard({
             k: 'online_market' as ChannelKey,
           },
           {
-            lab: 'Wholesale (12%)',
+            lab: 'Wholesale (15%)',
             v: sellWholesale,
             s: setSellWholesale,
             k: 'local_wholesale' as ChannelKey,

@@ -30,7 +30,7 @@ PRICING MARGINS:
 - Nassau POS: 38% margin + 10% VAT
 - Andros POS: 43% margin + 10% VAT
 - Online Market: 25% margin + 10% VAT
-- Local Wholesale: 12% margin + 10% VAT
+- Local Wholesale: 15% margin + 10% VAT
 
 PROFIT MATH (per sale, written to orders.{expense_allocation, bill_casale_share, net_profit}):
   gross_profit       = order_total × channel_margin
