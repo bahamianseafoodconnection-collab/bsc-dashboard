@@ -245,18 +245,20 @@ setExpandedId(s.id);
 if (!productsBySupplier[s.id]) loadProductsFor(s.id);
 }
 
-// Single-tap toggle: status='active' ↔ 'inactive'. No out_of_stock (avoids
-// constraint errors), no updated_at (column not on products in current schema).
+// Single-tap toggle: flip sell_online on/off. The product_status enum
+// only has 'active' (no 'inactive' value), so we use the sell_online flag
+// as the user-facing Enabled/Disabled lever — that's also what gates the
+// product from showing on the online_market channel.
 async function toggleProductActive(p: SupplierProduct, supplierId: string) {
 if (!canEdit) { showToast('Founder / co-founder only', false); return; }
-const newStatus = p.status === 'active' ? 'inactive' : 'active';
-const { error } = await supabase.from('products').update({ status: newStatus }).eq('id', p.id);
+const newOnline = !p.sell_online;
+const { error } = await supabase.from('products').update({ sell_online: newOnline }).eq('id', p.id);
 if (error) { showToast('Update failed: ' + error.message, false); return; }
 setProductsBySupplier((prev) => ({
 ...prev,
-[supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? { ...row, status: newStatus } : row),
+[supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? { ...row, sell_online: newOnline } : row),
 }));
-showToast(`${p.sku} → ${newStatus === 'active' ? 'Enabled' : 'Disabled'}`);
+showToast(`${p.sku} → ${newOnline ? 'Enabled' : 'Disabled'}`);
 }
 
 // Edit modal: name / cost / online sell price. Save fans out to three tables.
@@ -694,7 +696,7 @@ No products assigned to this supplier yet.
 {productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length > 0 && (
 <div className="space-y-2">
 {(productsBySupplier[s.id] ?? []).map((p) => {
-const isActive = p.status === 'active';
+const isActive = p.sell_online; // Enabled/Disabled tracks sell_online (see toggleProductActive)
 return (
 <div key={p.id} className="rounded-lg bg-white px-3 py-3"
 style={{ border: '1px solid #d5d9d9', boxShadow: '0 1px 2px rgba(15,17,17,0.05)' }}>
