@@ -189,19 +189,34 @@ async function callAnthropic(messages: AnthropicMessage[]): Promise<AnthropicRes
 
 export async function POST(req: NextRequest) {
   try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({
+        error: 'ANTHROPIC_API_KEY missing in environment',
+        reply: 'AI is not configured (missing API key). Please contact Dedrick.',
+      }, { status: 500 });
+    }
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_KEY!,
     );
 
-    const { message, sessionId, conversationHistory } = await req.json();
+    const body = await req.json();
+    const message = body.message;
+    // Accept either { sessionId } (full-page client) or omit it (dashboard tab).
+    const sessionId = body.sessionId ?? null;
+    // Accept either { conversationHistory } or { history }.
+    const conversationHistory = body.conversationHistory ?? body.history ?? [];
 
-    if (!message || !sessionId) {
-      return NextResponse.json({ error: 'Message and sessionId required' }, { status: 400 });
+    if (!message || typeof message !== 'string') {
+      return NextResponse.json({
+        error: 'message required (string)',
+        reply: 'No message was sent.',
+      }, { status: 400 });
     }
 
     const messages: AnthropicMessage[] = [
-      ...(conversationHistory || []),
+      ...(Array.isArray(conversationHistory) ? conversationHistory : []),
       { role: 'user', content: message },
     ];
 
@@ -243,22 +258,35 @@ export async function POST(req: NextRequest) {
 
     const webSearchUsed = toolCallsExecuted.some((n) => n === 'web_search');
 
-    await supabase.from('founder_ai_chat_history').insert([
-      { session_id: sessionId, role: 'user',      content: message,         created_at: new Date().toISOString() },
-      { session_id: sessionId, role: 'assistant', content: assistantText,
-        metadata: { web_search_used: webSearchUsed, tools_used: toolCallsExecuted },
-        created_at: new Date().toISOString() },
-    ]);
+    // Only persist to chat_history when a sessionId was provided (the
+    // standalone page sends one; the dashboard's inline tab does not).
+    if (sessionId) {
+      await supabase.from('founder_ai_chat_history').insert([
+        { session_id: sessionId, role: 'user',      content: message,         created_at: new Date().toISOString() },
+        { session_id: sessionId, role: 'assistant', content: assistantText,
+          metadata: { web_search_used: webSearchUsed, tools_used: toolCallsExecuted },
+          created_at: new Date().toISOString() },
+      ]).then(() => undefined, (err) => console.error('chat_history insert failed:', err));
+    }
 
     return NextResponse.json({
+      // Both field names — `message` for the new client, `reply` for the
+      // dashboard's existing inline tab that reads `data.reply`.
       message:       assistantText,
+      reply:         assistantText,
       webSearchUsed,
       toolsUsed:     toolCallsExecuted,
       sessionId,
     });
   } catch (error) {
+    // Surface the real cause so we can debug from the client without
+    // having to chase Vercel function logs.
+    const detail = error instanceof Error ? error.message : 'unknown';
     console.error('Founder AI route error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({
+      error: `Founder AI failed: ${detail}`,
+      reply: `Sorry, I hit an error: ${detail}. Try again, or ask Dedrick to check the route logs.`,
+    }, { status: 500 });
   }
 }
 
