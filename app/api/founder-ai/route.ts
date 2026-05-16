@@ -86,6 +86,9 @@ WRITE tools (founder + co_founder ONLY — every write goes through ai_writes au
 - add_product(...)            → CREATE a new product + its pricing rows + optional cost row.
 - set_product_channels(...)   → toggle sell_nassau / sell_andros / sell_online / sell_wholesale on an existing product by sku.
 - send_email_blast(...)       → send an email campaign to opted-in customers via Resend. Audience options: all_opted_in, nassau_pos_opted_in, newsletter_opted_in, signup_opted_in. Always preview first — read back the subject, headline, recipient count, and a snippet of the rendered email before asking the founder to confirm. The body_html should be 2–4 short paragraphs in basic HTML (<p>, <a>, <strong>); the tool wraps it in the BSC layout + CAN-SPAM footer automatically.
+- list_flyers()               → list every marketplace flyer with its live/scheduled/inactive state. Read-only. ALWAYS call this before create_flyer so you don't duplicate, and before set_flyer_active so you know the flyer_id.
+- create_flyer(...)           → CREATE a marketplace banner shown on /market. Two-step (preview → confirmed=true). Multiple live flyers rotate. Required: title. Optional: body, image_url, cta_label, cta_url, background_color, text_color, valid_from/valid_to, display_order. Defaults are BSC navy + gold theme.
+- set_flyer_active(...)       → flip an existing flyer ON or OFF. Pass flyer_id + is_active.
 
 WRITE TOOL PROTOCOL — NEVER SHORTCUT THIS:
 1. Founder asks you to add or change something.

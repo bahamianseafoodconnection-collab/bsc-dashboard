@@ -145,6 +145,47 @@ export const TOOLS = [
     },
   },
   {
+    name: 'list_flyers',
+    description:
+      'List the marketplace flyers (live + scheduled + inactive). Read-only. Use this before create_flyer / set_flyer_active so you can show the founder what already exists and avoid duplicates.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'create_flyer',
+    description:
+      'CREATE a new marketplace flyer (promotional banner shown on /market). Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (the rendered fields); show the founder; only call again with confirmed=true after explicit yes. Multiple live flyers rotate in the carousel sorted by display_order DESC.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title:            { type: 'string', description: 'Bold headline. 3-8 words.' },
+        body:             { type: 'string', description: 'One-line supporting text. Keep under 120 chars for mobile.' },
+        image_url:        { type: 'string', description: 'Optional. Background image URL (overlaid on background_color).' },
+        cta_label:        { type: 'string', description: 'Button label. Defaults to "Shop Now".' },
+        cta_url:          { type: 'string', description: 'Where the banner links to. Defaults to "/market". Use "/market?category=Seafood" etc. for filtered views.' },
+        background_color: { type: 'string', description: 'CSS color. Defaults to "#060d1f" (BSC navy).' },
+        text_color:       { type: 'string', description: 'CSS color for title/body. Defaults to "#f5c518" (BSC gold).' },
+        valid_from:       { type: 'string', description: 'Optional ISO 8601 timestamp. If omitted, flyer is live immediately.' },
+        valid_to:         { type: 'string', description: 'Optional ISO 8601 timestamp. If omitted, flyer stays live until manually disabled.' },
+        display_order:    { type: 'number', description: 'Higher = shown first in the carousel. Default 0.' },
+        confirmed:        { type: 'boolean', description: 'MUST be true to insert. False (or omitted) returns a preview.' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'set_flyer_active',
+    description:
+      'Toggle a flyer ON or OFF (changes is_active). Founder/co_founder ONLY. Use list_flyers first to find the flyer_id.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        flyer_id:  { type: 'string', description: 'UUID of the flyer.' },
+        is_active: { type: 'boolean', description: 'true to enable, false to disable.' },
+      },
+      required: ['flyer_id', 'is_active'],
+    },
+  },
+  {
     name: 'send_email_blast',
     description:
       'Send an email blast to BSC customers who opted in. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (recipient count + the rendered HTML); the founder must explicitly say YES; only then call again with confirmed=true. The blast body is wrapped in the standard BSC layout with a CAN-SPAM-compliant footer + one-click unsubscribe link. Filter the audience by `audience` — recommend `all_opted_in` unless the founder is targeting a specific cohort.',
@@ -202,6 +243,23 @@ interface SendEmailBlastInput {
   body_html?: unknown;
   audience?:  unknown;
   confirmed?: unknown;
+}
+interface CreateFlyerInput {
+  title?:            unknown;
+  body?:             unknown;
+  image_url?:        unknown;
+  cta_label?:        unknown;
+  cta_url?:          unknown;
+  background_color?: unknown;
+  text_color?:       unknown;
+  valid_from?:       unknown;
+  valid_to?:         unknown;
+  display_order?:    unknown;
+  confirmed?:        unknown;
+}
+interface SetFlyerActiveInput {
+  flyer_id?:  unknown;
+  is_active?: unknown;
 }
 
 /** Extract auth.users.id from a Supabase JWT. */
@@ -275,6 +333,9 @@ export async function dispatchTool(
       case 'add_product':          return await addProductTool(input as AddProductInput, admin, callerId);
       case 'set_product_channels': return await setProductChannelsTool(input as SetProductChannelsInput, admin, callerId);
       case 'send_email_blast':     return await sendEmailBlastTool(input as SendEmailBlastInput, admin, callerId);
+      case 'list_flyers':          return await listFlyersTool(admin);
+      case 'create_flyer':         return await createFlyerTool(input as CreateFlyerInput, admin, callerId);
+      case 'set_flyer_active':     return await setFlyerActiveTool(input as SetFlyerActiveInput, admin, callerId);
       default:                     return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
   } catch (e) {
@@ -707,5 +768,99 @@ async function sendEmailBlastTool(
   const status = errors.length === 0 ? 'success' : 'error';
   const result = { ok: errors.length === 0, sent, attempted: valid.length, errors };
   await logWrite(admin, 'send_email_blast', callerId, input, result, status, errors.join('; ') || null);
+  return JSON.stringify(result);
+}
+
+// ── list_flyers ───────────────────────────────────────────────────────
+async function listFlyersTool(admin: SupabaseClient): Promise<string> {
+  const { data, error } = await admin
+    .from('flyers')
+    .select('id, title, body, cta_label, cta_url, is_active, valid_from, valid_to, display_order, created_at')
+    .order('is_active',     { ascending: false })
+    .order('display_order', { ascending: false })
+    .order('created_at',    { ascending: false })
+    .limit(50);
+  if (error) return JSON.stringify({ error: error.message });
+  const now = new Date();
+  const annotated = (data ?? []).map((f) => {
+    const vf = f.valid_from ? new Date(f.valid_from) : null;
+    const vt = f.valid_to   ? new Date(f.valid_to)   : null;
+    const live = f.is_active && (!vf || vf <= now) && (!vt || vt >= now);
+    return { ...f, live };
+  });
+  return JSON.stringify({ count: annotated.length, flyers: annotated });
+}
+
+// ── create_flyer ──────────────────────────────────────────────────────
+async function createFlyerTool(
+  input: CreateFlyerInput,
+  admin: SupabaseClient,
+  callerId: string | null,
+): Promise<string> {
+  const perms = await checkWritePerms(admin, callerId);
+  if (!perms.ok) {
+    await logWrite(admin, 'create_flyer', callerId, input, null, 'denied', perms.error ?? 'denied');
+    return JSON.stringify({ error: perms.error });
+  }
+
+  const title = typeof input.title === 'string' ? input.title.trim() : '';
+  if (!title) return JSON.stringify({ error: 'title is required' });
+
+  const row = {
+    title,
+    body:             typeof input.body             === 'string' ? input.body.trim()             : null,
+    image_url:        typeof input.image_url        === 'string' ? input.image_url.trim()        : null,
+    cta_label:        typeof input.cta_label        === 'string' && input.cta_label.trim()        ? input.cta_label.trim()        : 'Shop Now',
+    cta_url:          typeof input.cta_url          === 'string' && input.cta_url.trim()          ? input.cta_url.trim()          : '/market',
+    background_color: typeof input.background_color === 'string' && input.background_color.trim() ? input.background_color.trim() : '#060d1f',
+    text_color:       typeof input.text_color       === 'string' && input.text_color.trim()       ? input.text_color.trim()       : '#f5c518',
+    valid_from:       typeof input.valid_from       === 'string' && input.valid_from              ? input.valid_from              : null,
+    valid_to:         typeof input.valid_to         === 'string' && input.valid_to                ? input.valid_to                : null,
+    display_order:    typeof input.display_order    === 'number' ? input.display_order            : 0,
+    is_active:        true,
+    created_by:       callerId,
+  };
+
+  if (input.confirmed !== true) {
+    return JSON.stringify({ preview: true, would_insert: row, note: 'Call again with confirmed=true to insert.' });
+  }
+
+  const { data, error } = await admin.from('flyers').insert(row).select('id').single();
+  if (error) {
+    await logWrite(admin, 'create_flyer', callerId, input, null, 'error', error.message);
+    return JSON.stringify({ error: error.message });
+  }
+  const result = { ok: true, id: data?.id, title, live_now: !row.valid_from };
+  await logWrite(admin, 'create_flyer', callerId, input, result, 'success', null);
+  return JSON.stringify(result);
+}
+
+// ── set_flyer_active ──────────────────────────────────────────────────
+async function setFlyerActiveTool(
+  input: SetFlyerActiveInput,
+  admin: SupabaseClient,
+  callerId: string | null,
+): Promise<string> {
+  const perms = await checkWritePerms(admin, callerId);
+  if (!perms.ok) {
+    await logWrite(admin, 'set_flyer_active', callerId, input, null, 'denied', perms.error ?? 'denied');
+    return JSON.stringify({ error: perms.error });
+  }
+  const flyerId  = typeof input.flyer_id  === 'string'  ? input.flyer_id  : '';
+  const isActive = typeof input.is_active === 'boolean' ? input.is_active : null;
+  if (!flyerId)         return JSON.stringify({ error: 'flyer_id is required' });
+  if (isActive === null) return JSON.stringify({ error: 'is_active (true/false) is required' });
+
+  const { data, error } = await admin.from('flyers')
+    .update({ is_active: isActive })
+    .eq('id', flyerId)
+    .select('id, title, is_active')
+    .single();
+  if (error) {
+    await logWrite(admin, 'set_flyer_active', callerId, input, null, 'error', error.message);
+    return JSON.stringify({ error: error.message });
+  }
+  const result = { ok: true, flyer: data };
+  await logWrite(admin, 'set_flyer_active', callerId, input, result, 'success', null);
   return JSON.stringify(result);
 }

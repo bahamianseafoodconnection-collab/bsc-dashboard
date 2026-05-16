@@ -10,6 +10,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import FlyerBanner from '@/components/FlyerBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -418,6 +419,9 @@ function MarketPageInner() {
           </p>
         </div>
       </section>
+
+      {/* ─── Flyer banner (Founder AI manages content via create_flyer) ─── */}
+      <FlyerBanner />
 
       {/* ─── Shop by category strip ─── */}
       <section className="border-b border-slate-200 bg-slate-50">
