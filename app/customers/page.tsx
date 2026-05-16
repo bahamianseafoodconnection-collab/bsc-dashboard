@@ -16,11 +16,11 @@ type CustomerRow = {
   full_name: string;
   phone: string | null;
   email: string | null;
-  source: string;
-  first_seen_at: string;
-  last_seen_at: string;
+  source: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
   total_orders: number;
-  total_spent_bsd: number;
+  total_spent_bsd: number;  // back-compat alias for total_spent
 };
 
 type OrderRow = {
@@ -57,19 +57,33 @@ export default function CustomersPage() {
     (async () => {
       setLoading(true);
       setError(null);
+      // The production customers schema uses `total_spent` (not `_bsd`) and
+      // may not have source/first_seen_at columns yet. Select * and normalize
+      // client-side so a partial schema still renders.
       const { data, error: err } = await supabase
         .from('customers')
-        .select(
-          'id, full_name, phone, email, source, first_seen_at, last_seen_at, total_orders, total_spent_bsd'
-        )
-        .order('total_spent_bsd', { ascending: false })
+        .select('*')
+        .order('created_at', { ascending: false })
         .limit(500);
       if (cancelled) return;
       if (err) {
         setError(plainError(err));
         setRows([]);
       } else {
-        setRows((data || []) as CustomerRow[]);
+        const normalized: CustomerRow[] = (data ?? []).map((c: Record<string, unknown>) => ({
+          id:              String(c.id ?? ''),
+          full_name:       String(c.full_name ?? c.name ?? ''),
+          phone:           (c.phone as string)  ?? null,
+          email:           (c.email as string)  ?? null,
+          source:          (c.source as string) ?? null,
+          first_seen_at:   (c.first_seen_at as string) ?? (c.created_at  as string) ?? null,
+          last_seen_at:    (c.last_seen_at  as string) ?? (c.updated_at  as string) ?? (c.created_at as string) ?? null,
+          total_orders:    Number(c.total_orders ?? 0),
+          total_spent_bsd: Number(c.total_spent_bsd ?? c.total_spent ?? 0),
+        }));
+        // Sort client-side since we used a generic order
+        normalized.sort((a, b) => b.total_spent_bsd - a.total_spent_bsd);
+        setRows(normalized);
       }
       setLoading(false);
     })();
@@ -93,7 +107,7 @@ export default function CustomersPage() {
       if (sort === 'visits') return b.total_orders - a.total_orders;
       if (sort === 'name') return a.full_name.localeCompare(b.full_name);
       // recent
-      return new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime();
+      return new Date(b.last_seen_at ?? 0).getTime() - new Date(a.last_seen_at ?? 0).getTime();
     });
     return out;
   }, [rows, search, sort]);
@@ -226,7 +240,7 @@ export default function CustomersPage() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 14 }}>{c.full_name}</div>
             <div style={{ color: '#94a3b8', fontSize: 11 }}>
-              {c.phone || c.email || '—'} · {c.source.replace('_', ' ')}
+              {c.phone || c.email || '—'}{c.source ? ` · ${c.source.replace('_', ' ')}` : ''}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -234,8 +248,7 @@ export default function CustomersPage() {
               BSD ${Number(c.total_spent_bsd).toFixed(2)}
             </div>
             <div style={{ color: '#94a3b8', fontSize: 11 }}>
-              {c.total_orders} order{c.total_orders === 1 ? '' : 's'} · last{' '}
-              {timeAgo(c.last_seen_at)}
+              {c.total_orders} order{c.total_orders === 1 ? '' : 's'}{c.last_seen_at ? ` · last ${timeAgo(c.last_seen_at)}` : ''}
             </div>
           </div>
         </button>
@@ -329,8 +342,9 @@ function CustomerDetail({
           {customer.email ? ` · ${customer.email}` : ''}
         </div>
         <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 6 }}>
-          First seen {fmtDate(customer.first_seen_at)} · Last seen{' '}
-          {fmtDate(customer.last_seen_at)} · Source {customer.source}
+          {customer.first_seen_at && <>First seen {fmtDate(customer.first_seen_at)} · </>}
+          {customer.last_seen_at  && <>Last seen {fmtDate(customer.last_seen_at)} · </>}
+          {customer.source        && <>Source {customer.source}</>}
         </div>
 
         <div
