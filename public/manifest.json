@@ -2,7 +2,7 @@
   "name": "BSC Marketplace",
   "short_name": "BSC",
   "description": "Bahamian Seafood Connection — fresh seafood, local food, vehicles, and bill payments delivered across the Bahamas.",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#060d1f",
