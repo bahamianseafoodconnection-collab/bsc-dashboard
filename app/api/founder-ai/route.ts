@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { TOOLS, dispatchTool } from '@/lib/founder-ai-tools';
+import { TOOLS, dispatchTool, extractUserIdFromJWT } from '@/lib/founder-ai-tools';
 
 const MODEL = 'claude-sonnet-4-5';
 const MAX_TOOL_ITERATIONS = 8;
@@ -75,11 +75,25 @@ TOOLS — USE THEM AGGRESSIVELY
 
 You have FOUR custom tools plus web_search. Always prefer a tool over guessing:
 
+READ tools (anyone signed in):
 - read_file(path)        → look up how a page works, what a query selects, what a migration changed. Paths under app/, lib/, components/, supabase/migrations/.
 - query_db(table, ...)   → read live rows from any public-schema table. Read-only.
 - recent_orders(limit)   → last N orders sorted newest-first. Optional order_type filter.
 - health_check()         → run the anomaly scanner. Returns categorized findings (schema drift / margin alerts / operational alerts). Call this whenever the founder asks "what is broken", "what should I worry about", "anything wrong", "scan for issues".
 - web_search             → current market data, regulations, species pricing — anything that needs the live internet.
+
+WRITE tools (founder + co_founder ONLY — every write goes through ai_writes audit):
+- add_product(...)            → CREATE a new product + its pricing rows + optional cost row.
+- set_product_channels(...)   → toggle sell_nassau / sell_andros / sell_online / sell_wholesale on an existing product by sku.
+
+WRITE TOOL PROTOCOL — NEVER SHORTCUT THIS:
+1. Founder asks you to add or change something.
+2. You call the write tool with confirmed=false (or omit confirmed). The tool returns a structured preview — what will be inserted/updated, before vs after.
+3. You show the founder that preview in your reply, in plain English. Numbers, channels, prices — be exact.
+4. WAIT for the founder to explicitly say yes / confirm / do it. "Looks good" / "go" / "do it" / "yes" all count.
+5. ONLY THEN call the same tool again with the same arguments PLUS confirmed=true.
+6. If the tool returns "denied" (non-founder caller), do not retry — explain to the user that write tools are founder/co_founder only.
+7. Every write is logged to ai_writes with the caller id, input, result, and status. Be precise; mistakes leave a permanent trail.
 
 WHEN TO USE WHAT:
 - "What did Bahama Breeze owe / sell us" → query_db('customers' or 'orders')
@@ -222,6 +236,12 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
+    // Identify the caller from the JWT (Authorization: Bearer <token>) so
+    // write tools can enforce founder/co_founder gating per call.
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const callerId = extractUserIdFromJWT(token);
+
     const messages: AnthropicMessage[] = [
       ...(Array.isArray(conversationHistory) ? conversationHistory : []),
       { role: 'user', content: message },
@@ -247,7 +267,7 @@ export async function POST(req: NextRequest) {
       const resultBlocks: AnthropicToolResultBlock[] = [];
       for (const call of toolUseBlocks) {
         toolCallsExecuted.push(call.name);
-        const result = await dispatchTool(call.name, call.input, supabase);
+        const result = await dispatchTool(call.name, call.input, supabase, callerId);
         resultBlocks.push({
           type:         'tool_result',
           tool_use_id:  call.id,
