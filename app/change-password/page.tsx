@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { LANGUAGES, type Lang } from '@/lib/i18n';
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -16,9 +17,20 @@ export default function ChangePasswordPage() {
   const [busy, setBusy]       = useState(false);
   const [done, setDone]       = useState(false);
   const [email, setEmail]     = useState<string | null>(null);
+  const [lang, setLang]       = useState<Lang>('en');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    supabase.auth.getUser().then(async ({ data }) => {
+      setEmail(data.user?.email ?? null);
+      if (data.user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('language')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        if (prof?.language) setLang(prof.language as Lang);
+      }
+    });
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -36,9 +48,10 @@ export default function ChangePasswordPage() {
       const { error: pwErr } = await supabase.auth.updateUser({ password: pwd });
       if (pwErr) { setError('Password update failed: ' + pwErr.message); setBusy(false); return; }
 
+      // Persist BOTH the cleared flag and the selected language in one call.
       const { error: profErr } = await supabase
         .from('profiles')
-        .update({ must_change_password: false })
+        .update({ must_change_password: false, language: lang })
         .eq('id', user.id);
       if (profErr) { setError('Saved password, but flag update failed: ' + profErr.message); setBusy(false); return; }
 
@@ -78,6 +91,26 @@ export default function ChangePasswordPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
+            <Field label="Language · Lang · Idioma">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                {LANGUAGES.map((L) => {
+                  const sel = lang === L.code;
+                  return (
+                    <button key={L.code} type="button" onClick={() => setLang(L.code)}
+                      style={{
+                        padding: '10px 6px', borderRadius: 8, cursor: 'pointer',
+                        background: sel ? '#1a2e5a' : 'rgba(255,255,255,0.04)',
+                        border: sel ? '2px solid #f5c518' : '2px solid rgba(255,255,255,0.08)',
+                        color: sel ? '#f5c518' : 'rgba(255,255,255,0.7)',
+                        textAlign: 'center',
+                      }}>
+                      <div style={{ fontSize: 18, lineHeight: 1 }}>{L.flag}</div>
+                      <div style={{ fontSize: 10, fontWeight: sel ? 700 : 500, marginTop: 4, letterSpacing: 0.3 }}>{L.native}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
             <Field label="New password">
               <input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)}
                 autoComplete="new-password" minLength={8} required style={input} />

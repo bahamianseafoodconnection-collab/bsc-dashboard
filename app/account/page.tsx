@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { LANGUAGES, type Lang } from '@/lib/i18n';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,7 @@ export default function AccountPage() {
   // Profile
   const [profileName, setProfileName] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
+  const [profileLang, setProfileLang] = useState<Lang>('en');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
@@ -70,7 +72,7 @@ export default function AccountPage() {
       setUser({ id: u.id, email: u.email ?? null });
 
       const [{ data: prof }, { count: oCount }, { count: wCount }, addrLoad] = await Promise.all([
-        supabase.from('profiles').select('full_name, phone').eq('id', u.id).maybeSingle(),
+        supabase.from('profiles').select('full_name, phone, language').eq('id', u.id).maybeSingle(),
         supabase.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
         supabase.from('wishlists').select('id', { count: 'exact', head: true }).eq('auth_user_id', u.id),
         supabase
@@ -83,6 +85,7 @@ export default function AccountPage() {
       if (cancelled) return;
       setProfileName((prof?.full_name as string) || '');
       setProfilePhone((prof?.phone as string) || '');
+      setProfileLang(((prof?.language as Lang | undefined) ?? 'en'));
       setOrderCount(oCount ?? 0);
       setWishlistCount(wCount ?? 0);
       if (addrLoad.error) setAddressError(addrLoad.error.message);
@@ -108,13 +111,14 @@ export default function AccountPage() {
       .maybeSingle();
     if (existing) {
       await supabase.from('profiles')
-        .update({ full_name: profileName.trim(), phone: profilePhone.trim() || null })
+        .update({ full_name: profileName.trim(), phone: profilePhone.trim() || null, language: profileLang })
         .eq('id', user.id);
     } else {
       await supabase.from('profiles').insert({
         id: user.id,
         full_name: profileName.trim(),
         phone: profilePhone.trim() || null,
+        language: profileLang,
         role: 'customer',
       });
     }
@@ -290,6 +294,25 @@ export default function AccountPage() {
               placeholder="+1 (242) 000-0000"
               inputMode="tel"
             />
+          </Field>
+          <Field label="Language · Lang · Idioma">
+            <div className="grid grid-cols-3 gap-2">
+              {LANGUAGES.map((L) => {
+                const sel = profileLang === L.code;
+                return (
+                  <button key={L.code} type="button" onClick={() => setProfileLang(L.code)}
+                    className="rounded-lg px-3 py-2 text-center text-xs font-bold"
+                    style={{
+                      backgroundColor: sel ? '#1a2e5a' : '#f1f5f9',
+                      color: sel ? '#f5c518' : '#475569',
+                      border: sel ? '2px solid #f5c518' : '2px solid #e2e8f0',
+                    }}>
+                    <div style={{ fontSize: 18, lineHeight: 1 }}>{L.flag}</div>
+                    <div style={{ marginTop: 4 }}>{L.native}</div>
+                  </button>
+                );
+              })}
+            </div>
           </Field>
           <div className="flex items-center gap-3">
             <button
