@@ -9,7 +9,7 @@ const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const STAFF_ROLES = new Set([
-  'founder','co_founder','cashier','manager','basic_admin','control_admin','andros_staff','supplier'
+  'founder','co_founder','cashier','manager','basic_admin','control_admin','andros_staff','supplier','receiver'
 ]);
 
 const STAFF_ONLY_PREFIXES = [
@@ -81,12 +81,21 @@ const STAFF_NAV: Record<string, { label: string; href: string; icon: string }[]>
     { label: 'Market',   href: '/market',    icon: '🏪' },
     { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
   ],
+  // TJ + Claff work POS cash AND receive/process inventory. 5 tabs total.
   cashier: [
-    { label: 'POS',      href: '/pos',       icon: '🛒' },
-    { label: 'Market',   href: '/market',    icon: '🏪' },
-    { label: 'Vehicles', href: '/vehicles',  icon: '🚗' },
-    { label: 'Pay Bills',href: '/utilities', icon: '⚡' },
-    { label: 'Orders',   href: '/orders',    icon: '📦' },
+    { label: 'POS',       href: '/pos',                 icon: '🛒' },
+    { label: 'Intake',    href: '/intake/scan-invoice', icon: '📥' },
+    { label: 'Inventory', href: '/inventory',           icon: '📊' },
+    { label: 'Yield',     href: '/yield',               icon: '🧮' },
+    { label: 'Pay Bills', href: '/utilities',           icon: '⚡' },
+  ],
+  // Nicholson: receives + processes inventory, no POS cash.
+  receiver: [
+    { label: 'Intake',    href: '/intake/scan-invoice', icon: '📥' },
+    { label: 'Inventory', href: '/inventory',           icon: '📊' },
+    { label: 'Yield',     href: '/yield',               icon: '🧮' },
+    { label: 'Market',    href: '/market',              icon: '🏪' },
+    { label: 'Pay Bills', href: '/utilities',           icon: '⚡' },
   ],
   andros_staff: [
     { label: 'Andros POS',href: '/pos-andros',icon: '🛒' },
