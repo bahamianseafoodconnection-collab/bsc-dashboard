@@ -55,9 +55,24 @@ export async function notifyOrderStatusChange(args: NotifyArgs): Promise<void> {
   const subject = SUBJECT_BY_STATUS[newStatus];
   const body = bodyFor(newStatus, customerName?.trim() || '', orderId ? orderId.slice(0, 8) : '');
   if (!subject || !body) return;
+
+  // ── PATH 1 — direct transactional email via Resend ─────────────
+  // Fires for every status change as long as we have an order_id. The
+  // server route looks up the customer's email itself (handles inline
+  // customer_email on the order AND the linked customers row), so we
+  // don't need to pass it from the caller. No-ops cleanly when no email
+  // is on file.
+  if (orderId) {
+    fetch('/api/email/order-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId, new_status: newStatus }),
+    }).catch((err) => console.warn('Order status email enqueue failed:', err));
+  }
+
+  // ── PATH 2 — legacy notifications queue (WhatsApp / SendGrid stub) ─
   // Need at least one channel target.
   if (!customerPhone && !customerEmail) return;
-
   const channel: 'whatsapp' | 'email' = customerPhone ? 'whatsapp' : 'email';
   try {
     await fetch('/api/notifications/queue', {
