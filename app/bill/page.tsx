@@ -33,7 +33,7 @@ async function checkAuth() {
 const { data: { session } } = await supabase.auth.getSession();
 if (!session?.user) { router.push('/login'); return; }
 const { data: p } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-if (!['bill', 'control_admin'].includes(p?.role)) router.push('/login');
+if (!['bill', 'control_admin', 'founder', 'co_founder'].includes(p?.role)) router.push('/login');
 }
 
 async function loadData() {

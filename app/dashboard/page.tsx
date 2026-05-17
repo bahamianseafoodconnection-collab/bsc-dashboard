@@ -190,6 +190,26 @@ export default function DashboardPage() {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { window.location.href = '/staff-login'; return; }
+
+      // Dashboard is locked to founder + co_founder (Dedrick + Jaquel).
+      // Every other role gets bounced — basic_admin → /jaquel,
+      // everyone else → /market. Profile.role is the source of truth.
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      const role = (prof?.role as string | null) ?? null;
+      if (role !== 'founder' && role !== 'co_founder') {
+        if (role === 'basic_admin')     window.location.href = '/jaquel';
+        else if (role === 'manager')    window.location.href = '/jaquel';
+        else if (role === 'cashier')    window.location.href = '/pos';
+        else if (role === 'receiver')   window.location.href = '/intake/scan-invoice';
+        else if (role === 'processor')  window.location.href = '/processor';
+        else if (role === 'supplier')   window.location.href = '/supplier';
+        else                            window.location.href = '/market';
+        return;
+      }
       setAuthChecked(true);
     }
     checkAuth();

@@ -264,7 +264,7 @@ async function checkAuth() {
 const { data: { session } } = await supabase.auth.getSession();
 if (!session?.user) { router.push('/login'); return; }
 const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-if (!['jorge', 'control_admin'].includes(profile?.role)) { router.push('/login'); return; }
+if (!['jorge', 'control_admin', 'founder', 'co_founder'].includes(profile?.role)) { router.push('/login'); return; }
 await loadData(session.user.email || '');
 }
 

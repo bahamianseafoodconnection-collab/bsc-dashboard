@@ -16,6 +16,7 @@ const ALLOWED_ROLES = new Set([
   'processor',
   'founder',
   'co_founder',
+  'control_admin',
   'manager',
   'right_hand',
   'supervisor',
@@ -51,30 +52,26 @@ export default async function ProcessorPage() {
     redirect('/staff-login?next=/processor');
   }
 
-  // Pull staff record. Try a few name column variants; production schema has
-  // historically had `full_name`, but older snapshots used `name`.
+  // Pull role from profiles (canonical source). Best-effort name + location
+  // from the users table — those columns may not exist on every install.
   let role: string | null = null;
   let displayName: string | null = null;
   let location: string | null = null;
 
-  for (const cols of [
-    'role, full_name, primary_location',
-    'role, name, primary_location',
-    'role',
-  ]) {
-    const { data, error } = await supa
-      .from('users')
-      .select(cols)
-      .eq('id', auth.user.id)
-      .maybeSingle();
-    if (!error && data) {
-      const row = data as unknown as Record<string, unknown>;
-      role = (row.role as string) ?? null;
-      displayName = (row.full_name as string) ?? (row.name as string) ?? null;
-      location = (row.primary_location as string) ?? null;
-      break;
-    }
+  const { data: prof } = await supa
+    .from('profiles')
+    .select('role, full_name')
+    .eq('id', auth.user.id)
+    .maybeSingle();
+  if (prof) {
+    role = (prof.role as string | null) ?? null;
+    displayName = (prof.full_name as string | null) ?? null;
   }
+  // Optional location lookup; ignore failures silently.
+  try {
+    const { data } = await supa.from('users').select('primary_location').eq('id', auth.user.id).maybeSingle();
+    if (data) location = (data as { primary_location?: string | null }).primary_location ?? null;
+  } catch { /* schema variance — non-fatal */ }
 
   if (!role || !ALLOWED_ROLES.has(role)) {
     return (
