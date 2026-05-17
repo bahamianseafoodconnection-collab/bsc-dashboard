@@ -138,12 +138,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, must_change_password')
           .eq('id', session.user.id)
           .single();
 
         const role = profile?.role || 'customer';
         setRoleState(role);
+
+        // Force-password-change takes priority over every other guard.
+        // If the user is flagged, they're locked to /change-password
+        // until they reset (the page itself clears the flag on success).
+        if (profile?.must_change_password && pathname !== '/change-password') {
+          router.replace('/change-password');
+          return;
+        }
 
         if (!STAFF_ROLES.has(role)) {
           const blocked =
