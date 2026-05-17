@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { CookieOptions } from '@supabase/ssr';
+import { sendOrderConfirmation } from '@/lib/email-templates';
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,6 +92,35 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error('Order create error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Fire-and-forget confirmation email. We don't await so the
+    // checkout response time stays snappy; email failures only show
+    // up in the server logs (the order itself is already safely saved).
+    if (customer_email && data?.id) {
+      // Best-effort lookup of customer_id by email so the unsubscribe
+      // footer is wired even when the buyer wasn't logged in.
+      (async () => {
+        try {
+          const { data: cust } = await supabase.from('customers')
+            .select('id').ilike('email', customer_email).maybeSingle();
+          const r = await sendOrderConfirmation({
+            to:             customer_email,
+            customer_id:    cust?.id,
+            customer_name:  customer_name || 'friend',
+            order_id:       data.id,
+            items:          Array.isArray(items) ? items : [],
+            subtotal:       Number(subtotal ?? total),
+            delivery_fee:   Number(delivery_fee ?? 0),
+            total:          Number(total),
+            delivery_type:  body.delivery_type ?? null,
+            payment_method: payment_method ?? null,
+          });
+          if (r?.error) console.error('Order confirmation email failed:', r.error);
+        } catch (e) {
+          console.error('Order confirmation email threw:', e);
+        }
+      })();
     }
 
     return NextResponse.json({

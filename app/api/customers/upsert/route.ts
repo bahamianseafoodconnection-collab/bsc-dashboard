@@ -123,6 +123,30 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    // Welcome email — only on the create path, only when we got an email,
+    // only when source='online' (don't blast cashier-entered POS customers
+    // who likely never asked for marketing emails). Fire-and-forget so
+    // signup latency isn't affected by Resend.
+    if (email && source === 'online') {
+      const newCustomerId = inserted.id as string;
+      const newName       = name as string;
+      const toEmail       = email as string;
+      (async () => {
+        try {
+          const { sendWelcomeEmail } = await import('@/lib/email-templates');
+          const r = await sendWelcomeEmail({
+            to:            toEmail,
+            customer_id:   newCustomerId,
+            customer_name: newName,
+          });
+          if (r?.error) console.error('Welcome email failed:', r.error);
+        } catch (e) {
+          console.error('Welcome email threw:', e);
+        }
+      })();
+    }
+
     return NextResponse.json({
       ok: true,
       created: true,
