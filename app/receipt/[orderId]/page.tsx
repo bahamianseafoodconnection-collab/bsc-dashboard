@@ -92,12 +92,12 @@ export default function ReceiptPage() {
       <div className="receipt-card" style={cardStyle}>
         {/* Header */}
         <div style={{ textAlign: 'center', borderBottom: '2px solid #1a2e5a', paddingBottom: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#1a2e5a' }}>🐟 BSC Marketplace</div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
-            Bahamian Seafood Connection · Nassau, Bahamas 🇧🇸
+          <div style={{ fontSize: 28, fontWeight: 900, color: '#1a2e5a', letterSpacing: 0.5 }}>BSC Market Place</div>
+          <div style={{ fontSize: 13, color: '#475569', marginTop: 6, lineHeight: 1.4 }}>
+            Epic Plaza, Fire Trail Rd, Nassau, New Providence, Bahamas
           </div>
-          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
-            +1 (242) 558-4495 · bscbahamas.com
+          <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>
+            Mobile: 242-822-6180 &nbsp;·&nbsp; TIN# 111392634
           </div>
         </div>
 
@@ -112,7 +112,7 @@ export default function ReceiptPage() {
           </div>
           <div>
             <div style={metaLabel}>Order #</div>
-            <div style={{ ...metaValue, fontFamily: 'monospace', fontSize: 11 }}>
+            <div style={{ ...metaValue, fontFamily: 'monospace', fontSize: 13 }}>
               {order.id.slice(0, 13)}…
             </div>
           </div>
@@ -120,17 +120,17 @@ export default function ReceiptPage() {
 
         {/* Customer */}
         <div style={sectionStyle}>
-          <div style={sectionLabel}>Bill to</div>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1a2e5a' }}>
-            {order.customer_name || 'Walk-in customer'}
+          <div style={sectionLabel}>Customer</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#1a2e5a' }}>
+            {order.customer_name || 'Walk-In Customer'}
           </div>
           {order.customer_phone && (
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+            <div style={{ fontSize: 14, color: '#475569', marginTop: 4 }}>
               📱 {order.customer_phone}
             </div>
           )}
           {order.customer_address && (
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
+            <div style={{ fontSize: 14, color: '#475569', marginTop: 2 }}>
               {order.customer_address}
             </div>
           )}
@@ -139,7 +139,7 @@ export default function ReceiptPage() {
         {/* Delivery method */}
         <div style={sectionStyle}>
           <div style={sectionLabel}>Delivery</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2e5a' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#1a2e5a' }}>
             {order.delivery_type === 'mailboat'
               ? '🚤 Mailboat shipping (Family Island)'
               : order.delivery_type === 'nassau'
@@ -149,7 +149,7 @@ export default function ReceiptPage() {
                   : '📦 Delivery'}
           </div>
           {order.admin_notes && (
-            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{order.admin_notes}</div>
+            <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>{order.admin_notes}</div>
           )}
         </div>
 
@@ -157,9 +157,9 @@ export default function ReceiptPage() {
         <div style={sectionStyle}>
           <div style={sectionLabel}>Items</div>
           {items.length === 0 ? (
-            <div style={{ fontSize: 12, color: '#666' }}>No line items recorded.</div>
+            <div style={{ fontSize: 14, color: '#666' }}>No line items recorded.</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr>
                   <th style={thStyle}>Item</th>
@@ -194,14 +194,14 @@ export default function ReceiptPage() {
         {/* Totals */}
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '2px solid #1a2e5a' }}>
           <div style={totalsRowStyle}>
-            <span style={{ color: '#666', fontSize: 12 }}>Subtotal (excl VAT)</span>
-            <span style={{ fontSize: 13 }}>${subtotal.toFixed(2)}</span>
+            <span style={{ color: '#475569', fontSize: 14, fontWeight: 600 }}>Subtotal (excl VAT)</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
           </div>
           <div style={totalsRowStyle}>
-            <span style={{ color: '#666', fontSize: 12 }}>VAT 10%</span>
-            <span style={{ fontSize: 13 }}>${vat.toFixed(2)}</span>
+            <span style={{ color: '#475569', fontSize: 14, fontWeight: 600 }}>VAT 10%</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>${vat.toFixed(2)}</span>
           </div>
-          <div style={{ ...totalsRowStyle, marginTop: 8, fontWeight: 900, fontSize: 16, color: '#1a2e5a' }}>
+          <div style={{ ...totalsRowStyle, marginTop: 10, fontWeight: 900, fontSize: 22, color: '#1a2e5a' }}>
             <span>TOTAL</span>
             <span>BSD ${total.toFixed(2)}</span>
           </div>
@@ -210,7 +210,7 @@ export default function ReceiptPage() {
         {/* Payment */}
         <div style={sectionStyle}>
           <div style={sectionLabel}>Payment</div>
-          <div style={{ fontSize: 12, color: '#475569' }}>
+          <div style={{ fontSize: 15, color: '#475569', fontWeight: 600 }}>
             {order.payment_method ? labelForPayment(order.payment_method) : '—'}
             {' · '}
             <span
@@ -222,21 +222,21 @@ export default function ReceiptPage() {
                   : order.payment_status === 'pending'
                     ? '#d97706'
                     : '#dc2626',
-                fontWeight: 700,
+                fontWeight: 800,
               }}
             >
               {(order.payment_status || order.status || 'pending').toUpperCase()}
             </span>
             {order.payment_ref && (
-              <span style={{ color: '#94a3b8', marginLeft: 8, fontFamily: 'monospace' }}>
+              <span style={{ color: '#94a3b8', marginLeft: 8, fontFamily: 'monospace', fontSize: 13 }}>
                 ref {order.payment_ref}
               </span>
             )}
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', fontSize: 10, color: '#999', marginTop: 18, borderTop: '1px solid #eee', paddingTop: 10 }}>
-          Thank you for shopping with BSC Marketplace.<br />
+        <div style={{ textAlign: 'center', fontSize: 12, color: '#666', marginTop: 18, borderTop: '1px solid #eee', paddingTop: 12, lineHeight: 1.5 }}>
+          Thank you for shopping with BSC Market Place.<br />
           Questions? WhatsApp +1 (242) 361-3474 or call +1 (242) 558-4495.
         </div>
       </div>
@@ -317,10 +317,10 @@ const cardStyle: React.CSSProperties = { background: '#fff', maxWidth: 600, marg
 const topBarStyle: React.CSSProperties = { maxWidth: 600, margin: '0 auto 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#475569' };
 const printBtnStyle: React.CSSProperties = { background: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 800, fontSize: 12, cursor: 'pointer' };
 const metaRowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 12, marginBottom: 14 };
-const metaLabel: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 };
-const metaValue: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#1a2e5a' };
+const metaLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 };
+const metaValue: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: '#1a2e5a' };
 const sectionStyle: React.CSSProperties = { marginTop: 14, paddingTop: 10, borderTop: '1px dashed #ddd' };
-const sectionLabel: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 };
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '6px 4px', borderBottom: '2px solid #1a2e5a', fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 };
-const tdStyle: React.CSSProperties = { padding: '6px 4px' };
+const sectionLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 };
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '8px 4px', borderBottom: '2px solid #1a2e5a', fontSize: 12, fontWeight: 700, color: '#1a2e5a', textTransform: 'uppercase', letterSpacing: 0.5 };
+const tdStyle: React.CSSProperties = { padding: '8px 4px', fontSize: 14, color: '#1a2e5a', verticalAlign: 'top' };
 const totalsRowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '4px 0' };
