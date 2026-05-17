@@ -164,6 +164,57 @@ export default function PrepPage() {
   const totalExpected = prepList.length;
   const totalPredictedRevenue = prepList.reduce((s, c) => s + c.avg_spend, 0);
 
+  // Top items for this DOW — aggregate across ALL orders that day, not
+  // just the regular customers (so we catch one-off bulk buyers too).
+  const topProducts = useMemo(() => {
+    const dayOrders = orders.filter(o => new Date(o.created_at).getDay() === targetDow);
+    const byKey = new Map<string, { sku?: string; name: string; times: number; total_qty: number; total_revenue: number }>();
+    for (const o of dayOrders) {
+      const items: RawItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawItem[]) : [];
+      for (const it of items) {
+        const key = it.sku ?? it.name ?? 'unknown';
+        const ex  = byKey.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
+        ex.times         += 1;
+        ex.total_qty     += Number(it.weight_lb ?? it.quantity ?? 0);
+        ex.total_revenue += Number(it.line_total ?? 0);
+        byKey.set(key, ex);
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) => b.total_qty - a.total_qty).slice(0, 12);
+  }, [orders, targetDow]);
+
+  // Per-customer DOW pattern when a card is clicked (modal).
+  const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
+  const expandedDetail = useMemo(() => {
+    if (!expandedCustomerId) return null;
+    const all = orders.filter(o => o.customer_id === expandedCustomerId);
+    const byDow = [0,1,2,3,4,5,6].map((dow) => {
+      const dowOrders = all.filter(o => new Date(o.created_at).getDay() === dow);
+      const total = dowOrders.reduce((s, o) => s + Number(o.total ?? 0), 0);
+      return { dow, name: DAYS.find(d => d.dow === dow)?.name ?? '', visits: dowOrders.length, total };
+    });
+    const itemMap = new Map<string, { sku?: string; name: string; times: number; total_qty: number }>();
+    for (const o of all) {
+      const items: RawItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawItem[]) : [];
+      for (const it of items) {
+        const key = it.sku ?? it.name ?? 'unknown';
+        const ex  = itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0 };
+        ex.times    += 1;
+        ex.total_qty += Number(it.weight_lb ?? it.quantity ?? 0);
+        itemMap.set(key, ex);
+      }
+    }
+    const c = all[0];
+    return {
+      name:       c?.customer_name ?? '(unnamed)',
+      phone:      c?.customer_phone,
+      total_visits: all.length,
+      total_spend: all.reduce((s, o) => s + Number(o.total ?? 0), 0),
+      byDow,
+      topItems: Array.from(itemMap.values()).sort((a, b) => b.times - a.times).slice(0, 10),
+    };
+  }, [expandedCustomerId, orders]);
+
   // ── RENDER ───────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#060d1f', color: '#fff', fontFamily: "'DM Sans', sans-serif" }}>
@@ -213,6 +264,31 @@ export default function PrepPage() {
         {err     && <p style={{ color: '#f87171', fontSize: 13 }}>⚠ {err}</p>}
         {loading && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center', padding: 30 }}>Loading 90 days of orders…</p>}
 
+        {/* Top items for this day — product-level demand */}
+        {!loading && topProducts.length > 0 && (
+          <div style={{ marginBottom: 14, padding: 14, borderRadius: 12, background: 'rgba(245,197,24,0.05)', border: '1px solid rgba(245,197,24,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: '#f5c518', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                🐟 Top items {tierForToday?.name ? `for ${tierForToday.name}` : ''}
+              </h2>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Last 90 days · prep this much</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+              {topProducts.map((p, i) => (
+                <div key={i} style={{ padding: 10, borderRadius: 8, background: '#0b1628', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{p.name}</p>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                    {p.times}× orders · {p.total_qty > 0 ? `${p.total_qty.toFixed(p.total_qty < 5 ? 1 : 0)} units` : '—'}
+                  </p>
+                  {p.total_revenue > 0 && (
+                    <p style={{ fontSize: 11, color: '#4ade80', marginTop: 2, fontWeight: 600 }}>${p.total_revenue.toFixed(0)} revenue</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!loading && prepList.length === 0 && (
           <div style={{ padding: 32, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 12 }}>
             No repeat customers for {tierForToday?.name ?? 'this day'} in the last 90 days.
@@ -229,8 +305,11 @@ export default function PrepPage() {
               opacity: isDone ? 0.7 : 1,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <p style={{ fontWeight: 700, fontSize: 15, textDecoration: isDone ? 'line-through' : 'none' }}>{c.name}</p>
+                <div style={{ minWidth: 0, flex: 1, cursor: 'pointer' }} onClick={() => setExpandedCustomerId(c.customer_id)}>
+                  <p style={{ fontWeight: 700, fontSize: 15, textDecoration: isDone ? 'line-through' : 'none' }}>
+                    {c.name}
+                    <span style={{ fontSize: 11, color: '#f5c518', fontWeight: 500, marginLeft: 6 }}>↗ pattern</span>
+                  </p>
                   <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>
                     {c.visits} visit{c.visits === 1 ? '' : 's'} on {tierForToday?.name ?? 'this day'} · last {daysAgo(c.last_visit)} days ago · usually ~${c.avg_spend.toFixed(2)}
                   </p>
@@ -273,6 +352,79 @@ export default function PrepPage() {
           );
         })}
       </main>
+
+      {/* ── Customer pattern modal ─────────────────────────── */}
+      {expandedDetail && (
+        <div onClick={() => setExpandedCustomerId(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 60, padding: 16,
+            background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 540, maxHeight: '85vh', overflowY: 'auto',
+              background: '#0b1628', borderRadius: 16, border: '1px solid rgba(245,197,24,0.25)',
+              padding: 0,
+            }}>
+            <div style={{ padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <p style={{ fontSize: 11, color: '#f5c518', textTransform: 'uppercase', letterSpacing: 1 }}>Customer pattern</p>
+                <h2 style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginTop: 4 }}>{expandedDetail.name}</h2>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+                  {expandedDetail.total_visits} visit{expandedDetail.total_visits === 1 ? '' : 's'} · ${expandedDetail.total_spend.toFixed(2)} lifetime
+                </p>
+              </div>
+              <button onClick={() => setExpandedCustomerId(null)}
+                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div style={{ padding: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#f5c518', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>When they buy</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
+                {expandedDetail.byDow.map((d) => {
+                  const maxVisits = Math.max(...expandedDetail.byDow.map((x) => x.visits), 1);
+                  const intensity = d.visits / maxVisits;
+                  return (
+                    <div key={d.dow} style={{ textAlign: 'center', padding: '6px 2px', borderRadius: 6, background: `rgba(245,197,24,${0.08 + intensity * 0.5})` }}>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.3 }}>{d.name.slice(0, 3).toUpperCase()}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: d.visits ? '#f5c518' : 'rgba(255,255,255,0.25)' }}>{d.visits}</div>
+                      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)' }}>${d.total.toFixed(0)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#f5c518', textTransform: 'uppercase', letterSpacing: 1, marginTop: 18, marginBottom: 8 }}>
+                Most-bought items (all time)
+              </p>
+              {expandedDetail.topItems.length === 0 ? (
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>No itemized orders recorded.</p>
+              ) : (
+                <div>
+                  {expandedDetail.topItems.map((it, i) => (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                      padding: '8px 0', borderBottom: i < expandedDetail.topItems.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    }}>
+                      <span style={{ fontSize: 13, color: '#fff' }}>{it.name}</span>
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
+                        {it.times}× · {it.total_qty > 0 ? `${it.total_qty.toFixed(it.total_qty < 5 ? 1 : 0)} units` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {expandedDetail.phone && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+                  <a href={`tel:${expandedDetail.phone}`} style={miniBtn('#60a5fa')}>📞 Call</a>
+                  <a href={`https://wa.me/${expandedDetail.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" style={miniBtn('#25d366')}>💬 WhatsApp</a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

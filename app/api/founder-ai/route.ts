@@ -80,6 +80,10 @@ READ tools (anyone signed in):
 - query_db(table, ...)   → read live rows from any public-schema table. Read-only.
 - recent_orders(limit)   → last N orders sorted newest-first. Optional order_type filter.
 - health_check()         → run the anomaly scanner. Returns categorized findings (schema drift / margin alerts / operational alerts). Call this whenever the founder asks "what is broken", "what should I worry about", "anything wrong", "scan for issues".
+- demand_pattern(...)    → behavioral analytics, two modes:
+                            mode='product_by_day', day_of_week (0=Sun..6=Sat) → top SKUs that sell on that day with units + revenue.
+                            mode='customer', customer_id → that customer's full 7-day visit pattern + their most-bought items.
+                            Use for ANY "what sells on X day", "who buys Y", "what does Z customer always order" question. Lookback defaults to 90 days; raise via lookback_days up to 365.
 - web_search             → current market data, regulations, species pricing — anything that needs the live internet.
 
 WRITE tools (founder + co_founder ONLY — every write goes through ai_writes audit):

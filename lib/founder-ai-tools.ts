@@ -193,6 +193,24 @@ export const TOOLS = [
     },
   },
   {
+    name: 'demand_pattern',
+    description:
+      'Read-only behavioral analytics. Returns either (a) top products that sell on a given day-of-week, or (b) a single customer\'s buying pattern across all 7 days + their most-bought items. Use this when the founder asks things like "what sells on Wednesday", "who buys snapper", "show me Jaquel\'s pattern", or "what does the Smith family always order".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          description: '"product_by_day" for top products on a given DOW, or "customer" for a single customer\'s full pattern.',
+        },
+        day_of_week: { type: 'number', description: 'Required when mode=product_by_day. 0=Sunday, 1=Monday, …, 6=Saturday.' },
+        customer_id: { type: 'string', description: 'Required when mode=customer. UUID of the customer.' },
+        lookback_days: { type: 'number', description: 'Optional window. Defaults to 90 days.' },
+      },
+      required: ['mode'],
+    },
+  },
+  {
     name: 'send_email_blast',
     description:
       'Send an email blast to BSC customers who opted in. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (recipient count + the rendered HTML); the founder must explicitly say YES; only then call again with confirmed=true. The blast body is wrapped in the standard BSC layout with a CAN-SPAM-compliant footer + one-click unsubscribe link. Filter the audience by `audience` — recommend `all_opted_in` unless the founder is targeting a specific cohort.',
@@ -243,6 +261,12 @@ interface SetProductChannelsInput {
   sell_online?: unknown;
   sell_wholesale?: unknown;
   confirmed?: unknown;
+}
+interface DemandPatternInput {
+  mode?:          unknown;
+  day_of_week?:   unknown;
+  customer_id?:   unknown;
+  lookback_days?: unknown;
 }
 interface SendEmailBlastInput {
   subject?:   unknown;
@@ -339,6 +363,7 @@ export async function dispatchTool(
       case 'health_check':         return JSON.stringify(await healthCheck(admin));
       case 'add_product':          return await addProductTool(input as AddProductInput, admin, callerId);
       case 'set_product_channels': return await setProductChannelsTool(input as SetProductChannelsInput, admin, callerId);
+      case 'demand_pattern':       return await demandPatternTool(input as DemandPatternInput, admin);
       case 'send_email_blast':     return await sendEmailBlastTool(input as SendEmailBlastInput, admin, callerId);
       case 'list_flyers':          return await listFlyersTool(admin);
       case 'create_flyer':         return await createFlyerTool(input as CreateFlyerInput, admin, callerId);
@@ -870,4 +895,111 @@ async function setFlyerActiveTool(
   const result = { ok: true, flyer: data };
   await logWrite(admin, 'set_flyer_active', callerId, input, result, 'success', null);
   return JSON.stringify(result);
+}
+
+// ── demand_pattern (READ-ONLY) ────────────────────────────────────────
+//
+// Two modes:
+//   • product_by_day(day_of_week) — top SKUs for a given DOW
+//   • customer(customer_id)       — that customer's per-DOW visits + top items
+//
+// Both aggregate from orders.wholesale_items (JSONB) in JS, using a single
+// scan of the last `lookback_days` (default 90) of orders. No SQL CTEs.
+
+interface RawOrderItem { sku?: string; name?: string; quantity?: number; weight_lb?: number | null; line_total?: number }
+interface OrderRow {
+  id: string;
+  created_at: string;
+  customer_id: string | null;
+  customer_name: string | null;
+  total: number | null;
+  wholesale_items: unknown;
+}
+
+async function demandPatternTool(input: DemandPatternInput, admin: SupabaseClient): Promise<string> {
+  const mode = typeof input.mode === 'string' ? input.mode : '';
+  if (mode !== 'product_by_day' && mode !== 'customer') {
+    return JSON.stringify({ error: 'mode must be "product_by_day" or "customer"' });
+  }
+  const lookback = Math.max(7, Math.min(365, Number(input.lookback_days ?? 90)));
+  const since = new Date();
+  since.setDate(since.getDate() - lookback);
+
+  let q = admin.from('orders')
+    .select('id, created_at, customer_id, customer_name, total, wholesale_items')
+    .gte('created_at', since.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(2000);
+
+  if (mode === 'customer') {
+    const cid = typeof input.customer_id === 'string' ? input.customer_id : '';
+    if (!cid) return JSON.stringify({ error: 'customer_id is required for mode=customer' });
+    q = q.eq('customer_id', cid);
+  }
+
+  const { data, error } = await q;
+  if (error) return JSON.stringify({ error: error.message });
+  const orders = (data ?? []) as OrderRow[];
+
+  if (mode === 'product_by_day') {
+    const dow = Number(input.day_of_week);
+    if (!Number.isInteger(dow) || dow < 0 || dow > 6) {
+      return JSON.stringify({ error: 'day_of_week must be an integer 0-6 (0=Sunday)' });
+    }
+    const dayOrders = orders.filter(o => new Date(o.created_at).getDay() === dow);
+    const byKey = new Map<string, { sku?: string; name: string; times: number; total_qty: number; total_revenue: number }>();
+    for (const o of dayOrders) {
+      const items: RawOrderItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawOrderItem[]) : [];
+      for (const it of items) {
+        const key = it.sku ?? it.name ?? 'unknown';
+        const ex  = byKey.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
+        ex.times         += 1;
+        ex.total_qty     += Number(it.weight_lb ?? it.quantity ?? 0);
+        ex.total_revenue += Number(it.line_total ?? 0);
+        byKey.set(key, ex);
+      }
+    }
+    const top = Array.from(byKey.values()).sort((a, b) => b.total_qty - a.total_qty).slice(0, 15);
+    const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dow];
+    return JSON.stringify({
+      mode:           'product_by_day',
+      day_of_week:    dow,
+      day_name:       dayName,
+      lookback_days:  lookback,
+      order_count:    dayOrders.length,
+      top_products:   top,
+    });
+  }
+
+  // mode === 'customer'
+  const byDow = [0,1,2,3,4,5,6].map((dow) => {
+    const dowOrders = orders.filter(o => new Date(o.created_at).getDay() === dow);
+    return {
+      day_of_week: dow,
+      day_name:    ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dow],
+      visits:      dowOrders.length,
+      total_spend: dowOrders.reduce((s, o) => s + Number(o.total ?? 0), 0),
+    };
+  });
+  const itemMap = new Map<string, { sku?: string; name: string; times: number; total_qty: number }>();
+  for (const o of orders) {
+    const items: RawOrderItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawOrderItem[]) : [];
+    for (const it of items) {
+      const key = it.sku ?? it.name ?? 'unknown';
+      const ex  = itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0 };
+      ex.times    += 1;
+      ex.total_qty += Number(it.weight_lb ?? it.quantity ?? 0);
+      itemMap.set(key, ex);
+    }
+  }
+  return JSON.stringify({
+    mode:          'customer',
+    customer_id:   input.customer_id,
+    customer_name: orders[0]?.customer_name ?? null,
+    lookback_days: lookback,
+    total_visits:  orders.length,
+    total_spend:   orders.reduce((s, o) => s + Number(o.total ?? 0), 0),
+    by_day:        byDow,
+    top_items:     Array.from(itemMap.values()).sort((a, b) => b.times - a.times).slice(0, 15),
+  });
 }
