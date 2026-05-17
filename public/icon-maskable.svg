@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Maskable icon: full-bleed BSC navy, the brand mark sits inside the inner 80% safe zone -->
+  <!-- Maskable: full-bleed navy; mark sits inside the 80% safe zone -->
   <rect width="512" height="512" fill="#060d1f"/>
-  <g transform="translate(140 192)">
-    <rect width="232" height="128" rx="8" fill="#00778B"/>
-    <rect y="44" width="232" height="40" fill="#FFC72C"/>
-    <polygon points="0,0 70,64 0,128" fill="#000000"/>
+  <g stroke="#f5c518" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M148 184 L188 184 L226 320 L368 320 L398 220 L210 220"/>
   </g>
-  <text x="256" y="376" font-family="Georgia, serif" font-size="58" font-weight="700" text-anchor="middle" fill="#f5c518">BSC</text>
+  <circle cx="248" cy="364" r="20" fill="#f5c518"/>
+  <circle cx="356" cy="364" r="20" fill="#f5c518"/>
+  <text x="256" y="430" font-family="Georgia, serif" font-size="44" font-weight="700" text-anchor="middle" fill="#f5c518">Shop BSC</text>
 </svg>

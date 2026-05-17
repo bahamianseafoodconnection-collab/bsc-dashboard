@@ -1,9 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="96" fill="#060d1f"/>
-  <g transform="translate(96 176)">
-    <rect width="320" height="160" rx="12" fill="#00778B"/>
-    <rect y="55" width="320" height="50" fill="#FFC72C"/>
-    <polygon points="0,0 95,80 0,160" fill="#000000"/>
+  <!-- Gold shopping cart -->
+  <g stroke="#f5c518" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Handle stem -->
+    <path d="M108 144 L160 144 L208 320 L388 320 L424 196 L188 196"/>
   </g>
-  <text x="256" y="420" font-family="Georgia, serif" font-size="80" font-weight="700" text-anchor="middle" fill="#f5c518">BSC</text>
+  <!-- Wheels -->
+  <circle cx="232" cy="372" r="24" fill="#f5c518"/>
+  <circle cx="368" cy="372" r="24" fill="#f5c518"/>
+  <!-- "Shop BSC" wordmark -->
+  <text x="256" y="460" font-family="Georgia, serif" font-size="54" font-weight="700" text-anchor="middle" fill="#f5c518">Shop BSC</text>
 </svg>
