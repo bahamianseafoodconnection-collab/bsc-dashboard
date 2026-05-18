@@ -13,7 +13,14 @@
 --   SEAFOOD IS AN ALLERGEN
 --   WILD CAUGHT PRODUCT OF THE BAHAMAS
 
+-- Both the earlier label-fields migration (20260518020000) and this one
+-- are folded together here so it's safe to run even on a fresh DB that
+-- never received the earlier file. Every column is IF NOT EXISTS.
+
 ALTER TABLE traceability_batches
+  ADD COLUMN IF NOT EXISTS allergens               TEXT,
+  ADD COLUMN IF NOT EXISTS cook_disclaimer         TEXT,
+  ADD COLUMN IF NOT EXISTS product_label_url       TEXT,
   ADD COLUMN IF NOT EXISTS lot_code                TEXT,        -- YYYY/NNNN, auto on approve
   ADD COLUMN IF NOT EXISTS fda_number              TEXT,
   ADD COLUMN IF NOT EXISTS processing_plant_number TEXT,
