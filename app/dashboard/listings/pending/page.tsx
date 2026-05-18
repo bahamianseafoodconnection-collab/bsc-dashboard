@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { gmapsLink } from '@/lib/traceability/batch';
+import { suggestProfile } from '@/lib/traceability/product-packaging';
 
 interface ListingRow {
   id: string; vendor_id: string; title: string; description: string | null; product_type: string | null;
@@ -94,22 +95,38 @@ export default function PendingListingsPage() {
     if (!v) { alert('Vendor not loaded'); return; }
     const sl = Number(shelfLife[l.id] ?? DEFAULT_SHELF_LIFE[v.vendor_type] ?? 7);
 
-    // 1) Generate batch number via RPC.
-    const { data: bn, error: bnErr } = await supabase.rpc('generate_batch_number', { p_vendor_type: v.vendor_type });
-    if (bnErr || !bn) { alert('Batch number generation failed: ' + (bnErr?.message ?? 'unknown')); return; }
-    const batchNumber: string = bn as string;
+    // 1) Generate batch number + lot code via RPCs.
+    const [bnRes, lcRes] = await Promise.all([
+      supabase.rpc('generate_batch_number', { p_vendor_type: v.vendor_type }),
+      supabase.rpc('generate_lot_code'),
+    ]);
+    if (bnRes.error || !bnRes.data) { alert('Batch number generation failed: ' + (bnRes.error?.message ?? 'unknown')); return; }
+    if (lcRes.error || !lcRes.data) { alert('Lot code generation failed: '   + (lcRes.error?.message ?? 'unknown')); return; }
+    const batchNumber: string = bnRes.data as string;
+    const lotCode:     string = lcRes.data as string;
 
     // 2) Parse meta from rejection_reason (until we add a JSONB column).
     let meta: Record<string, unknown> = {};
     try { if (l.rejection_reason) meta = JSON.parse(l.rejection_reason) as Record<string, unknown>; } catch { /* */ }
 
-    // 3) Insert traceability_batches row with vendor-context snapshot.
+    // 3) Pull label defaults from the product-packaging lookup.
+    const profile     = suggestProfile(l.product_type ?? l.title);
+    const ingredients = profile?.key === 'lobster_tail' ? 'Lobster Tails, Sodium Bisulfite added as a Preservative'
+                      : profile?.key === 'conch'        ? 'Conch, Salt'
+                      : profile?.key === 'farm_crop'    ? (l.product_type ?? l.title)
+                      : (l.product_type ?? l.title);
+    const allergens   = (profile?.key === 'lobster_tail' || profile?.key === 'conch')
+                          ? 'Contains shellfish.'
+                          : v.vendor_type === 'fisherman' ? 'Contains fish.' : null;
+
+    // 4) Insert traceability_batches row with vendor-context snapshot.
     const isFisher = v.vendor_type === 'fisherman';
     const isFarmer = v.vendor_type === 'farmer';
     const payoutSnapshot = Number(l.price_per_unit) * Number(l.quantity_available);
 
     const { error: bErr } = await supabase.from('traceability_batches').insert({
       batch_number:             batchNumber,
+      lot_code:                 lotCode,
       listing_id:               l.id,
       vendor_id:                v.id,
       vendor_type:              v.vendor_type,
@@ -127,7 +144,16 @@ export default function PendingListingsPage() {
       farm_license_number:      isFarmer ? v.farm_license_number      : null,
       farm_license_doc_url:     isFarmer ? v.farm_license_doc_url     : null,
       farmer_id_doc_url:        isFarmer ? v.farmer_id_doc_url        : null,
-      shelf_life_days:          sl,
+      // Label defaults — match the Spiny Tails Co. reference sticker.
+      fda_number:               '16988725790',
+      processing_plant_number:  '45',
+      ingredients,
+      allergens,
+      cook_disclaimer:          'Cook fully before consumption.',
+      wild_caught:              isFisher,
+      master_case_lbs:          profile?.master_case_lbs ?? null,
+      package_lbs:              profile?.package_lbs     ?? null,
+      shelf_life_days:          sl || profile?.shelf_life_days || 7,
       status:                   'pending_processing',
       approved_by:              session?.user.id ?? null,
       approved_at:              new Date().toISOString(),
