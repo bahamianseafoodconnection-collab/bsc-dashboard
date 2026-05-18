@@ -1,7 +1,12 @@
 'use client';
 
 // Shared marketplace component used by /shop/fresh-catch and /shop/farm-fresh.
-// Pulls vendor_listings WHERE status='live' AND vendor.vendor_type=kind.
+//
+// Reads vendor *marketing* info from the column-filtered
+// `vendor_public_profiles` VIEW — never from the base `vendors` table —
+// so customer-side PII (phone, email, government_id, license, bank
+// info) is structurally impossible to expose, even if a curious user
+// crafts their own query in the browser DevTools.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -13,10 +18,11 @@ interface Listing {
   price_per_unit: number; photos: string[]; videos: string[];
   harvest_status: string | null; harvest_or_catch_time: string | null; available_until: string | null;
 }
-interface Vendor { id: string; business_name: string; vendor_type: string; trust_tier: number; location: string | null; }
+// VendorPublic intentionally omits phone, email, address, bank, IDs, etc.
+interface VendorPublic { id: string; business_name: string; vendor_type: string; trust_tier: number; location: string | null; }
 
 export default function VendorMarketShop({ kind }: { kind: 'fisherman' | 'farmer' }) {
-  const [items,   setItems]   = useState<Array<Listing & { vendor: Vendor | null }>>([]);
+  const [items,   setItems]   = useState<Array<Listing & { vendor: VendorPublic | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [err,     setErr]     = useState<string | null>(null);
   const [q,       setQ]       = useState('');
@@ -24,12 +30,12 @@ export default function VendorMarketShop({ kind }: { kind: 'fisherman' | 'farmer
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: vs, error: vErr } = await supabase.from('vendors')
+      // PUBLIC VIEW — only safe columns; PII never leaves the server.
+      const { data: vs, error: vErr } = await supabase.from('vendor_public_profiles')
         .select('id, business_name, vendor_type, trust_tier, location')
-        .eq('approval_status', 'approved')
         .eq('vendor_type', kind);
       if (vErr) { setErr(vErr.message); setLoading(false); return; }
-      const vendors = (vs ?? []) as Vendor[];
+      const vendors = (vs ?? []) as VendorPublic[];
       const vMap = new Map(vendors.map((v) => [v.id, v]));
       if (vendors.length === 0) { setItems([]); setLoading(false); return; }
 
@@ -100,9 +106,10 @@ export default function VendorMarketShop({ kind }: { kind: 'fisherman' | 'farmer
                   <span style={{ fontSize: 18, fontWeight: 800, color: '#0F1111' }}>${Number(l.price_per_unit).toFixed(2)}<span style={{ fontSize: 11, color: '#565959', fontWeight: 500 }}>/{l.unit}</span></span>
                   <span style={{ fontSize: 11, color: '#565959' }}>{Number(l.quantity_available).toFixed(0)} {l.unit} left</span>
                 </div>
+                {/* CTA goes to BSC's WhatsApp — vendor's number is NEVER exposed */}
                 <a href={`https://wa.me/12423613474?text=${encodeURIComponent(`Reserve: ${l.title}`)}`} target="_blank" rel="noopener noreferrer"
                   style={{ display: 'block', marginTop: 10, background: '#f5c518', color: '#060d1f', padding: '10px 14px', borderRadius: 10, fontWeight: 800, textAlign: 'center', textDecoration: 'none', fontSize: 13 }}>
-                  Reserve via WhatsApp
+                  Reserve via BSC
                 </a>
               </div>
             </article>
