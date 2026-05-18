@@ -36,7 +36,14 @@ export default function LoginPage() {
         return;
       }
       await new Promise((r) => setTimeout(r, 400));
-      window.location.href = '/market';
+      // Role-based landing — fishermen go straight to /lobster-intake.
+      const { data: { user } } = await supabase.auth.getUser();
+      let dest = '/market';
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+        if (prof?.role === 'fisherman') dest = '/lobster-intake';
+      }
+      window.location.href = dest;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setLoading(false);

@@ -47,7 +47,8 @@ const ISLANDS = [
 // raw weight. Grading by 5oz/6oz/.../20UP is what processing operators
 // fill in on /dashboard/processing-batches after the batch is finished.
 
-const STAFF_ROLES = new Set(['founder','co_founder','control_admin','manager','processor','receiver']);
+const STAFF_ROLES     = new Set(['founder','co_founder','control_admin','manager','processor','receiver']);
+const ALLOWED_ROLES   = new Set([...STAFF_ROLES, 'fisherman']);
 
 type Supplier = {
   id: string;
@@ -99,6 +100,10 @@ export default function LobsterIntakePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [role, setRole]     = useState<string | null>(null);
+  const [fishermanUid, setFishermanUid] = useState<string | null>(null);
+  const isFisherman          = role === 'fisherman';
+  const isStaff              = role !== null && STAFF_ROLES.has(role);
 
   // Form state
   const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10));
@@ -160,14 +165,17 @@ export default function LobsterIntakePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { window.location.href = '/staff-login?next=/lobster-intake'; return; }
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-      if (!prof || !STAFF_ROLES.has(prof.role as string)) { window.location.href = '/market'; return; }
+      const r = (prof?.role as string) ?? '';
+      if (!r || !ALLOWED_ROLES.has(r)) { window.location.href = '/market'; return; }
+      setRole(r);
+      if (r === 'fisherman') setFishermanUid(session.user.id);
       setAuthed(true);
-      await Promise.all([load(), loadSuppliers()]);
+      await Promise.all([load(), loadSuppliers(r === 'fisherman' ? session.user.id : null)]);
     })();
   }, []);
 
-  async function loadSuppliers() {
-    const { data } = await supabase
+  async function loadSuppliers(fishermanUserId: string | null) {
+    let q = supabase
       .from('suppliers')
       .select(`
         id, name,
@@ -177,7 +185,12 @@ export default function LobsterIntakePage() {
         vessel_registration_uploaded_at
       `)
       .order('name', { ascending: true });
-    setSuppliers((data || []) as Supplier[]);
+    if (fishermanUserId) q = q.eq('auth_user_id', fishermanUserId);
+    const { data } = await q;
+    const list = (data || []) as Supplier[];
+    setSuppliers(list);
+    // Auto-select the fisherman's own supplier so vessel info & registration banner pre-load.
+    if (fishermanUserId && list[0]) setSupplierId(list[0].id);
   }
 
   async function uploadYearlyRegistration(file: File) {
@@ -201,7 +214,7 @@ export default function LobsterIntakePage() {
     }).eq('id', selectedSupplier.id);
     setRegUploading(false);
     if (updErr) { alert(`Save failed: ${plainError(updErr)}`); return; }
-    await loadSuppliers();
+    await loadSuppliers(fishermanUid);
   }
 
   async function saveVesselToSupplier() {
@@ -214,7 +227,7 @@ export default function LobsterIntakePage() {
     }).eq('id', selectedSupplier.id);
     setRegBusy(false);
     if (err) { alert(`Save failed: ${plainError(err)}`); return; }
-    await loadSuppliers();
+    await loadSuppliers(fishermanUid);
   }
 
   async function load() {
@@ -376,13 +389,15 @@ export default function LobsterIntakePage() {
 
   return (
     <div style={pgStyle}>
-      <Link href="/dashboard" style={backStyle}>← BSC Control</Link>
+      {!isFisherman && <Link href="/dashboard" style={backStyle}>← BSC Control</Link>}
 
       <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f5c518', margin: 0, marginBottom: 6 }}>
-        Step 1 · Lobster Intake
+        {isFisherman ? '🎣 Submit New Catch' : 'Step 1 · Lobster Intake'}
       </h1>
       <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>
-        Boat receive at Spiny Tail door. Capture vessel + GPS-stamped photos/videos. Lot # auto-generates. Once approved, the lot routes to processing for Step 2 (freezer + production date) and Step 3 (case packing + rejections).
+        {isFisherman
+          ? 'Fill in today\'s catch + GPS-stamped photos. Once admin approves, your batch routes to Spiny Tail processing — each step shows a → arrow to the next.'
+          : 'Boat receive at Spiny Tail door. Capture vessel + GPS-stamped photos/videos. Lot # auto-generates. Once approved, the lot routes to processing for Step 2 (freezer + production date) and Step 3 (case packing + rejections).'}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 14 }}>
@@ -421,17 +436,19 @@ export default function LobsterIntakePage() {
           </Field>
         </div>
 
-        <Field label="Supplier (existing fisherman)">
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={inputStyle}>
-            <option value="">— none / new fisherman below —</option>
-            {suppliers.map((s) => {
-              const tag = s.vessel_registration_year === currentYear
-                ? '✓'
-                : s.vessel_registration_doc_url ? `⚠ ${s.vessel_registration_year ?? '?'}` : '⚠ no reg';
-              return <option key={s.id} value={s.id}>{s.name} · {tag}</option>;
-            })}
-          </select>
-        </Field>
+        {!isFisherman && (
+          <Field label="Supplier (existing fisherman)">
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={inputStyle}>
+              <option value="">— none / new fisherman below —</option>
+              {suppliers.map((s) => {
+                const tag = s.vessel_registration_year === currentYear
+                  ? '✓'
+                  : s.vessel_registration_doc_url ? `⚠ ${s.vessel_registration_year ?? '?'}` : '⚠ no reg';
+                return <option key={s.id} value={s.id}>{s.name} · {tag}</option>;
+              })}
+            </select>
+          </Field>
+        )}
 
         {/* Yearly boat registration — uploaded once per government renewal year */}
         {selectedSupplier && (
@@ -675,7 +692,7 @@ export default function LobsterIntakePage() {
               </div>
             )}
 
-            {status === 'pending' && (
+            {status === 'pending' && isStaff && (
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button onClick={() => approve(r.id, 'approved')} disabled={approvingId === r.id} style={{ ...btn, background: '#16a34a' }}>
                   {approvingId === r.id ? '…' : '✓ Approve → send to processing'}
