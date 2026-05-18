@@ -42,8 +42,10 @@ const ISLANDS = [
   'Other',
 ];
 
-// Lobster tail size grades — full ladder: 5oz → 20UP, 40lb master case.
-const TAIL_SIZES = ['5oz', '6oz', '7oz', '8oz', '9oz', '10/12oz', '12/14oz', '14/16oz', '16/20oz', '20UP'];
+// NOTE: Size grading happens in Step 3 at the processing facility, NOT here.
+// Step 1 is for the fisherman/receiver: vessel info + GPS-stamped media +
+// raw weight. Grading by 5oz/6oz/.../20UP is what processing operators
+// fill in on /dashboard/processing-batches after the batch is finished.
 
 const STAFF_ROLES = new Set(['founder','co_founder','control_admin','manager','processor','receiver']);
 
@@ -100,7 +102,6 @@ export default function LobsterIntakePage() {
   const [totalWeight, setTotalWeight] = useState('');
   const [costPerLb, setCostPerLb] = useState('8.00');
   const [notes, setNotes] = useState('');
-  const [sizeGrades, setSizeGrades] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -173,10 +174,6 @@ export default function LobsterIntakePage() {
     return Math.round(w * c * 100) / 100;
   }
 
-  function gradeBreakdownTotal() {
-    return Object.values(sizeGrades).reduce((s, v) => s + (Number(v) || 0), 0);
-  }
-
   async function uploadMedia(file: File) {
     if (!file) return;
     setUploading(true);
@@ -216,13 +213,6 @@ export default function LobsterIntakePage() {
 
     const lotNumber = `${islandSource.slice(0, 3).toUpperCase()}-${productType.replace(/\s+/g, '-').slice(0, 4).toUpperCase()}-${Date.now().toString().slice(-8)}`;
 
-    const cleanedGrades: Record<string, number> = {};
-    for (const [k, v] of Object.entries(sizeGrades)) {
-      const n = Number(v);
-      if (Number.isFinite(n) && n > 0) cleanedGrades[k] = n;
-    }
-    const breakdown = Object.keys(cleanedGrades).length > 0 ? cleanedGrades : null;
-
     const weight = Number(totalWeight);
     const cost = Number(costPerLb);
     const totalDollars = weight * cost;
@@ -241,7 +231,6 @@ export default function LobsterIntakePage() {
       boat_reg: boatReg.trim() || vesselReg.trim() || null,
       cost_paid: totalDollars,
       true_cost_per_lb: cost,
-      size_grade_breakdown: breakdown,
       intake_notes: notes.trim() || null,
       supplier_id: supplierId || null,
       lot_number: lotNumber,
@@ -268,7 +257,6 @@ export default function LobsterIntakePage() {
     setVesselReg('');
     setBoatReg('');
     setTotalWeight('');
-    setSizeGrades({});
     setNotes('');
     setMedia([]);
     load();
@@ -407,40 +395,7 @@ export default function LobsterIntakePage() {
           </Field>
         </div>
 
-        {/* Size-grade breakdown (lobster tail only) */}
-        {productType === 'Lobster Tail' && (
-          <div style={{ background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>
-              Size grade breakdown — lbs per grade (5oz → 20UP)
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 6 }}>
-              {TAIL_SIZES.map((sz) => (
-                <div key={sz}>
-                  <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 2 }}>{sz}</div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={sizeGrades[sz] || ''}
-                    onChange={(e) => setSizeGrades((g) => ({ ...g, [sz]: e.target.value }))}
-                    placeholder="0"
-                    style={{ ...inputStyle, padding: '6px 8px', fontSize: 12, marginBottom: 0 }}
-                  />
-                </div>
-              ))}
-            </div>
-            {gradeBreakdownTotal() > 0 && (
-              <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6, textAlign: 'right' }}>
-                Breakdown total: {gradeBreakdownTotal().toFixed(1)} lbs
-                {totalWeight && Math.abs(gradeBreakdownTotal() - Number(totalWeight)) > 0.5 && (
-                  <span style={{ color: '#f5c518', marginLeft: 6 }}>
-                    ⚠ doesn&rsquo;t match total weight ({Number(totalWeight).toFixed(1)})
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Size grading lives at /dashboard/processing-batches Step 3 — not here. */}
 
         {/* GPS-stamped media uploads — required for traceability */}
         <div style={{ background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: 10, marginBottom: 10 }}>
@@ -523,12 +478,6 @@ export default function LobsterIntakePage() {
 
       {intakes.map((r) => {
         const lbs = Number(r.whole_weight_lb || r.clean_weight_lb || 0);
-        const grades = r.size_grade_breakdown
-          ? Object.entries(r.size_grade_breakdown)
-              .filter(([, v]) => Number(v) > 0)
-              .map(([k, v]) => `${k}: ${Number(v).toFixed(1)}`)
-              .join(' · ')
-          : null;
         const sup = r.supplier as Supplier | null;
         const status = r.approval_status ?? 'pending';
         const accent = status === 'approved' ? '#22c55e' : status === 'rejected' ? '#f87171' : '#fbbf24';
@@ -565,11 +514,6 @@ export default function LobsterIntakePage() {
               </div>
             )}
 
-            {grades && (
-              <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6 }}>
-                {grades}
-              </div>
-            )}
             {r.intake_notes && (
               <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6, fontStyle: 'italic' }}>
                 {r.intake_notes}
