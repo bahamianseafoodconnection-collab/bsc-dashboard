@@ -263,6 +263,16 @@ export default function ProcessingBatchesPage() {
                 </div>
               </div>
 
+              {/* Stage tracker — arrow points to the next step in the pipeline */}
+              <StageTracker
+                steps={[
+                  { label: '① Intake', state: 'done' },
+                  { label: '② Freezer / Production', state: stage1 ? 'next' : stage2 ? 'active' : 'done' },
+                  { label: '③ Case packing + rejections', state: stage1 ? 'pending' : stage2 ? 'next' : b.case_size_breakdown ? 'done' : 'active' },
+                  { label: '🖨 Labels',  state: b.status === 'processed' ? 'next' : 'pending' },
+                ]}
+              />
+
               {/* vessel / farm context — always visible (the "full information" Step 3 needs) */}
               <div style={{ marginTop: 10, padding: 10, background: '#0b1628', borderRadius: 8, fontSize: 11 }}>
                 <p style={lab}>{b.vendor_type === 'fisherman' ? 'Vessel' : b.vendor_type === 'farmer' ? 'Farm' : 'Vendor'} context</p>
@@ -492,6 +502,43 @@ export default function ProcessingBatchesPage() {
           );
         })}
       </main>
+    </div>
+  );
+}
+
+type StepState = 'done' | 'active' | 'next' | 'pending' | 'rejected';
+function StageTracker({ steps }: { steps: { label: string; state: StepState }[] }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, flexWrap: 'wrap' }}>
+      {steps.map((s, i) => (
+        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+            background:
+              s.state === 'done'     ? 'rgba(34,197,94,0.15)' :
+              s.state === 'active'   ? 'rgba(251,191,36,0.20)' :
+              s.state === 'next'     ? 'rgba(96,165,250,0.20)' :
+              s.state === 'rejected' ? 'rgba(248,113,113,0.15)' :
+              'rgba(255,255,255,0.05)',
+            color:
+              s.state === 'done'     ? '#4ade80' :
+              s.state === 'active'   ? '#fbbf24' :
+              s.state === 'next'     ? '#60a5fa' :
+              s.state === 'rejected' ? '#f87171' :
+              'rgba(255,255,255,0.4)',
+            border: s.state === 'active' || s.state === 'next' ? `1px solid currentColor` : '1px solid transparent',
+            textTransform: 'uppercase', letterSpacing: 0.5,
+          }}>
+            {s.state === 'done' && '✓ '}{s.label}
+          </span>
+          {i < steps.length - 1 && (
+            <span style={{
+              fontSize: 14, fontWeight: 900,
+              color: steps[i + 1].state === 'active' || steps[i + 1].state === 'next' ? '#fbbf24' : 'rgba(255,255,255,0.25)',
+            }}>→</span>
+          )}
+        </span>
+      ))}
     </div>
   );
 }

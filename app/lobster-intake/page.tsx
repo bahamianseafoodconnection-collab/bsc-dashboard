@@ -650,6 +650,20 @@ export default function LobsterIntakePage() {
               </div>
             )}
 
+            {/* Stage tracker — arrow points to the next step in the pipeline */}
+            <StageTracker
+              steps={[
+                { label: '① Door receive', state: 'done' },
+                { label: '② Admin approval', state: status === 'pending' ? 'active' : status === 'rejected' ? 'rejected' : 'done' },
+                { label: '③ Processing',    state: status === 'approved' ? 'next' : 'pending' },
+              ]}
+            />
+            {status === 'approved' && (
+              <div style={{ fontSize: 11, color: '#22c55e', marginTop: 6, textAlign: 'right' }}>
+                ✓ Approved · waiting in <Link href="/dashboard/processing-batches" style={{ color: '#f5c518', fontWeight: 700 }}>processing queue →</Link>
+              </div>
+            )}
+
             {r.intake_notes && (
               <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6, fontStyle: 'italic' }}>
                 {r.intake_notes}
@@ -692,6 +706,45 @@ function Stat({ label, value, accent }: { label: string; value: number | string;
     <div style={{ background: '#0d1f3c', border: '1px solid #1e3a5f', borderRadius: 10, padding: '10px 12px' }}>
       <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' }}>{label}</div>
       <div style={{ fontSize: 16, fontWeight: 900, color: accent || '#f5c518', marginTop: 2 }}>{value}</div>
+    </div>
+  );
+}
+
+type StepState = 'done' | 'active' | 'next' | 'pending' | 'rejected';
+function StageTracker({ steps }: { steps: { label: string; state: StepState }[] }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
+      {steps.map((s, i) => (
+        <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 999,
+            background:
+              s.state === 'done'     ? 'rgba(34,197,94,0.15)' :
+              s.state === 'active'   ? 'rgba(251,191,36,0.18)' :
+              s.state === 'next'     ? 'rgba(96,165,250,0.18)' :
+              s.state === 'rejected' ? 'rgba(248,113,113,0.15)' :
+              'rgba(255,255,255,0.05)',
+            color:
+              s.state === 'done'     ? '#4ade80' :
+              s.state === 'active'   ? '#fbbf24' :
+              s.state === 'next'     ? '#60a5fa' :
+              s.state === 'rejected' ? '#f87171' :
+              'rgba(255,255,255,0.4)',
+            border: s.state === 'active' || s.state === 'next' ? `1px solid currentColor` : '1px solid transparent',
+            textTransform: 'uppercase', letterSpacing: 0.5,
+          }}>
+            {s.state === 'done' && '✓ '}
+            {s.state === 'rejected' && '✗ '}
+            {s.label}
+          </span>
+          {i < steps.length - 1 && (
+            <span style={{
+              fontSize: 13, color: steps[i + 1].state === 'active' || steps[i + 1].state === 'next' ? '#fbbf24' : 'rgba(255,255,255,0.25)',
+              fontWeight: 900,
+            }}>→</span>
+          )}
+        </span>
+      ))}
     </div>
   );
 }
