@@ -61,8 +61,10 @@ export default function ProcessingBatchesPage() {
   }, []);
 
   async function load() {
+    // Include 'processed' so operators can re-print labels for recently
+    // finished batches without hunting through history.
     const { data } = await supabase.from('traceability_batches')
-      .select('*').in('status', ['pending_processing','at_processing']).order('approved_at', { ascending: false }).limit(120);
+      .select('*').in('status', ['pending_processing','at_processing','processed']).order('approved_at', { ascending: false }).limit(120);
     const list = (data ?? []) as BatchRow[];
     setBatches(list);
     if (list.length === 0) return;
@@ -163,9 +165,14 @@ export default function ProcessingBatchesPage() {
                     {b.quantity_units ? ` · ${b.quantity_units} ${b.quantity_unit_type ?? 'bag'}${b.quantity_units === 1 ? '' : 's'} in` : ''}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ background: stage1 ? 'rgba(245,197,24,0.2)' : 'rgba(96,165,250,0.2)', color: stage1 ? '#f5c518' : '#60a5fa', padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{b.status.replace(/_/g, ' ')}</span>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>shelf life {b.shelf_life_days ?? '—'}d</div>
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                  <span style={{ background: stage1 ? 'rgba(245,197,24,0.2)' : stage2 ? 'rgba(96,165,250,0.2)' : 'rgba(22,163,74,0.2)', color: stage1 ? '#f5c518' : stage2 ? '#60a5fa' : '#4ade80', padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{b.status.replace(/_/g, ' ')}</span>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>shelf life {b.shelf_life_days ?? '—'}d</div>
+                  {b.status === 'processed' && (
+                    <Link href={`/dashboard/processing-batches/${b.id}/labels`} style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 8, background: '#f5c518', color: '#060d1f', fontWeight: 800, fontSize: 11, textDecoration: 'none' }}>
+                      🖨 Print labels
+                    </Link>
+                  )}
                 </div>
               </div>
 
