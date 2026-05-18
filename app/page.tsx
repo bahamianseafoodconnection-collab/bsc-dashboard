@@ -40,26 +40,50 @@ export default function HomePage() {
           Premium seafood, meats and groceries delivered across Nassau and Andros.
         </p>
 
-        {/* Two main CTAs */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
+        {/* Three main CTAs — BSC Direct, Fresh Catch, Farm Fresh */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-3xl">
           <Link href="/market"
-            className="flex-1 flex flex-col items-center gap-3 rounded-2xl py-6 px-4 font-bold text-base transition active:scale-95"
+            className="flex flex-col items-center gap-2 rounded-2xl py-6 px-4 font-bold transition active:scale-95"
             style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
             <span className="text-4xl">🛒</span>
-            <div>
-              <div className="font-black text-lg">Shop Online</div>
-              <div className="text-xs font-semibold opacity-70">Fresh seafood · Meats · Groceries</div>
+            <div className="text-center">
+              <div className="font-black text-lg">BSC Direct</div>
+              <div className="text-xs font-semibold opacity-70">Wholesale brands · Catalog · Delivery</div>
             </div>
           </Link>
 
-          <Link href="/utilities"
-            className="flex-1 flex flex-col items-center gap-3 rounded-2xl py-6 px-4 font-bold text-base border transition active:scale-95"
-            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(245,197,24,0.3)', color: '#fff' }}>
-            <span className="text-4xl">⚡</span>
-            <div>
-              <div className="font-black text-lg">Pay Bills</div>
-              <div className="text-xs font-semibold opacity-50">BPL · Water · Cable · More</div>
+          <Link href="/shop/fresh-catch"
+            className="flex flex-col items-center gap-2 rounded-2xl py-6 px-4 font-bold border transition active:scale-95"
+            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(245,197,24,0.35)', color: '#fff' }}>
+            <span className="text-4xl">🐟</span>
+            <div className="text-center">
+              <div className="font-black text-lg" style={{ color: '#f5c518' }}>Fresh Catch</div>
+              <div className="text-xs font-semibold opacity-70">Direct from Bahamian fishermen</div>
             </div>
+          </Link>
+
+          <Link href="/shop/farm-fresh"
+            className="flex flex-col items-center gap-2 rounded-2xl py-6 px-4 font-bold border transition active:scale-95"
+            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(245,197,24,0.35)', color: '#fff' }}>
+            <span className="text-4xl">🌱</span>
+            <div className="text-center">
+              <div className="font-black text-lg" style={{ color: '#f5c518' }}>Farm Fresh</div>
+              <div className="text-xs font-semibold opacity-70">Direct from Bahamian farmers</div>
+            </div>
+          </Link>
+        </div>
+
+        {/* Secondary CTAs */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-3xl mt-3">
+          <Link href="/utilities"
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 font-bold border transition active:scale-95"
+            style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)' }}>
+            <span className="text-lg">⚡</span><span className="text-sm">Pay Bills</span>
+          </Link>
+          <Link href="/vendor/signup"
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3 px-4 font-bold border transition active:scale-95"
+            style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)' }}>
+            <span className="text-lg">🤝</span><span className="text-sm">Sell on BSC</span>
           </Link>
         </div>
       </section>
