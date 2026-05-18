@@ -49,7 +49,18 @@ const ISLANDS = [
 
 const STAFF_ROLES = new Set(['founder','co_founder','control_admin','manager','processor','receiver']);
 
-type Supplier = { id: string; name: string };
+type Supplier = {
+  id: string;
+  name: string;
+  vessel_name: string | null;
+  vessel_registration_number: string | null;
+  vessel_owner_name: string | null;
+  vessel_captain_name: string | null;
+  vessel_registration_doc_url: string | null;
+  vessel_registration_year: number | null;
+  vessel_registration_expires_on: string | null;
+  vessel_registration_uploaded_at: string | null;
+};
 
 type IntakeRow = {
   id: string;
@@ -112,6 +123,32 @@ export default function LobsterIntakePage() {
   // Approval workflow
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
+  // Yearly boat registration upload (per-supplier)
+  const [regUploading, setRegUploading] = useState(false);
+  const [regBusy, setRegBusy] = useState(false);
+
+  const selectedSupplier = useMemo(
+    () => suppliers.find((s) => s.id === supplierId) || null,
+    [suppliers, supplierId],
+  );
+
+  // When supplier changes, prefill vessel fields from supplier record.
+  // Manual overrides (user typed something different) are preserved if
+  // they exist before selection.
+  useEffect(() => {
+    if (!selectedSupplier) return;
+    if (selectedSupplier.vessel_captain_name && !captainName) setCaptainName(selectedSupplier.vessel_captain_name);
+    if (selectedSupplier.vessel_name             && !vesselName)  setVesselName(selectedSupplier.vessel_name);
+    if (selectedSupplier.vessel_registration_number && !vesselReg) setVesselReg(selectedSupplier.vessel_registration_number);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSupplier?.id]);
+
+  const currentYear = new Date().getFullYear();
+  const regYear     = selectedSupplier?.vessel_registration_year ?? null;
+  const regOnFile   = !!selectedSupplier?.vessel_registration_doc_url;
+  const regCurrent  = regOnFile && regYear === currentYear;
+  const regExpired  = regOnFile && regYear !== null && regYear < currentYear;
+
   // Update sourceType automatically when productType changes
   useEffect(() => {
     if (productType === 'Lobster Whole') setSourceType('whole');
@@ -132,9 +169,52 @@ export default function LobsterIntakePage() {
   async function loadSuppliers() {
     const { data } = await supabase
       .from('suppliers')
-      .select('id, name')
+      .select(`
+        id, name,
+        vessel_name, vessel_registration_number, vessel_owner_name,
+        vessel_captain_name, vessel_registration_doc_url,
+        vessel_registration_year, vessel_registration_expires_on,
+        vessel_registration_uploaded_at
+      `)
       .order('name', { ascending: true });
     setSuppliers((data || []) as Supplier[]);
+  }
+
+  async function uploadYearlyRegistration(file: File) {
+    if (!selectedSupplier) { alert('Pick a supplier first.'); return; }
+    setRegUploading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const ext  = file.name.split('.').pop() ?? 'jpg';
+    const path = `suppliers/${selectedSupplier.id}/registration-${currentYear}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('vendor-listings').upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) { alert(`Upload failed: ${upErr.message}`); setRegUploading(false); return; }
+    const { data: pub } = supabase.storage.from('vendor-listings').getPublicUrl(path);
+    const { error: updErr } = await supabase.from('suppliers').update({
+      vessel_registration_doc_url:     pub.publicUrl,
+      vessel_registration_year:        currentYear,
+      vessel_registration_uploaded_at: new Date().toISOString(),
+      vessel_registration_uploaded_by: user?.id ?? null,
+      // also fold in any edits the operator made to vessel info while here
+      vessel_captain_name:        captainName.trim() || selectedSupplier.vessel_captain_name,
+      vessel_name:                vesselName.trim()  || selectedSupplier.vessel_name,
+      vessel_registration_number: vesselReg.trim()   || selectedSupplier.vessel_registration_number,
+    }).eq('id', selectedSupplier.id);
+    setRegUploading(false);
+    if (updErr) { alert(`Save failed: ${plainError(updErr)}`); return; }
+    await loadSuppliers();
+  }
+
+  async function saveVesselToSupplier() {
+    if (!selectedSupplier) return;
+    setRegBusy(true);
+    const { error: err } = await supabase.from('suppliers').update({
+      vessel_captain_name:        captainName.trim() || null,
+      vessel_name:                vesselName.trim()  || null,
+      vessel_registration_number: vesselReg.trim()   || null,
+    }).eq('id', selectedSupplier.id);
+    setRegBusy(false);
+    if (err) { alert(`Save failed: ${plainError(err)}`); return; }
+    await loadSuppliers();
   }
 
   async function load() {
@@ -341,16 +421,72 @@ export default function LobsterIntakePage() {
           </Field>
         </div>
 
-        <Field label="Supplier (existing)">
+        <Field label="Supplier (existing fisherman)">
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={inputStyle}>
             <option value="">— none / new fisherman below —</option>
-            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {suppliers.map((s) => {
+              const tag = s.vessel_registration_year === currentYear
+                ? '✓'
+                : s.vessel_registration_doc_url ? `⚠ ${s.vessel_registration_year ?? '?'}` : '⚠ no reg';
+              return <option key={s.id} value={s.id}>{s.name} · {tag}</option>;
+            })}
           </select>
         </Field>
 
-        {/* Vessel block — explicit four-field capture per spec */}
+        {/* Yearly boat registration — uploaded once per government renewal year */}
+        {selectedSupplier && (
+          <div style={{
+            background: regCurrent ? 'rgba(34,197,94,0.08)' : 'rgba(248,113,113,0.08)',
+            border: `1px solid ${regCurrent ? '#22c55e' : '#f87171'}`,
+            borderRadius: 8, padding: 10, marginBottom: 10,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: regCurrent ? '#22c55e' : '#f87171', textTransform: 'uppercase' }}>
+                  📜 Yearly boat registration · {selectedSupplier.name}
+                </div>
+                <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 4 }}>
+                  {regCurrent && <>✓ {currentYear} registration on file · uploaded {selectedSupplier.vessel_registration_uploaded_at ? new Date(selectedSupplier.vessel_registration_uploaded_at).toLocaleDateString() : '—'}</>}
+                  {regExpired && <>⚠ Latest doc is for {regYear}. Upload {currentYear} renewal.</>}
+                  {!regOnFile && <>⚠ No boat registration on file. Upload the {currentYear} government renewal.</>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {selectedSupplier.vessel_registration_doc_url && (
+                  <a href={selectedSupplier.vessel_registration_doc_url} target="_blank" rel="noopener noreferrer"
+                    style={{ background: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
+                    📄 View on file
+                  </a>
+                )}
+                <label style={{
+                  background: regCurrent ? 'rgba(34,197,94,0.15)' : '#f5c518',
+                  color: regCurrent ? '#22c55e' : '#060d1f',
+                  border: `1px solid ${regCurrent ? '#22c55e' : '#f5c518'}`,
+                  borderRadius: 6, padding: '6px 10px', fontSize: 11, fontWeight: 800,
+                  cursor: regUploading ? 'not-allowed' : 'pointer', opacity: regUploading ? 0.5 : 1,
+                }}>
+                  {regUploading ? '⏳ Uploading…' : regCurrent ? `🔁 Replace ${currentYear}` : `📤 Upload ${currentYear} renewal`}
+                  <input type="file" accept="image/*,application/pdf" disabled={regUploading} style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadYearlyRegistration(f); e.currentTarget.value = ''; }} />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Vessel block — auto-fills from supplier record on selection */}
         <div style={{ background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>Vessel & Captain</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518' }}>
+              Vessel & Captain {selectedSupplier ? <span style={{ color: '#94a3b8', fontWeight: 400 }}>· auto-filled from {selectedSupplier.name}</span> : null}
+            </div>
+            {selectedSupplier && (
+              <button type="button" onClick={saveVesselToSupplier} disabled={regBusy}
+                style={{ background: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 700, cursor: regBusy ? 'not-allowed' : 'pointer' }}>
+                {regBusy ? '…' : '💾 Save to supplier'}
+              </button>
+            )}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <Field label="Captain name">
               <input value={captainName} onChange={(e) => setCaptainName(e.target.value)} placeholder="e.g. Oscar Pinder" style={inputStyle} />
