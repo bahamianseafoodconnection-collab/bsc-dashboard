@@ -214,12 +214,15 @@ CREATE POLICY "vendor_listings_admin_all" ON vendor_listings
   FOR ALL USING (is_bsc_admin()) WITH CHECK (is_bsc_admin());
 
 -- vendor_orders
+-- (Customer self-view will be added back as a server-side route once
+-- the customers table is finalised with an auth.users link column.
+-- Production schema does NOT currently expose customers.auth_user_id,
+-- so the previous EXISTS-based policy fails. Admin + vendor + QC
+-- policies still cover the live flow.)
 DROP POLICY IF EXISTS "vendor_orders_customer_self"  ON vendor_orders;
 DROP POLICY IF EXISTS "vendor_orders_vendor_self"    ON vendor_orders;
 DROP POLICY IF EXISTS "vendor_orders_admin_all"      ON vendor_orders;
 DROP POLICY IF EXISTS "vendor_orders_qc_update"      ON vendor_orders;
-CREATE POLICY "vendor_orders_customer_self" ON vendor_orders
-  FOR SELECT USING (EXISTS (SELECT 1 FROM customers c WHERE c.id = customer_id AND c.auth_user_id = auth.uid()));
 CREATE POLICY "vendor_orders_vendor_self" ON vendor_orders
   FOR SELECT USING (EXISTS (SELECT 1 FROM vendors v WHERE v.id = vendor_id AND v.user_id = auth.uid()));
 CREATE POLICY "vendor_orders_admin_all" ON vendor_orders
