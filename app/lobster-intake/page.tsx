@@ -2,20 +2,19 @@
 
 // app/lobster-intake/page.tsx
 //
-// Boat receive form for the lobster pipeline. Build #3 of the wealth
-// engine. Captures every intake at the door of Spiny Tail with the
-// data needed for: traceability (boat + captain + date), cost basis
-// (cost/lb), grade breakdown (5oz/6oz/8oz/etc.), and yield discipline
-// (yield calculated later from real measurements, not entered here).
+// STEP 1 of the lobster pipeline — boat receive at Spiny Tail door.
+// Captures vessel + captain + photos/videos WITH GPS so we have full
+// provenance before processing begins. Each intake lands in
+// public.yield_lots with approval_status='pending'. Once approved,
+// processing picks it up at /dashboard/processing-batches (Steps 2 & 3).
 //
-// Writes to public.yield_lots (extended via sql/2026-05-09-lobster-intake.sql).
-// Inline-styled (back-office). Mobile-friendly so processors can enter
-// at the door from a phone.
+// Schema additions live in 20260518040000_intake_step1_step2.sql.
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { captureGps, gmapsLink } from '@/lib/traceability/batch';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,8 +42,10 @@ const ISLANDS = [
   'Other',
 ];
 
-// Lobster tail size grades (matches Jomara invoice grading)
-const TAIL_SIZES = ['5oz', '6oz', '7oz', '8oz', '9oz', '10/12oz', '12/14oz', '14/16oz'];
+// Lobster tail size grades — full ladder: 5oz → 20UP, 40lb master case.
+const TAIL_SIZES = ['5oz', '6oz', '7oz', '8oz', '9oz', '10/12oz', '12/14oz', '14/16oz', '16/20oz', '20UP'];
+
+const STAFF_ROLES = new Set(['founder','co_founder','control_admin','manager','processor','receiver']);
 
 type Supplier = { id: string; name: string };
 
@@ -57,6 +58,8 @@ type IntakeRow = {
   island_source: string | null;
   captain_name: string | null;
   boat_reg: string | null;
+  vessel_name: string | null;
+  vessel_registration: string | null;
   whole_weight_lb: number | null;
   clean_weight_lb: number | null;
   cost_paid: number | null;
@@ -65,19 +68,31 @@ type IntakeRow = {
   intake_notes: string | null;
   supplier_id: string | null;
   supplier?: Supplier | Supplier[] | null;
+  intake_photos: string[] | null;
+  intake_videos: string[] | null;
+  intake_latitude: number | null;
+  intake_longitude: number | null;
+  intake_captured_at: string | null;
+  approval_status: 'pending' | 'approved' | 'rejected' | null;
+  approval_notes: string | null;
   created_at: string;
 };
+
+type MediaItem = { url: string; type: 'photo' | 'video'; lat: number | null; lng: number | null; capturedAt: string | null };
 
 export default function LobsterIntakePage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [intakes, setIntakes] = useState<IntakeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
   // Form state
   const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10));
   const [supplierId, setSupplierId] = useState('');
   const [captainName, setCaptainName] = useState('');
+  const [vesselName, setVesselName] = useState('');
+  const [vesselReg, setVesselReg] = useState('');
   const [boatReg, setBoatReg] = useState('');
   const [islandSource, setIslandSource] = useState('Moores Island');
   const [productType, setProductType] = useState('Lobster Tail');
@@ -89,6 +104,13 @@ export default function LobsterIntakePage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Step 1 media + GPS
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // Approval workflow
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
   // Update sourceType automatically when productType changes
   useEffect(() => {
     if (productType === 'Lobster Whole') setSourceType('whole');
@@ -96,8 +118,14 @@ export default function LobsterIntakePage() {
   }, [productType]);
 
   useEffect(() => {
-    load();
-    loadSuppliers();
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { window.location.href = '/staff-login?next=/lobster-intake'; return; }
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
+      if (!prof || !STAFF_ROLES.has(prof.role as string)) { window.location.href = '/market'; return; }
+      setAuthed(true);
+      await Promise.all([load(), loadSuppliers()]);
+    })();
   }, []);
 
   async function loadSuppliers() {
@@ -115,9 +143,11 @@ export default function LobsterIntakePage() {
       .from('yield_lots')
       .select(`
         id, lot_number, received_date, product_type, source_type,
-        island_source, captain_name, boat_reg, whole_weight_lb,
-        clean_weight_lb, cost_paid, true_cost_per_lb, size_grade_breakdown,
-        intake_notes, supplier_id, created_at,
+        island_source, captain_name, boat_reg, vessel_name, vessel_registration,
+        whole_weight_lb, clean_weight_lb, cost_paid, true_cost_per_lb,
+        size_grade_breakdown, intake_notes, supplier_id, created_at,
+        intake_photos, intake_videos, intake_latitude, intake_longitude,
+        intake_captured_at, approval_status, approval_notes,
         supplier:suppliers ( id, name )
       `)
       .order('received_date', { ascending: false, nullsFirst: false })
@@ -147,19 +177,45 @@ export default function LobsterIntakePage() {
     return Object.values(sizeGrades).reduce((s, v) => s + (Number(v) || 0), 0);
   }
 
+  async function uploadMedia(file: File) {
+    if (!file) return;
+    setUploading(true);
+    const isVideo = file.type.startsWith('video/');
+    const gpsP = captureGps();
+    const { data: { user } } = await supabase.auth.getUser();
+    const ext  = file.name.split('.').pop() ?? (isVideo ? 'mp4' : 'jpg');
+    const path = `${user?.id ?? 'anon'}/intake/${receivedDate}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('vendor-listings').upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) { alert(`Upload failed: ${upErr.message}`); setUploading(false); return; }
+    const { data: pub } = supabase.storage.from('vendor-listings').getPublicUrl(path);
+    const gps = await gpsP;
+    setMedia((m) => [...m, {
+      url: pub.publicUrl,
+      type: isVideo ? 'video' : 'photo',
+      lat: gps?.latitude ?? null,
+      lng: gps?.longitude ?? null,
+      capturedAt: gps?.captured_at ?? new Date().toISOString(),
+    }]);
+    setUploading(false);
+  }
+
+  function removeMedia(idx: number) {
+    setMedia((m) => m.filter((_, i) => i !== idx));
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSuccess(null);
     if (!totalWeight || Number(totalWeight) <= 0) { alert('Enter a weight'); return; }
     if (!costPerLb || Number(costPerLb) <= 0) { alert('Enter a cost per lb'); return; }
     if (!supplierId && !captainName.trim()) { alert('Pick a supplier or enter a captain name'); return; }
+    if (media.length === 0) {
+      if (!confirm('No photos/videos uploaded. Step 1 normally requires GPS-stamped media. Save anyway?')) return;
+    }
     setSubmitting(true);
 
-    // Auto-generate lot number if no trigger provides one (yield_lots may
-    // already have an auto-trigger - we let it win when it fires).
     const lotNumber = `${islandSource.slice(0, 3).toUpperCase()}-${productType.replace(/\s+/g, '-').slice(0, 4).toUpperCase()}-${Date.now().toString().slice(-8)}`;
 
-    // Build size grade breakdown JSON only if any entered
     const cleanedGrades: Record<string, number> = {};
     for (const [k, v] of Object.entries(sizeGrades)) {
       const n = Number(v);
@@ -171,39 +227,68 @@ export default function LobsterIntakePage() {
     const cost = Number(costPerLb);
     const totalDollars = weight * cost;
 
+    // Use first photo's GPS as canonical intake position
+    const primary = media.find((m) => m.lat != null && m.lng != null) ?? null;
+
     const row: Record<string, unknown> = {
       received_date: receivedDate,
       product_type: productType,
       source_type: sourceType,
       island_source: islandSource,
       captain_name: captainName.trim() || null,
-      boat_reg: boatReg.trim() || null,
+      vessel_name: vesselName.trim() || null,
+      vessel_registration: vesselReg.trim() || null,
+      boat_reg: boatReg.trim() || vesselReg.trim() || null,
       cost_paid: totalDollars,
       true_cost_per_lb: cost,
       size_grade_breakdown: breakdown,
       intake_notes: notes.trim() || null,
       supplier_id: supplierId || null,
       lot_number: lotNumber,
+      intake_photos: media.filter((m) => m.type === 'photo').map((m) => m.url),
+      intake_videos: media.filter((m) => m.type === 'video').map((m) => m.url),
+      intake_latitude:  primary?.lat ?? null,
+      intake_longitude: primary?.lng ?? null,
+      intake_captured_at: primary?.capturedAt ?? null,
+      approval_status: 'pending',
     };
-    // Map weight to the right column based on whether we bought whole or tail
     if (sourceType === 'whole') row.whole_weight_lb = weight;
     else row.clean_weight_lb = weight;
 
     const { error: err } = await supabase.from('yield_lots').insert(row);
     setSubmitting(false);
     if (err) {
-      alert(`Save failed: ${plainError(err)}\n\nIf 'relation' or 'column' error, run sql/2026-05-09-lobster-intake.sql in Supabase.`);
+      alert(`Save failed: ${plainError(err)}\n\nIf 'relation' or 'column' error, run sql/2026-05-09-lobster-intake.sql + 20260518040000_intake_step1_step2.sql in Supabase.`);
       return;
     }
 
-    setSuccess(`✓ Lot ${lotNumber} saved · ${weight} lbs · BSD $${totalDollars.toFixed(2)}`);
-    // Reset form (keep date + supplier + island for fast next entry)
+    setSuccess(`✓ Lot ${lotNumber} saved · ${weight} lbs · BSD $${totalDollars.toFixed(2)} · awaiting approval`);
     setCaptainName('');
+    setVesselName('');
+    setVesselReg('');
     setBoatReg('');
     setTotalWeight('');
     setSizeGrades({});
     setNotes('');
+    setMedia([]);
     load();
+  }
+
+  async function approve(id: string, status: 'approved' | 'rejected') {
+    setApprovingId(id);
+    const { data: { session } } = await supabase.auth.getSession();
+    const noteText = status === 'rejected'
+      ? prompt('Reason for rejecting this intake?') || 'rejected'
+      : null;
+    const { error: err } = await supabase.from('yield_lots').update({
+      approval_status: status,
+      approved_by: session?.user.id ?? null,
+      approved_at: new Date().toISOString(),
+      approval_notes: noteText,
+    }).eq('id', id);
+    setApprovingId(null);
+    if (err) { alert(`Failed: ${plainError(err)}`); return; }
+    await load();
   }
 
   const todayStats = useMemo(() => {
@@ -215,31 +300,35 @@ export default function LobsterIntakePage() {
       lbs += Number(r.whole_weight_lb || r.clean_weight_lb || 0);
       cost += Number(r.cost_paid || 0);
     }
-    return { count: todays.length, lbs: Math.round(lbs * 10) / 10, cost: Math.round(cost * 100) / 100 };
+    const pending = intakes.filter((r) => r.approval_status === 'pending').length;
+    return { count: todays.length, lbs: Math.round(lbs * 10) / 10, cost: Math.round(cost * 100) / 100, pending };
   }, [intakes]);
+
+  if (authed === null) return <div style={pgStyle}>Loading…</div>;
 
   return (
     <div style={pgStyle}>
       <Link href="/dashboard" style={backStyle}>← BSC Control</Link>
 
       <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f5c518', margin: 0, marginBottom: 6 }}>
-        Lobster Intake
+        Step 1 · Lobster Intake
       </h1>
       <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>
-        Boat receive at Spiny Tail door. Capture intake, lot # auto-generates. Yield gets measured later (real data only, no assumptions).
+        Boat receive at Spiny Tail door. Capture vessel + GPS-stamped photos/videos. Lot # auto-generates. Once approved, the lot routes to processing for Step 2 (freezer + production date) and Step 3 (case packing + rejections).
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 8, marginBottom: 14 }}>
         <Stat label="Today's intakes" value={todayStats.count}                accent="#f5c518" />
         <Stat label="Today's lbs"     value={`${todayStats.lbs.toFixed(1)}`} accent="#22c55e" />
         <Stat label="Today's cost"    value={`$${todayStats.cost.toFixed(2)}`} accent="#a78bfa" />
+        <Stat label="Pending approval" value={todayStats.pending}             accent="#fbbf24" />
       </div>
 
       {error && (
         <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 10, padding: 12, color: '#f87171', fontSize: 12, marginBottom: 12 }}>
           ⚠️ {error}
           {(error.toLowerCase().includes('relation') || error.toLowerCase().includes('column')) && (
-            <div style={{ marginTop: 6 }}>Run sql/2026-05-09-lobster-intake.sql in Supabase SQL editor.</div>
+            <div style={{ marginTop: 6 }}>Run the latest migration <code>20260518040000_intake_step1_step2.sql</code> in Supabase SQL editor.</div>
           )}
         </div>
       )}
@@ -271,13 +360,25 @@ export default function LobsterIntakePage() {
           </select>
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <Field label="Captain name (if new)">
-            <input value={captainName} onChange={(e) => setCaptainName(e.target.value)} placeholder="e.g. Oscar Pinder" style={inputStyle} />
-          </Field>
-          <Field label="Boat reg / name">
-            <input value={boatReg} onChange={(e) => setBoatReg(e.target.value)} placeholder="optional" style={inputStyle} />
-          </Field>
+        {/* Vessel block — explicit four-field capture per spec */}
+        <div style={{ background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>Vessel & Captain</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Field label="Captain name">
+              <input value={captainName} onChange={(e) => setCaptainName(e.target.value)} placeholder="e.g. Oscar Pinder" style={inputStyle} />
+            </Field>
+            <Field label="Boat name">
+              <input value={vesselName} onChange={(e) => setVesselName(e.target.value)} placeholder="e.g. Sea Hunter" style={inputStyle} />
+            </Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <Field label="Boat registration #">
+              <input value={vesselReg} onChange={(e) => setVesselReg(e.target.value)} placeholder="BAH-12345" style={inputStyle} />
+            </Field>
+            <Field label="Other reg (legacy)">
+              <input value={boatReg} onChange={(e) => setBoatReg(e.target.value)} placeholder="optional" style={inputStyle} />
+            </Field>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -310,9 +411,9 @@ export default function LobsterIntakePage() {
         {productType === 'Lobster Tail' && (
           <div style={{ background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: 10, marginBottom: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>
-              Size grade breakdown (optional — lbs per grade)
+              Size grade breakdown — lbs per grade (5oz → 20UP)
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 6 }}>
               {TAIL_SIZES.map((sz) => (
                 <div key={sz}>
                   <div style={{ fontSize: 9, color: '#94a3b8', marginBottom: 2 }}>{sz}</div>
@@ -341,16 +442,71 @@ export default function LobsterIntakePage() {
           </div>
         )}
 
+        {/* GPS-stamped media uploads — required for traceability */}
+        <div style={{ background: '#0a1628', border: '1px solid #1e3a5f', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 6 }}>
+            📸 Intake photos / videos (GPS-stamped) — required for traceability
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <label style={uploadBtn(uploading)}>
+              {uploading ? '⏳ Uploading…' : '📷 Take photo'}
+              <input type="file" accept="image/*" capture="environment" disabled={uploading} style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMedia(f); e.currentTarget.value = ''; }} />
+            </label>
+            <label style={uploadBtn(uploading)}>
+              {uploading ? '⏳ Uploading…' : '🎥 Record video'}
+              <input type="file" accept="video/*" capture="environment" disabled={uploading} style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMedia(f); e.currentTarget.value = ''; }} />
+            </label>
+            <label style={uploadBtn(uploading)}>
+              {uploading ? '⏳ Uploading…' : '🗂 Upload from device'}
+              <input type="file" accept="image/*,video/*" multiple disabled={uploading} style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  for (const f of files) { await uploadMedia(f); }
+                  e.currentTarget.value = '';
+                }} />
+            </label>
+          </div>
+          {media.length === 0 && (
+            <div style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
+              No media yet. Take at least one photo so GPS gets stamped.
+            </div>
+          )}
+          {media.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+              {media.map((m, i) => (
+                <div key={i} style={{ background: '#060d1f', border: '1px solid #1e3a5f', borderRadius: 8, padding: 6, position: 'relative' }}>
+                  {m.type === 'photo' ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={m.url} alt={`upload ${i + 1}`} style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6 }} />
+                  ) : (
+                    <video src={m.url} style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6 }} />
+                  )}
+                  <div style={{ fontSize: 9, color: '#cbd5e1', marginTop: 4 }}>
+                    {m.lat != null && m.lng != null ? (
+                      <a href={gmapsLink(m.lat, m.lng) ?? '#'} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>📍 GPS</a>
+                    ) : (
+                      <span style={{ color: '#f87171' }}>⚠ no GPS</span>
+                    )}
+                  </div>
+                  <button type="button" onClick={() => removeMedia(i)} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(248,113,113,0.9)', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 6px', fontSize: 9, cursor: 'pointer' }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <Field label="Notes">
           <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="condition, payment terms, anything to remember" style={inputStyle} />
         </Field>
 
         <button
           type="submit"
-          disabled={submitting}
-          style={{ width: '100%', background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 8, padding: '12px 14px', fontWeight: 800, fontSize: 14, cursor: 'pointer', opacity: submitting ? 0.5 : 1 }}
+          disabled={submitting || uploading}
+          style={{ width: '100%', background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 8, padding: '12px 14px', fontWeight: 800, fontSize: 14, cursor: 'pointer', opacity: (submitting || uploading) ? 0.5 : 1 }}
         >
-          {submitting ? 'Saving…' : 'Save intake + generate lot #'}
+          {submitting ? 'Saving…' : 'Save intake + send for approval'}
         </button>
       </form>
 
@@ -374,8 +530,13 @@ export default function LobsterIntakePage() {
               .join(' · ')
           : null;
         const sup = r.supplier as Supplier | null;
+        const status = r.approval_status ?? 'pending';
+        const accent = status === 'approved' ? '#22c55e' : status === 'rejected' ? '#f87171' : '#fbbf24';
+        const photoCount = (r.intake_photos ?? []).length;
+        const videoCount = (r.intake_videos ?? []).length;
+        const map = gmapsLink(r.intake_latitude, r.intake_longitude);
         return (
-          <div key={r.id} style={{ ...cardStyle, borderLeft: '4px solid #22c55e' }}>
+          <div key={r.id} style={{ ...cardStyle, borderLeft: `4px solid ${accent}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>
@@ -384,23 +545,50 @@ export default function LobsterIntakePage() {
                 <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
                   Lot <span style={{ color: '#f5c518', fontFamily: 'monospace' }}>{r.lot_number || '—'}</span>
                   {r.island_source && ` · ${r.island_source}`}
-                  {r.captain_name && ` · ${r.captain_name}`}
+                  {(r.vessel_name || r.captain_name) && ` · ${r.vessel_name ?? ''}${r.captain_name ? ` (${r.captain_name})` : ''}`}
+                  {r.vessel_registration && ` · reg ${r.vessel_registration}`}
                   {sup && ` · ${sup.name}`}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: '#22c55e' }}>${Number(r.cost_paid || 0).toFixed(2)}</div>
+                <span style={{ background: `${accent}22`, color: accent, padding: '3px 8px', borderRadius: 999, fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}>{status}</span>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#22c55e', marginTop: 4 }}>${Number(r.cost_paid || 0).toFixed(2)}</div>
                 <div style={{ fontSize: 10, color: '#94a3b8' }}>${Number(r.true_cost_per_lb || 0).toFixed(2)}/lb</div>
               </div>
             </div>
+
+            {(photoCount + videoCount > 0 || map) && (
+              <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6, paddingTop: 6, borderTop: '1px dashed #1e3a5f', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {photoCount > 0 && <span>📷 {photoCount} photo{photoCount === 1 ? '' : 's'}</span>}
+                {videoCount > 0 && <span>🎥 {videoCount} video{videoCount === 1 ? '' : 's'}</span>}
+                {map && <a href={map} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>📍 GPS map</a>}
+              </div>
+            )}
+
             {grades && (
-              <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6, paddingTop: 6, borderTop: '1px dashed #1e3a5f' }}>
+              <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6 }}>
                 {grades}
               </div>
             )}
             {r.intake_notes && (
               <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 6, fontStyle: 'italic' }}>
                 {r.intake_notes}
+              </div>
+            )}
+            {r.approval_notes && (
+              <div style={{ fontSize: 11, color: '#f87171', marginTop: 6, fontStyle: 'italic' }}>
+                Rejection: {r.approval_notes}
+              </div>
+            )}
+
+            {status === 'pending' && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={() => approve(r.id, 'approved')} disabled={approvingId === r.id} style={{ ...btn, background: '#16a34a' }}>
+                  {approvingId === r.id ? '…' : '✓ Approve → send to processing'}
+                </button>
+                <button onClick={() => approve(r.id, 'rejected')} disabled={approvingId === r.id} style={{ ...btn, background: '#dc2626' }}>
+                  ✗ Reject
+                </button>
               </div>
             )}
           </div>
@@ -428,7 +616,15 @@ function Stat({ label, value, accent }: { label: string; value: number | string;
   );
 }
 
+const uploadBtn = (busy: boolean): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  background: '#1e3a5f', color: '#f5c518', border: '1px solid #f5c518',
+  borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 700,
+  cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1,
+});
+
 const pgStyle: React.CSSProperties = { padding: 16, backgroundColor: '#060d1f', minHeight: '100vh', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: 80, maxWidth: 720, margin: '0 auto' };
 const cardStyle: React.CSSProperties = { backgroundColor: '#0d1f3c', borderRadius: 12, padding: '12px 14px', border: '1px solid #1e3a5f', marginBottom: 10 };
 const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 8, background: '#111c33', border: '1px solid #1e2d4a', color: '#fff', fontSize: 14, marginBottom: 10, boxSizing: 'border-box', outline: 'none' };
 const backStyle: React.CSSProperties = { display: 'inline-block', background: 'rgba(245,197,24,0.1)', border: '1px solid #f5c518', borderRadius: 8, color: '#f5c518', fontWeight: 700, fontSize: 12, padding: '6px 12px', marginBottom: 14, textDecoration: 'none' };
+const btn: React.CSSProperties = { flex: 1, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer' };
