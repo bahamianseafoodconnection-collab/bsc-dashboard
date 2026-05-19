@@ -702,6 +702,14 @@ export default function LobsterIntakePage() {
                 </button>
               </div>
             )}
+            {status === 'approved' && isStaff && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <Link href={`/spinytails/intake?yield_lot_id=${r.id}`}
+                  style={{ flex: 1, background: 'rgba(167,139,250,0.15)', color: '#a78bfa', border: '1px solid #a78bfa', borderRadius: 8, padding: '8px 12px', fontSize: 12, fontWeight: 800, textDecoration: 'none', textAlign: 'center' }}>
+                  🏭 Send to Spiny Tails (HACCP)
+                </Link>
+              </div>
+            )}
           </div>
         );
       })}
