@@ -185,6 +185,32 @@ export default function POSPage() {
 
   useEffect(() => { loadCatalog() }, [loadCatalog])
 
+  // Deep-link: /pos?focus=<product_id> (from /products "🛒 Sell at POS").
+  // Once the catalog finishes loading, auto-add the requested product.
+  // Per-lb products open the weight input prompt; unit products add qty=1
+  // and pop the cart drawer. We fire exactly once per session.
+  const focusFiredRef = useRef(false)
+  useEffect(() => {
+    if (focusFiredRef.current) return
+    if (products.length === 0) return
+    const params = new URLSearchParams(window.location.search)
+    const focus  = params.get('focus')
+    if (!focus) return
+    focusFiredRef.current = true
+
+    const target = products.find(p => p.id === focus)
+    if (!target) {
+      alert("That product isn't available at Nassau POS. It may be inactive or missing a nassau_pos price on /products.")
+    } else {
+      addToCart(target)
+      if (!target.is_per_lb) setShowCart(true)
+    }
+
+    // Strip the param so a page refresh doesn't re-add the line.
+    const cleanUrl = window.location.pathname + window.location.hash
+    window.history.replaceState({}, '', cleanUrl)
+  }, [products])
+
   // Fetch overhead metrics once per session so each sale can persist its
   // expense_allocation / bill_casale_share / net_profit. Falls back silently
   // if expenses table is empty — overhead stays null, profit fields write null.
