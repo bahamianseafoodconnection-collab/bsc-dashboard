@@ -51,6 +51,31 @@ export default function ArAgingPage() {
   const [onlyStale, setOnlyStale] = useState(false);
   const [drill, setDrill]     = useState<CustomerAging | null>(null);
   const [markBusy, setMarkBusy] = useState<string | null>(null);
+  const [alertBusy,  setAlertBusy]  = useState(false);
+  const [alertToast, setAlertToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function fireAgingAlert() {
+    setAlertBusy(true); setAlertToast(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/ar/aging-alert', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({ threshold_days: 60 }),
+    });
+    const json = await res.json();
+    setAlertBusy(false);
+    if (json.ok && json.alerted) {
+      setAlertToast({ ok: true, msg: `✓ Digest sent — ${json.stale_customers} customers past 60d, $${Number(json.total_overdue).toFixed(2)} overdue` });
+    } else if (json.ok && !json.alerted) {
+      setAlertToast({ ok: true, msg: `ℹ ${json.reason}${json.threshold_days ? ` (threshold ${json.threshold_days}d)` : ''}` });
+    } else {
+      setAlertToast({ ok: false, msg: `⚠ ${json.error ?? 'unknown error'}` });
+    }
+    setTimeout(() => setAlertToast(null), 6000);
+  }
 
   useEffect(() => {
     (async () => {
@@ -175,11 +200,31 @@ export default function ArAgingPage() {
     <div style={pg}>
       <header style={hdr}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <Link href="/dashboard" style={back}>← Dashboard</Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/dashboard" style={back}>← Dashboard</Link>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={fireAgingAlert} disabled={alertBusy}
+                style={{ background: 'rgba(248,113,113,0.12)', color: '#f87171', border: '1px solid #f87171', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: alertBusy ? 0.5 : 1 }}
+                title="Email overdue-customer digest to admin recipients now">
+                {alertBusy ? 'Sending…' : '🔔 Send aging alert now'}
+              </button>
+              <Link href="/dashboard/ar-aging/trends" style={{ color: '#a78bfa', fontSize: 12, textDecoration: 'none', fontWeight: 700 }}>
+                📈 Payment behavior →
+              </Link>
+            </div>
+          </div>
           <h1 style={h1}>🧾 AR aging — wholesale credit accounts</h1>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
             {totals.count} unpaid invoice{totals.count === 1 ? '' : 's'} · {aging.length} customer{aging.length === 1 ? '' : 's'} · ${totals.total.toFixed(2)} outstanding
           </p>
+          {alertToast && (
+            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+              background: alertToast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+              color:      alertToast.ok ? '#4ade80' : '#f87171',
+              border:    `1px solid ${alertToast.ok ? '#16a34a' : '#f87171'}` }}>
+              {alertToast.msg}
+            </div>
+          )}
         </div>
       </header>
 
