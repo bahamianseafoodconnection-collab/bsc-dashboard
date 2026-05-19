@@ -51,6 +51,7 @@ const NAV_GROUPS = [
     items: [
       { icon: '💸', label: 'Expenses',          href: '/expenses' },
       { icon: '📋', label: 'Accounts Payable',  href: '/accounts-payable' },
+      { icon: '🧾', label: 'AR Aging (wholesale)', href: '/dashboard/ar-aging' },
       { icon: '💼', label: 'Payroll',           href: '/payroll' },
       { icon: '👥', label: 'Customers',         href: '/customers' },
       { icon: '🪪', label: 'Staff',             href: '/staff' },
