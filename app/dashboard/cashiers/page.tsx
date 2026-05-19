@@ -62,6 +62,27 @@ export default function CashiersDashboardPage() {
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
   const [drill, setDrill] = useState<{ session: SessionTotalsRow; orders: OrderRow[] } | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
+  const [closeOnBehalf, setCloseOnBehalf] = useState<SessionTotalsRow | null>(null);
+  const [cobCounted, setCobCounted] = useState('');
+  const [cobNotes,   setCobNotes]   = useState('');
+  const [cobBusy,    setCobBusy]    = useState(false);
+
+  async function adminCloseSession() {
+    if (!closeOnBehalf) return;
+    const counted = parseFloat(cobCounted);
+    if (isNaN(counted) || counted < 0) { alert('Enter counted cash (BSD).'); return; }
+    setCobBusy(true);
+    const { error } = await supabase.rpc('close_cashier_session', {
+      p_session_id:    closeOnBehalf.session_id,
+      p_counted_cents: Math.round(counted * 100),
+      p_notes:         (cobNotes.trim() ? cobNotes.trim() + ' · ' : '') + '[closed by admin on behalf]',
+    });
+    setCobBusy(false);
+    if (error) { alert('Close failed: ' + error.message); return; }
+    setCloseOnBehalf(null);
+    setCobCounted(''); setCobNotes('');
+    await load();
+  }
 
   useEffect(() => {
     (async () => {
@@ -175,7 +196,7 @@ export default function CashiersDashboardPage() {
                 <Stat label="Total"   value={dollars(openTotals.total)}   accent="#f5c518" />
               </div>
               <div style={{ marginTop: 12 }}>
-                {open.map(s => <SessionCard key={s.session_id} row={s} profile={profiles[s.cashier_user_id]} onOpen={() => openDrill(s)} />)}
+                {open.map(s => <SessionCard key={s.session_id} row={s} profile={profiles[s.cashier_user_id]} onOpen={() => openDrill(s)} onAdminClose={() => setCloseOnBehalf(s)} />)}
               </div>
             </>
           )}
@@ -200,6 +221,39 @@ export default function CashiersDashboardPage() {
             </div>
           )}
         </section>
+
+        {/* Admin close-on-behalf modal */}
+        {closeOnBehalf && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setCloseOnBehalf(null)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: '#0b1628', border: '1px solid rgba(245,197,24,0.25)', borderRadius: 14, padding: 18, maxWidth: 420, width: '100%' }}>
+              <h3 style={{ fontFamily: "'Playfair Display', serif", color: '#f5c518', margin: 0, fontSize: 18 }}>Close shift on behalf</h3>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, marginBottom: 12 }}>
+                Cashier: <strong>{profiles[closeOnBehalf.cashier_user_id]?.full_name ?? '(unknown)'}</strong> · {closeOnBehalf.location} · float ${(closeOnBehalf.opening_float_cents/100).toFixed(2)} · {closeOnBehalf.order_count} orders
+              </p>
+              <p style={{ fontSize: 11, color: '#fbbf24', marginBottom: 10 }}>
+                ⚠ This stamps you as the closer in the audit trail. Use only when the cashier has left without closing.
+              </p>
+              <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>Counted cash (BSD)</label>
+              <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="e.g. 1245.50" autoFocus
+                value={cobCounted} onChange={(e) => setCobCounted(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, background: '#060d1f', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', fontSize: 16, marginBottom: 8, boxSizing: 'border-box' }} />
+              <label style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>Notes (optional)</label>
+              <input type="text" placeholder="reason / context"
+                value={cobNotes} onChange={(e) => setCobNotes(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, background: '#060d1f', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', fontSize: 13, marginBottom: 12, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setCloseOnBehalf(null)}
+                  style={{ flex: 1, padding: '10px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={adminCloseSession} disabled={cobBusy}
+                  style={{ flex: 2, padding: '10px 14px', borderRadius: 8, background: '#f5c518', color: '#060d1f', border: 'none', fontSize: 12, fontWeight: 900, cursor: 'pointer', opacity: cobBusy ? 0.5 : 1 }}>
+                  {cobBusy ? 'Closing…' : '✓ Close shift'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Drill-down modal */}
@@ -252,17 +306,27 @@ export default function CashiersDashboardPage() {
   );
 }
 
-function SessionCard({ row, profile, onOpen }: { row: SessionTotalsRow; profile: ProfileMini | undefined; onOpen: () => void }) {
+function SessionCard({ row, profile, onOpen, onAdminClose }: { row: SessionTotalsRow; profile: ProfileMini | undefined; onOpen: () => void; onAdminClose?: () => void }) {
   const expected   = row.opening_float_cents + row.cash_sales_cents;
   const variance   = row.variance_cents;
   const isOpen     = row.status === 'open';
   return (
-    <button onClick={onOpen} style={{
-      width: '100%', textAlign: 'left',
+    <div style={{
       background: '#0b1628', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 12, marginBottom: 8,
-      cursor: 'pointer', color: '#fff',
+      color: '#fff', position: 'relative',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+      {/* Admin close-on-behalf — top-right corner, only on open shifts */}
+      {isOpen && onAdminClose && (
+        <button onClick={(e) => { e.stopPropagation(); onAdminClose(); }}
+          style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(248,113,113,0.12)', color: '#f87171', border: '1px solid rgba(248,113,113,0.4)', borderRadius: 6, padding: '4px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
+          title="Close this shift on behalf of the cashier (admin only)">
+          🔒 Close
+        </button>
+      )}
+    <button onClick={onOpen} style={{
+      width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 0,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, paddingRight: isOpen && onAdminClose ? 60 : 0 }}>
         <div>
           <span style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{profile?.full_name ?? '(unknown cashier)'}</span>
           <span style={{ marginLeft: 8, fontSize: 10, color: '#94a3b8' }}>· {row.location}</span>
@@ -291,6 +355,7 @@ function SessionCard({ row, profile, onOpen }: { row: SessionTotalsRow; profile:
         </div>
       )}
     </button>
+    </div>
   );
 }
 

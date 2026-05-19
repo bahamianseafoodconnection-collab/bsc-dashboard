@@ -32,6 +32,7 @@ interface CustomerAging {
   customer_id:     string | null;   // null = walk-in / unbound
   customer_name:   string;
   customer_phone:  string | null;
+  customer_email:  string | null;
   oldest_age:      number;
   '0-30':          number;
   '31-60':         number;
@@ -44,6 +45,7 @@ interface CustomerAging {
 export default function ArAgingPage() {
   const [authed, setAuthed]   = useState<boolean | null>(null);
   const [orders, setOrders]   = useState<UnpaidOrder[]>([]);
+  const [emails, setEmails]   = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
   const [onlyStale, setOnlyStale] = useState(false);
@@ -67,7 +69,20 @@ export default function ArAgingPage() {
       .from('ar_unpaid_orders')
       .select('id, created_at, total, customer_id, customer_name, customer_phone, channel, location, age_days, bucket')
       .order('created_at', { ascending: true });
-    setOrders((data ?? []) as UnpaidOrder[]);
+    const list = (data ?? []) as UnpaidOrder[];
+    setOrders(list);
+
+    // Side-fetch emails for every customer_id so the drill-down can offer
+    // 📧 Send reminder without an extra round-trip when admin clicks in.
+    const ids = Array.from(new Set(list.map(o => o.customer_id).filter((x): x is string => !!x)));
+    if (ids.length > 0) {
+      const { data: cs } = await supabase.from('customers').select('id, email').in('id', ids);
+      const m: Record<string, string | null> = {};
+      for (const c of (cs ?? []) as { id: string; email: string | null }[]) m[c.id] = c.email;
+      setEmails(m);
+    } else {
+      setEmails({});
+    }
     setLoading(false);
   }
 
@@ -80,6 +95,7 @@ export default function ArAgingPage() {
         customer_id:    o.customer_id,
         customer_name:  o.customer_name ?? '(walk-in)',
         customer_phone: o.customer_phone,
+        customer_email: o.customer_id ? (emails[o.customer_id] ?? null) : null,
         oldest_age:     0,
         '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0,
         total: 0, order_count: 0,
@@ -91,7 +107,7 @@ export default function ArAgingPage() {
       map.set(key, row);
     }
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [orders]);
+  }, [orders, emails]);
 
   const filtered = useMemo(() => {
     let rows = aging;
@@ -265,7 +281,28 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose, onLinked
   const [methodPicker, setMethodPicker] = useState<string | null>(null);
   const [method, setMethod] = useState<'cash' | 'card' | 'wire' | 'check' | 'offset'>('wire');
   const [notes,  setNotes]  = useState('');
-  const isOrphan = !customer.customer_id;
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [reminderResult, setReminderResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const isOrphan  = !customer.customer_id;
+  const canRemind = !!customer.customer_id && !!customer.customer_email;
+
+  async function sendReminder() {
+    if (!customer.customer_id) return;
+    setReminderBusy(true); setReminderResult(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/ar/send-reminder', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({ customer_id: customer.customer_id }),
+    });
+    const json = await res.json();
+    setReminderBusy(false);
+    setReminderResult({ ok: !!json.ok, msg: json.ok ? `✓ Reminder sent to ${json.sent_to}` : `⚠ ${json.error}` });
+    setTimeout(() => setReminderResult(null), 5000);
+  }
 
   // Link-to-customer state (only meaningful when isOrphan)
   const [linkOpen,  setLinkOpen]  = useState(false);
@@ -320,6 +357,16 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose, onLinked
                 🔗 Link to customer
               </button>
             )}
+            {canRemind && (
+              <button onClick={sendReminder} disabled={reminderBusy}
+                style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid #16a34a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: reminderBusy ? 0.5 : 1 }}
+                title={`Email aging summary to ${customer.customer_email}`}>
+                {reminderBusy ? 'Sending…' : '📧 Send reminder'}
+              </button>
+            )}
+            {customer.customer_id && !customer.customer_email && (
+              <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>(no email on file)</span>
+            )}
             {customer.customer_id && (
               <Link href={`/dashboard/ar-aging/statement/${customer.customer_id}`} target="_blank" rel="noopener noreferrer"
                 style={{ background: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
@@ -329,6 +376,17 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose, onLinked
             <button onClick={onClose} style={{ background: 'transparent', color: '#94a3b8', border: 'none', fontSize: 22, cursor: 'pointer' }}>×</button>
           </div>
         </div>
+
+        {reminderResult && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: 12, fontWeight: 700,
+            background: reminderResult.ok ? 'rgba(34,197,94,0.15)' : 'rgba(248,113,113,0.15)',
+            color:      reminderResult.ok ? '#4ade80' : '#f87171',
+            border: `1px solid ${reminderResult.ok ? '#16a34a' : '#f87171'}`,
+          }}>
+            {reminderResult.msg}
+          </div>
+        )}
 
         {isOrphan && linkOpen && (
           <div style={{ background: '#0a1628', border: '1px solid #60a5fa', borderRadius: 10, padding: 12, marginBottom: 12 }}>

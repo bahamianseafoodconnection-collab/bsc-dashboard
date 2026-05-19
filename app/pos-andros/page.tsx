@@ -72,7 +72,16 @@ type CartItem = {
   qty: number;
 };
 
-type PaymentMethod = 'cash' | 'card' | 'transfer';
+type PaymentMethod = 'cash' | 'card' | 'transfer' | 'account';
+
+interface CashierSession {
+  id: string;
+  cashier_user_id: string;
+  location: string;
+  status: 'open' | 'closed';
+  opened_at: string;
+  opening_float_cents: number;
+}
 
 type CompletedSale = {
   ref: string;
@@ -164,6 +173,69 @@ export default function AndrosPOSPage() {
   const [lastSale, setLastSale] = useState<CompletedSale | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [overhead, setOverhead] = useState<OverheadMetrics | null>(null);
+
+  // Cashier shift / cash drawer (parity with /pos Nassau)
+  const [cashierSession, setCashierSession]   = useState<CashierSession | null>(null);
+  const [shiftOpenModal, setShiftOpenModal]   = useState(false);
+  const [shiftCloseModal, setShiftCloseModal] = useState(false);
+  const [openFloat, setOpenFloat]             = useState('');
+  const [openNotes, setOpenNotes]             = useState('');
+  const [closeCounted, setCloseCounted]       = useState('');
+  const [closeNotes, setCloseNotes]           = useState('');
+  const [shiftBusy, setShiftBusy]             = useState(false);
+
+  async function loadAndrosSession() {
+    const supabase = getSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('cash_drawer_sessions')
+      .select('id, cashier_user_id, location, status, opened_at, opening_float_cents')
+      .eq('cashier_user_id', user.id)
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setCashierSession((data as CashierSession | null) ?? null);
+  }
+  useEffect(() => { if (unlocked) loadAndrosSession(); }, [unlocked]);
+
+  async function handleOpenAndrosShift() {
+    const dollars = parseFloat(openFloat);
+    if (isNaN(dollars) || dollars < 0) { alert('Enter the opening float (BSD).'); return; }
+    setShiftBusy(true);
+    const supabase = getSupabase();
+    const { data, error } = await supabase.rpc('open_cashier_session', {
+      p_location:    'andros',
+      p_float_cents: Math.round(dollars * 100),
+      p_notes:       openNotes.trim() || null,
+    });
+    setShiftBusy(false);
+    if (error) { alert('Open shift failed: ' + error.message); return; }
+    const row = Array.isArray(data) ? data[0] : data;
+    setCashierSession(row as CashierSession);
+    setShiftOpenModal(false);
+    setOpenFloat(''); setOpenNotes('');
+  }
+
+  async function handleCloseAndrosShift() {
+    if (!cashierSession) return;
+    const counted = parseFloat(closeCounted);
+    if (isNaN(counted) || counted < 0) { alert('Enter the counted cash (BSD).'); return; }
+    setShiftBusy(true);
+    const supabase = getSupabase();
+    const { error } = await supabase.rpc('close_cashier_session', {
+      p_session_id:    cashierSession.id,
+      p_counted_cents: Math.round(counted * 100),
+      p_notes:         closeNotes.trim() || null,
+    });
+    setShiftBusy(false);
+    if (error) { alert('Close shift failed: ' + error.message); return; }
+    setCashierSession(null);
+    setShiftCloseModal(false);
+    setCloseCounted(''); setCloseNotes('');
+    alert('Shift closed. Variance saved — see /dashboard/cashiers.');
+  }
 
   useEffect(() => {
     fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null));
@@ -320,12 +392,13 @@ export default function AndrosPOSPage() {
         ? computeProfitSplit(Number(subtotal.toFixed(2)), ANDROS_POS_MARGIN, overhead.expense_rate)
         : null;
 
+      const paymentStatus = paymentMethod === 'account' ? 'unpaid' : 'paid_in_full';
       const { data: insertedOrder, error: insertError } = await supabase
         .from('orders')
         .insert({
           order_type: 'pos_sale_andros',
           payment_method: paymentMethod,
-          payment_status: 'paid_in_full',
+          payment_status: paymentStatus,
           wholesale_items: lineItems,
           wholesale_cost_total: Number(subtotal.toFixed(2)),
           customer_name: customerNameClean || 'Walk-in',
@@ -334,6 +407,9 @@ export default function AndrosPOSPage() {
           admin_notes:
             paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
           user_id: userId,
+          // Andros cashier shift linkage — admin dashboard joins these.
+          cashier_session_id: cashierSession?.id ?? null,
+          cashier_user_id:    userId,
           expense_allocation: profit?.expense_allocation ?? null,
           bill_casale_share:  profit?.bill_casale_share  ?? null,
           net_profit:         profit?.net_profit         ?? null,
@@ -615,20 +691,34 @@ export default function AndrosPOSPage() {
                 Ceta&rsquo;s Variety · Mastic Point · 43% margin
               </div>
             </div>
-            <Link
-              href="/dashboard"
-              style={{
-                color: '#c4b5fd',
-                fontSize: 13,
-                fontWeight: 700,
-                textDecoration: 'none',
-                backgroundColor: 'rgba(255,255,255,0.1)',
-                padding: '6px 12px',
-                borderRadius: 8,
-              }}
-            >
-              ← BSC Control
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {cashierSession ? (
+                <button onClick={() => setShiftCloseModal(true)}
+                  style={{ background: 'rgba(34,197,94,0.18)', color: '#4ade80', border: '1px solid #16a34a', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                  title={`Open · float $${(cashierSession.opening_float_cents/100).toFixed(2)}`}>
+                  🟢 Shift open
+                </button>
+              ) : (
+                <button onClick={() => setShiftOpenModal(true)}
+                  style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid #f87171', borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                  🔴 No shift
+                </button>
+              )}
+              <Link
+                href="/dashboard"
+                style={{
+                  color: '#c4b5fd',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                }}
+              >
+                ← BSC Control
+              </Link>
+            </div>
           </div>
 
           <input
@@ -867,7 +957,7 @@ export default function AndrosPOSPage() {
           />
 
           <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-            {(['cash', 'card', 'transfer'] as const).map((m) => (
+            {(['cash', 'card', 'transfer', 'account'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setPaymentMethod(m)}
@@ -1069,6 +1159,59 @@ export default function AndrosPOSPage() {
             >
               Next sale
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── OPEN SHIFT MODAL (Andros) ── */}
+      {shiftOpenModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 900, color: '#4c1d95' }}>Open Andros Shift</h3>
+            <p style={{ fontSize: 13, color: '#64748b', marginTop: 0, marginBottom: 14 }}>Count the cash already in the drawer — that becomes your float.</p>
+            <label style={{ fontSize: 11, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>Opening float (BSD)</label>
+            <input type="number" step="0.01" min="0" inputMode="decimal" placeholder="e.g. 200.00"
+              value={openFloat} onChange={(e) => setOpenFloat(e.target.value)} autoFocus
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', fontSize: 18, marginBottom: 10, boxSizing: 'border-box' }} />
+            <label style={{ fontSize: 11, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>Notes (optional)</label>
+            <input type="text" placeholder="any context for this shift…"
+              value={openNotes} onChange={(e) => setOpenNotes(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', fontSize: 14, marginBottom: 14, boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShiftOpenModal(false)} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#e5e7eb', color: '#475569', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleOpenAndrosShift} disabled={shiftBusy} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 900, cursor: 'pointer', opacity: shiftBusy ? 0.5 : 1 }}>
+                {shiftBusy ? 'Opening…' : '✓ Open Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CLOSE SHIFT MODAL (Andros) ── */}
+      {shiftCloseModal && cashierSession && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 24, maxWidth: 380, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 900, color: '#4c1d95' }}>Close Andros Shift</h3>
+            <p style={{ fontSize: 13, color: '#64748b', marginTop: 0, marginBottom: 4 }}>
+              Float opened: <strong style={{ color: '#4c1d95' }}>${(cashierSession.opening_float_cents/100).toFixed(2)}</strong>
+            </p>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 0, marginBottom: 14 }}>
+              Count the cash in the drawer NOW (including the original float). System computes variance against cash sales.
+            </p>
+            <label style={{ fontSize: 11, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>Counted cash (BSD)</label>
+            <input type="number" step="0.01" min="0" inputMode="decimal" placeholder="e.g. 1245.50"
+              value={closeCounted} onChange={(e) => setCloseCounted(e.target.value)} autoFocus
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', fontSize: 18, marginBottom: 10, boxSizing: 'border-box' }} />
+            <label style={{ fontSize: 11, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>Close notes (optional)</label>
+            <input type="text" placeholder="missing receipts, voids, anything to flag…"
+              value={closeNotes} onChange={(e) => setCloseNotes(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', fontSize: 14, marginBottom: 14, boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShiftCloseModal(false)} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#e5e7eb', color: '#475569', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleCloseAndrosShift} disabled={shiftBusy} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 900, cursor: 'pointer', opacity: shiftBusy ? 0.5 : 1 }}>
+                {shiftBusy ? 'Closing…' : '✓ Close Shift'}
+              </button>
+            </div>
           </div>
         </div>
       )}
