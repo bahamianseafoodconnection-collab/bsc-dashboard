@@ -124,8 +124,10 @@ export default function StatementPage({ params }: { params: Promise<{ customerId
       <div className="statement-card" style={cardStyle}>
         {/* Header */}
         <div style={{ textAlign: 'center', borderBottom: '2px solid #1a2e5a', paddingBottom: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 28, fontWeight: 900, color: '#1a2e5a', letterSpacing: 0.5 }}>BSC Market Place</div>
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 6, lineHeight: 1.4 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/bsc-marketplace-logo.png" alt="BSC Market Place"
+            style={{ height: 110, width: 'auto', display: 'block', margin: '0 auto' }} />
+          <div style={{ fontSize: 13, color: '#475569', marginTop: 4, lineHeight: 1.4 }}>
             Epic Plaza, Fire Trail Rd, Nassau, New Providence, Bahamas
           </div>
           <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>

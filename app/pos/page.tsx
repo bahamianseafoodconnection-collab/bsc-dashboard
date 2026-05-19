@@ -556,10 +556,16 @@ export default function POSPage() {
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-gray-900 border-b border-gray-800 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-bold text-lg leading-tight" style={{ color: '#f5c518', fontFamily: "'Playfair Display', serif" }}>BSC Marketplace</h1>
-            <p className="text-xs text-gray-400">Nassau POS · Fire Trail Road</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-center rounded-lg bg-white shadow-sm shrink-0" style={{ height: 44, padding: 4 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/bsc-marketplace-logo.png" alt="BSC Market Place" style={{ height: 36, width: 'auto', display: 'block' }} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#f5c518' }}>Nassau POS</p>
+              <p className="text-[11px] text-gray-400 truncate">Fire Trail Road · Register</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isWednesday && (

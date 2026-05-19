@@ -688,12 +688,18 @@ export default function AndrosPOSPage() {
               marginBottom: 12,
             }}
           >
-            <div>
-              <div style={{ fontWeight: 900, fontSize: 18, color: '#fff' }}>
-                💜 Andros Register
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ height: 44, padding: 4, background: '#fff', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/bsc-marketplace-logo.png" alt="BSC Market Place" style={{ height: 36, width: 'auto', display: 'block' }} />
               </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>
-                Ceta&rsquo;s Variety · Mastic Point · 43% margin
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', color: '#c4b5fd' }}>
+                  💜 Andros Register
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>
+                  Ceta&rsquo;s Variety · Mastic Point
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

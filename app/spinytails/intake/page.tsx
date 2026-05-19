@@ -11,15 +11,22 @@
 //   4. Surfaces CCP-1 temperature constraints (fresh ≤40°F, frozen ≤0°F)
 //      as inline validation BEFORE the DB rejects the row.
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-// Next 15 requires useSearchParams() inside a Suspense boundary or
-// force-dynamic. We force-dynamic here because the form mutates DB
-// state on submit anyway — no value in pre-rendering.
-export const dynamic = 'force-dynamic';
+// Next 15 requires useSearchParams() inside a Suspense boundary on
+// client routes. The default export wraps IntakeFormInner in
+// <Suspense>; force-dynamic alone wasn't sufficient on this 'use client' page.
+
+export default function SpinytailsIntakePage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#060d1f', color: '#fff', padding: 20 }}>Loading intake…</div>}>
+      <IntakeFormInner />
+    </Suspense>
+  );
+}
 
 const STAFF_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager','processor','receiver']);
 
@@ -40,7 +47,7 @@ interface YieldLot {
   batch_id:           string | null;
 }
 
-export default function SpinytailsIntakePage() {
+function IntakeFormInner() {
   const params = useSearchParams();
   const prefillYieldId = params.get('yield_lot_id');
 

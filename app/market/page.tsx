@@ -329,17 +329,14 @@ function MarketPageInner() {
       <header className="sticky top-0 z-40 bg-navy shadow-md">
         <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-3 px-3 sm:h-16 sm:gap-4 sm:px-6">
 
-          {/* ── Bahamian identity badge ── */}
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center justify-center h-9 w-9 rounded-full sm:h-10 sm:w-10 text-xl font-black shrink-0"
-              style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
-              🇧🇸
+          {/* ── BSC Market Place logo (watercolor brand) ── */}
+          <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="BSC Market Place — home">
+            <div className="flex items-center justify-center rounded-xl bg-white shadow-sm shrink-0" style={{ height: 48, padding: 4 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/bsc-marketplace-logo.png" alt="BSC Market Place" style={{ height: 40, width: 'auto', display: 'block' }} />
             </div>
-            <div className="text-white">
-              <div className="text-sm font-extrabold tracking-wide" style={{ color: '#f5c518' }}>
-                BSC Marketplace
-              </div>
-              <div className="text-[10px] text-slate-300">Shop Local · Nassau 🌊</div>
+            <div className="text-white hidden sm:block">
+              <div className="text-[10px] text-slate-300 tracking-widest uppercase">Shop Local · Nassau 🇧🇸</div>
             </div>
           </Link>
 
@@ -405,18 +402,46 @@ function MarketPageInner() {
         </div>
       </header>
 
-      {/* ─── Hero strip ─── */}
-      <section className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-screen-2xl flex-col gap-1 px-4 py-4 sm:px-6 sm:py-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600">
-            Shop Local · Delivered Fresh
-          </p>
-          <h1 className="font-display text-2xl font-bold text-navy sm:text-3xl">
-            BSC Online Market
-          </h1>
-          <p className="text-sm text-slate-600 sm:text-base">
-            Fresh Bahamian seafood + Nassau&rsquo;s top wholesale brands, delivered to your door.
-          </p>
+      {/* ─── Branded hero ─── */}
+      <section
+        className="border-b border-slate-200"
+        style={{
+          background:
+            'radial-gradient(ellipse at top left, rgba(245,197,24,0.08) 0%, transparent 55%), ' +
+            'radial-gradient(ellipse at bottom right, rgba(167,139,250,0.10) 0%, transparent 60%), ' +
+            'linear-gradient(180deg, #ffffff 0%, #fbfaf6 100%)',
+        }}>
+        <div className="mx-auto flex max-w-screen-2xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:gap-8 sm:px-6 sm:py-8">
+          {/* Logo lockup */}
+          <div className="flex shrink-0 items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/bsc-marketplace-logo.png"
+              alt="BSC Market Place"
+              style={{ height: 140, width: 'auto', display: 'block' }}
+              className="sm:h-44"
+            />
+          </div>
+          {/* Tagline */}
+          <div className="flex-1 sm:border-l sm:border-slate-200 sm:pl-8">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#a16207' }}>
+              Bahamian Seafood Connection · Est. Nassau
+            </p>
+            <h1 className="mt-1 font-display text-2xl font-bold sm:text-3xl" style={{ color: '#1a2e5a' }}>
+              Fresh from the Bahamas, straight to your door.
+            </h1>
+            <p className="mt-2 text-sm text-slate-700 sm:text-base">
+              Wild-caught spiny lobster, conch, snapper &amp; hogfish — plus Nassau&rsquo;s top wholesale brands. Same-day pickup at Fire Trail Road, or delivered island-wide.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="#shop" className="rounded-lg bg-navy px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#0d1834]">
+                Shop the catch →
+              </Link>
+              <Link href="/trace" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-navy transition hover:border-navy">
+                🧾 Trace by lot
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 

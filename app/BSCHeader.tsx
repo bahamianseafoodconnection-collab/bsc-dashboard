@@ -2,22 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 
-const LOGO_URL = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images/logo.jpg';
-
-function BSCLogo({ dark = false, size = 44 }: { dark?: boolean; size?: number }) {
-return (
-<Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-<div style={{ width: `${size}px`, height: `${size}px`, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: dark ? '2px solid #e5e7eb' : '2px solid rgba(255,255,255,0.15)', backgroundColor: '#fff' }}>
-<img src={LOGO_URL} alt="BSC Marketplace" width={size} height={size} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-</div>
-<div style={{ lineHeight: 1.15 }}>
-<div style={{ color: dark ? '#1a2e5a' : '#fff', fontWeight: 900, fontSize: '18px', letterSpacing: '-0.3px' }}>BSC</div>
-<div style={{ color: dark ? '#666' : 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: '9px', letterSpacing: '2.5px', textTransform: 'uppercase' }}>Marketplace</div>
-<div style={{ color: dark ? '#999' : 'rgba(255,255,255,0.4)', fontSize: '8px' }}>Fresh. Local. Reliable.</div>
-</div>
-</Link>
-);
+function BSCLogo({ dark = false, size = 56 }: { dark?: boolean; size?: number }) {
+  // dark prop here means "light surface" in the rest of this file
+  // (variant === 'public' uses a white header → dark text). Confusing
+  // naming inherited; passing-through to BrandLogo's darkSurface.
+  const darkSurface = !dark; // staff variant has dark navy bg
+  // Approximate the requested pixel size to BrandLogo's enum
+  const bucket: 'sm' | 'md' | 'lg' = size <= 36 ? 'sm' : size <= 52 ? 'md' : 'lg';
+  return <BrandLogo size={bucket} darkSurface={darkSurface} href="/" />;
 }
 
 type Props = {
