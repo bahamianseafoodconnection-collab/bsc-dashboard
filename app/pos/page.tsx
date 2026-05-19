@@ -583,24 +583,52 @@ export default function POSPage() {
               {products.find(p => p.id === weightInput.productId)?.name}
             </p>
             <input
-              type="number" step="0.01" min="0.01"
+              type="number"
+              step="0.01"
+              min="0.01"
+              inputMode="decimal"
+              pattern="[0-9]*\.?[0-9]*"
               placeholder="e.g. 2.45"
               value={weightInput.weight}
               onChange={e => setWeightInput(prev => prev ? { ...prev, weight: e.target.value } : null)}
               onKeyDown={e => e.key === 'Enter' && confirmWeight()}
               className="w-full bg-gray-800 text-white text-2xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 text-center"
               autoFocus />
-            <p className="text-xs text-gray-500 text-center mt-1">pounds — enter decimal e.g. 2.45</p>
+            <p className="text-xs text-gray-500 text-center mt-1">pounds — decimals supported (e.g. <strong>2.45</strong> or <strong>0.75</strong>)</p>
             {weightInput.weight && !isNaN(parseFloat(weightInput.weight)) && parseFloat(weightInput.weight) > 0 && (() => {
               const product = products.find(p => p.id === weightInput.productId)
-              const price   = product?.promo_price ?? product?.sell_price ?? 0
-              const lbs     = parseFloat(weightInput.weight)
+              if (!product) return null
+              const lbs   = parseFloat(weightInput.weight)
+              // Use the real cart-pricing helper so the preview matches what the
+              // cart will charge — including wholesale auto-upgrade at 10+ lbs.
+              const snap: ProductPriceSnapshot = {
+                retail_price:    product.sell_price,
+                wholesale_price: product.wholesale_price,
+                promo_price:     product.promo_price,
+              }
+              const pricing = priceCartLine(snap, lbs, 'lb')
+              const total   = Math.round(pricing.unit_price * lbs * 100) / 100
               return (
                 <div className="mt-3 rounded-xl p-3 text-center" style={{ backgroundColor: '#0f1f3d' }}>
-                  <p className="text-xs text-gray-400">{lbs.toFixed(2)} lbs × ${price.toFixed(2)}/lb</p>
-                  <p className="text-xl font-bold mt-0.5" style={{ color: '#f5c518' }}>
-                    ${(price * lbs).toFixed(2)}
+                  <p className="text-xs text-gray-400">
+                    {lbs.toFixed(2)} lbs × ${pricing.unit_price.toFixed(2)}/lb
+                    {pricing.applied_channel === 'promo' && (
+                      <span className="ml-1.5" style={{ color: '#f5c518' }}>★ Special</span>
+                    )}
+                    {pricing.upgraded_to_wholesale && (
+                      <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: '#16a34a', color: '#fff' }}>
+                        WHOLESALE
+                      </span>
+                    )}
                   </p>
+                  <p className="text-xl font-bold mt-0.5" style={{ color: '#f5c518' }}>
+                    ${total.toFixed(2)}
+                  </p>
+                  {pricing.qualifies_as_wholesale && !pricing.wholesale_price_available && pricing.applied_channel !== 'promo' && (
+                    <p className="text-[10px] mt-1" style={{ color: '#fbbf24' }}>
+                      ⚠ Qualifies for wholesale — no local_wholesale price set
+                    </p>
+                  )}
                 </div>
               )
             })()}
