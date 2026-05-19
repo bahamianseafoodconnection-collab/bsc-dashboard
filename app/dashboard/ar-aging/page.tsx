@@ -6,7 +6,7 @@
 // days, groups by customer, and lets admin click into a customer to
 // see their unpaid invoices and mark them paid.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -247,22 +247,61 @@ export default function ArAgingPage() {
           markPaid={markPaid}
           markBusy={markBusy}
           onClose={() => setDrill(null)}
+          onLinked={async () => { await load(); setDrill(null); }}
         />
       )}
     </div>
   );
 }
 
-function CustomerDrill({ customer, orders, markPaid, markBusy, onClose }: {
+function CustomerDrill({ customer, orders, markPaid, markBusy, onClose, onLinked }: {
   customer: CustomerAging;
   orders:   UnpaidOrder[];
   markPaid: (orderId: string, method: string, notes?: string) => Promise<void>;
   markBusy: string | null;
   onClose:  () => void;
+  onLinked: () => Promise<void>;
 }) {
   const [methodPicker, setMethodPicker] = useState<string | null>(null);
   const [method, setMethod] = useState<'cash' | 'card' | 'wire' | 'check' | 'offset'>('wire');
   const [notes,  setNotes]  = useState('');
+  const isOrphan = !customer.customer_id;
+
+  // Link-to-customer state (only meaningful when isOrphan)
+  const [linkOpen,  setLinkOpen]  = useState(false);
+  const [linkPhone, setLinkPhone] = useState('');
+  const [linkMatch, setLinkMatch] = useState<{ id: string; full_name: string; email: string | null; phone_e164: string } | null>(null);
+  const [linkLooking, setLinkLooking] = useState(false);
+  const [linkErr,   setLinkErr]   = useState<string | null>(null);
+  const [linkBusy,  setLinkBusy]  = useState(false);
+  const linkTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setLinkMatch(null); setLinkErr(null);
+    if (linkTimer.current) clearTimeout(linkTimer.current);
+    if (linkPhone.trim().length < 7) return;
+    setLinkLooking(true);
+    linkTimer.current = setTimeout(async () => {
+      const { data } = await supabase.rpc('bsc_lookup_customer_by_phone', { p_raw_phone: linkPhone.trim() });
+      const match = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      setLinkMatch(match ?? null);
+      setLinkErr(match ? null : 'No customer found with that phone — create one at /customers first, then come back.');
+      setLinkLooking(false);
+    }, 350);
+  }, [linkPhone]);
+
+  async function linkAllOrphansToMatch() {
+    if (!linkMatch || !isOrphan) return;
+    setLinkBusy(true);
+    const ids = orders.map(o => o.id);
+    const { error } = await supabase
+      .from('orders')
+      .update({ customer_id: linkMatch.id })
+      .in('id', ids);
+    setLinkBusy(false);
+    if (error) { setLinkErr('Link failed: ' + error.message); return; }
+    await onLinked();
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }} onClick={onClose}>
@@ -275,6 +314,12 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose }: {
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isOrphan && (
+              <button onClick={() => setLinkOpen(v => !v)}
+                style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: '1px solid #60a5fa', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                🔗 Link to customer
+              </button>
+            )}
             {customer.customer_id && (
               <Link href={`/dashboard/ar-aging/statement/${customer.customer_id}`} target="_blank" rel="noopener noreferrer"
                 style={{ background: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
@@ -284,6 +329,39 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose }: {
             <button onClick={onClose} style={{ background: 'transparent', color: '#94a3b8', border: 'none', fontSize: 22, cursor: 'pointer' }}>×</button>
           </div>
         </div>
+
+        {isOrphan && linkOpen && (
+          <div style={{ background: '#0a1628', border: '1px solid #60a5fa', borderRadius: 10, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: '#60a5fa', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              🔗 Link {orders.length} unpaid invoice{orders.length === 1 ? '' : 's'} to an existing customer
+            </div>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 8 }}>
+              These invoices were rung up without a customer attached. Type the customer's phone to find their record — the system normalizes 7-digit ↦ +1242 automatically.
+            </p>
+            <input type="tel" inputMode="tel" placeholder="e.g. 242-555-0100"
+              value={linkPhone} onChange={(e) => setLinkPhone(e.target.value)} autoFocus
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 6, background: '#060d1f', color: '#fff', border: '1px solid rgba(96,165,250,0.4)', fontSize: 14, marginBottom: 6, boxSizing: 'border-box' }} />
+            {linkLooking && <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>Looking up…</p>}
+            {linkMatch && (
+              <div style={{ background: '#052e16', padding: '8px 10px', borderRadius: 6, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: '#4ade80', fontWeight: 800 }}>✓ Found</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{linkMatch.full_name}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>{linkMatch.phone_e164}{linkMatch.email ? ` · ${linkMatch.email}` : ''}</div>
+              </div>
+            )}
+            {linkErr && !linkMatch && <p style={{ fontSize: 11, color: '#f87171', marginBottom: 6 }}>{linkErr}</p>}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => { setLinkOpen(false); setLinkPhone(''); setLinkMatch(null); setLinkErr(null); }}
+                style={{ flex: 1, padding: '8px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: '#94a3b8', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={linkAllOrphansToMatch} disabled={!linkMatch || linkBusy}
+                style={{ flex: 2, padding: '8px 10px', borderRadius: 6, background: linkMatch ? '#60a5fa' : 'rgba(96,165,250,0.3)', color: '#fff', border: 'none', fontSize: 11, fontWeight: 800, cursor: linkMatch ? 'pointer' : 'not-allowed' }}>
+                {linkBusy ? 'Linking…' : `🔗 Link ${orders.length} invoice${orders.length === 1 ? '' : 's'}`}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={statGrid}>
           <Stat label="0-30"  value={`$${customer['0-30'].toFixed(2)}`}  accent="#4ade80" small />
