@@ -112,6 +112,7 @@ export default function SpinytailsHubPage() {
             <NavTile href="/spinytails/vessels"   icon="🛥"  label="Vessels"                hint="Registry + color tags" />
             <NavTile href="/spinytails/steps"     icon="📚" label="Step-by-step SOPs"      hint="Walkthrough of all 11 steps + CCPs" />
             <NavTile href="/spinytails/documents" icon="📜" label="Document library"       hint="SOP · SSOP · HACCP · upload + versioning" />
+            <NavTile href="/spinytails/audits"    icon="🔐" label="Inspector audit access" hint="Token + QR for BAHFSA / Customs / Marine Resources" />
             <NavTile href="/lobster-intake"        icon="🦞" label="Lobster Intake (door)"  hint="Upstream / fisherman-facing" />
             <NavTile href="/dashboard/processing-batches" icon="🏭" label="Processing batches" hint="Bridge to existing traceability_batches" />
           </div>

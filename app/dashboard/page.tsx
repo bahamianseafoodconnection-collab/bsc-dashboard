@@ -44,6 +44,7 @@ const NAV_GROUPS = [
       { icon: '🛥', label: 'Spiny Tails vessels', href: '/spinytails/vessels' },
       { icon: '📚', label: 'Spiny Tails SOPs',    href: '/spinytails/steps' },
       { icon: '📜', label: 'Spiny Tails docs',    href: '/spinytails/documents' },
+      { icon: '🔐', label: 'ST Inspector audits', href: '/spinytails/audits' },
       { icon: '🎣', label: 'Fishermen (logins)', href: '/dashboard/fishermen' },
       { icon: '💵', label: 'Cashier drawers',    href: '/dashboard/cashiers' },
       { icon: '📈', label: 'Cashier trends',     href: '/dashboard/cashiers/trends' },
