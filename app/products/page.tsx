@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { calculatePrice, BSC_PRICING_RULES, type PricingChannel } from '@/lib/pricing';
+import { priceCartLine, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
@@ -138,6 +139,254 @@ export default function ProductsPage() {
   const [adding, setAdding]                   = useState(false);
   const [toast, setToast]                     = useState<{ msg: string; ok: boolean } | null>(null);
   const [tab, setTab]                         = useState<'list' | 'add'>('list');
+
+  // ── Quick Sale state ─────────────────────────────────────────────
+  type SaleLine = { product: Product; quantity: number; weight_lb?: number };
+  type SaleChannel  = 'nassau_pos' | 'andros_pos' | 'online_retail' | 'wholesale';
+  type SalePayment  = 'cash' | 'card' | 'wire';
+  type SaleCustomer = { id: string; full_name: string; phone: string | null; email: string | null; email_marketing_consent: boolean | null; total_orders: number; total_spent: number };
+  const [saleOpen,         setSaleOpen]         = useState(false);
+  const [saleCart,         setSaleCart]         = useState<SaleLine[]>([]);
+  const [saleChannel,      setSaleChannel]      = useState<SaleChannel>('nassau_pos');
+  const [saleWeightInput,  setSaleWeightInput]  = useState<{ productId: string; weight: string } | null>(null);
+  const [salePhone,        setSalePhone]        = useState('');
+  const [saleName,         setSaleName]         = useState('');
+  const [saleEmail,        setSaleEmail]        = useState('');
+  const [saleConsent,      setSaleConsent]      = useState(false);
+  const [saleFoundCust,    setSaleFoundCust]    = useState<SaleCustomer | null>(null);
+  const [saleStatus,       setSaleStatus]       = useState<'idle' | 'found' | 'new' | 'looking'>('idle');
+  const [salePayment,      setSalePayment]      = useState<SalePayment>('cash');
+  const [saleCashTendered, setSaleCashTendered] = useState('');
+  const [saleSubmitting,   setSaleSubmitting]   = useState(false);
+  const salePhoneTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Per-line pricing — recomputed every render so quantity bumps that
+  // cross 10 lbs auto-flip to wholesale immediately.
+  function saleLineInfo(line: SaleLine): { count: number; pricing: CartLinePricing; line_subtotal: number } {
+    const retailKey =
+      saleChannel === 'andros_pos'    ? 'andros_pos'    :
+      saleChannel === 'online_retail' ? 'online_market' :
+      saleChannel === 'wholesale'     ? 'local_wholesale' :
+      'nassau_pos';
+    const retailSnap = line.product.pricing[retailKey] ?? line.product.pricing['nassau_pos'] ?? 0;
+    const wholesaleSnap = line.product.pricing['local_wholesale'] ?? null;
+    const snap: ProductPriceSnapshot = {
+      retail_price:    retailSnap,
+      // When admin explicitly selected wholesale channel, the retail field IS wholesale.
+      // Otherwise expose the local_wholesale snapshot for auto-upgrade at 10+ lbs.
+      wholesale_price: saleChannel === 'wholesale' ? null : wholesaleSnap,
+      promo_price:     null,
+    };
+    const isLb    = line.product.unit_type === 'lb';
+    const count   = line.weight_lb && line.weight_lb > 0 ? line.weight_lb : line.quantity;
+    const pricing = priceCartLine(snap, count, isLb ? 'lb' : 'each');
+    return { count, pricing, line_subtotal: Math.round(pricing.unit_price * count * 100) / 100 };
+  }
+
+  const saleSubtotal = saleCart.reduce((s, l) => s + saleLineInfo(l).line_subtotal, 0);
+  const saleVat      = 0;  // matches /pos for now — food items are zero-rated at POS
+  const saleTotal    = saleSubtotal + saleVat;
+  const saleCount    = saleCart.reduce((s, l) => s + l.quantity, 0);
+
+  function addToSale(product: Product, weightLb?: number) {
+    const isLb = product.unit_type === 'lb';
+    if (isLb && !weightLb) {
+      setSaleWeightInput({ productId: product.id, weight: '' });
+      return;
+    }
+    setSaleCart(prev => {
+      if (!isLb) {
+        const idx = prev.findIndex(l => l.product.id === product.id);
+        if (idx > -1) return prev.map((l, i) => i === idx ? { ...l, quantity: l.quantity + 1 } : l);
+      }
+      return [...prev, { product, quantity: 1, weight_lb: weightLb }];
+    });
+    setSaleWeightInput(null);
+    setSaleOpen(true);
+  }
+  function removeFromSale(idx: number)         { setSaleCart(prev => prev.filter((_, i) => i !== idx)); }
+  function adjustSaleQty(idx: number, delta: number) {
+    setSaleCart(prev => prev.map((l, i) => {
+      if (i !== idx) return l;
+      const q = l.quantity + delta;
+      return q <= 0 ? null : { ...l, quantity: q };
+    }).filter(Boolean) as SaleLine[]);
+  }
+  function confirmSaleWeight() {
+    if (!saleWeightInput) return;
+    const p = products.find(x => x.id === saleWeightInput.productId);
+    const lbs = parseFloat(saleWeightInput.weight);
+    if (!p || isNaN(lbs) || lbs <= 0) return;
+    addToSale(p, lbs);
+  }
+
+  // Phone normalize — mirror of bsc_normalize_phone for write-time E.164.
+  function saleNormalizePhone(raw: string): string | null {
+    if (!raw || !raw.trim()) return null;
+    let c = raw.replace(/[^0-9+]/g, '');
+    if (c.startsWith('+')) return c;
+    c = c.replace(/\+/g, '');
+    if (c.length === 7) return `+1242${c}`;
+    if (c.length === 10) return `+1${c}`;
+    if (c.length === 11 && c.startsWith('1')) return `+${c}`;
+    return c ? `+${c}` : null;
+  }
+
+  function handleSalePhoneChange(val: string) {
+    setSalePhone(val);
+    setSaleFoundCust(null);
+    setSaleStatus('idle');
+    setSaleName(''); setSaleEmail(''); setSaleConsent(false);
+    if (salePhoneTimer.current) clearTimeout(salePhoneTimer.current);
+    if (val.length < 7) return;
+    setSaleStatus('looking');
+    salePhoneTimer.current = setTimeout(async () => {
+      const { data: matches } = await supabase.rpc('bsc_lookup_customer_by_phone', { p_raw_phone: val.trim() });
+      const match = Array.isArray(matches) && matches.length > 0 ? matches[0] : null;
+      if (!match) { setSaleStatus('new'); return; }
+      const { data: full } = await supabase
+        .from('customers')
+        .select('id, full_name, phone, email, email_marketing_consent, total_orders, total_spent')
+        .eq('id', match.id)
+        .maybeSingle();
+      const row = (full ?? { ...match, total_orders: 0, total_spent: 0 }) as SaleCustomer;
+      setSaleFoundCust(row);
+      setSaleName(row.full_name);
+      setSaleEmail(row.email ?? '');
+      setSaleConsent(Boolean(row.email_marketing_consent));
+      setSaleStatus('found');
+    }, 350);
+  }
+
+  function resetSale() {
+    setSaleCart([]);
+    setSalePhone(''); setSaleName(''); setSaleEmail(''); setSaleConsent(false);
+    setSaleFoundCust(null); setSaleStatus('idle');
+    setSalePayment('cash'); setSaleCashTendered('');
+  }
+
+  async function handleSaleCharge() {
+    if (saleCart.length === 0) return;
+    const tendered = parseFloat(saleCashTendered) || 0;
+    if (salePayment === 'cash' && tendered < saleTotal) {
+      alert(`Cash tendered ($${tendered.toFixed(2)}) is less than total ($${saleTotal.toFixed(2)}).`);
+      return;
+    }
+    setSaleSubmitting(true);
+    try {
+      const phoneClean = salePhone.trim();
+      const nameClean  = saleName.trim();
+      const emailClean = saleEmail.trim().toLowerCase();
+      const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean) ? emailClean : '';
+      const normalized = saleNormalizePhone(phoneClean);
+
+      let customerId: string | null = null;
+      if (phoneClean && nameClean) {
+        if (saleFoundCust) {
+          const updates: Record<string, unknown> = {
+            last_seen_at: new Date().toISOString(),
+            total_orders: saleFoundCust.total_orders + 1,
+            total_spent:  Number(saleFoundCust.total_spent) + saleTotal,
+          };
+          if (normalized) updates.phone_e164 = normalized;
+          if (validEmail) updates.email = validEmail;
+          if (saleConsent && validEmail && !saleFoundCust.email_marketing_consent) {
+            updates.email_marketing_consent = true;
+            updates.email_consent_at        = new Date().toISOString();
+            updates.email_consent_source    = saleChannel;
+          }
+          await supabase.from('customers').update(updates).eq('id', saleFoundCust.id);
+          customerId = saleFoundCust.id;
+        } else {
+          const consentNow = saleConsent && !!validEmail;
+          const originForChannel: string =
+            saleChannel === 'andros_pos'    ? 'andros_pos' :
+            saleChannel === 'online_retail' ? 'online'     :
+            saleChannel === 'wholesale'     ? 'wholesale'  :
+            'nassau_pos';
+          const { data: newCust } = await supabase.from('customers').insert({
+            full_name:      nameClean,
+            phone:          phoneClean,
+            phone_e164:     normalized,
+            origin_channel: originForChannel,
+            email:          validEmail || null,
+            email_marketing_consent: consentNow,
+            email_consent_at:     consentNow ? new Date().toISOString() : null,
+            email_consent_source: consentNow ? originForChannel : null,
+            total_orders: 1, total_spent: saleTotal,
+            created_by: FOUNDER_ID,
+          }).select('id').single();
+          customerId = newCust?.id ?? null;
+        }
+      }
+
+      const items = saleCart.map(line => {
+        const { pricing, line_subtotal } = saleLineInfo(line);
+        return {
+          product_id: line.product.id, sku: line.product.sku, name: line.product.name,
+          quantity:   line.quantity,
+          unit_price: pricing.unit_price,
+          weight_lb:  line.weight_lb ?? null,
+          line_total: line_subtotal,
+          applied_channel:       pricing.applied_channel,
+          upgraded_to_wholesale: pricing.upgraded_to_wholesale,
+        };
+      });
+
+      const orderTypeMap: Record<SaleChannel, string> = {
+        nassau_pos:    'pos_sale_nassau',
+        andros_pos:    'pos_sale_andros',
+        online_retail: 'online',
+        wholesale:     'wholesale',
+      };
+      const locationMap: Record<SaleChannel, string> = {
+        nassau_pos:    'bsc_marketplace_nassau',
+        andros_pos:    'bsc_andros',
+        online_retail: 'online',
+        wholesale:     'bsc_marketplace_nassau',
+      };
+      const channelMap: Record<SaleChannel, string> = {
+        nassau_pos:    'nassau_pos',
+        andros_pos:    'andros_pos',
+        online_retail: 'online_retail',
+        wholesale:     'local_wholesale',
+      };
+
+      let adminNotes = `Admin Quick Sale via /products`;
+      if (salePayment === 'cash') {
+        const change = Math.max(0, tendered - saleTotal);
+        adminNotes += ` · Cash tendered: $${tendered.toFixed(2)} · Change: $${change.toFixed(2)}`;
+      }
+
+      const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
+        order_type:     orderTypeMap[saleChannel],
+        location:       locationMap[saleChannel],
+        channel:        channelMap[saleChannel],
+        wholesale_items: items,
+        subtotal:       saleSubtotal, vat_amount: saleVat, total: saleTotal,
+        payment_method: salePayment,
+        payment_status: 'paid_in_full',
+        admin_notes:    adminNotes,
+        status:         'completed',
+        customer_id:    customerId,
+        customer_name:  nameClean || null,
+        customer_phone: phoneClean || null,
+      }).select('id').single();
+      if (orderErr) throw orderErr;
+
+      const orderId = newOrder?.id;
+      if (orderId) window.open(`/receipt/${orderId}`, '_blank');
+
+      setSaleSubmitting(false);
+      resetSale();
+      setSaleOpen(false);
+      setToast({ msg: '✓ Sale completed', ok: true });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      setSaleSubmitting(false);
+      alert('Order failed: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  }
 
   // 3 image-source refs per form: Files / Gallery / Camera. All three write to
   // the same state — only the input element's `accept` + `capture` attributes
@@ -465,11 +714,22 @@ export default function ProductsPage() {
               {noImageCount > 0 && <span style={{ color: '#f5c518' }}> · {noImageCount} missing images</span>}
             </p>
           </div>
-          <button onClick={() => setTab(tab === 'add' ? 'list' : 'add')}
-            className="px-4 py-2 rounded-xl font-bold text-sm"
-            style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
-            {tab === 'add' ? '← Back' : '+ Add Product'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setSaleOpen(true)}
+              className="relative px-3 py-2 rounded-xl font-bold text-sm"
+              style={{ backgroundColor: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid rgba(245,197,24,0.4)' }}>
+              🛒 Sell
+              {saleCount > 0 && (
+                <span className="absolute -top-1 -right-1 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center"
+                  style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>{saleCount}</span>
+              )}
+            </button>
+            <button onClick={() => setTab(tab === 'add' ? 'list' : 'add')}
+              className="px-4 py-2 rounded-xl font-bold text-sm"
+              style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+              {tab === 'add' ? '← Back' : '+ Add Product'}
+            </button>
+          </div>
         </div>
         <div className="flex gap-2">
           {(['list', 'add'] as const).map(t => (
@@ -756,9 +1016,19 @@ export default function ProductsPage() {
               {filtered.map(p => {
                 const supplier = suppliers.find(s => s.id === p.primary_supplier_id);
                 return (
-                  <button key={p.id} onClick={() => openProduct(p)}
-                    className="w-full text-left rounded-xl border transition"
+                  <div key={p.id} className="relative rounded-xl border transition"
                     style={{ backgroundColor: '#0f1f3d', borderColor: 'rgba(245,197,24,0.15)' }}>
+                    {/* ➕ Add to sale — floating top-right, separate hit area from card body */}
+                    <button onClick={(e) => { e.stopPropagation(); addToSale(p); }}
+                      className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full text-base font-bold flex items-center justify-center z-10"
+                      style={{ backgroundColor: '#f5c518', color: '#060d1f' }}
+                      aria-label={`Add ${p.name} to sale`}
+                      title="Add to sale">
+                      🛒
+                    </button>
+                  <button onClick={() => openProduct(p)}
+                    className="w-full text-left"
+                    style={{ background: 'transparent' }}>
                     <div className="flex items-stretch">
                       <div className="shrink-0 w-20 h-20 rounded-l-xl overflow-hidden"
                         style={{ backgroundColor: '#1a2e5a' }}>
@@ -807,6 +1077,7 @@ export default function ProductsPage() {
                       </div>
                     </div>
                   </button>
+                  </div>
                 );
               })}
             </div>
@@ -978,6 +1249,172 @@ export default function ProductsPage() {
                   {saving ? 'Saving…' : '✓ Save Changes'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── QUICK SALE WEIGHT INPUT ── */}
+      {saleWeightInput && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
+            <h3 className="font-bold text-lg mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>Enter Weight (lbs)</h3>
+            <p className="text-sm text-gray-400 mb-4">{products.find(p => p.id === saleWeightInput.productId)?.name}</p>
+            <input
+              type="number" step="0.01" min="0.01" inputMode="decimal" pattern="[0-9]*\.?[0-9]*"
+              placeholder="e.g. 2.45" value={saleWeightInput.weight}
+              onChange={e => setSaleWeightInput(prev => prev ? { ...prev, weight: e.target.value } : null)}
+              onKeyDown={e => e.key === 'Enter' && confirmSaleWeight()}
+              className="w-full bg-gray-800 text-white text-2xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 text-center"
+              autoFocus />
+            <p className="text-xs text-gray-500 text-center mt-1">pounds — decimals supported (e.g. <strong>2.45</strong>)</p>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setSaleWeightInput(null)} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Cancel</button>
+              <button onClick={confirmSaleWeight} className="flex-1 rounded-xl py-3 text-sm font-bold" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>Add to Cart</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── QUICK SALE DRAWER ── */}
+      {saleOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={() => setSaleOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-md h-full flex flex-col overflow-hidden border-l"
+            style={{ backgroundColor: '#060d1f', borderColor: 'rgba(245,197,24,0.25)' }}>
+            <div className="px-5 py-4 border-b flex items-center justify-between"
+              style={{ borderColor: 'rgba(245,197,24,0.2)' }}>
+              <h2 className="font-bold text-lg" style={{ color: '#f5c518', fontFamily: "'Playfair Display', serif" }}>🛒 Quick Sale</h2>
+              <button onClick={() => setSaleOpen(false)} className="text-gray-400 text-2xl leading-none w-8 h-8 flex items-center justify-center">×</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {/* Channel */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wide font-bold block mb-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>Sale channel</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { k: 'nassau_pos',    l: '🟡 Nassau POS' },
+                    { k: 'andros_pos',    l: '🟣 Andros POS' },
+                    { k: 'online_retail', l: '🛒 Online' },
+                    { k: 'wholesale',     l: '📦 Wholesale' },
+                  ].map(c => (
+                    <button key={c.k} onClick={() => setSaleChannel(c.k as SaleChannel)}
+                      className="px-2 py-2 rounded-lg text-xs font-bold"
+                      style={saleChannel === c.k
+                        ? { backgroundColor: '#f5c518', color: '#060d1f' }
+                        : { backgroundColor: '#1a2e5a', color: '#94a3b8', border: '1px solid rgba(245,197,24,0.2)' }}>
+                      {c.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cart lines */}
+              {saleCart.length === 0 ? (
+                <div className="text-center py-8 text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  No items yet. Tap 🛒 on a product to add it.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {saleCart.map((line, i) => {
+                    const { pricing, line_subtotal } = saleLineInfo(line);
+                    const isLb = line.product.unit_type === 'lb';
+                    return (
+                      <div key={i} className="flex items-center gap-3 rounded-xl p-3" style={{ backgroundColor: '#0f1f3d' }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate text-white">{line.product.name}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                            ${pricing.unit_price.toFixed(2)}{isLb ? '/lb' : ''}
+                            {isLb && line.weight_lb ? ` × ${line.weight_lb.toFixed(2)} lbs` : line.quantity > 1 ? ` × ${line.quantity}` : ''}
+                            {pricing.upgraded_to_wholesale && (
+                              <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: '#16a34a', color: '#fff' }}>WHOLESALE</span>
+                            )}
+                          </p>
+                          {pricing.qualifies_as_wholesale && !pricing.wholesale_price_available && (
+                            <p className="text-[10px] mt-0.5" style={{ color: '#fbbf24' }}>⚠ qualifies — no wholesale price set</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {!isLb && (
+                            <>
+                              <button onClick={() => adjustSaleQty(i, -1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold">−</button>
+                              <span className="text-sm w-4 text-center text-white">{line.quantity}</span>
+                              <button onClick={() => adjustSaleQty(i, 1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold">+</button>
+                            </>
+                          )}
+                          <span className="text-sm font-bold ml-1" style={{ color: '#f5c518' }}>${line_subtotal.toFixed(2)}</span>
+                          <button onClick={() => removeFromSale(i)} className="text-red-400 text-xl ml-1 leading-none">×</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Customer */}
+              <div className="rounded-xl p-3" style={{ backgroundColor: '#0f1f3d', border: '1px solid rgba(245,197,24,0.15)' }}>
+                <label className="text-[10px] uppercase tracking-wide font-bold block mb-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>Customer phone</label>
+                <input type="tel" inputMode="tel" autoComplete="tel" placeholder="e.g. 242-555-0100"
+                  value={salePhone} onChange={(e) => handleSalePhoneChange(e.target.value)}
+                  className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 mb-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                {saleStatus === 'looking' && <p className="text-[11px] animate-pulse" style={{ color: 'rgba(255,255,255,0.55)' }}>Looking up…</p>}
+                {saleStatus === 'found' && saleFoundCust && (
+                  <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: '#052e16' }}>
+                    <p className="text-[11px] font-bold" style={{ color: '#4ade80' }}>✓ Returning customer</p>
+                    <p className="text-sm font-semibold text-white">{saleFoundCust.full_name}</p>
+                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>{saleFoundCust.total_orders} orders · ${Number(saleFoundCust.total_spent).toFixed(2)} lifetime</p>
+                  </div>
+                )}
+                {saleStatus === 'new' && (
+                  <p className="text-[11px] mb-1" style={{ color: '#fbbf24' }}>⚠ New customer — fill name + email below</p>
+                )}
+                <input type="text" placeholder="Full name" value={saleName} onChange={(e) => setSaleName(e.target.value)} readOnly={saleStatus === 'found'}
+                  className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 mb-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                <input type="email" placeholder="Email (for receipts)" value={saleEmail} onChange={(e) => setSaleEmail(e.target.value)} readOnly={saleStatus === 'found' && !!saleFoundCust?.email}
+                  className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 mb-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                {!saleFoundCust?.email_marketing_consent && (
+                  <label className="flex items-center gap-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                    <input type="checkbox" checked={saleConsent} onChange={(e) => setSaleConsent(e.target.checked)} />
+                    Email marketing consent (Wed Special + drops)
+                  </label>
+                )}
+              </div>
+
+              {/* Payment */}
+              <div className="rounded-xl p-3" style={{ backgroundColor: '#0f1f3d', border: '1px solid rgba(245,197,24,0.15)' }}>
+                <label className="text-[10px] uppercase tracking-wide font-bold block mb-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>Payment</label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[{k:'cash',l:'💵 Cash'},{k:'card',l:'💳 Card'},{k:'wire',l:'🏦 Wire'}].map(pm => (
+                    <button key={pm.k} onClick={() => setSalePayment(pm.k as SalePayment)}
+                      className="px-2 py-2 rounded-lg text-xs font-bold"
+                      style={salePayment === pm.k
+                        ? { backgroundColor: '#f5c518', color: '#060d1f' }
+                        : { backgroundColor: '#1a2e5a', color: '#94a3b8' }}>
+                      {pm.l}
+                    </button>
+                  ))}
+                </div>
+                {salePayment === 'cash' && (
+                  <input type="number" inputMode="decimal" step="0.01" min="0" placeholder={`Tendered (need ${saleTotal.toFixed(2)})`}
+                    value={saleCashTendered} onChange={(e) => setSaleCashTendered(e.target.value)}
+                    className="w-full bg-gray-800 text-white rounded-lg px-3 py-2 mt-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                )}
+              </div>
+            </div>
+
+            <div className="px-5 pb-5 pt-3 border-t" style={{ borderColor: 'rgba(245,197,24,0.2)' }}>
+              <div className="flex justify-between text-sm mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                <span>Subtotal</span><span>${saleSubtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-xl mb-3 text-white">
+                <span>Total</span><span style={{ color: '#f5c518' }}>${saleTotal.toFixed(2)}</span>
+              </div>
+              <button onClick={handleSaleCharge} disabled={saleCart.length === 0 || saleSubmitting}
+                className="w-full py-3.5 rounded-xl font-bold text-sm disabled:opacity-40"
+                style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                {saleSubmitting ? 'Saving…' : `Charge $${saleTotal.toFixed(2)}`}
+              </button>
             </div>
           </div>
         </div>
