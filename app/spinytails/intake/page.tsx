@@ -16,6 +16,11 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
+// Next 15 requires useSearchParams() inside a Suspense boundary or
+// force-dynamic. We force-dynamic here because the form mutates DB
+// state on submit anyway — no value in pre-rendering.
+export const dynamic = 'force-dynamic';
+
 const STAFF_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager','processor','receiver']);
 
 interface Vessel { id: string; vessel_code: string; fisherman_name: string; color_tag: string; status: string; }
