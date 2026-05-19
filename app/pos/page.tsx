@@ -65,10 +65,20 @@ const TERMINALS = [
 ]
 
 const PAYMENT_METHODS = [
-  { value: 'cash', label: '💵 Cash' },
-  { value: 'card', label: '💳 Card' },
-  { value: 'wire', label: '🏦 Wire Transfer' },
+  { value: 'cash',    label: '💵 Cash' },
+  { value: 'card',    label: '💳 Card' },
+  { value: 'wire',    label: '🏦 Wire Transfer' },
+  { value: 'account', label: '🧾 Account (wholesale credit)' },
 ]
+
+interface CashierSession {
+  id: string
+  cashier_user_id: string
+  location: string
+  status: 'open' | 'closed'
+  opened_at: string
+  opening_float_cents: number
+}
 
 const CATEGORIES = [
   { label: 'All',     match: (_c: string) => true },
@@ -108,6 +118,67 @@ export default function POSPage() {
   const [customerLookingUp, setCustomerLookingUp] = useState(false)
   const [customerStatus, setCustomerStatus]     = useState<'idle' | 'found' | 'new'>('idle')
   const phoneSearchTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  // Cashier shift / cash drawer
+  const [cashierSession, setCashierSession] = useState<CashierSession | null>(null)
+  const [shiftOpenModal,  setShiftOpenModal]  = useState(false)
+  const [shiftCloseModal, setShiftCloseModal] = useState(false)
+  const [openFloatDollars,setOpenFloatDollars]= useState('')
+  const [openLocation,    setOpenLocation]    = useState<'nassau' | 'andros'>('nassau')
+  const [openNotes,       setOpenNotes]       = useState('')
+  const [closeCounted,    setCloseCounted]    = useState('')
+  const [closeNotes,      setCloseNotes]      = useState('')
+  const [shiftBusy,       setShiftBusy]       = useState(false)
+
+  async function loadCashierSession() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('cash_drawer_sessions')
+      .select('id, cashier_user_id, location, status, opened_at, opening_float_cents')
+      .eq('cashier_user_id', user.id)
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    setCashierSession((data as CashierSession | null) ?? null)
+  }
+  useEffect(() => { loadCashierSession() }, [])
+
+  async function handleOpenShift() {
+    const dollars = parseFloat(openFloatDollars)
+    if (isNaN(dollars) || dollars < 0) { alert('Enter the opening float (BSD).'); return }
+    setShiftBusy(true)
+    const { data, error } = await supabase.rpc('open_cashier_session', {
+      p_location:    openLocation,
+      p_float_cents: Math.round(dollars * 100),
+      p_notes:       openNotes.trim() || null,
+    })
+    setShiftBusy(false)
+    if (error) { alert('Open shift failed: ' + error.message); return }
+    const row = Array.isArray(data) ? data[0] : data
+    setCashierSession(row as CashierSession)
+    setShiftOpenModal(false)
+    setOpenFloatDollars(''); setOpenNotes('')
+  }
+
+  async function handleCloseShift() {
+    if (!cashierSession) return
+    const counted = parseFloat(closeCounted)
+    if (isNaN(counted) || counted < 0) { alert('Enter the counted cash (BSD).'); return }
+    setShiftBusy(true)
+    const { error } = await supabase.rpc('close_cashier_session', {
+      p_session_id:    cashierSession.id,
+      p_counted_cents: Math.round(counted * 100),
+      p_notes:         closeNotes.trim() || null,
+    })
+    setShiftBusy(false)
+    if (error) { alert('Close shift failed: ' + error.message); return }
+    setCashierSession(null)
+    setShiftCloseModal(false)
+    setCloseCounted(''); setCloseNotes('')
+    alert('Shift closed. Variance saved — check /dashboard/cashiers for the summary.')
+  }
 
   const loadCatalog = useCallback(async () => {
     setLoading(true)
@@ -431,18 +502,25 @@ export default function POSPage() {
         ? computeProfitSplit(total, NASSAU_POS_MARGIN, overhead.expense_rate)
         : null
 
+      const { data: { user } } = await supabase.auth.getUser()
+      // Account-credit orders don't move money today — mark as unpaid so AR can chase them.
+      const paymentStatus = paymentMethod === 'account' ? 'unpaid' : 'paid_in_full'
       const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
         order_type: 'pos_sale_nassau',
         location: 'bsc_marketplace_nassau', channel: 'nassau_pos',
         wholesale_items: items,
         subtotal, vat_amount: vatAmount, total,
         payment_method: paymentMethod,
-        payment_status: 'paid_in_full',
+        payment_status: paymentStatus,
         terminal_type:  paymentMethod === 'card' ? terminal : null,
         admin_notes: adminNotes, status: 'completed',
         customer_id:    customerId,
         customer_name:  nameClean || null,
         customer_phone: phoneClean || null,
+        // Cashier shift linkage — the admin dashboard joins on these to show
+        // each cashier's drawer activity in real time.
+        cashier_session_id: cashierSession?.id ?? null,
+        cashier_user_id:    user?.id ?? null,
         expense_allocation: profit?.expense_allocation ?? null,
         bill_casale_share:  profit?.bill_casale_share  ?? null,
         net_profit:         profit?.net_profit         ?? null,
@@ -477,11 +555,26 @@ export default function POSPage() {
             <h1 className="font-bold text-lg leading-tight" style={{ color: '#f5c518', fontFamily: "'Playfair Display', serif" }}>BSC Marketplace</h1>
             <p className="text-xs text-gray-400">Nassau POS · Fire Trail Road</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {isWednesday && (
               <span className="text-xs font-bold px-2 py-1 rounded-full animate-pulse" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
                 🐟 Wed Special
               </span>
+            )}
+            {/* Shift status chip — open/close drawer for this cashier */}
+            {cashierSession ? (
+              <button onClick={() => setShiftCloseModal(true)}
+                className="text-xs font-bold px-2.5 py-1.5 rounded-lg"
+                style={{ backgroundColor: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid #16a34a' }}
+                title={`Open ${cashierSession.location} · float $${(cashierSession.opening_float_cents/100).toFixed(2)}`}>
+                🟢 Shift open
+              </button>
+            ) : (
+              <button onClick={() => setShiftOpenModal(true)}
+                className="text-xs font-bold px-2.5 py-1.5 rounded-lg"
+                style={{ backgroundColor: 'rgba(248,113,113,0.12)', color: '#f87171', border: '1px solid #f87171' }}>
+                🔴 No shift
+              </button>
             )}
             <button onClick={() => setShowCart(true)} className="relative bg-gray-800 rounded-xl px-4 py-2 text-sm font-semibold" style={{ color: '#f5c518' }}>
               🛒 Cart
@@ -573,6 +666,71 @@ export default function POSPage() {
       </main>
 
       {/* ── Weight input modal ── */}
+      {/* ── OPEN SHIFT MODAL ── */}
+      {shiftOpenModal && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
+            <h3 className="font-bold text-lg mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>Open Shift</h3>
+            <p className="text-sm text-gray-400 mb-4">Count the cash already in the drawer — that becomes your float.</p>
+            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Location</label>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {(['nassau','andros'] as const).map(loc => (
+                <button key={loc} onClick={() => setOpenLocation(loc)}
+                  className="px-3 py-2 rounded-lg text-sm font-bold"
+                  style={openLocation === loc
+                    ? { backgroundColor: '#f5c518', color: '#060d1f' }
+                    : { backgroundColor: '#1f2937', color: '#9ca3af' }}>
+                  {loc === 'nassau' ? '🟡 Nassau' : '🟣 Andros'}
+                </button>
+              ))}
+            </div>
+            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Opening float (BSD)</label>
+            <input type="number" step="0.01" min="0" inputMode="decimal" placeholder="e.g. 200.00"
+              value={openFloatDollars} onChange={e => setOpenFloatDollars(e.target.value)} autoFocus
+              className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 mb-3" />
+            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Notes (optional)</label>
+            <input type="text" placeholder="any context for this shift…"
+              value={openNotes} onChange={e => setOpenNotes(e.target.value)}
+              className="w-full bg-gray-800 text-white rounded-xl px-4 py-2 border border-gray-600 focus:outline-none focus:border-yellow-400 mb-4 text-sm" />
+            <div className="flex gap-3">
+              <button onClick={() => setShiftOpenModal(false)} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Cancel</button>
+              <button onClick={handleOpenShift} disabled={shiftBusy} className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                {shiftBusy ? 'Opening…' : '✓ Open Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CLOSE SHIFT MODAL ── */}
+      {shiftCloseModal && cashierSession && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6">
+          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
+            <h3 className="font-bold text-lg mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>Close Shift</h3>
+            <p className="text-sm text-gray-400 mb-3">
+              Float opened: <strong className="text-white">${(cashierSession.opening_float_cents/100).toFixed(2)}</strong>
+            </p>
+            <p className="text-xs text-gray-500 mb-4">
+              Count the cash in the drawer NOW (including the original float). The system computes the variance against your cash sales.
+            </p>
+            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Counted cash (BSD)</label>
+            <input type="number" step="0.01" min="0" inputMode="decimal" placeholder="e.g. 1245.50"
+              value={closeCounted} onChange={e => setCloseCounted(e.target.value)} autoFocus
+              className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 mb-3" />
+            <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Close notes (optional)</label>
+            <input type="text" placeholder="missing receipts, voids, anything to flag…"
+              value={closeNotes} onChange={e => setCloseNotes(e.target.value)}
+              className="w-full bg-gray-800 text-white rounded-xl px-4 py-2 border border-gray-600 focus:outline-none focus:border-yellow-400 mb-4 text-sm" />
+            <div className="flex gap-3">
+              <button onClick={() => setShiftCloseModal(false)} className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-3 text-sm font-medium">Cancel</button>
+              <button onClick={handleCloseShift} disabled={shiftBusy} className="flex-1 rounded-xl py-3 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
+                {shiftBusy ? 'Closing…' : '✓ Close Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {weightInput && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
           <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm border border-gray-700">
