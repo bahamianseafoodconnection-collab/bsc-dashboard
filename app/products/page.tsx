@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import Link from 'next/link';
+import { calculatePrice, BSC_PRICING_RULES, type PricingChannel } from '@/lib/pricing';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
@@ -957,6 +959,13 @@ export default function ProductsPage() {
                 </div>
               </div>
 
+              {/* BSC 5-Channel Pricing Preview — live calculation from cost using
+                  the new pricing_rules (22/19/35/40/40 + 10% VAT). Read-only here;
+                  the editable per-channel prices above are the manual snapshot the
+                  POS reads at sale time. Use this to spot-check that admin prices
+                  are in sync with BSC margins. */}
+              <BscPricingPreview cost={parseFloat(editCost) || 0} unit={selected.unit_type || 'each'} productId={selected.id} />
+
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setSelected(null)}
                   className="flex-1 py-3 rounded-xl text-sm font-bold"
@@ -973,6 +982,80 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Read-only preview of what the BSC 5-channel pricing system would charge
+// at the given cost. Auto-routes qty=15 lb / qty=1 case through the
+// wholesale upgrades so admin can see the FULL spread of channel prices.
+function BscPricingPreview({ cost, unit, productId }: { cost: number; unit: string; productId: string }) {
+  if (!cost || cost <= 0) {
+    return (
+      <div className="rounded-xl p-4" style={{ backgroundColor: '#0a1628', border: '1px solid rgba(167,139,250,0.4)' }}>
+        <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#a78bfa' }}>
+          BSC 5-channel pricing preview
+        </h3>
+        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+          Enter a Cost Per Unit above to see what the new BSC pricing structure (22/19/35/40/40 + 10% VAT) would charge across all five channels.
+        </p>
+      </div>
+    );
+  }
+
+  // Two scenarios per row: under-threshold (retail rate) and at-threshold
+  // (auto-upgrades retail channels to wholesale).
+  const isWeight = unit === 'lb';
+  const channels: { ch: PricingChannel; label: string; retailQty: number; upgradeQty: number }[] = [
+    { ch: 'nassau_pos',    label: '🟡 Nassau POS',     retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
+    { ch: 'andros_pos',    label: '🟢 Andros POS',     retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
+    { ch: 'online_retail', label: '🛒 Online',          retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
+  ];
+  const saleUnit = (isWeight ? 'lb' : 'each') as 'lb' | 'each';
+
+  return (
+    <div className="rounded-xl p-4" style={{ backgroundColor: '#0a1628', border: '1px solid rgba(167,139,250,0.4)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: '#a78bfa' }}>
+          BSC 5-channel pricing preview
+        </h3>
+        <Link href={`/pos?focus=${encodeURIComponent(productId)}`} target="_blank" rel="noopener noreferrer"
+          className="text-[11px] font-bold rounded-md px-2 py-1"
+          style={{ backgroundColor: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid rgba(245,197,24,0.4)' }}>
+          🛒 Sell at POS →
+        </Link>
+      </div>
+      <p className="text-[10px] mb-3" style={{ color: 'rgba(255,255,255,0.5)' }}>
+        Live math from cost ${cost.toFixed(2)}/{isWeight ? 'lb' : 'unit'} via <code>calculatePrice()</code>. Wholesale fires at 10+ lbs or by-the-case.
+      </p>
+      <div className="space-y-1.5 text-[11px]">
+        <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-2 font-bold pb-1 mb-1 border-b" style={{ color: 'rgba(255,255,255,0.6)', borderColor: 'rgba(167,139,250,0.2)' }}>
+          <span>Channel</span><span className="text-right">Retail</span><span className="text-right">10+ {isWeight ? 'lbs' : 'cases'}</span>
+        </div>
+        {channels.map(({ ch, label, retailQty, upgradeQty }) => {
+          const retail   = calculatePrice({ cost, channel: ch, quantity: retailQty, unit: saleUnit });
+          const upgrade  = calculatePrice({ cost, channel: ch, quantity: upgradeQty, unit: isWeight ? 'lb' : 'case' });
+          return (
+            <div key={ch} className="grid grid-cols-[1.4fr_1fr_1fr] gap-2 items-center">
+              <span className="text-white">{label}</span>
+              <span className="text-right" style={{ color: '#fbbf24' }}>
+                ${retail.unitPrice.toFixed(2)} <span style={{ color: 'rgba(255,255,255,0.4)' }}>({retail.markupPct}%)</span>
+              </span>
+              <span className="text-right">
+                <span style={{ color: '#4ade80' }}>${upgrade.unitPrice.toFixed(2)}</span>{' '}
+                <span style={{ color: 'rgba(255,255,255,0.4)' }}>({upgrade.markupPct}%{upgrade.upgradedToWholesale ? ' ⬇' : ''})</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] mt-3" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        Retail subtotal uses the requested channel; the right column auto-upgrades to{' '}
+        <strong style={{ color: '#a78bfa' }}>wholesale_in_store ({BSC_PRICING_RULES.wholesale_in_store.markupPct}%)</strong>{' '}
+        for POS lines or{' '}
+        <strong style={{ color: '#a78bfa' }}>wholesale_online ({BSC_PRICING_RULES.wholesale_online.markupPct}%)</strong>{' '}
+        for online lines. VAT 10% is included in unit price.
+      </p>
     </div>
   );
 }

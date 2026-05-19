@@ -9,6 +9,7 @@ import {
   NASSAU_POS_MARGIN,
   type OverheadMetrics,
 } from '@/lib/profit'
+import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -28,7 +29,8 @@ interface Product {
   name: string
   category: string
   is_bsc_processed: boolean
-  sell_price: number
+  sell_price: number              // nassau_pos retail snapshot
+  wholesale_price: number | null  // local_wholesale snapshot (drives auto-upgrade at 10+ lbs / by case)
   promo_price: number | null
   promo_label: string | null
   is_per_lb: boolean
@@ -37,8 +39,8 @@ interface Product {
 interface CartItem {
   product: Product
   quantity: number
-  unit_price: number
   weight_lb?: number
+  // unit_price/applied channel are computed per-render via lineInfo()
 }
 
 interface Promotion {
@@ -114,7 +116,7 @@ export default function POSPage() {
       const today = new Date().getDay()
       setIsWednesday(today === 3)
 
-      // Fetch products — include unit_type to determine per-lb products
+      // Fetch products — get the nassau_pos snapshot as the retail price.
       const { data: productsRaw, error: prodErr } = await supabase
         .from('products')
         .select('id, sku, barcode, name, category, is_bsc_processed, unit_type, product_pricing!inner(manual_unit_price)')
@@ -126,6 +128,25 @@ export default function POSPage() {
         .order('name')
 
       if (prodErr) throw prodErr
+
+      const productIds = (productsRaw ?? []).map((p: any) => p.id)
+
+      // Separate fetch for local_wholesale prices so we can auto-upgrade
+      // at 10+ lbs of one product / by the case. Missing wholesale price
+      // = no auto-upgrade for that product (retail price always applies).
+      let wholesaleMap = new Map<string, number>()
+      if (productIds.length > 0) {
+        const { data: wholesaleRaw } = await supabase
+          .from('product_pricing')
+          .select('product_id, manual_unit_price')
+          .in('product_id', productIds)
+          .eq('channel', 'local_wholesale')
+          .eq('is_current', true)
+          .eq('is_active', true)
+        for (const row of (wholesaleRaw ?? []) as { product_id: string; manual_unit_price: number }[]) {
+          wholesaleMap.set(row.product_id, Number(row.manual_unit_price))
+        }
+      }
 
       let promos: Promotion[] = []
       if (today === 3) {
@@ -146,11 +167,11 @@ export default function POSPage() {
         return {
           id: p.id, sku: p.sku, barcode: p.barcode, name: p.name,
           category: p.category, is_bsc_processed: p.is_bsc_processed,
-          sell_price:  Number(pricing?.manual_unit_price ?? 0),
-          promo_price: promo ? Number(promo.promo_price) : null,
-          promo_label: promo?.display_label ?? null,
-          // ✅ Use unit_type from DB — no more hardcoded SKU list
-          is_per_lb: p.unit_type === 'lb',
+          sell_price:      Number(pricing?.manual_unit_price ?? 0),
+          wholesale_price: wholesaleMap.get(p.id) ?? null,
+          promo_price:     promo ? Number(promo.promo_price) : null,
+          promo_label:     promo?.display_label ?? null,
+          is_per_lb:       p.unit_type === 'lb',
         }
       })
 
@@ -171,7 +192,23 @@ export default function POSPage() {
     fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null))
   }, [])
 
-  // Phone lookup
+  // Phone normalize — mirror of bsc_normalize_phone() so writes
+  // populate phone_e164 alongside the legacy `phone` column.
+  function normalizePhone(raw: string): string | null {
+    if (!raw || !raw.trim()) return null
+    let cleaned = raw.replace(/[^0-9+]/g, '')
+    if (cleaned.startsWith('+')) return cleaned
+    cleaned = cleaned.replace(/\+/g, '')
+    if (cleaned.length === 7) return `+1242${cleaned}`
+    if (cleaned.length === 10) return `+1${cleaned}`
+    if (cleaned.length === 11 && cleaned.startsWith('1')) return `+${cleaned}`
+    return cleaned ? `+${cleaned}` : null
+  }
+
+  // Phone lookup — uses bsc_lookup_customer_by_phone RPC. The RPC
+  // normalizes 7-digit → +1242 and matches on phone_e164. After we
+  // find the id, fetch the full row so we still have total_orders +
+  // total_spent + email consent flags for the rest of the flow.
   function handlePhoneChange(val: string) {
     setCustomerPhone(val)
     setFoundCustomer(null)
@@ -183,22 +220,27 @@ export default function POSPage() {
     if (val.length < 7) return
     phoneSearchTimeout.current = setTimeout(async () => {
       setCustomerLookingUp(true)
-      const { data } = await supabase
+      const { data: matches } = await supabase.rpc('bsc_lookup_customer_by_phone', { p_raw_phone: val.trim() })
+      const match = Array.isArray(matches) && matches.length > 0 ? matches[0] : null
+      if (!match) {
+        setCustomerLookingUp(false)
+        setCustomerStatus('new')
+        return
+      }
+      // Fetch the rest of the row (consent + lifetime totals) using the matched id.
+      const { data: full } = await supabase
         .from('customers')
         .select('id, full_name, phone, email, email_marketing_consent, total_orders, total_spent')
-        .eq('phone', val.trim())
+        .eq('id', match.id)
         .maybeSingle()
       setCustomerLookingUp(false)
-      if (data) {
-        setFoundCustomer(data)
-        setCustomerName(data.full_name)
-        setCustomerEmail(data.email ?? '')
-        setEmailConsent(Boolean(data.email_marketing_consent))
-        setCustomerStatus('found')
-      } else {
-        setCustomerStatus('new')
-      }
-    }, 600)
+      const row = (full ?? { ...match, total_orders: 0, total_spent: 0 }) as Customer
+      setFoundCustomer(row)
+      setCustomerName(row.full_name)
+      setCustomerEmail(row.email ?? '')
+      setEmailConsent(Boolean(row.email_marketing_consent))
+      setCustomerStatus('found')
+    }, 350)
   }
 
   function resetCheckout() {
@@ -221,18 +263,30 @@ export default function POSPage() {
     return matchCat && matchSearch
   })
 
+  // Per-line effective pricing. Recomputed every render so a quantity
+  // bump that crosses 10 lbs auto-flips to wholesale immediately.
+  function lineInfo(item: CartItem): { count: number; pricing: CartLinePricing; line_subtotal: number } {
+    const snap: ProductPriceSnapshot = {
+      retail_price:    item.product.sell_price,
+      wholesale_price: item.product.wholesale_price,
+      promo_price:     item.product.promo_price,
+    }
+    const count   = lineCount(item.quantity, item.weight_lb)
+    const pricing = priceCartLine(snap, count, item.product.is_per_lb ? 'lb' : 'each')
+    return { count, pricing, line_subtotal: Math.round(pricing.unit_price * count * 100) / 100 }
+  }
+
   function addToCart(product: Product, weightLb?: number) {
     if (product.is_per_lb && !weightLb) {
       setWeightInput({ productId: product.id, weight: '' })
       return
     }
-    const unit_price = product.promo_price ?? product.sell_price
     setCart(prev => {
       if (!product.is_per_lb) {
         const idx = prev.findIndex(i => i.product.id === product.id)
         if (idx > -1) return prev.map((item, i) => i === idx ? { ...item, quantity: item.quantity + 1 } : item)
       }
-      return [...prev, { product, quantity: 1, unit_price, weight_lb: weightLb }]
+      return [...prev, { product, quantity: 1, weight_lb: weightLb }]
     })
     setWeightInput(null)
   }
@@ -255,10 +309,7 @@ export default function POSPage() {
     addToCart(product, lbs)
   }
 
-  const subtotal      = cart.reduce((sum, item) => {
-    if (item.product.is_per_lb && item.weight_lb) return sum + item.unit_price * item.weight_lb
-    return sum + item.unit_price * item.quantity
-  }, 0)
+  const subtotal      = cart.reduce((sum, item) => sum + lineInfo(item).line_subtotal, 0)
   const vatAmount     = 0
   const total         = subtotal + vatAmount
   const cartCount     = cart.reduce((sum, item) => sum + item.quantity, 0)
@@ -286,6 +337,7 @@ export default function POSPage() {
       const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean) ? emailClean : ''
 
       if (phoneClean && nameClean) {
+        const normalized = normalizePhone(phoneClean)
         if (foundCustomer) {
           // Update returning customer; only flip consent ON (never silently
           // OFF — the cashier could have just left the checkbox unchecked).
@@ -294,6 +346,9 @@ export default function POSPage() {
             total_orders: foundCustomer.total_orders + 1,
             total_spent:  Number(foundCustomer.total_spent) + total,
           }
+          // Backfill phone_e164 on legacy rows so future lookups via the
+          // RPC find them on the next visit.
+          if (normalized) updates.phone_e164 = normalized
           if (validEmail) updates.email = validEmail
           if (emailConsent && validEmail && !foundCustomer.email_marketing_consent) {
             updates.email_marketing_consent = true
@@ -305,8 +360,11 @@ export default function POSPage() {
         } else {
           const consentNow = emailConsent && !!validEmail
           const { data: newCust } = await supabase.from('customers').insert({
-            full_name: nameClean, phone: phoneClean,
-            email: validEmail || null,
+            full_name:     nameClean,
+            phone:         phoneClean,
+            phone_e164:    normalized,                // populate the new lookup key
+            origin_channel: 'nassau_pos',             // unify origin tracking
+            email:         validEmail || null,
             email_marketing_consent: consentNow,
             email_consent_at:     consentNow ? new Date().toISOString() : null,
             email_consent_source: consentNow ? 'nassau_pos' : null,
@@ -327,17 +385,21 @@ export default function POSPage() {
         adminNotes = wireRef ? `Wire ref: ${wireRef}` : 'Wire transfer'
       }
 
-      const items = cart.map(item => ({
-        product_id: item.product.id, sku: item.product.sku, name: item.product.name,
-        quantity:   item.quantity,
-        unit_price: item.unit_price,
-        weight_lb:  item.weight_lb ?? null,
-        line_total: item.product.is_per_lb && item.weight_lb
-          ? item.unit_price * item.weight_lb
-          : item.unit_price * item.quantity,
-        promo_applied: item.product.promo_price !== null,
-        promo_label:   item.product.promo_label ?? null,
-      }))
+      const items = cart.map(item => {
+        const { pricing, line_subtotal } = lineInfo(item)
+        return {
+          product_id: item.product.id, sku: item.product.sku, name: item.product.name,
+          quantity:   item.quantity,
+          unit_price: pricing.unit_price,
+          weight_lb:  item.weight_lb ?? null,
+          line_total: line_subtotal,
+          // New: tells the receipt + reports which channel applied + whether wholesale auto-upgraded.
+          applied_channel:        pricing.applied_channel,
+          upgraded_to_wholesale:  pricing.upgraded_to_wholesale,
+          promo_applied: item.product.promo_price !== null,
+          promo_label:   item.product.promo_label ?? null,
+        }
+      })
 
       const profit = overhead
         ? computeProfitSplit(total, NASSAU_POS_MARGIN, overhead.expense_rate)
@@ -546,22 +608,31 @@ export default function POSPage() {
               ) : (
                 <div className="space-y-3">
                   {cart.map((item, i) => {
-                    const lineTotal = item.product.is_per_lb && item.weight_lb
-                      ? item.unit_price * item.weight_lb
-                      : item.unit_price * item.quantity
+                    const { pricing, line_subtotal } = lineInfo(item)
+                    const unitLabel = item.product.is_per_lb ? '/lb' : ''
                     return (
                       <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-xl p-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{item.product.name}</p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            ${item.unit_price.toFixed(2)}/lb
+                            ${pricing.unit_price.toFixed(2)}{unitLabel}
                             {item.product.is_per_lb && item.weight_lb
                               ? ` × ${item.weight_lb.toFixed(2)} lbs`
                               : item.quantity > 1 ? ` × ${item.quantity}` : ''}
-                            {item.product.promo_price !== null && (
+                            {pricing.applied_channel === 'promo' && (
                               <span className="ml-1.5" style={{ color: '#f5c518' }}>★ Special</span>
                             )}
+                            {pricing.upgraded_to_wholesale && (
+                              <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: '#16a34a', color: '#fff' }}>
+                                WHOLESALE
+                              </span>
+                            )}
                           </p>
+                          {pricing.qualifies_as_wholesale && !pricing.wholesale_price_available && pricing.applied_channel !== 'promo' && (
+                            <p className="text-[10px] mt-0.5" style={{ color: '#fbbf24' }}>
+                              ⚠ Qualifies for wholesale — set local_wholesale price on /products
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {!item.product.is_per_lb && (
@@ -571,7 +642,7 @@ export default function POSPage() {
                               <button onClick={() => adjustQty(i, 1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold flex items-center justify-center">+</button>
                             </>
                           )}
-                          <span className="text-sm font-bold ml-1" style={{ color: '#f5c518' }}>${lineTotal.toFixed(2)}</span>
+                          <span className="text-sm font-bold ml-1" style={{ color: '#f5c518' }}>${line_subtotal.toFixed(2)}</span>
                           <button onClick={() => removeFromCart(i)} className="text-red-400 text-xl ml-1 leading-none">×</button>
                         </div>
                       </div>
