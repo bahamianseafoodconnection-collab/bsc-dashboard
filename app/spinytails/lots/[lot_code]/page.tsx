@@ -170,6 +170,27 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
             {vessel ? `${vessel.vessel_code} · ${vessel.fisherman_name} · ${vessel.color_tag}` : '—'} · received {lot.receipt_date}
           </p>
+          {(() => {
+            // Map current status → SOP step number for the in-context SOP link
+            const stepForStatus: Record<string, number> = {
+              received: 2, in_receiving_freezer: 3, thawing: 4, processing: 5,
+              blast_freezing: 8, mastered: 9, in_distribution: 10, shipped: 11,
+            };
+            const step = stepForStatus[lot.status];
+            if (!step) return null;
+            return (
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <Link href={`/spinytails/steps?step=${step}`}
+                  style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid #60a5fa', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textDecoration: 'none' }}>
+                  📘 Step {step} SOP for this stage →
+                </Link>
+                <Link href="/spinytails/documents"
+                  style={{ background: 'rgba(34,211,238,0.12)', color: '#22d3ee', border: '1px solid #22d3ee', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textDecoration: 'none' }}>
+                  🧼 All SSOPs
+                </Link>
+              </div>
+            );
+          })()}
         </div>
       </header>
 

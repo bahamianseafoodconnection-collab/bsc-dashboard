@@ -272,6 +272,11 @@ function IntakeFormInner() {
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
             Generates a fresh lot code, captures receipt + initial QC.
           </p>
+          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <Link href="/spinytails/steps?step=1" style={sopChip}>📘 Step 1 SOP</Link>
+            <Link href="/spinytails/steps?step=2" style={sopChip}>📘 Step 2 SOP</Link>
+            <Link href="/spinytails/documents"   style={{ ...sopChip, background: 'rgba(248,113,113,0.12)', color: '#f87171', borderColor: '#f87171' }}>🛡️ CCP-1 plan</Link>
+          </div>
         </div>
       </header>
 
@@ -470,4 +475,5 @@ const hdr: React.CSSProperties = { background: '#0b1628', padding: '14px 16px', 
 const back: React.CSSProperties = { color: '#f5c518', fontSize: 12, textDecoration: 'none' };
 const h1: React.CSSProperties = { fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 700, color: '#f5c518', margin: '4px 0 2px' };
 const card: React.CSSProperties = { background: '#0b1628', border: '1px solid rgba(245,197,24,0.15)', borderRadius: 12, padding: 14, marginBottom: 12 };
+const sopChip: React.CSSProperties = { background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid #60a5fa', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textDecoration: 'none', letterSpacing: 0.3 };
 const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 8, background: '#060d1f', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', fontSize: 14, boxSizing: 'border-box' };

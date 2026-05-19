@@ -42,6 +42,8 @@ const NAV_GROUPS = [
       { icon: '🏭', label: 'Spiny Tails (HACCP)', href: '/spinytails' },
       { icon: '📥', label: 'Spiny Tails intake',  href: '/spinytails/intake' },
       { icon: '🛥', label: 'Spiny Tails vessels', href: '/spinytails/vessels' },
+      { icon: '📚', label: 'Spiny Tails SOPs',    href: '/spinytails/steps' },
+      { icon: '📜', label: 'Spiny Tails docs',    href: '/spinytails/documents' },
       { icon: '🎣', label: 'Fishermen (logins)', href: '/dashboard/fishermen' },
       { icon: '💵', label: 'Cashier drawers',    href: '/dashboard/cashiers' },
       { icon: '📈', label: 'Cashier trends',     href: '/dashboard/cashiers/trends' },

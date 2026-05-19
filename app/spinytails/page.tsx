@@ -108,9 +108,11 @@ export default function SpinytailsHubPage() {
         <div style={{ marginTop: 16 }}>
           <h2 style={h2}>Quick actions</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            <NavTile href="/spinytails/intake"   icon="📥" label="New intake (Step 1-2)"  hint="Receive lobster, generate lot code, run CCP-1" />
-            <NavTile href="/spinytails/vessels"  icon="🛥"  label="Vessels"                hint="Registry + color tags" />
-            <NavTile href="/lobster-intake"       icon="🦞" label="Lobster Intake (door)"  hint="Upstream / fisherman-facing" />
+            <NavTile href="/spinytails/intake"    icon="📥" label="New intake (Step 1-2)"  hint="Receive lobster, generate lot code, run CCP-1" />
+            <NavTile href="/spinytails/vessels"   icon="🛥"  label="Vessels"                hint="Registry + color tags" />
+            <NavTile href="/spinytails/steps"     icon="📚" label="Step-by-step SOPs"      hint="Walkthrough of all 11 steps + CCPs" />
+            <NavTile href="/spinytails/documents" icon="📜" label="Document library"       hint="SOP · SSOP · HACCP · upload + versioning" />
+            <NavTile href="/lobster-intake"        icon="🦞" label="Lobster Intake (door)"  hint="Upstream / fisherman-facing" />
             <NavTile href="/dashboard/processing-batches" icon="🏭" label="Processing batches" hint="Bridge to existing traceability_batches" />
           </div>
         </div>
