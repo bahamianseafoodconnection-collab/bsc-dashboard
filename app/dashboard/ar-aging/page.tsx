@@ -267,14 +267,22 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose }: {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 50, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#0b1628', borderRadius: 14, padding: 16, maxWidth: 780, width: '100%', marginTop: 32, border: '1px solid rgba(245,197,24,0.25)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{ fontFamily: "'Playfair Display', serif", color: '#f5c518', margin: 0, fontSize: 20 }}>{customer.customer_name}</h3>
             <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
               {customer.customer_phone ?? '—'} · {customer.order_count} unpaid · ${customer.total.toFixed(2)} total · oldest {customer.oldest_age} days
             </p>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', color: '#94a3b8', border: 'none', fontSize: 22, cursor: 'pointer' }}>×</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {customer.customer_id && (
+              <Link href={`/dashboard/ar-aging/statement/${customer.customer_id}`} target="_blank" rel="noopener noreferrer"
+                style={{ background: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
+                📄 Statement
+              </Link>
+            )}
+            <button onClick={onClose} style={{ background: 'transparent', color: '#94a3b8', border: 'none', fontSize: 22, cursor: 'pointer' }}>×</button>
+          </div>
         </div>
 
         <div style={statGrid}>
