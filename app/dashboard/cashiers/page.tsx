@@ -72,13 +72,18 @@ export default function CashiersDashboardPage() {
     const counted = parseFloat(cobCounted);
     if (isNaN(counted) || counted < 0) { alert('Enter counted cash (BSD).'); return; }
     setCobBusy(true);
+    const sessionId = closeOnBehalf.session_id;
     const { error } = await supabase.rpc('close_cashier_session', {
-      p_session_id:    closeOnBehalf.session_id,
+      p_session_id:    sessionId,
       p_counted_cents: Math.round(counted * 100),
       p_notes:         (cobNotes.trim() ? cobNotes.trim() + ' · ' : '') + '[closed by admin on behalf]',
     });
     setCobBusy(false);
     if (error) { alert('Close failed: ' + error.message); return; }
+    fetch('/api/cashiers/variance-alert', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body:   JSON.stringify({ session_id: sessionId }),
+    }).catch((err) => console.warn('Variance alert failed:', err));
     setCloseOnBehalf(null);
     setCobCounted(''); setCobNotes('');
     await load();
@@ -169,7 +174,12 @@ export default function CashiersDashboardPage() {
     <div style={pg}>
       <header style={hdr}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <Link href="/dashboard" style={back}>← Dashboard</Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/dashboard" style={back}>← Dashboard</Link>
+            <Link href="/dashboard/cashiers/trends" style={{ color: '#a78bfa', fontSize: 12, textDecoration: 'none', fontWeight: 700 }}>
+              📈 Per-cashier trends →
+            </Link>
+          </div>
           <h1 style={h1}>💵 Cashier drawers — live</h1>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
             {open.length} open shift{open.length === 1 ? '' : 's'} · auto-refresh every 30s

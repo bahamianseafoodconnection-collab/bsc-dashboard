@@ -224,13 +224,18 @@ export default function AndrosPOSPage() {
     if (isNaN(counted) || counted < 0) { alert('Enter the counted cash (BSD).'); return; }
     setShiftBusy(true);
     const supabase = getSupabase();
+    const sessionId = cashierSession.id;
     const { error } = await supabase.rpc('close_cashier_session', {
-      p_session_id:    cashierSession.id,
+      p_session_id:    sessionId,
       p_counted_cents: Math.round(counted * 100),
       p_notes:         closeNotes.trim() || null,
     });
     setShiftBusy(false);
     if (error) { alert('Close shift failed: ' + error.message); return; }
+    fetch('/api/cashiers/variance-alert', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body:   JSON.stringify({ session_id: sessionId }),
+    }).catch((err) => console.warn('Variance alert failed:', err));
     setCashierSession(null);
     setShiftCloseModal(false);
     setCloseCounted(''); setCloseNotes('');
