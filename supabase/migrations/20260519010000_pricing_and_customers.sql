@@ -210,6 +210,36 @@ BEGIN
   END IF;
 END$$;
 
+-- ── First, defensively ensure all the "core" legacy columns the upsert
+-- function + backfill assume exist actually exist. Different deployments
+-- of the customers table have evolved different shapes (some have name,
+-- some full_name; some have last_seen_at, some don't). Adding with IF
+-- NOT EXISTS is a no-op when present.
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS full_name      TEXT,
+  ADD COLUMN IF NOT EXISTS email          TEXT,
+  ADD COLUMN IF NOT EXISTS first_seen_at  TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_seen_at   TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS updated_at     TIMESTAMPTZ DEFAULT NOW();
+
+-- Backfill last_seen_at on legacy rows so ORDER BY in the phone backfill
+-- below doesn't choke.
+UPDATE customers
+  SET last_seen_at = COALESCE(updated_at, created_at, NOW())
+  WHERE last_seen_at IS NULL;
+
+-- If a `name` column existed historically, copy it into full_name.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'customers' AND column_name = 'name')
+  THEN
+    EXECUTE 'UPDATE customers SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL';
+  END IF;
+END$$;
+
+-- Now add the new unified-customer columns.
 ALTER TABLE customers
   ADD COLUMN IF NOT EXISTS phone_e164             TEXT,
   ADD COLUMN IF NOT EXISTS phone_raw              TEXT,
