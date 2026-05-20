@@ -82,6 +82,7 @@ const NAV_GROUPS = [
       { icon: '🏷️', label: 'Products',         href: '/products' },
       { icon: '📷', label: 'New product intake',    href: '/founder-ai/products/intake' },
       { icon: '🧪', label: 'Pending products (AI)', href: '/founder-ai/products/pending' },
+      { icon: '🔥', label: 'Specials (closed dates)', href: '/dashboard/specials' },
     ],
   },
   {

@@ -73,7 +73,8 @@ interface MarketProduct {
   name: string;
   description: string;
   category: string;
-  price: number;                // online_market snapshot (retail)
+  price: number;                // effective price — special_price if on special, else regular
+  regular_price?: number;       // original online_market price; shown as strikethrough when on special
   wholesale_price?: number | null; // local_wholesale snapshot — drives auto-upgrade at 10+ lbs / by case
   unit: string;
   unit_type?: string;           // 'lb' | 'each' | 'case' — used by priceCartLine to qualify wholesale
@@ -84,6 +85,9 @@ interface MarketProduct {
   avg_rating?: number;
   review_count?: number;
   stock_qty?: number;
+  is_on_special?: boolean;      // NOW() is inside the special window
+  special_label?: string | null;
+  special_ends_at?: string | null;
 }
 
 interface CartItem extends MarketProduct {
@@ -190,10 +194,12 @@ function MarketPageInner() {
       }
 
       // Step 2: Fetch active online products. Now also pulling unit_type
-      // so priceCartLine() can decide qty-vs-weight wholesale qualification.
+      // so priceCartLine() can decide qty-vs-weight wholesale qualification,
+      // plus the special_* columns so we can override price during an
+      // active "closed date" promotion window.
       const { data: mp, error: mpErr } = await supabase
         .from('products')
-        .select('id, sku, name, description, category, image_url, sell_online, status, unit_type')
+        .select('id, sku, name, description, category, image_url, sell_online, status, unit_type, special_price, special_starts_at, special_ends_at, special_label')
         .eq('sell_online', true)
         .eq('status', 'active')
         .in('id', productIds)
@@ -204,22 +210,34 @@ function MarketPageInner() {
         return;
       }
 
-      const market: MarketProduct[] = (mp || []).map((p: any) => ({
-        id: p.id,
-        source: 'market' as const,
-        sku: p.sku ?? '',
-        name: p.name,
-        description: p.description || '',
-        category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
-        price: priceMap.get(p.id) ?? 0,
-        wholesale_price: wholesaleMap.get(p.id) ?? null,
-        unit_type: p.unit_type ?? 'each',
-        unit: p.unit_type === 'lb' ? 'lb' : 'each',
-        min_qty: 1,
-        image_url: p.image_url || '',
-        in_stock: true,
-        featured: false,
-      }));
+      const nowMs = Date.now();
+      const market: MarketProduct[] = (mp || []).map((p: any) => {
+        const regular = priceMap.get(p.id) ?? 0;
+        const startMs = p.special_starts_at ? new Date(p.special_starts_at).getTime() : -Infinity;
+        const endMs   = p.special_ends_at   ? new Date(p.special_ends_at).getTime()   :  Infinity;
+        const onSpecial = p.special_price != null && startMs <= nowMs && nowMs <= endMs;
+        const effectivePrice = onSpecial ? Number(p.special_price) : regular;
+        return {
+          id: p.id,
+          source: 'market' as const,
+          sku: p.sku ?? '',
+          name: p.name,
+          description: p.description || '',
+          category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
+          price: effectivePrice,
+          regular_price: onSpecial ? regular : undefined,
+          wholesale_price: wholesaleMap.get(p.id) ?? null,
+          unit_type: p.unit_type ?? 'each',
+          unit: p.unit_type === 'lb' ? 'lb' : 'each',
+          min_qty: 1,
+          image_url: p.image_url || '',
+          in_stock: true,
+          featured: false,
+          is_on_special: onSpecial,
+          special_label:   p.special_label ?? null,
+          special_ends_at: p.special_ends_at ?? null,
+        };
+      });
 
       setProducts(market);
       setLoading(false);
@@ -569,6 +587,37 @@ function MarketPageInner() {
             </div>
           )}
 
+          {/* 🔥 Specials carousel — products with an active special_price window. */}
+          {!loading && activeBrand === 'all' && activeCategory === 'All' && !search.trim() && (() => {
+            const onSpecial = products.filter((p) => p.is_on_special && p.in_stock);
+            if (onSpecial.length === 0) return null;
+            return (
+              <div className="mb-5">
+                <div className="mb-2 flex items-end justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">🔥 Limited time</div>
+                    <h2 className="font-display text-lg font-bold text-navy">Today&apos;s specials</h2>
+                  </div>
+                  <div className="text-[10px] text-slate-500">while supplies last</div>
+                </div>
+                <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
+                  {onSpecial.slice(0, 16).map((p) => {
+                    const inCart = cart.find((i) => i.id === p.id && i.source === p.source);
+                    return (
+                      <div key={`spec-${p.source}-${p.id}`} className="w-44 shrink-0 sm:w-52">
+                        <ProductCard product={p} inCartQty={inCart?.qty ?? 0} onAdd={() => addToCart(p)}
+                          showBrand={false} onCardClick={() => {
+                            if (p.source === 'market') router.push(`/product/${p.id}`);
+                            else if (p.wholesaler) router.push(`/local-wholesale/${p.wholesaler}`);
+                          }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Featured carousel */}
           {!loading && activeBrand === 'all' && activeCategory === 'All' && !search.trim() && (() => {
             const featured = products.filter((p) => p.featured && p.in_stock);
@@ -741,9 +790,14 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
             🇧🇸 BSC
           </div>
         )}
-        {product.featured && (
+        {product.featured && !product.is_on_special && (
           <div className="absolute right-2 top-2 rounded-md bg-gold px-2 py-0.5 text-[10px] font-extrabold text-navy shadow-sm">
             ★ FEATURED
+          </div>
+        )}
+        {product.is_on_special && (
+          <div className="absolute right-2 top-2 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
+            🔥 {product.special_label ?? 'SPECIAL'}
           </div>
         )}
         {typeof product.stock_qty === 'number' && product.stock_qty > 0 && product.stock_qty <= 5 && (
@@ -770,9 +824,15 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
         )}
         {product.description && <p className="clamp-2 text-xs text-slate-500">{product.description}</p>}
         <div className="mt-auto flex items-baseline gap-1 pt-1">
-          <span className="text-lg font-extrabold text-navy sm:text-xl">BSD ${product.price.toFixed(2)}</span>
+          <span className={`text-lg font-extrabold sm:text-xl ${product.is_on_special ? 'text-red-600' : 'text-navy'}`}>BSD ${product.price.toFixed(2)}</span>
           <span className="text-xs text-slate-400">/ {product.unit}</span>
+          {product.is_on_special && typeof product.regular_price === 'number' && (
+            <span className="ml-1 text-[11px] font-semibold text-slate-400 line-through">${product.regular_price.toFixed(2)}</span>
+          )}
         </div>
+        {product.is_on_special && product.special_ends_at && (
+          <div className="text-[10px] font-bold uppercase tracking-wider text-red-600">Ends {new Date(product.special_ends_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
+        )}
         {product.min_qty > 1 && (
           <div className="text-[10px] text-slate-400">Min order: {product.min_qty} {product.unit}</div>
         )}

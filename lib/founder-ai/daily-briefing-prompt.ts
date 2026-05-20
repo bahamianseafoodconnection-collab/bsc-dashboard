@@ -38,9 +38,13 @@ export const SACRED_MARGINS = {
 // Bill's standing cut — 5% of gross profit on every sale. Sacred.
 export const BILL_CASALE_RATE = 0.05;
 
-// Twelve founding principles. Placeholder text — REPLACE with Dedrick's
-// canonical list before the first real briefing fires. Numbered so the
-// AI can reference them by index when explaining a recommendation.
+// Twelve founding principles — ratified by Dedrick on 2026-05-20.
+// Numbered so the AI can reference them by index when explaining a
+// recommendation (e.g. "per principle #4, weekend prep").
+//
+// Principle #2 in particular is enforced — any sale flagged in the
+// briefing that violated a sacred margin must be called out in
+// "What I Noticed".
 export const FOUNDING_PRINCIPLES: string[] = [
   '1. Bahamian first — local seafood, local hands, local economy.',
   '2. Sacred margins protect Bill, Dedrick, Jaquel, and every BSC worker.',
@@ -54,8 +58,6 @@ export const FOUNDING_PRINCIPLES: string[] = [
   '10. Founder AI surfaces the truth; humans make the decision.',
   '11. We never blast a customer who did not opt in.',
   '12. Build the dashboard the founder will use every morning.',
-  // TODO(dedrick): replace this list with the canonical 12 before
-  // first-real-briefing day.
 ];
 
 export function buildDailyBriefingPrompt(input: DailyBriefingDataInput): string {

@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-20T20:44:38.894Z",
+  "generated_at": "2026-05-20T21:02:14.085Z",
   "stats": {
-    "pages": 126,
+    "pages": 127,
     "api_routes": 45,
     "tables": 35,
-    "migrations": 36,
+    "migrations": 37,
     "business_rules": 13
   },
   "pages": [
@@ -199,6 +199,12 @@
       "file": "app/dashboard/quality-control/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/quality-control — Spiny Tail inspection queue. Visible to processor / receiver / control_admin / founder / co_founder / manager. Inspector can pass/reject; reject bumps vendor.quality_rejections_count."
+    },
+    {
+      "url": "/dashboard/specials",
+      "file": "app/dashboard/specials/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/specials Schedule \"closed date\" product specials — pick any product, set a special_price + window (special_starts_at / special_ends_at) + optional label, and the product shows in the 🔥 Specials section on /m…"
     },
     {
       "url": "/dashboard/vendors/approved",
