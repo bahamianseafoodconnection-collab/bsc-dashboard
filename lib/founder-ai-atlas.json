@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-05-20T21:02:14.085Z",
+  "generated_at": "2026-05-20T21:41:23.186Z",
   "stats": {
-    "pages": 127,
+    "pages": 128,
     "api_routes": 45,
     "tables": 35,
     "migrations": 37,
@@ -139,6 +139,12 @@
       "file": "app/dashboard/cashiers/trends/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/cashiers/trends — per-cashier monthly aggregates. Reads cash_drawer_session_totals over a date range, groups by cashier, computes: # closed sessions, total sales, cash sales, card sales, account sales, total…"
+    },
+    {
+      "url": "/dashboard/customer-pulse",
+      "file": "app/dashboard/customer-pulse/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/customer-pulse Dedrick's personal \"who came back today\" view. Per the founder-only-loop principle, this page is restricted to control_admin / founder / co_founder — NOT the wider admin set used by other dashb…"
     },
     {
       "url": "/dashboard/daily-briefing",
