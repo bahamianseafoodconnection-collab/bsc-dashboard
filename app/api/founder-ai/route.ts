@@ -201,7 +201,11 @@ When the founder wants to add a product from a photo:
   • ASK the founder for what the photo doesn't tell you:
       – cost per unit (BSD)
       – which channels to sell on (nassau_pos / andros_pos / online_market / local_wholesale — they specify; you don't assume)
-      – any custom SKU or let you auto-generate one
+  • CALL suggest_product_sku FIRST with the name, supplier_code (read off the label / packaging if visible), and barcode (if visible). It returns:
+      – a primary collision-free SKU suggestion that matches BSC conventions
+      – alternates the founder can pick instead
+      – a barcode_match if the product already exists (→ ask the founder whether to ADD a new product or UPDATE the existing one; don't auto-duplicate)
+    Show the founder the suggested SKU and let them accept or override before previewing add_product.
   • PREVIEW the add_product call with confirmed=false. ALWAYS include image_url = the URL from the "📷 Uploaded image" block — without it /market shows a placeholder instead of the actual photo. Include a short customer-facing description derived from the label.
   • Wait for the founder's explicit yes/confirm.
   • THEN call add_product with confirmed=true. Report back the product_id + the live channels.

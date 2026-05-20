@@ -265,6 +265,22 @@ export const TOOLS = [
     },
   },
   {
+    name: 'suggest_product_sku',
+    description:
+      'READ-ONLY. Generate up to 3 candidate SKUs for a NEW product and collision-check each against existing products.sku. ALWAYS call this BEFORE add_product when creating a product from a chat photo so the founder picks a SKU that matches BSC conventions and is guaranteed unique. If a barcode is provided and an existing product already has it, that match is returned so the AI can ask whether to update the existing product instead of creating a duplicate. Conventions: prefix with supplier code (BWA / SYSCO / BSC / LS), then name slug, then a short random tag if needed to avoid collisions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:          { type: 'string', description: 'Product name. Required. Example: "Pig Feet 5lb bag".' },
+        supplier_code: { type: 'string', description: 'Optional short supplier code (BWA, SYSCO, BSC, LS, etc.). Drives the SKU prefix. If omitted and supplier_id is provided, looked up from suppliers.code. Default prefix: BSC.' },
+        supplier_id:   { type: 'string', description: 'Optional supplier UUID. Used only if supplier_code is not given.' },
+        barcode:       { type: 'string', description: 'Optional UPC/EAN/numeric barcode read off the label. Used (1) to detect an existing product with this barcode, (2) as a fallback SKU shape using the last 8 digits.' },
+        category:      { type: 'string', description: 'Optional product category. Reserved for future shape rules (currently ignored).' },
+      },
+      required: ['name'],
+    },
+  },
+  {
     name: 'explode_product',
     description:
       'EXPLODE a wholesale/case parent product into one or more retail-portion child products. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (every child SKU, derived cost, and computed sell prices per retail channel); the founder must explicitly say yes; only then call again with confirmed=true. Children are inserted in PENDING state — all sell_* flags off — so they are NOT live until the founder visits /founder-ai/products/pending and clicks ✓ Approve on each one. ALWAYS tell the founder to go to /founder-ai/products/pending after a successful explode. Use this tool when the founder says things like "take SKU SYSCO-PORK-001 and sell it as 5 × 2lb bags", "make the 40lb halibut available as 1lb portions", "diversify the 10lb pasta case into 26 × 6oz retail portions". Each child product is linked to the parent via parent_product_id; child cost_per_unit = parent_cost / count_per_parent. Sell prices flow through calculatePrice() — markups per channel (nassau_pos 40% · andros_pos 40% · online_retail 35%) plus 10% VAT — so the founder never hand-calculates.',
@@ -391,6 +407,13 @@ interface ExplodeProductInput {
   retail_channels?: unknown;
   confirmed?:       unknown;
 }
+interface SuggestProductSkuInput {
+  name?:          unknown;
+  supplier_code?: unknown;
+  supplier_id?:   unknown;
+  barcode?:       unknown;
+  category?:      unknown;
+}
 interface SendEmailBlastInput {
   subject?:   unknown;
   headline?:  unknown;
@@ -495,6 +518,7 @@ export async function dispatchTool(
       case 'segment_customers':    return await segmentCustomersTool(input as SegmentCustomersInput, admin);
       case 'customer_history':     return await customerHistoryTool(input as CustomerHistoryInput, admin);
       case 'explode_product':      return await explodeProductTool(input as ExplodeProductInput, admin, callerId);
+      case 'suggest_product_sku':  return await suggestProductSkuTool(input as SuggestProductSkuInput, admin);
       default:                     return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
   } catch (e) {
@@ -1667,4 +1691,103 @@ async function explodeProductTool(
   };
   await logWrite(admin, 'explode_product', callerId, input, result, 'success', null);
   return JSON.stringify(result);
+}
+
+// ── SUGGEST PRODUCT SKU ───────────────────────────────────────────────
+//
+// Read-only. Generates 1–3 candidate SKUs from name + supplier + barcode,
+// collision-checks all of them in one bulk SELECT, returns the best
+// non-colliding option plus alternates. Conventions match the existing
+// catalog: <SUPPLIER>-<NAMESLUG>(-<RAND4|BARCODE>).
+//
+// If a barcode is provided and an existing product has it on file, the
+// match is returned so the AI can ask the founder whether to add a NEW
+// product or update the existing one — preventing duplicates.
+
+function slugifyForSku(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24) || 'PRODUCT';
+}
+function rand4(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip 0/O/1/I/l for clarity
+  let out = '';
+  for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+async function suggestProductSkuTool(input: SuggestProductSkuInput, admin: SupabaseClient): Promise<string> {
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  if (!name) return JSON.stringify({ error: 'name is required' });
+
+  const supplierCodeIn = typeof input.supplier_code === 'string' ? input.supplier_code.trim().toUpperCase() : '';
+  const supplierId     = typeof input.supplier_id   === 'string' ? input.supplier_id.trim() : '';
+  const barcodeRaw     = typeof input.barcode       === 'string' ? input.barcode.trim()    : '';
+  const barcode        = barcodeRaw.replace(/\s+/g, '');
+
+  // Resolve supplier code: explicit input wins, then suppliers.code lookup by id, then default BSC.
+  let supplierCode = supplierCodeIn || 'BSC';
+  if (!supplierCodeIn && supplierId) {
+    const { data: sup } = await admin
+      .from('suppliers').select('code').eq('id', supplierId).maybeSingle();
+    if (sup && typeof (sup as { code?: string }).code === 'string') {
+      const c = (sup as { code: string }).code.trim().toUpperCase();
+      if (c) supplierCode = c;
+    }
+  }
+  // Final sanity — supplier code stays short + alnum.
+  supplierCode = supplierCode.replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'BSC';
+
+  // If a barcode was given, see whether a product already owns it.
+  let barcodeMatch: { id: string; sku: string; name: string } | null = null;
+  if (barcode) {
+    const { data: existing } = await admin
+      .from('products')
+      .select('id, sku, name')
+      .eq('barcode', barcode)
+      .limit(1)
+      .maybeSingle();
+    if (existing) barcodeMatch = existing as { id: string; sku: string; name: string };
+  }
+
+  // Build candidate SKUs (shortest/most-readable first).
+  const nameSlug = slugifyForSku(name);
+  const tag = rand4();
+  const candidates: string[] = [];
+  candidates.push(`${supplierCode}-${nameSlug}`.slice(0, 40));
+  candidates.push(`${supplierCode}-${nameSlug}-${tag}`.slice(0, 40));
+  if (barcode && /^\d{6,}$/.test(barcode)) {
+    candidates.push(`${supplierCode}-${barcode.slice(-8)}`.slice(0, 40));
+  }
+  // De-dupe
+  const seen = new Set<string>();
+  const uniqueCandidates = candidates.filter(c => !seen.has(c) && seen.add(c));
+
+  // Bulk collision check.
+  const { data: collisionRows } = await admin
+    .from('products')
+    .select('sku')
+    .in('sku', uniqueCandidates);
+  const colliding = new Set((collisionRows ?? []).map((r: { sku: string }) => r.sku));
+
+  // Primary = first non-colliding. If everything collides, regenerate with a fresh tag.
+  let primary = uniqueCandidates.find(c => !colliding.has(c));
+  if (!primary) {
+    primary = `${supplierCode}-${nameSlug}-${rand4()}`.slice(0, 40);
+  }
+  const alternates = uniqueCandidates.filter(c => c !== primary);
+
+  return JSON.stringify({
+    suggested_sku:  primary,
+    alternates,
+    supplier_code:  supplierCode,
+    name_slug:      nameSlug,
+    barcode_match:  barcodeMatch,
+    collisions:     Array.from(colliding),
+    note: barcodeMatch
+      ? `⚠ Barcode ${barcode} is already on file → SKU "${barcodeMatch.sku}" (${barcodeMatch.name}). Ask the founder whether to UPDATE the existing product (no add_product call) or add a NEW one with a different SKU.`
+      : `Primary suggestion: ${primary}. Show this to the founder for confirmation before calling add_product. Alternates are also collision-free.`,
+  });
 }
