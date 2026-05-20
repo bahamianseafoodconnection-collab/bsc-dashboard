@@ -11,6 +11,22 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import FlyerBanner from '@/components/FlyerBanner';
+import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
+import type { SaleUnit } from '@/lib/pricing';
+
+// Per-line pricing helper for online cart: auto-upgrades to wholesale
+// at 10+ lbs of one product (or by-case) when a wholesale snapshot exists.
+// Carts persisted before this code shipped lack wholesale_price / unit_type —
+// fall back to retail in that case (no badge, no upgrade).
+function linePricing(item: { price: number; wholesale_price?: number | null; unit_type?: string; qty: number }) {
+  const snap: ProductPriceSnapshot = {
+    retail_price: item.price,
+    wholesale_price: item.wholesale_price ?? null,
+    promo_price: null,
+  };
+  const unit: SaleUnit = item.unit_type === 'lb' ? 'lb' : item.unit_type === 'case' ? 'case' : 'each';
+  return priceCartLine(snap, item.qty, unit);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -57,8 +73,10 @@ interface MarketProduct {
   name: string;
   description: string;
   category: string;
-  price: number;
+  price: number;                // online_market snapshot (retail)
+  wholesale_price?: number | null; // local_wholesale snapshot — drives auto-upgrade at 10+ lbs / by case
   unit: string;
+  unit_type?: string;           // 'lb' | 'each' | 'case' — used by priceCartLine to qualify wholesale
   min_qty: number;
   image_url: string;
   in_stock: boolean;
@@ -135,7 +153,7 @@ function MarketPageInner() {
 
   useEffect(() => {
     (async () => {
-      // Step 1: Get all current online_market prices
+      // Step 1: Get all current online_market prices (retail base)
       const { data: pricingData, error: pricingErr } = await supabase
         .from('product_pricing')
         .select('product_id, manual_unit_price')
@@ -154,10 +172,28 @@ function MarketPageInner() {
       }
       const productIds = [...priceMap.keys()];
 
-      // Step 2: Fetch active online products — column is 'category' not 'product_category'
+      // Step 1b: Also fetch local_wholesale prices so cart can auto-upgrade
+      // at 10+ lbs of one product (or by-case). Missing wholesale price =
+      // no auto-upgrade for that product, retail always applies.
+      const wholesaleMap = new Map<string, number>();
+      if (productIds.length > 0) {
+        const { data: wsRows } = await supabase
+          .from('product_pricing')
+          .select('product_id, manual_unit_price')
+          .in('product_id', productIds)
+          .eq('channel', 'local_wholesale')
+          .eq('is_current', true)
+          .eq('is_active', true);
+        for (const row of (wsRows ?? []) as { product_id: string; manual_unit_price: number }[]) {
+          wholesaleMap.set(row.product_id, Number(row.manual_unit_price));
+        }
+      }
+
+      // Step 2: Fetch active online products. Now also pulling unit_type
+      // so priceCartLine() can decide qty-vs-weight wholesale qualification.
       const { data: mp, error: mpErr } = await supabase
         .from('products')
-        .select('id, sku, name, description, category, image_url, sell_online, status')
+        .select('id, sku, name, description, category, image_url, sell_online, status, unit_type')
         .eq('sell_online', true)
         .eq('status', 'active')
         .in('id', productIds)
@@ -176,7 +212,9 @@ function MarketPageInner() {
         description: p.description || '',
         category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
         price: priceMap.get(p.id) ?? 0,
-        unit: 'each',
+        wholesale_price: wholesaleMap.get(p.id) ?? null,
+        unit_type: p.unit_type ?? 'each',
+        unit: p.unit_type === 'lb' ? 'lb' : 'each',
         min_qty: 1,
         image_url: p.image_url || '',
         in_stock: true,
@@ -262,8 +300,10 @@ function MarketPageInner() {
       });
   }, [products, activeCategory, activeBrand, search, sort]);
 
-  const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  // Cart total reflects wholesale auto-upgrade per line.
+  const cartTotal = cart.reduce((s, i) => s + linePricing(i).unit_price * i.qty, 0);
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+  const wholesaleLines = cart.filter(i => linePricing(i).upgraded_to_wholesale).length;
 
   function addToCart(p: MarketProduct) {
     setCart((prev) => {
@@ -289,18 +329,26 @@ function MarketPageInner() {
   async function placeOrder() {
     setPlacing(true);
     const { data: { session } } = await supabase.auth.getSession();
-    await supabase.from('orders').insert({
-      channel: 'online_market',
-      payment_method: 'cod',
-      status: 'pending',
-      items: cart.map((i) => ({
+    // Per-line wholesale auto-upgrade applied here too — the COD quick-order
+    // path bypasses /checkout, so it has to do the same pricing math.
+    const items = cart.map((i) => {
+      const p = linePricing(i);
+      return {
         product_id: i.id,
         sku: i.sku || null,
         name: i.name,
         quantity: i.qty,
-        unit_price: i.price,
-        line_total: +(i.price * i.qty).toFixed(2),
-      })),
+        unit_price: p.unit_price,
+        line_total: +(p.unit_price * i.qty).toFixed(2),
+        applied_channel: p.applied_channel,             // 'retail' | 'wholesale' | 'promo'
+        upgraded_to_wholesale: p.upgraded_to_wholesale,
+      };
+    });
+    await supabase.from('orders').insert({
+      channel: 'online_market',
+      payment_method: 'cod',
+      status: 'pending',
+      items,
       total_amount: +cartTotal.toFixed(2),
       customer_id: session?.user.id || null,
       location: 'online',
@@ -599,7 +647,7 @@ function MarketPageInner() {
 
       {/* ─── Cart drawer ─── */}
       {showCart && (
-        <CartDrawer cart={cart} cartCount={cartCount} cartTotal={cartTotal}
+        <CartDrawer cart={cart} cartCount={cartCount} cartTotal={cartTotal} wholesaleLines={wholesaleLines}
           onClose={() => setShowCart(false)} onUpdateQty={updateQty}
           onPlaceOrder={placeOrder} placing={placing}
           onCheckout={() => { setShowCart(false); router.push('/checkout'); }} />
@@ -793,8 +841,8 @@ function TrustBar() {
   );
 }
 
-function CartDrawer({ cart, cartCount, cartTotal, onClose, onUpdateQty, onPlaceOrder, placing, onCheckout }: {
-  cart: CartItem[]; cartCount: number; cartTotal: number; onClose: () => void;
+function CartDrawer({ cart, cartCount, cartTotal, wholesaleLines, onClose, onUpdateQty, onPlaceOrder, placing, onCheckout }: {
+  cart: CartItem[]; cartCount: number; cartTotal: number; wholesaleLines: number; onClose: () => void;
   onUpdateQty: (id: string, source: string, qty: number) => void;
   onPlaceOrder: () => void; placing: boolean; onCheckout: () => void;
 }) {
@@ -824,6 +872,11 @@ function CartDrawer({ cart, cartCount, cartTotal, onClose, onUpdateQty, onPlaceO
         </div>
         {cart.length > 0 && (
           <div className="border-t border-slate-200 p-4">
+            {wholesaleLines > 0 && (
+              <div className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 border border-emerald-200">
+                ✓ Wholesale pricing applied on <strong>{wholesaleLines}</strong> line{wholesaleLines === 1 ? '' : 's'} (10+ lbs of one product or by-the-case).
+              </div>
+            )}
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm font-semibold text-slate-600">Total</span>
               <span className="text-2xl font-extrabold text-navy">BSD ${cartTotal.toFixed(2)}</span>
@@ -862,27 +915,49 @@ function CartGroups({ cart, onUpdateQty }: {
               style={{ color: brand?.color ?? '#1a2e5a', borderBottomColor: brand ? `${brand.color}33` : '#e2e8f0' }}>
               {brand ? `${brand.emoji} ${brand.name}` : '🇧🇸 BSC Direct'}
             </div>
-            {items.map((item) => (
-              <div key={`${item.source}-${item.id}`}
-                className="flex items-start gap-3 border-b border-slate-100 py-3 last:border-b-0">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-navy">{item.name}</div>
-                  {item.sku && brand && (
-                    <span className="mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px]"
-                      style={{ backgroundColor: brand.light, color: brand.color }}>{item.sku}</span>
-                  )}
-                  <div className="mt-1 text-xs text-slate-500">
-                    BSD ${item.price.toFixed(2)} × {item.qty}{' '}
-                    <span className="font-bold text-navy">= ${(item.price * item.qty).toFixed(2)}</span>
+            {items.map((item) => {
+              const p = linePricing(item);
+              const lineTotal = p.unit_price * item.qty;
+              return (
+                <div key={`${item.source}-${item.id}`}
+                  className="flex items-start gap-3 border-b border-slate-100 py-3 last:border-b-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-navy">
+                      {item.name}
+                      {p.upgraded_to_wholesale && (
+                        <span className="ml-2 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          style={{ backgroundColor: '#16a34a', color: '#fff' }}>
+                          Wholesale
+                        </span>
+                      )}
+                    </div>
+                    {item.sku && brand && (
+                      <span className="mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px]"
+                        style={{ backgroundColor: brand.light, color: brand.color }}>{item.sku}</span>
+                    )}
+                    <div className="mt-1 text-xs text-slate-500">
+                      BSD ${p.unit_price.toFixed(2)} × {item.qty}{' '}
+                      <span className="font-bold text-navy">= ${lineTotal.toFixed(2)}</span>
+                      {p.upgraded_to_wholesale && (
+                        <span className="ml-1 text-[10px] line-through text-slate-400">
+                          (was ${(item.price * item.qty).toFixed(2)})
+                        </span>
+                      )}
+                    </div>
+                    {p.qualifies_as_wholesale && !p.wholesale_price_available && p.applied_channel !== 'promo' && (
+                      <div className="mt-1 text-[10px] text-amber-600">
+                        ⓘ Qualifies for wholesale — pricing not yet set
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}>−</QtyButton>
+                    <span className="min-w-6 text-center text-sm font-bold text-navy">{item.qty}</span>
+                    <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}>+</QtyButton>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}>−</QtyButton>
-                  <span className="min-w-6 text-center text-sm font-bold text-navy">{item.qty}</span>
-                  <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}>+</QtyButton>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })}

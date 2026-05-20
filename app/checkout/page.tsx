@@ -19,6 +19,8 @@ import {
   type OverheadMetrics,
 } from '@/lib/profit';
 import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
+import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
+import type { SaleUnit } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,12 +35,26 @@ interface CartItem {
   id: string;
   source: 'market' | 'wholesale' | 'us';
   name: string;
-  price: number;
+  price: number;                    // online_market snapshot (retail)
+  wholesale_price?: number | null;  // local_wholesale snapshot — drives auto-upgrade
+  unit_type?: string;               // 'lb' | 'case' | 'each'
   qty: number;
   unit: string;
   sku?: string;
   wholesaler?: string;
   image_url?: string;
+}
+
+// Same helper as /market — auto-upgrade per line based on qty + unit_type.
+// Carts saved before this code lack wholesale_price / unit_type; retail wins.
+function linePricing(item: CartItem) {
+  const snap: ProductPriceSnapshot = {
+    retail_price: item.price,
+    wholesale_price: item.wholesale_price ?? null,
+    promo_price: null,
+  };
+  const unit: SaleUnit = item.unit_type === 'lb' ? 'lb' : item.unit_type === 'case' ? 'case' : 'each';
+  return priceCartLine(snap, item.qty, unit);
 }
 
 type View = 'summary' | 'payment' | 'done';
@@ -129,7 +145,16 @@ export default function CheckoutPage() {
     try { window.localStorage.removeItem('bsc_cart'); } catch { /* ignore */ }
   }, [view]);
 
-  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  // Cart subtotal now reflects per-line wholesale auto-upgrade (10+ lbs of
+  // one product, or by-the-case). Customers see the wholesale discount
+  // automatically without any code-entry friction.
+  const subtotal = cart.reduce((s, i) => s + linePricing(i).unit_price * i.qty, 0);
+  const wholesaleSavings = cart.reduce((s, i) => {
+    const p = linePricing(i);
+    if (!p.upgraded_to_wholesale) return s;
+    return s + (i.price - p.unit_price) * i.qty;
+  }, 0);
+  const wholesaleLineCount = cart.filter(i => linePricing(i).upgraded_to_wholesale).length;
   const promoDiscount = promoApplied
     ? Math.min(promoApplied.discount_amount, subtotal)
     : 0;
@@ -247,11 +272,26 @@ export default function CheckoutPage() {
       }
     }
 
+    // Stamp every cart line with its applied channel + upgrade flag so the
+    // receipt + reports show wholesale auto-upgrades and so per-line
+    // unit_price reflects the price the customer actually paid.
+    const stampedItems = cart.map((i) => {
+      const p = linePricing(i);
+      return {
+        ...i,
+        unit_price:             p.unit_price,
+        line_total:             +(p.unit_price * i.qty).toFixed(2),
+        retail_unit_price:      i.price,
+        applied_channel:        p.applied_channel,
+        upgraded_to_wholesale:  p.upgraded_to_wholesale,
+      };
+    });
+
     const orderRow: Record<string, unknown> = {
       order_type: 'online_market',
       payment_method: payMethod,
       payment_status: payMethod === 'cod' ? 'pending' : 'processing',
-      wholesale_items: cart,
+      wholesale_items: stampedItems,
       wholesale_cost_total: total,
       customer_name: name.trim() || null,
       customer_phone: phone.trim() || null,
@@ -618,22 +658,47 @@ export default function CheckoutPage() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-bold text-navy">{item.name}</div>
+                      <div className="truncate text-xs font-bold text-navy">
+                        {item.name}
+                        {(() => {
+                          const p = linePricing(item);
+                          if (!p.upgraded_to_wholesale) return null;
+                          return (
+                            <span className="ml-1.5 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                              style={{ backgroundColor: '#16a34a', color: '#fff' }}>
+                              Wholesale
+                            </span>
+                          );
+                        })()}
+                      </div>
                       {item.sku && (
                         <div className="font-mono text-[10px] text-slate-400">{item.sku}</div>
                       )}
-                      <div className="text-[11px] text-slate-500">
-                        Qty {item.qty} × BSD ${fmt(item.price)}
-                      </div>
+                      {(() => {
+                        const p = linePricing(item);
+                        return (
+                          <div className="text-[11px] text-slate-500">
+                            Qty {item.qty} × BSD ${fmt(p.unit_price)}
+                            {p.upgraded_to_wholesale && (
+                              <span className="ml-1 line-through text-slate-400">${fmt(item.price)}</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="shrink-0 text-xs font-extrabold text-navy">
-                      BSD ${fmt(item.price * item.qty)}
+                      BSD ${fmt(linePricing(item).unit_price * item.qty)}
                     </div>
                   </div>
                 ))}
               </div>
 
               <div className="border-t-2 border-slate-100 pt-3.5">
+                {wholesaleLineCount > 0 && (
+                  <div className="mb-2 rounded-md bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-800 border border-emerald-200">
+                    ✓ Wholesale pricing on {wholesaleLineCount} line{wholesaleLineCount === 1 ? '' : 's'} — you saved <strong>BSD ${fmt(wholesaleSavings)}</strong> automatically.
+                  </div>
+                )}
                 <div className="mb-1 flex justify-between text-xs">
                   <span className="text-slate-500">
                     Subtotal ({cart.reduce((s, i) => s + i.qty, 0)} items)
