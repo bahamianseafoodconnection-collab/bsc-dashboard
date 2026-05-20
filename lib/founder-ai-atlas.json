@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-20T21:41:23.186Z",
+  "generated_at": "2026-05-20T22:20:33.895Z",
   "stats": {
-    "pages": 128,
-    "api_routes": 45,
-    "tables": 35,
-    "migrations": 37,
+    "pages": 129,
+    "api_routes": 47,
+    "tables": 37,
+    "migrations": 39,
     "business_rules": 13
   },
   "pages": [
@@ -211,6 +211,12 @@
       "file": "app/dashboard/specials/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/specials Schedule \"closed date\" product specials — pick any product, set a special_price + window (special_starts_at / special_ends_at) + optional label, and the product shows in the 🔥 Specials section on /m…"
+    },
+    {
+      "url": "/dashboard/sql-editor",
+      "file": "app/dashboard/sql-editor/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/sql-editor Founder-only SQL editor — runs queries against the live BSC database via the bsc_admin_exec_sql() SECURITY DEFINER RPC. Role check happens in Postgres (founder / co_founder / control_admin). Every…"
     },
     {
       "url": "/dashboard/vendors/approved",
@@ -1089,6 +1095,22 @@
       "purpose": "/api/spinytails/ssop-reminder Two paths (mirror of /api/ar/aging-alert): GET — Vercel cron daily. CRON_SECRET in Authorization header. POST — Admin manual trigger. Staff JWT required. Both produce one branded HTML diges…"
     },
     {
+      "url": "/api/sql-editor/run",
+      "file": "app/api/sql-editor/run/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/sql-editor/run Thin wrapper around the bsc_admin_exec_sql() SECURITY DEFINER RPC. All gating + audit happens server-side in Postgres — this route just forwards the JWT so auth.uid() resolves correctly inside the fu…"
+    },
+    {
+      "url": "/api/sql-editor/schema",
+      "file": "app/api/sql-editor/schema/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "/api/sql-editor/schema Returns the founder-only schema overview: every public table with a row estimate, RLS status, and last analyze/autovacuum timestamps. Driven by the bsc_admin_schema_overview() RPC — role gating ha…"
+    },
+    {
       "url": "/api/staff/activate",
       "file": "app/api/staff/activate/route.ts",
       "methods": [
@@ -1227,6 +1249,20 @@
         "display_order"
       ],
       "first_seen_migration": "supabase/migrations/20260516190000_flyers.sql"
+    },
+    {
+      "name": "order_lot_consumption",
+      "columns": [
+        "id",
+        "order_id",
+        "lot_id",
+        "product_id",
+        "quantity_lbs",
+        "notes",
+        "recorded_at",
+        "recorded_by"
+      ],
+      "first_seen_migration": "supabase/migrations/20260520220000_order_lot_consumption.sql"
     },
     {
       "name": "pricing_config",
@@ -1552,6 +1588,20 @@
         "suspended_at"
       ],
       "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "sql_query_audit",
+      "columns": [
+        "id",
+        "caller_id",
+        "sql_text",
+        "allow_write",
+        "rowcount",
+        "elapsed_ms",
+        "error",
+        "ran_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260520230000_sql_editor_audit_rpc.sql"
     },
     {
       "name": "staff_changes",

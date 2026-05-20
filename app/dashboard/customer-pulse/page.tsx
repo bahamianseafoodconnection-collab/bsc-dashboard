@@ -232,20 +232,61 @@ export default function CustomerPulsePage() {
     return { returning, newOnes, totalOrders, totalRevenue, totalProfit, uniqueCustomers: pulse.length };
   }, [pulse, orders]);
 
-  // Lot consumption summary (best-effort until order_items.lot_code is wired)
+  // Real lot consumption — joined via order_lot_consumption junction table.
+  // Refreshed inside load() and merged with regex fallback below.
+  const [olcRows, setOlcRows] = useState<Array<{ lot_code: string; customer_name: string | null; qty_lbs: number | null }>>([]);
+
+  useEffect(() => {
+    if (orders.length === 0) { setOlcRows([]); return; }
+    (async () => {
+      const orderIds = orders.map(o => o.id);
+      const { data } = await supabase
+        .from('order_lot_consumption')
+        .select('order_id, quantity_lbs, lot:spinytails_lots(lot_code), orders(customer_name)')
+        .in('order_id', orderIds);
+      const rows = ((data ?? []) as unknown as Array<{
+        order_id: string;
+        quantity_lbs: number | null;
+        lot: { lot_code: string } | { lot_code: string }[] | null;
+        orders: { customer_name: string | null } | { customer_name: string | null }[] | null;
+      }>).map(r => {
+        const lot   = Array.isArray(r.lot)    ? r.lot[0]    : r.lot;
+        const order = Array.isArray(r.orders) ? r.orders[0] : r.orders;
+        return {
+          lot_code:      lot?.lot_code ?? '',
+          customer_name: order?.customer_name ?? null,
+          qty_lbs:       r.quantity_lbs,
+        };
+      }).filter(r => !!r.lot_code);
+      setOlcRows(rows);
+    })();
+  }, [orders]);
+
+  // Combine REAL (junction-table) consumption with REGEX (fallback for legacy
+  // orders that shipped before order_lot_consumption existed). Real records
+  // win when both exist for the same (lot, customer) pair.
   const lotConsumption = useMemo(() => {
-    const lotToCustomers = new Map<string, Set<string>>();
+    const lotToData = new Map<string, { customers: Set<string>; qty_lbs: number; verified: boolean }>();
+    for (const r of olcRows) {
+      const cur = lotToData.get(r.lot_code) ?? { customers: new Set<string>(), qty_lbs: 0, verified: false };
+      if (r.customer_name) cur.customers.add(r.customer_name);
+      cur.qty_lbs += Number(r.qty_lbs ?? 0);
+      cur.verified = true;
+      lotToData.set(r.lot_code, cur);
+    }
     for (const o of orders) {
       const lots = extractLotCodes(o);
       const who  = o.customer_name ?? '(unknown)';
       for (const lot of lots) {
-        const set = lotToCustomers.get(lot) ?? new Set<string>();
-        set.add(who);
-        lotToCustomers.set(lot, set);
+        const cur = lotToData.get(lot) ?? { customers: new Set<string>(), qty_lbs: 0, verified: false };
+        cur.customers.add(who);
+        lotToData.set(lot, cur);
       }
     }
-    return Array.from(lotToCustomers.entries()).map(([lot, custs]) => ({ lot, customers: Array.from(custs) }));
-  }, [orders]);
+    return Array.from(lotToData.entries()).map(([lot, d]) => ({
+      lot, customers: Array.from(d.customers), qty_lbs: d.qty_lbs, verified: d.verified,
+    }));
+  }, [orders, olcRows]);
 
   if (authed === null) return <div style={pg}>Loading…</div>;
 
@@ -322,22 +363,29 @@ export default function CustomerPulsePage() {
           <h2 style={sectionH2}>📦 Lot consumption today ({lotConsumption.length})</h2>
           {lotConsumption.length === 0 ? (
             <div style={{ ...emptyBox, marginTop: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#f5c518' }}>No STPC / BSC-FISH lot codes detected in today&apos;s orders.</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 6, lineHeight: 1.6, maxWidth: 540, margin: '6px auto 0' }}>
-                Trace-loop limit: until <code style={{ background: '#0b1628', padding: '0 4px', borderRadius: 3 }}>order_items.lot_code</code> is added,
-                this view scans order notes + cart items for STPC-YYYYMMDD-VV-NN patterns. The next migration that wires
-                a real <code style={{ background: '#0b1628', padding: '0 4px', borderRadius: 3 }}>lot_code</code> column on order line items closes
-                the loop fully — every STPC lot will list its customers and every customer will list the lots they consumed.
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#f5c518' }}>No lot consumption recorded for today.</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 6, lineHeight: 1.6, maxWidth: 580, margin: '6px auto 0' }}>
+                The trace loop is now wired via <code style={{ background: '#0b1628', padding: '0 4px', borderRadius: 3 }}>order_lot_consumption</code>.
+                Packers record consumption at <Link href="/spinytails/lots" style={{ color: '#f5c518' }}>/spinytails/lots/&lt;lot_code&gt;</Link> when a case ships against a customer order.
+                Legacy orders that shipped without a recorded entry are still caught by an STPC-* / BSC-FISH-* regex scan over <code style={{ background: '#0b1628', padding: '0 4px', borderRadius: 3 }}>admin_notes</code> + <code style={{ background: '#0b1628', padding: '0 4px', borderRadius: 3 }}>wholesale_items</code>.
               </div>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
-              {lotConsumption.map(({ lot, customers }) => (
+              {lotConsumption.map(({ lot, customers, qty_lbs, verified }) => (
                 <div key={lot} style={lotCard}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                    <Link href={`/spinytails/lots/${encodeURIComponent(lot)}`}
-                      style={{ fontFamily: 'monospace', fontSize: 13, color: '#f5c518', fontWeight: 800, textDecoration: 'none' }}>{lot} →</Link>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>{customers.length} customer{customers.length === 1 ? '' : 's'}</span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                      <Link href={`/spinytails/lots/${encodeURIComponent(lot)}`}
+                        style={{ fontFamily: 'monospace', fontSize: 13, color: '#f5c518', fontWeight: 800, textDecoration: 'none' }}>{lot} →</Link>
+                      {verified
+                        ? <span title="Confirmed via order_lot_consumption" style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid #16a34a', borderRadius: 12, padding: '1px 7px', fontSize: 9, fontWeight: 800, letterSpacing: 0.4 }}>✓ VERIFIED</span>
+                        : <span title="Inferred via regex on order notes / line items — record at /spinytails/lots/<code> to verify" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid #f59e0b', borderRadius: 12, padding: '1px 7px', fontSize: 9, fontWeight: 800, letterSpacing: 0.4 }}>~ INFERRED</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>
+                      {customers.length} customer{customers.length === 1 ? '' : 's'}
+                      {qty_lbs > 0 && <> · {qty_lbs.toFixed(2)} lbs</>}
+                    </span>
                   </div>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
                     Sold to: {customers.join(', ')}

@@ -72,6 +72,21 @@ interface ShipmentLink {
   shipment_id: string; lot_id: string; master_cartons: number; weight_lbs: number;
   shipments: { shipment_number: string; shipped_at: string; destination_customer: string; destination_country: string } | null;
 }
+interface Consumption {
+  id:           string;
+  order_id:     string;
+  product_id:   string | null;
+  quantity_lbs: number | null;
+  notes:        string | null;
+  recorded_at:  string;
+  // hydrated via joins:
+  order_customer_name?: string | null;
+  order_total?:         number | null;
+  order_created_at?:    string;
+  product_sku?:         string | null;
+  product_name?:        string | null;
+}
+interface ProductMini { id: string; sku: string; name: string; }
 
 export default function LotDetailPage({ params }: { params: Promise<{ lot_code: string }> }) {
   const { lot_code } = usePromise(params);
@@ -87,10 +102,21 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
   const [grades, setGrades] = useState<Grade[]>([]);
   const [packagings, setPackagings] = useState<Packaging[]>([]);
   const [shipments, setShipments] = useState<ShipmentLink[]>([]);
+  const [consumptions, setConsumptions] = useState<Consumption[]>([]);
+  const [productCatalog, setProductCatalog] = useState<ProductMini[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   const [statusBusy, setStatusBusy] = useState(false);
+
+  // Consumption recorder form state
+  const [conOrderId,   setConOrderId]   = useState('');
+  const [conProductId, setConProductId] = useState<string>('');
+  const [conQtyLbs,    setConQtyLbs]    = useState<string>('');
+  const [conNotes,     setConNotes]     = useState('');
+  const [conPreview,   setConPreview]   = useState<{ customer_name: string | null; total: number | null; created_at: string | null } | null>(null);
+  const [conSaving,    setConSaving]    = useState(false);
+  const [conToast,     setConToast]     = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -132,6 +158,45 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
     } else {
       setGrades([]);
     }
+
+    // Order lot consumption — who consumed this lot.
+    const { data: olcRows } = await supabase
+      .from('order_lot_consumption')
+      .select('id, order_id, product_id, quantity_lbs, notes, recorded_at, orders(customer_name, total, created_at), products(sku, name)')
+      .eq('lot_id', (lotRow as Lot).id)
+      .order('recorded_at', { ascending: false });
+    const built: Consumption[] = ((olcRows ?? []) as unknown as Array<{
+      id: string; order_id: string; product_id: string | null;
+      quantity_lbs: number | null; notes: string | null; recorded_at: string;
+      orders:   { customer_name: string | null; total: number | null; created_at: string } | { customer_name: string | null; total: number | null; created_at: string }[] | null;
+      products: { sku: string; name: string } | { sku: string; name: string }[] | null;
+    }>).map(r => {
+      const ord  = Array.isArray(r.orders)   ? r.orders[0]   : r.orders;
+      const prod = Array.isArray(r.products) ? r.products[0] : r.products;
+      return {
+        id:                  r.id,
+        order_id:            r.order_id,
+        product_id:          r.product_id,
+        quantity_lbs:        r.quantity_lbs,
+        notes:               r.notes,
+        recorded_at:         r.recorded_at,
+        order_customer_name: ord?.customer_name ?? null,
+        order_total:         ord?.total ?? null,
+        order_created_at:    ord?.created_at,
+        product_sku:         prod?.sku ?? null,
+        product_name:        prod?.name ?? null,
+      };
+    });
+    setConsumptions(built);
+
+    // Small product catalog for the picker — only sell_online products (most likely to be in orders).
+    const { data: prods } = await supabase
+      .from('products')
+      .select('id, sku, name')
+      .eq('status', 'active')
+      .order('name')
+      .limit(500);
+    setProductCatalog((prods ?? []) as ProductMini[]);
     setLoading(false);
   }, [decoded]);
 
@@ -153,6 +218,62 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
   const tempExcursionCount = useMemo(() => temps.filter(t => !t.within_limit).length, [temps]);
   const totalCases40 = useMemo(() => packagings.reduce((s, p) => s + p.master_cartons_40lb, 0), [packagings]);
   const totalCases10 = useMemo(() => packagings.reduce((s, p) => s + p.primary_boxes_10lb, 0), [packagings]);
+
+  // Resolve the typed order id (full UUID or short prefix) to the actual order
+  async function previewOrder(input: string) {
+    const v = input.trim();
+    if (!v) { setConPreview(null); return; }
+    let query = supabase.from('orders').select('id, customer_name, total, created_at').limit(2);
+    // Full UUID? exact match. Else prefix.
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
+      query = query.eq('id', v);
+    } else {
+      // Use text-cast prefix match. Supabase exposes this via ilike on cast.
+      query = query.filter('id::text', 'ilike', `${v}%`);
+    }
+    const { data } = await query;
+    if (!data || data.length === 0)  { setConPreview(null); return; }
+    if (data.length > 1)              { setConPreview({ customer_name: '(multiple matches — paste full UUID)', total: null, created_at: null }); return; }
+    const o = data[0] as { id: string; customer_name: string | null; total: number | null; created_at: string };
+    setConOrderId(o.id);
+    setConPreview({ customer_name: o.customer_name, total: o.total != null ? Number(o.total) : null, created_at: o.created_at });
+  }
+
+  async function saveConsumption() {
+    if (!lot || !conOrderId.trim()) { setConToast({ ok: false, msg: '⚠ Order ID required' }); return; }
+    setConSaving(true); setConToast(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const callerId = session?.user?.id ?? null;
+    const qty = parseFloat(conQtyLbs);
+    const { error } = await supabase.from('order_lot_consumption').insert({
+      order_id:     conOrderId.trim(),
+      lot_id:       lot.id,
+      product_id:   conProductId || null,
+      quantity_lbs: Number.isFinite(qty) ? qty : null,
+      notes:        conNotes.trim() || null,
+      recorded_by:  callerId,
+    });
+    setConSaving(false);
+    if (error) {
+      const dup = /duplicate key/i.test(error.message);
+      setConToast({ ok: false, msg: dup ? '⚠ This (order, lot, product) combo is already recorded.' : `⚠ ${error.message}` });
+      setTimeout(() => setConToast(null), 6000);
+      return;
+    }
+    setConToast({ ok: true, msg: '✓ Consumption recorded' });
+    setConOrderId(''); setConProductId(''); setConQtyLbs(''); setConNotes(''); setConPreview(null);
+    await load();
+    setTimeout(() => setConToast(null), 4000);
+  }
+
+  async function deleteConsumption(id: string) {
+    if (!confirm('Delete this consumption record? This is an audit log — only remove if it was recorded in error.')) return;
+    const { error } = await supabase.from('order_lot_consumption').delete().eq('id', id);
+    if (error) { setConToast({ ok: false, msg: `⚠ ${error.message}` }); setTimeout(() => setConToast(null), 6000); return; }
+    setConToast({ ok: true, msg: '🗑 Removed' });
+    await load();
+    setTimeout(() => setConToast(null), 4000);
+  }
 
   if (authed === null) return <div style={pg}>Loading…</div>;
   if (err) return <div style={pg}><div style={{ padding: 20, color: '#f87171' }}>⚠ {err} <Link href="/spinytails" style={{ color: '#f5c518' }}>← back</Link></div></div>;
@@ -391,6 +512,96 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
             ))}
           </Section>
         )}
+
+        {/* Sold to orders — closes the trace loop */}
+        <Section title="Sold to orders (consumption)" countLabel={`${consumptions.length}`}>
+          {consumptions.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', padding: '6px 0' }}>
+              No order consumption recorded yet. Add the first record below when a case ships against a specific customer order.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 6 }}>
+              {consumptions.map(c => (
+                <div key={c.id} style={row}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: '#fff', fontWeight: 700 }}>
+                      {c.order_customer_name ?? '(no customer name)'}
+                      {c.order_total != null && <span style={{ color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>· ${Number(c.order_total).toFixed(2)}</span>}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace', marginTop: 2 }}>
+                      order {c.order_id.slice(0, 8)}…
+                      {c.product_sku && <> · {c.product_sku}</>}
+                      {c.quantity_lbs != null && <> · {Number(c.quantity_lbs).toFixed(2)} lbs</>}
+                      {' · '}{new Date(c.recorded_at).toLocaleDateString()}
+                    </div>
+                    {c.notes && <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 2 }}>{c.notes}</div>}
+                  </div>
+                  <button onClick={() => deleteConsumption(c.id)}
+                    style={{ background: 'transparent', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, padding: '4px 8px', fontSize: 10, cursor: 'pointer' }}>
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Recorder form */}
+          <div style={{ marginTop: 12, padding: 10, background: '#060d1f', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 8 }}>
+            <div style={{ fontSize: 10, color: '#4ade80', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>+ Record a new consumption</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
+              <div>
+                <label style={lab}>Order ID (paste UUID or first 8 chars)</label>
+                <input type="text" value={conOrderId}
+                  onChange={ev => { setConOrderId(ev.target.value); setConPreview(null); }}
+                  onBlur={ev => previewOrder(ev.target.value)}
+                  placeholder="e.g. a1b2c3d4 or full UUID"
+                  style={{ background: '#0b1628', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', borderRadius: 6, padding: '6px 10px', fontSize: 12, width: '100%', fontFamily: 'monospace' }} />
+                {conPreview && (
+                  <div style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
+                    → {conPreview.customer_name ?? '(unknown customer)'}
+                    {conPreview.total != null && <> · ${conPreview.total.toFixed(2)}</>}
+                    {conPreview.created_at && <> · {new Date(conPreview.created_at).toLocaleDateString()}</>}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 6 }}>
+                <div>
+                  <label style={lab}>Product (optional)</label>
+                  <select value={conProductId} onChange={ev => setConProductId(ev.target.value)}
+                    style={{ background: '#0b1628', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', borderRadius: 6, padding: '6px 10px', fontSize: 12, width: '100%' }}>
+                    <option value="">— none —</option>
+                    {productCatalog.map(p => <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lab}>Qty (lbs)</label>
+                  <input type="number" step="0.001" min="0" value={conQtyLbs}
+                    onChange={ev => setConQtyLbs(ev.target.value)} placeholder="(optional)"
+                    style={{ background: '#0b1628', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', borderRadius: 6, padding: '6px 10px', fontSize: 12, width: '100%' }} />
+                </div>
+              </div>
+              <div>
+                <label style={lab}>Notes (optional)</label>
+                <input type="text" value={conNotes} onChange={ev => setConNotes(ev.target.value)}
+                  placeholder='e.g. "1 master carton at packout"'
+                  style={{ background: '#0b1628', color: '#fff', border: '1px solid rgba(245,197,24,0.25)', borderRadius: 6, padding: '6px 10px', fontSize: 12, width: '100%' }} />
+              </div>
+              {conToast && (
+                <div style={{ fontSize: 11, fontWeight: 700,
+                  background: conToast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                  color:      conToast.ok ? '#4ade80' : '#f87171',
+                  border:    `1px solid ${conToast.ok ? '#16a34a' : '#f87171'}`,
+                  borderRadius: 6, padding: '4px 8px' }}>
+                  {conToast.msg}
+                </div>
+              )}
+              <button onClick={saveConsumption} disabled={conSaving || !conOrderId.trim()}
+                style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: (conSaving || !conOrderId.trim()) ? 0.5 : 1, marginTop: 4 }}>
+                {conSaving ? 'Saving…' : '✓ Save consumption'}
+              </button>
+            </div>
+          </div>
+        </Section>
 
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginTop: 16 }}>
           Need a corrective action? Use the dashboard /spinytails (CAPA tracker coming in Phase 1B).
