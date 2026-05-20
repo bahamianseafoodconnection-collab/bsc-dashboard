@@ -58,6 +58,7 @@ const NAV_GROUPS = [
     items: [
       { icon: '💸', label: 'Expenses',          href: '/expenses' },
       { icon: '📋', label: 'Accounts Payable',  href: '/accounts-payable' },
+      { icon: '🧮', label: 'Pricing rules',     href: '/dashboard/pricing-rules' },
       { icon: '🧾', label: 'AR Aging (wholesale)', href: '/dashboard/ar-aging' },
       { icon: '📈', label: 'AR payment behavior',  href: '/dashboard/ar-aging/trends' },
       { icon: '💼', label: 'Payroll',           href: '/payroll' },
