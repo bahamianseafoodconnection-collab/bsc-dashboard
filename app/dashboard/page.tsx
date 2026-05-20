@@ -62,6 +62,7 @@ const NAV_GROUPS = [
       { icon: '🧾', label: 'AR Aging (wholesale)', href: '/dashboard/ar-aging' },
       { icon: '📈', label: 'AR payment behavior',  href: '/dashboard/ar-aging/trends' },
       { icon: '💼', label: 'Payroll',           href: '/payroll' },
+      { icon: '🤝', label: "Bill Casale 5% ledger", href: '/dashboard/bill-payout' },
       { icon: '👥', label: 'Customers',         href: '/customers' },
       { icon: '🪪', label: 'Staff',             href: '/staff' },
       { icon: '🔗', label: 'Partner Links',     href: '/partner-tokens' },

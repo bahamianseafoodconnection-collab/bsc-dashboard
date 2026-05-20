@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-20T23:26:05.977Z",
+  "generated_at": "2026-05-20T23:32:43.123Z",
   "stats": {
-    "pages": 129,
-    "api_routes": 48,
+    "pages": 130,
+    "api_routes": 49,
     "tables": 38,
     "migrations": 41,
     "business_rules": 13
@@ -127,6 +127,12 @@
       "file": "app/dashboard/ar-aging/trends/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/ar-aging/trends — per-customer payment behavior. Aggregates all account-credit orders (paid + unpaid) over a date window and shows each customer's payment habits: # invoices, $ billed, $ paid, current outstan…"
+    },
+    {
+      "url": "/dashboard/bill-payout",
+      "file": "app/dashboard/bill-payout/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/bill-payout Bill Casale's sacred 5% gross-profit share, broken out by month. orders.bill_casale_share is populated by the per-transaction allocation hook on every sale. This page sums it by month, shows lifet…"
     },
     {
       "url": "/dashboard/cashiers",
@@ -858,6 +864,14 @@
         "GET"
       ],
       "purpose": "/api/cron/schema-integrity Daily 6am AST. Runs bsc_admin_schema_overview() with the service-role key (which is permitted because the RPC's gate is \"founder/co_founder/ control_admin\"; we synthesize a verified call by us…"
+    },
+    {
+      "url": "/api/cron/vendor-weekly-statements",
+      "file": "app/api/cron/vendor-weekly-statements/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "/api/cron/vendor-weekly-statements Monday 8am AST (12 UTC). For each vendor with orders in the previous Mon–Sun window, send a per-vendor email statement with: every order in the window, total revenue, total commission,…"
     },
     {
       "url": "/api/customers/upsert",
