@@ -1614,9 +1614,12 @@ async function explodeProductTool(
     }
 
     // 3. INSERT product_pricing rows per channel.
+    //    Note: lib/pricing uses 'online_retail' as the markup-channel name
+    //    but product_pricing.channel stores 'online_market' (canonical DB
+    //    value queried by /market + /checkout). Map at write time.
     const pricingRows = p.channel_prices.map(cp => ({
       product_id:         childId,
-      channel:            cp.channel,
+      channel:            cp.channel === 'online_retail' ? 'online_market' : cp.channel,
       pricing_mode:       'manual_override',
       margin_multiplier:  1.0,
       vat_multiplier:     1.0,

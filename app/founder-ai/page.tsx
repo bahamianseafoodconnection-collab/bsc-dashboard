@@ -345,6 +345,9 @@ export default function FounderAIPage() {
           <a href="/founder-ai/flyer-maker" style={{ fontSize: '11px', color: '#f5c518', textDecoration: 'none', borderBottom: '1px dashed rgba(245,197,24,0.4)' }}>
             🎨 Open Flyer Maker
           </a>
+          <a href="/founder-ai/products/intake" style={{ fontSize: '11px', color: '#60a5fa', textDecoration: 'none', borderBottom: '1px dashed rgba(96,165,250,0.4)' }}>
+            📷 New product intake
+          </a>
           <a href="/founder-ai/products/pending" style={{ fontSize: '11px', color: '#4ade80', textDecoration: 'none', borderBottom: '1px dashed rgba(74,222,128,0.4)' }}>
             🧪 Pending products review
           </a>

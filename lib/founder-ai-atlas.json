@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-05-20T20:25:16.917Z",
+  "generated_at": "2026-05-20T20:44:38.894Z",
   "stats": {
-    "pages": 125,
+    "pages": 126,
     "api_routes": 45,
     "tables": 35,
     "migrations": 36,
@@ -235,6 +235,12 @@
       "file": "app/founder-ai/flyer-maker/page.tsx",
       "category": "founder-ai",
       "purpose": "BSC Flyer Maker ───────────── Two-panel UI for composing ChatGPT prompts that produce BSC-branded marketing flyers, then optionally blasting an email announcement to every opted-in customer. LEFT — Brand reference: stan…"
+    },
+    {
+      "url": "/founder-ai/products/intake",
+      "file": "app/founder-ai/products/intake/page.tsx",
+      "category": "founder-ai",
+      "purpose": "/founder-ai/products/intake Photo + form product intake. Drop or snap a product photo, type the name + description + cost + category, hit submit, and the product lands in the pending queue at /founder-ai/products/pendin…"
     },
     {
       "url": "/founder-ai/products/pending",
