@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState, use as usePromise } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { Shell, StatusPill } from '@/components/AuditViewerShell';
 
 // Build our own browser client here — the audit viewer is the only
 // route that's intentionally accessed without a user session. We don't
@@ -187,56 +188,12 @@ export default function AuditLandingPage({ params }: { params: Promise<{ token: 
   );
 }
 
-export function StatusPill({ status }: { status: string }) {
-  const colors: Record<string, [string, string]> = {
-    received:             ['#fef3c7', '#92400e'],
-    in_receiving_freezer: ['#dbeafe', '#1e40af'],
-    thawing:              ['#fef3c7', '#92400e'],
-    processing:           ['#ede9fe', '#5b21b6'],
-    blast_freezing:       ['#dbeafe', '#1e40af'],
-    mastered:             ['#dcfce7', '#166534'],
-    in_distribution:      ['#dcfce7', '#166534'],
-    shipped:              ['#bbf7d0', '#14532d'],
-    rejected:             ['#fee2e2', '#991b1b'],
-    recalled:             ['#fee2e2', '#991b1b'],
-  };
-  const [bg, fg] = colors[status] ?? ['#e5e7eb', '#374151'];
-  return <span style={{ background: bg, color: fg, padding: '2px 10px', borderRadius: 999, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>{status.replace(/_/g, ' ')}</span>;
-}
-
 function NavTile({ icon, label, hint }: { icon: string; label: string; hint: string }) {
   return (
     <div style={{ background: '#fff', borderRadius: 12, padding: 14, color: '#1a2e5a', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
       <div style={{ fontSize: 22 }}>{icon}</div>
       <div style={{ fontWeight: 800, fontSize: 14, marginTop: 4 }}>{label}</div>
       <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{hint}</div>
-    </div>
-  );
-}
-
-export function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ minHeight: '100vh', background: '#e2e8f0', fontFamily: "'DM Sans', system-ui, sans-serif", color: '#1a2e5a' }}>
-      <header style={{ background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '14px 16px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/bsc-marketplace-logo.png" alt="BSC Market Place" style={{ height: 56, width: 'auto', display: 'block' }} />
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, color: '#a16207', textTransform: 'uppercase' }}>
-                Spiny Tails Processing Co.
-              </div>
-              <div style={{ fontSize: 12, color: '#475569' }}>HACCP · SSOP · Traceability</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
-            🔐 Inspector view
-          </div>
-        </div>
-      </header>
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16 }}>
-        {children}
-      </main>
     </div>
   );
 }

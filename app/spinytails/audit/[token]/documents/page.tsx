@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState, use as usePromise } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
-import { Shell } from '../page';
+import { Shell } from '@/components/AuditViewerShell';
 import SimpleMarkdown from '@/components/SimpleMarkdown';
 
 const supabase = createBrowserClient(

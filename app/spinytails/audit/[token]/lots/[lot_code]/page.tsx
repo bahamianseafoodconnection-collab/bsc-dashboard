@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState, use as usePromise } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
-import { Shell, StatusPill } from '../../page';
+import { Shell, StatusPill } from '@/components/AuditViewerShell';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
