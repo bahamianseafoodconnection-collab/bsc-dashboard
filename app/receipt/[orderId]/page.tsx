@@ -237,7 +237,28 @@ export default function ReceiptPage() {
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', fontSize: 12, color: '#666', marginTop: 18, borderTop: '1px solid #eee', paddingTop: 12, lineHeight: 1.5 }}>
+        {/* Trace QR — customer self-verification of provenance */}
+        <div style={{
+          marginTop: 18, borderTop: '1px solid #eee', paddingTop: 12,
+          display: 'flex', gap: 12, alignItems: 'center',
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=2&data=${encodeURIComponent('https://bscbahamas.com/trace')}`}
+            alt="Scan to trace your seafood"
+            style={{ width: 84, height: 84, borderRadius: 4, border: '1px solid #e7e7e7', background: '#fff', flexShrink: 0 }}
+          />
+          <div style={{ fontSize: 11, color: '#1a2e5a', lineHeight: 1.45 }}>
+            <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 12, color: '#1a2e5a', letterSpacing: 0.5 }}>
+              🧾 Trace your seafood
+            </p>
+            <p style={{ margin: 0, color: '#475569' }}>
+              Scan to verify origin + HACCP records. Look for the <strong>lot code</strong> printed on BSC-processed packages and enter it at <strong>bscbahamas.com/trace</strong>.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', fontSize: 12, color: '#666', marginTop: 14, borderTop: '1px dashed #ddd', paddingTop: 10, lineHeight: 1.5 }}>
           Thank you for shopping with BSC Market Place.<br />
           Questions? WhatsApp +1 (242) 361-3474 or call +1 (242) 558-4495.
         </div>
