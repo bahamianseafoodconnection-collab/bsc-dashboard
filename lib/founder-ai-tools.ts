@@ -130,6 +130,8 @@ export const TOOLS = [
         },
         cost_per_unit: { type: 'number', description: 'Optional. Product cost. Used for cost reporting + per-transaction allocation math.' },
         stock_lbs:     { type: 'number', description: 'Optional starting inventory in lbs.' },
+        image_url:     { type: 'string', description: 'Optional. Public URL of the product photo. When the founder uploads a photo in chat, the persisted URL appears in a "📷 Uploaded image" text block in the user turn — pass that URL here so /market displays the photo on the product card. Must be a fully-qualified https:// URL.' },
+        description:   { type: 'string', description: 'Optional. Short customer-facing description shown on /market and product pages. Extract from any photo you were shown (label text, ingredients, weight, brand) when relevant.' },
         confirmed:     { type: 'boolean', description: 'MUST be true to perform the insert. False (or omitted) returns a preview only.' },
       },
       required: ['name', 'sku', 'category', 'unit_of_measure', 'pricing'],
@@ -336,6 +338,8 @@ interface AddProductInput {
   pricing?: unknown;
   cost_per_unit?: unknown;
   stock_lbs?: unknown;
+  image_url?: unknown;
+  description?: unknown;
   confirmed?: unknown;
 }
 interface SetProductChannelsInput {
@@ -621,6 +625,8 @@ async function addProductTool(
   const primary_supplier_id = typeof input.primary_supplier_id === 'string' ? input.primary_supplier_id : null;
   const stock_lbs = typeof input.stock_lbs === 'number' ? input.stock_lbs : null;
   const cost_per_unit = typeof input.cost_per_unit === 'number' ? input.cost_per_unit : null;
+  const image_url = typeof input.image_url === 'string' && /^https?:\/\//.test(input.image_url) ? input.image_url : null;
+  const description = typeof input.description === 'string' ? input.description.trim() : null;
   const confirmed = input.confirmed === true;
 
   if (!name || !sku || !category || !unit_of_measure) {
@@ -658,7 +664,7 @@ async function addProductTool(
     return JSON.stringify({
       preview: true,
       will_create: {
-        product: { sku, name, category, unit_of_measure, unit_type, is_bsc_processed, primary_supplier_id, status: 'active', stock_lbs, ...channelFlags },
+        product: { sku, name, description, category, unit_of_measure, unit_type, is_bsc_processed, primary_supplier_id, status: 'active', stock_lbs, image_url, ...channelFlags },
         pricing_rows: pricing.map((p) => ({ channel: p.channel, manual_unit_price: p.price, mode: 'manual_override' })),
         cost_row: cost_per_unit !== null ? { cost_per_unit, unit_of_measure, supplier_id: primary_supplier_id } : null,
       },
@@ -673,6 +679,7 @@ async function addProductTool(
       .insert({
         sku,
         name,
+        description,
         category,
         unit_of_measure,
         unit_type,
@@ -680,6 +687,7 @@ async function addProductTool(
         primary_supplier_id,
         status: 'active',
         stock_lbs,
+        image_url,
         ...channelFlags,
         created_by: callerId,
       })

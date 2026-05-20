@@ -190,8 +190,26 @@ READ tools (anyone signed in):
 - customer_history(...)  → deep-dive on one customer. Look up by customer_id OR phone OR email (at least one required). Returns lifetime stats, recent orders (default 30, max 100), channel mix, top 15 items by frequency. Use for "what does Sarah usually buy", "pull everything on 242-555-0100".
 - web_search             → current market data, regulations, species pricing — anything that needs the live internet.
 
+PRODUCT PHOTOS — VISION + AUTO-PERSIST:
+When the founder uploads a photo in the chat (camera, file, or paste), TWO things land in the user turn together:
+  1. The actual image (you see it directly via vision — read every label, price tag, ingredient list, weight, brand, country of origin).
+  2. A "📷 Uploaded image (persisted public URL …)" text block listing the public URL(s) where the photo lives in BSC's site-images bucket.
+
+When the founder wants to add a product from a photo:
+  • EXTRACT everything you can from the image: product name, brand, size/weight, ingredients, allergens, country of origin, any visible price or barcode. Read the label out loud.
+  • SUMMARIZE what you see in plain English so the founder can confirm.
+  • ASK the founder for what the photo doesn't tell you:
+      – cost per unit (BSD)
+      – which channels to sell on (nassau_pos / andros_pos / online_market / local_wholesale — they specify; you don't assume)
+      – any custom SKU or let you auto-generate one
+  • PREVIEW the add_product call with confirmed=false. ALWAYS include image_url = the URL from the "📷 Uploaded image" block — without it /market shows a placeholder instead of the actual photo. Include a short customer-facing description derived from the label.
+  • Wait for the founder's explicit yes/confirm.
+  • THEN call add_product with confirmed=true. Report back the product_id + the live channels.
+
+If the founder says "add this for sale" without specifying channels, ask once: "Which channels — Nassau POS, Andros POS, Online Market, Local Wholesale?" Do not assume.
+
 WRITE tools (founder + co_founder ONLY — every write goes through ai_writes audit):
-- add_product(...)            → CREATE a new product + its pricing rows + optional cost row.
+- add_product(...)            → CREATE a new product + its pricing rows + optional cost row. When the founder uploads a photo, ALWAYS pass image_url (from the 📷 block) + a description extracted from the label.
 - set_product_channels(...)   → toggle sell_nassau / sell_andros / sell_online / sell_wholesale on an existing product by sku.
 - send_email_blast(...)       → send an email campaign to opted-in customers via Resend. Audience options: all_opted_in, nassau_pos_opted_in, newsletter_opted_in, signup_opted_in. Always preview first — read back the subject, headline, recipient count, and a snippet of the rendered email before asking the founder to confirm. The body_html should be 2–4 short paragraphs in basic HTML (<p>, <a>, <strong>); the tool wraps it in the BSC layout + CAN-SPAM footer automatically.
 - list_flyers()               → list every marketplace flyer with its live/scheduled/inactive state. Read-only. ALWAYS call this before create_flyer so you don't duplicate, and before set_flyer_active so you know the flyer_id.
@@ -385,6 +403,38 @@ export async function POST(req: NextRequest) {
     // Build the latest user turn. If images were uploaded, use the
     // array-content form (text + image blocks). Otherwise stay on the
     // simpler string form for compatibility with cached history.
+    //
+    // Photo persistence: every chat-uploaded image is also pushed to the
+    // site-images bucket so it becomes addressable for downstream tools
+    // (e.g. add_product can attach it to the new products.image_url).
+    // The persisted URLs are injected as a text block in the same user
+    // turn so Claude both SEES the photo (vision) and KNOWS the URL
+    // string to pass into tool calls.
+    const persistedUrls: string[] = [];
+    if (inputImages.length > 0) {
+      const monthBucket = new Date().toISOString().slice(0, 7); // YYYY-MM
+      for (let i = 0; i < inputImages.length; i++) {
+        const img = inputImages[i];
+        try {
+          const ext = (img.media_type.split('/')[1] || 'jpg').toLowerCase().replace('jpeg', 'jpg');
+          const sessionPart = sessionId ? String(sessionId).slice(0, 8) : (callerId ? callerId.slice(0, 8) : 'anon');
+          const path = `founder-ai-chat/${monthBucket}/${sessionPart}-${Date.now()}-${i}.${ext}`;
+          const bytes = Buffer.from(img.data, 'base64');
+          const { error: upErr } = await supabase.storage
+            .from('site-images')
+            .upload(path, bytes, { upsert: false, contentType: img.media_type });
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('site-images').getPublicUrl(path);
+            persistedUrls.push(urlData.publicUrl);
+          } else {
+            console.warn('founder-ai chat image upload failed:', upErr.message);
+          }
+        } catch (e) {
+          console.warn('founder-ai chat image persist exception:', e instanceof Error ? e.message : e);
+        }
+      }
+    }
+
     const userTurn: AnthropicMessage = inputImages.length > 0
       ? {
           role: 'user',
@@ -394,6 +444,12 @@ export async function POST(req: NextRequest) {
               type:   'image',
               source: { type: 'base64', media_type: img.media_type, data: img.data },
             })),
+            ...(persistedUrls.length > 0
+              ? [{
+                  type: 'text' as const,
+                  text: `📷 Uploaded image${persistedUrls.length === 1 ? '' : 's'} (persisted public URL${persistedUrls.length === 1 ? '' : 's'} — pass into add_product image_url when creating a product from this photo):\n${persistedUrls.map((u, i) => `${i + 1}. ${u}`).join('\n')}`,
+                }]
+              : []),
           ],
         }
       : { role: 'user', content: message };
