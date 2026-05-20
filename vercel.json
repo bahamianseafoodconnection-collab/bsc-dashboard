@@ -12,6 +12,14 @@
     {
       "path": "/api/spinytails/ssop-reminder",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cashiers/weekly-digest",
+      "schedule": "0 11 * * 1"
+    },
+    {
+      "path": "/api/health-check",
+      "schedule": "0 10 * * *"
     }
   ]
 }

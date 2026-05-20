@@ -345,6 +345,9 @@ export default function FounderAIPage() {
           <a href="/founder-ai/flyer-maker" style={{ fontSize: '11px', color: '#f5c518', textDecoration: 'none', borderBottom: '1px dashed rgba(245,197,24,0.4)' }}>
             🎨 Open Flyer Maker
           </a>
+          <a href="/founder-ai/products/pending" style={{ fontSize: '11px', color: '#4ade80', textDecoration: 'none', borderBottom: '1px dashed rgba(74,222,128,0.4)' }}>
+            🧪 Pending products review
+          </a>
         </div>
         <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: '8px' }}>
           BSC Global Seafood Intelligence · Nassau, Bahamas · bscbahamas.com

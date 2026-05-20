@@ -26,6 +26,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { healthCheck } from './health-check';
 import { buildBlastHtml, sendBatch } from './email';
+import { calculatePrice, type PricingChannel, type SaleUnit } from './pricing';
 
 const REPO_ROOT = process.cwd();
 const ALLOWED_READ_PREFIXES = [
@@ -262,6 +263,40 @@ export const TOOLS = [
     },
   },
   {
+    name: 'explode_product',
+    description:
+      'EXPLODE a wholesale/case parent product into one or more retail-portion child products. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (every child SKU, derived cost, and computed sell prices per retail channel); the founder must explicitly say yes; only then call again with confirmed=true. Children are inserted in PENDING state — all sell_* flags off — so they are NOT live until the founder visits /founder-ai/products/pending and clicks ✓ Approve on each one. ALWAYS tell the founder to go to /founder-ai/products/pending after a successful explode. Use this tool when the founder says things like "take SKU SYSCO-PORK-001 and sell it as 5 × 2lb bags", "make the 40lb halibut available as 1lb portions", "diversify the 10lb pasta case into 26 × 6oz retail portions". Each child product is linked to the parent via parent_product_id; child cost_per_unit = parent_cost / count_per_parent. Sell prices flow through calculatePrice() — markups per channel (nassau_pos 40% · andros_pos 40% · online_retail 35%) plus 10% VAT — so the founder never hand-calculates.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        parent_sku: { type: 'string', description: 'SKU of the wholesale/case parent product (e.g. "BWA-118-3900" or "SYSCO-PORK-CASE-001"). Must already exist; must NOT itself be a child.' },
+        divisions: {
+          type: 'array',
+          description: 'One entry per retail variant to create. Example: [{"portion_size":2,"portion_unit":"lb","count_per_parent":5,"sale_unit":"bag"}, {"portion_size":6,"portion_unit":"oz","count_per_parent":26,"sale_unit":"portion"}].',
+          items: {
+            type: 'object',
+            properties: {
+              portion_size:     { type: 'number', description: 'Numeric size of one retail unit. e.g. 2 (for 2lb) or 6 (for 6oz).' },
+              portion_unit:     { type: 'string', description: 'Unit the portion_size is measured in: "lb" | "oz" | "each".' },
+              count_per_parent: { type: 'number', description: 'How many retail units come out of one parent. child_cost = parent_cost / this number.' },
+              sale_unit:        { type: 'string', description: 'How the retail unit is sold. "lb" | "bag" | "portion" | "pack" | "each". Drives calculatePrice() and POS display.' },
+              sku_suffix:       { type: 'string', description: 'Optional override for the child SKU suffix. Default is "<portion_size><PORTION_UNIT>" e.g. "2LB".' },
+              name_suffix:      { type: 'string', description: 'Optional override for the child product name suffix. Default is "<portion_size> <portion_unit> <sale_unit>" e.g. "2 lb bag".' },
+            },
+            required: ['portion_size', 'portion_unit', 'count_per_parent', 'sale_unit'],
+          },
+        },
+        retail_channels: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Which channels to sell the child products on. Valid: "nassau_pos","andros_pos","online_retail". Default: all three (retail set). Wholesale channels are intentionally excluded — parent already handles wholesale.',
+        },
+        confirmed: { type: 'boolean', description: 'MUST be true to insert. False (or omitted) returns a preview only.' },
+      },
+      required: ['parent_sku', 'divisions'],
+    },
+  },
+  {
     name: 'customer_history',
     description:
       'Full deep-dive on one customer: lifetime stats + recent orders + top items + first/last seen + consent status. Use when the founder asks "what does Sarah usually buy", "show me history for 242-555-0100", or "pull everything on customer X". Read-only. Look up by customer_id (UUID) OR phone OR email — at least one required. Returns up to 30 most-recent orders + the top 15 items by frequency.',
@@ -337,6 +372,20 @@ interface CustomerHistoryInput {
   phone?:       unknown;
   email?:       unknown;
   order_limit?: unknown;
+}
+interface ExplodeDivisionInput {
+  portion_size?:     unknown;
+  portion_unit?:     unknown;
+  count_per_parent?: unknown;
+  sale_unit?:        unknown;
+  sku_suffix?:       unknown;
+  name_suffix?:      unknown;
+}
+interface ExplodeProductInput {
+  parent_sku?:      unknown;
+  divisions?:       unknown;
+  retail_channels?: unknown;
+  confirmed?:       unknown;
 }
 interface SendEmailBlastInput {
   subject?:   unknown;
@@ -441,6 +490,7 @@ export async function dispatchTool(
       case 'list_customers':       return await listCustomersTool(input as ListCustomersInput, admin);
       case 'segment_customers':    return await segmentCustomersTool(input as SegmentCustomersInput, admin);
       case 'customer_history':     return await customerHistoryTool(input as CustomerHistoryInput, admin);
+      case 'explode_product':      return await explodeProductTool(input as ExplodeProductInput, admin, callerId);
       default:                     return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
   } catch (e) {
@@ -1320,4 +1370,290 @@ async function customerHistoryTool(input: CustomerHistoryInput, admin: SupabaseC
     channel_mix: byChannel,
     top_items: topItems,
   });
+}
+
+// ── EXPLODE PRODUCT ──────────────────────────────────────────────────
+//
+// Takes a wholesale/case parent product and creates N retail child
+// products derived from how the parent divides — e.g. a 10lb case →
+// 5 × 2lb bags, or a 40lb item → 26 × 6oz portions. Two-step preview /
+// confirm. Children get cost_per_unit = parent_cost / count_per_parent
+// and sell prices computed via lib/pricing.ts calculatePrice() so the
+// founder never hand-calculates retail markups.
+
+const VALID_RETAIL_CHANNELS = new Set<PricingChannel>(['nassau_pos', 'andros_pos', 'online_retail']);
+const VALID_PORTION_UNITS   = new Set(['lb', 'oz', 'each']);
+const VALID_SALE_UNITS      = new Set<SaleUnit>(['lb', 'bag', 'portion', 'each']);
+
+interface DivisionSpec {
+  portion_size:     number;
+  portion_unit:     string;
+  count_per_parent: number;
+  sale_unit:        SaleUnit;
+  sku_suffix?:      string;
+  name_suffix?:     string;
+}
+
+async function explodeProductTool(
+  input: ExplodeProductInput,
+  admin: SupabaseClient,
+  callerId: string | null,
+): Promise<string> {
+  const perms = await checkWritePerms(admin, callerId);
+  if (!perms.ok) {
+    await logWrite(admin, 'explode_product', callerId, input, null, 'denied', perms.error ?? 'denied');
+    return JSON.stringify({ error: perms.error });
+  }
+
+  const parentSku = typeof input.parent_sku === 'string' ? input.parent_sku.trim() : '';
+  const confirmed = input.confirmed === true;
+  if (!parentSku) {
+    const err = 'parent_sku is required.';
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+
+  // Validate + normalize divisions.
+  const raw = Array.isArray(input.divisions) ? input.divisions : [];
+  const divisions: DivisionSpec[] = [];
+  for (const d of raw as unknown[]) {
+    if (!d || typeof d !== 'object') continue;
+    const obj = d as ExplodeDivisionInput;
+    const size  = typeof obj.portion_size === 'number' ? obj.portion_size : NaN;
+    const unit  = typeof obj.portion_unit === 'string' ? obj.portion_unit.toLowerCase().trim() : '';
+    const count = typeof obj.count_per_parent === 'number' ? obj.count_per_parent : NaN;
+    const sale  = typeof obj.sale_unit === 'string' ? obj.sale_unit.toLowerCase().trim() as SaleUnit : 'each';
+    if (!Number.isFinite(size) || size <= 0)               continue;
+    if (!VALID_PORTION_UNITS.has(unit))                    continue;
+    if (!Number.isFinite(count) || count <= 0 || !Number.isInteger(count)) continue;
+    if (!VALID_SALE_UNITS.has(sale))                       continue;
+    divisions.push({
+      portion_size:     size,
+      portion_unit:     unit,
+      count_per_parent: count,
+      sale_unit:        sale,
+      sku_suffix:       typeof obj.sku_suffix  === 'string' ? obj.sku_suffix.trim()  : undefined,
+      name_suffix:      typeof obj.name_suffix === 'string' ? obj.name_suffix.trim() : undefined,
+    });
+  }
+  if (divisions.length === 0) {
+    const err = 'At least one division required. Each division needs: portion_size>0, portion_unit (lb|oz|each), count_per_parent (positive integer), sale_unit (lb|bag|portion|each).';
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+
+  // Channels — default to the retail set.
+  const channelInput = Array.isArray(input.retail_channels) ? input.retail_channels : null;
+  const channels: PricingChannel[] = channelInput
+    ? channelInput.filter((c): c is PricingChannel => typeof c === 'string' && VALID_RETAIL_CHANNELS.has(c as PricingChannel))
+    : ['nassau_pos', 'andros_pos', 'online_retail'];
+  if (channels.length === 0) {
+    const err = 'No valid retail channels. Pick from: nassau_pos, andros_pos, online_retail.';
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+
+  // Look up parent product.
+  const { data: parent, error: parentErr } = await admin
+    .from('products')
+    .select('id, sku, name, category, primary_supplier_id, parent_product_id, unit_of_measure')
+    .eq('sku', parentSku)
+    .maybeSingle();
+  if (parentErr || !parent) {
+    const err = `Parent SKU "${parentSku}" not found in products.`;
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+  if (parent.parent_product_id) {
+    const err = `SKU "${parentSku}" is itself a child product (parent_product_id is set). Pick a wholesale/case parent.`;
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+
+  // Parent's current cost.
+  const { data: parentCost } = await admin
+    .from('product_costs')
+    .select('cost_per_unit, unit_of_measure, supplier_id')
+    .eq('product_id', parent.id)
+    .eq('is_current', true)
+    .maybeSingle();
+  if (!parentCost || parentCost.cost_per_unit == null) {
+    const err = `Parent "${parentSku}" has no current product_costs row. Add a cost first, then explode.`;
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+  const parentCostPerUnit = Number(parentCost.cost_per_unit);
+
+  // Compute every child SKU, cost, and per-channel sell prices.
+  const previews = divisions.map(d => {
+    const suffix    = d.sku_suffix  ?? `${d.portion_size}${d.portion_unit.toUpperCase()}`;
+    const childSku  = `${parentSku}-${suffix}`;
+    const nameSfx   = d.name_suffix ?? `${d.portion_size} ${d.portion_unit} ${d.sale_unit}`;
+    const childName = `${parent.name} · ${nameSfx}`;
+    const childCost = Math.round((parentCostPerUnit / d.count_per_parent) * 10000) / 10000;
+    const prices    = channels.map(ch => {
+      const r = calculatePrice({ cost: childCost, channel: ch, quantity: 1, unit: d.sale_unit });
+      return {
+        channel:      ch,
+        markup_pct:   r.markupPct,
+        unit_price:   Math.round(r.finalPrice * 100) / 100,
+        margin_dollars: Math.round(r.marginDollars * 100) / 100,
+      };
+    });
+    return {
+      child_sku:           childSku,
+      child_name:          childName,
+      portion_size:        d.portion_size,
+      portion_unit:        d.portion_unit,
+      portions_per_parent: d.count_per_parent,
+      sale_unit:           d.sale_unit,
+      child_cost_per_unit: childCost,
+      channel_prices:      prices,
+    };
+  });
+
+  // Detect any child SKUs that would collide with existing products.
+  const childSkus = previews.map(p => p.child_sku);
+  const { data: existing } = await admin
+    .from('products')
+    .select('sku')
+    .in('sku', childSkus);
+  const existingSet = new Set((existing ?? []).map((r: { sku: string }) => r.sku));
+  const collisions  = childSkus.filter(s => existingSet.has(s));
+
+  // Preview path.
+  if (!confirmed) {
+    return JSON.stringify({
+      preview: true,
+      parent: {
+        sku:                parentSku,
+        name:               parent.name,
+        category:           parent.category,
+        cost_per_unit:      parentCostPerUnit,
+        unit_of_measure:    parentCost.unit_of_measure ?? parent.unit_of_measure,
+        primary_supplier_id: parent.primary_supplier_id,
+      },
+      channels,
+      children: previews,
+      collisions: collisions.length > 0 ? collisions : undefined,
+      next_step: collisions.length > 0
+        ? `One or more child SKUs already exist: ${collisions.join(', ')}. Resolve before retrying (use sku_suffix to differentiate).`
+        : 'Show the founder this preview. If they confirm, call explode_product again with the same arguments plus confirmed=true.',
+    });
+  }
+
+  if (collisions.length > 0) {
+    const err = `Refusing to insert — child SKU collision(s): ${collisions.join(', ')}.`;
+    await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: err });
+  }
+
+  // Commit path.
+  const created: Array<{ sku: string; name: string; id: string }> = [];
+  const nowIso = new Date().toISOString();
+
+  for (const p of previews) {
+    const division = divisions.find(d =>
+      `${parentSku}-${d.sku_suffix ?? `${d.portion_size}${d.portion_unit.toUpperCase()}`}` === p.child_sku,
+    );
+    if (!division) continue;
+
+    // 1. INSERT product (child) in PENDING state — all sell_* flags off
+    //    until founder reviews + approves at /founder-ai/products/pending.
+    //    The intended channels are still captured in the product_pricing
+    //    rows below (one row per channel with the computed price), so the
+    //    approval UI can derive which channel flags to flip on.
+    const { data: childRow, error: prodErr } = await admin
+      .from('products')
+      .insert({
+        sku:                 p.child_sku,
+        name:                p.child_name,
+        category:            parent.category,
+        unit_of_measure:     division.sale_unit,
+        unit_type:           division.sale_unit === 'lb' ? 'lb' : null,
+        is_bsc_processed:    false,
+        primary_supplier_id: parent.primary_supplier_id,
+        status:              'active',
+        sell_nassau:         false,
+        sell_andros:         false,
+        sell_online:         false,
+        sell_wholesale:      false,
+        parent_product_id:   parent.id,
+        portion_size:        p.portion_size,
+        portion_unit:        p.portion_unit,
+        portions_per_parent: p.portions_per_parent,
+        created_by:          callerId,
+      })
+      .select('id, sku, name')
+      .single();
+    if (prodErr || !childRow) {
+      const err = `Failed to insert child SKU ${p.child_sku}: ${prodErr?.message ?? 'no row'}. Aborting (already created: ${created.map(c => c.sku).join(', ') || 'none'}).`;
+      await logWrite(admin, 'explode_product', callerId, input, { created }, 'error', err);
+      return JSON.stringify({ error: err, partial_created: created });
+    }
+    const childId = childRow.id as string;
+
+    // 2. INSERT product_costs (immutable; trigger expires nothing since
+    //    this is the first cost row for the new product).
+    const { error: costErr } = await admin.from('product_costs').insert({
+      product_id:      childId,
+      supplier_id:     parentCost.supplier_id ?? parent.primary_supplier_id,
+      cost_type:       'opening_balance',
+      cost_per_unit:   p.child_cost_per_unit,
+      unit_of_measure: division.sale_unit,
+      shipping_per_lb: 0,
+      customs_duty_pct: 0,
+      vat_levy_pct:    0,
+      processing_fee:  0,
+      effective_from:  nowIso,
+      is_current:      true,
+      recorded_by:     callerId,
+    });
+    if (costErr) {
+      console.warn(`product_costs insert failed for ${p.child_sku}:`, costErr.message);
+    }
+
+    // 3. INSERT product_pricing rows per channel.
+    const pricingRows = p.channel_prices.map(cp => ({
+      product_id:         childId,
+      channel:            cp.channel,
+      pricing_mode:       'manual_override',
+      margin_multiplier:  1.0,
+      vat_multiplier:     1.0,
+      manual_unit_price:  cp.unit_price,
+      shipping_per_lb:    0,
+      customs_duty_pct:   0,
+      vat_levy_pct:       0,
+      per_transaction_fee: 0,
+      service_fee_pct:    0,
+      effective_from:     nowIso,
+      is_current:         true,
+      is_active:          true,
+      recorded_by:        callerId,
+    }));
+    const { error: priceErr } = await admin.from('product_pricing').insert(pricingRows);
+    if (priceErr) {
+      // Roll back the child product so we don't leave a costed-but-unpriced row.
+      await admin.from('products').delete().eq('id', childId);
+      const err = `product_pricing insert failed for ${p.child_sku}: ${priceErr.message} (rolled back child).`;
+      await logWrite(admin, 'explode_product', callerId, input, { created }, 'error', err);
+      return JSON.stringify({ error: err, partial_created: created });
+    }
+
+    created.push({ sku: p.child_sku, name: p.child_name, id: childId });
+  }
+
+  const result = {
+    ok: true,
+    parent_sku: parentSku,
+    parent_cost_per_unit: parentCostPerUnit,
+    channels,
+    children_created: created.length,
+    children: created,
+    pending_review: true,
+    review_url: '/founder-ai/products/pending',
+    next_step: `${created.length} child product(s) created in PENDING state (all sell_* flags off). The founder must visit /founder-ai/products/pending to edit + approve before any are live for sale. Tell the founder this.`,
+  };
+  await logWrite(admin, 'explode_product', callerId, input, result, 'success', null);
+  return JSON.stringify(result);
 }

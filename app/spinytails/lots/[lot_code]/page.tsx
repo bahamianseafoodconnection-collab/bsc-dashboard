@@ -188,6 +188,11 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
                   style={{ background: 'rgba(34,211,238,0.12)', color: '#22d3ee', border: '1px solid #22d3ee', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textDecoration: 'none' }}>
                   🧼 All SSOPs
                 </Link>
+                <Link href={`/spinytails/lots/${encodeURIComponent(lot.lot_code)}/stickers`}
+                  style={{ background: 'rgba(245,197,24,0.12)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textDecoration: 'none' }}
+                  title="Print Avery 5163 trace QR stickers — 10 per sheet, one per carton">
+                  🏷 Print trace stickers
+                </Link>
               </div>
             );
           })()}

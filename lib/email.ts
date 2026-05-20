@@ -70,30 +70,48 @@ export function buildBlastHtml(opts: { headline: string; body_html: string; cust
 </body></html>`;
 }
 
+export interface EmailAttachment {
+  filename:     string;
+  /** Base64-encoded file content (no data: prefix). */
+  content:      string;
+  /** MIME type, e.g. 'text/csv', 'application/pdf'. Optional — Resend infers from filename when omitted. */
+  content_type?: string;
+}
+
 export interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
   from?: string;
+  attachments?: EmailAttachment[];
 }
 
 export async function sendEmail(p: SendEmailParams): Promise<{ id?: string; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { error: 'RESEND_API_KEY missing in environment' };
 
+  const body: Record<string, unknown> = {
+    from:    p.from || defaultFrom(),
+    to:      [p.to],
+    subject: p.subject,
+    html:    p.html,
+  };
+  if (p.attachments && p.attachments.length > 0) {
+    body.attachments = p.attachments.map(a => ({
+      filename:     a.filename,
+      content:      a.content,
+      content_type: a.content_type,
+    }));
+  }
+
   const res = await fetch(RESEND_EMAILS, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from:    p.from || defaultFrom(),
-      to:      [p.to],
-      subject: p.subject,
-      html:    p.html,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.text();
-    return { error: `Resend ${res.status}: ${body}` };
+    const errBody = await res.text();
+    return { error: `Resend ${res.status}: ${errBody}` };
   }
   const data = await res.json();
   return { id: data?.id };

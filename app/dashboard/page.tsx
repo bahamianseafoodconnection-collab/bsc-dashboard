@@ -80,12 +80,15 @@ const NAV_GROUPS = [
       { icon: '🛒', label: 'Public Market',     href: '/market' },
       { icon: '🖼️', label: 'Product Images',   href: '/admin/images' },
       { icon: '🏷️', label: 'Products',         href: '/products' },
+      { icon: '🧪', label: 'Pending products (AI)', href: '/founder-ai/products/pending' },
     ],
   },
   {
     label: 'AI & Insights',
     items: [
       { icon: '🤖', label: 'Founder AI',        href: '#ai' },
+      { icon: '🧪', label: 'Pending products review', href: '/founder-ai/products/pending' },
+      { icon: '🩺', label: 'Operational health',     href: '/dashboard/health' },
       { icon: '📚', label: 'Dashboard Guide',   href: '/dashboard-guide' },
     ],
   },

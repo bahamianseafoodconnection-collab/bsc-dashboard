@@ -350,6 +350,229 @@ export async function healthCheck(admin: SupabaseClient): Promise<HealthReport> 
     }
   }, undefined);
 
+  // 14. Cashier drawer left open more than 24 hours.
+  await safe(async () => {
+    const { data } = await admin
+      .from('cash_drawer_sessions')
+      .select('id, cashier_user_id, location, opened_at')
+      .eq('status', 'open')
+      .lt('opened_at', dayAgo)
+      .limit(20);
+    if (data && data.length > 0) {
+      findings.push({
+        category:    'operational',
+        severity:    'critical',
+        message:     `${data.length} cashier drawer session(s) have been open more than 24 hours. Someone forgot to close out. Locations: ${Array.from(new Set(data.map((r: { location: string }) => r.location))).join(', ')}.`,
+        count:       data.length,
+        sample_ids:  data.slice(0, 5).map((r: { id: string }) => r.id),
+      });
+    }
+  }, undefined);
+
+  // 15. Chronic cashier shorter — ≥3 short shifts (variance < −$5) in last 30d.
+  await safe(async () => {
+    const thirtyAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await admin
+      .from('cash_drawer_session_totals')
+      .select('cashier_user_id, variance_cents')
+      .eq('status', 'closed')
+      .gte('closed_at', thirtyAgo)
+      .lt('variance_cents', -500);
+    if (!data || data.length === 0) return;
+    const counts = new Map<string, number>();
+    for (const r of data as Array<{ cashier_user_id: string }>) {
+      counts.set(r.cashier_user_id, (counts.get(r.cashier_user_id) ?? 0) + 1);
+    }
+    const chronic = Array.from(counts.entries()).filter(([, c]) => c >= 3);
+    if (chronic.length > 0) {
+      const sample = chronic.slice(0, 5).map(([id, c]) => `${id.slice(0, 8)} (${c}×)`).join(', ');
+      findings.push({
+        category:    'operational',
+        severity:    'warning',
+        message:     `${chronic.length} cashier(s) had 3+ short shifts (variance < −$5) in the last 30 days. Sample: ${sample}.`,
+        count:       chronic.length,
+        sample_ids:  chronic.slice(0, 5).map(([id]) => id),
+      });
+    }
+  }, undefined);
+
+  // 16. AR over 60 days outstanding — unpaid wholesale/credit orders aging out.
+  await safe(async () => {
+    const sixtyAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await admin
+      .from('orders')
+      .select('id, total, customer_name, customer_id, created_at')
+      .eq('payment_status', 'unpaid')
+      .lt('created_at', sixtyAgo)
+      .limit(100);
+    if (data && data.length > 0) {
+      const sum = data.reduce((s: number, r: { total: number | null }) => s + Number(r.total ?? 0), 0);
+      findings.push({
+        category:    'schema',
+        severity:    'critical',
+        message:     `${data.length} unpaid invoice(s) are more than 60 days old. Outstanding: $${sum.toFixed(2)}. Send statements / escalate or write off.`,
+        count:       data.length,
+        sample_ids:  data.slice(0, 5).map((r: { id: string }) => r.id),
+      });
+    }
+  }, undefined);
+
+  // 17. Spinytails: no pre-op SSOP recorded today (skip Sundays — plant closed).
+  await safe(async () => {
+    if (now.getUTCDay() === 0) return;
+    const today = now.toISOString().slice(0, 10);
+    const { count } = await admin
+      .from('spinytails_sanitation_checks')
+      .select('*', { count: 'exact', head: true })
+      .eq('check_phase', 'pre_op')
+      .eq('check_date', today);
+    if ((count ?? 0) === 0) {
+      findings.push({
+        category:    'operational',
+        severity:    'warning',
+        message:     `No pre-op SSOP checks recorded for today (${today}). HACCP plan requires daily pre-op verification before production starts.`,
+        count:       0,
+      });
+    }
+  }, undefined);
+
+  // 18. Spinytails: corrective actions open more than 7 days.
+  await safe(async () => {
+    const { data } = await admin
+      .from('spinytails_corrective_actions')
+      .select('id, ca_number, what_failed, opened_at')
+      .is('closed_at', null)
+      .lt('opened_at', weekAgo)
+      .limit(20);
+    if (data && data.length > 0) {
+      findings.push({
+        category:    'operational',
+        severity:    'warning',
+        message:     `${data.length} HACCP corrective action(s) have been open more than 7 days without closure. CA #s: ${data.slice(0, 5).map((r: { ca_number: number }) => r.ca_number).join(', ')}.`,
+        count:       data.length,
+        sample_ids:  data.slice(0, 5).map((r: { id: string }) => r.id),
+      });
+    }
+  }, undefined);
+
+  // 19. Spinytails: calibration overdue — next_due in the past with no newer log.
+  await safe(async () => {
+    const today = now.toISOString().slice(0, 10);
+    const { data } = await admin
+      .from('spinytails_calibration_logs')
+      .select('id, equipment_id, equipment_type, next_due, performed_at')
+      .not('next_due', 'is', null)
+      .lt('next_due', today)
+      .order('performed_at', { ascending: false })
+      .limit(200);
+    if (!data || data.length === 0) return;
+    // Keep only the most recent log per equipment_id; flag those still overdue.
+    const seen = new Set<string>();
+    const overdue: Array<{ id: string; equipment_id: string; equipment_type: string }> = [];
+    for (const r of data as Array<{ id: string; equipment_id: string; equipment_type: string; next_due: string }>) {
+      if (seen.has(r.equipment_id)) continue;
+      seen.add(r.equipment_id);
+      if (r.next_due < today) overdue.push(r);
+    }
+    if (overdue.length > 0) {
+      findings.push({
+        category:    'operational',
+        severity:    'warning',
+        message:     `${overdue.length} piece(s) of equipment are past their calibration due date. Equipment: ${overdue.slice(0, 4).map(r => `${r.equipment_id} (${r.equipment_type})`).join(', ')}.`,
+        count:       overdue.length,
+        sample_ids:  overdue.slice(0, 5).map(r => r.id),
+      });
+    }
+  }, undefined);
+
+  // 20. Spinytails: staff with most-recent training over 365 days old.
+  await safe(async () => {
+    const { data } = await admin
+      .from('spinytails_training_records')
+      .select('staff_id, trained_at')
+      .not('staff_id', 'is', null)
+      .order('trained_at', { ascending: false })
+      .limit(500);
+    if (!data || data.length === 0) return;
+    const latest = new Map<string, string>();
+    for (const r of data as Array<{ staff_id: string; trained_at: string }>) {
+      if (!latest.has(r.staff_id)) latest.set(r.staff_id, r.trained_at);
+    }
+    const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    const stale = Array.from(latest.entries()).filter(([, t]) => t < yearAgo);
+    if (stale.length > 0) {
+      findings.push({
+        category:    'operational',
+        severity:    'info',
+        message:     `${stale.length} HACCP staff member(s) have not had a training entry in over 365 days. Annual refresher recommended.`,
+        count:       stale.length,
+        sample_ids:  stale.slice(0, 5).map(([id]) => id),
+      });
+    }
+  }, undefined);
+
+  // 21. Spinytails: audit sessions past expiry that were never revoked.
+  await safe(async () => {
+    const nowIso = now.toISOString();
+    const { data } = await admin
+      .from('spinytails_audit_sessions')
+      .select('id, inspector_name, inspector_agency, expires_at')
+      .is('revoked_at', null)
+      .lt('expires_at', nowIso)
+      .limit(20);
+    if (data && data.length > 0) {
+      findings.push({
+        category:    'schema',
+        severity:    'info',
+        message:     `${data.length} inspector audit session(s) are past expiry but never revoked. The tokens are technically dead but the records still show as "active". Mark as revoked for clean audit trail.`,
+        count:       data.length,
+        sample_ids:  data.slice(0, 5).map((r: { id: string }) => r.id),
+      });
+    }
+  }, undefined);
+
+  // 22. Products with no current product_costs row — pricing math runs on $0 cost.
+  await safe(async () => {
+    const { data: prods } = await admin
+      .from('products')
+      .select('id, sku, name');
+    const { data: costs } = await admin
+      .from('product_costs')
+      .select('product_id')
+      .eq('is_current', true);
+    if (!prods || !costs) return;
+    const costed = new Set((costs as Array<{ product_id: string }>).map(c => c.product_id));
+    const missing = (prods as Array<{ id: string; sku: string; name: string }>).filter(p => !costed.has(p.id));
+    if (missing.length > 0) {
+      findings.push({
+        category:    'margin',
+        severity:    'warning',
+        message:     `${missing.length} product(s) have no current product_costs row. Channel pricing falls back to $0 cost, so margin math is wrong. SKUs: ${missing.slice(0, 4).map(p => p.sku).join(', ')}${missing.length > 4 ? ', …' : ''}.`,
+        count:       missing.length,
+        sample_ids:  missing.slice(0, 5).map(p => p.id),
+      });
+    }
+  }, undefined);
+
+  // 23. Vendor listings live but priced at $0.
+  await safe(async () => {
+    const { data } = await admin
+      .from('vendor_listings')
+      .select('id, title, vendor_id, price_per_unit')
+      .eq('status', 'live')
+      .eq('price_per_unit', 0)
+      .limit(50);
+    if (data && data.length > 0) {
+      findings.push({
+        category:    'schema',
+        severity:    'warning',
+        message:     `${data.length} live vendor listing(s) have a $0 price. Titles: ${data.slice(0, 3).map((r: { title: string }) => r.title).join(', ')}. Buyers can add these to cart for free.`,
+        count:       data.length,
+        sample_ids:  data.slice(0, 5).map((r: { id: string }) => r.id),
+      });
+    }
+  }, undefined);
+
   // ── Summary ─────────────────────────────────────────────────────────
   const by_severity = {
     critical: findings.filter((f) => f.severity === 'critical').length,

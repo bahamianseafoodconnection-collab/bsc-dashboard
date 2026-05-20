@@ -1,0 +1,1738 @@
+{
+  "generated_at": "2026-05-20T20:25:16.917Z",
+  "stats": {
+    "pages": 125,
+    "api_routes": 45,
+    "tables": 35,
+    "migrations": 36,
+    "business_rules": 13
+  },
+  "pages": [
+    {
+      "url": "/account",
+      "file": "app/account/page.tsx",
+      "category": "customer",
+      "purpose": "/account — customer hub. Profile, saved addresses, quick links. Tailwind, brand tokens, mobile-first."
+    },
+    {
+      "url": "/accounts-payable",
+      "file": "app/accounts-payable/page.tsx",
+      "category": "customer",
+      "purpose": "Unified \"what do I owe and when\" view. Aggregates: - Unpaid expenses (public.expenses WHERE paid_at IS NULL) - Open purchase_invoices (balance_owed > 0) Sorted by due_date, with status pills (overdue / due-this-week / f…"
+    },
+    {
+      "url": "/admin/images",
+      "file": "app/admin/images/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/ashley",
+      "file": "app/ashley/page.tsx",
+      "category": "other",
+      "purpose": "File: app/ashley/page.tsx"
+    },
+    {
+      "url": "/bill",
+      "file": "app/bill/page.tsx",
+      "category": "other",
+      "purpose": "File: app/bill/page.tsx"
+    },
+    {
+      "url": "/bills",
+      "file": "app/bills/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/captains",
+      "file": "app/captains/page.tsx",
+      "category": "other",
+      "purpose": "Fishing captain registry. Every captain BSC sources from + their vessels. Aggregates total deliveries / lbs / paid (kept current by app code on each yield_lots / processing_batches insert)."
+    },
+    {
+      "url": "/cash",
+      "file": "app/cash/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/category/[slug]",
+      "file": "app/category/[slug]/page.tsx",
+      "category": "other",
+      "purpose": "SEO landing page per product category. Server-rendered so each category gets its own title/description/OG image. Lists products in the category with images, prices, and a CTA back to /market for full add-to-cart interac…"
+    },
+    {
+      "url": "/change-password",
+      "file": "app/change-password/page.tsx",
+      "category": "other",
+      "purpose": "Forced password change. Reached automatically by the AppShell guard when profiles.must_change_password = TRUE. The user cannot leave this page (no nav, no back links) until the change succeeds."
+    },
+    {
+      "url": "/checkout",
+      "file": "app/checkout/page.tsx",
+      "category": "customer",
+      "purpose": "/checkout — premium ecommerce flow. Tailwind redesign. Three views: summary -> payment -> done."
+    },
+    {
+      "url": "/cod-flag",
+      "file": "app/cod-flag/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/contact",
+      "file": "app/contact/page.tsx",
+      "category": "other",
+      "purpose": "public contact form. Posts to /api/contact which writes the message into the notifications queue (channel='email') addressed to BSC's mailbox. Until SendGrid creds are wired the row lands as 'stub_sent' so the message i…"
+    },
+    {
+      "url": "/customers",
+      "file": "app/customers/page.tsx",
+      "category": "other",
+      "purpose": "Customer tracking — reads the public.customers table populated by the /api/customers/upsert endpoint. Detail view aggregates the customer's orders to surface their buying habits (top items, channel mix, recency)."
+    },
+    {
+      "url": "/customers/dashboard",
+      "file": "app/customers/dashboard/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/dashboard",
+      "file": "app/dashboard/page.tsx",
+      "category": "dashboard",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/dashboard-guide",
+      "file": "app/dashboard-guide/page.tsx",
+      "category": "dashboard",
+      "purpose": "Master instruction table for the entire BSC dashboard. Every page, what it does, when to use it, common actions. Searchable. Built so Dedrick (or any staff member) can find \"how do I X\" without asking. Founder AI also r…"
+    },
+    {
+      "url": "/dashboard/ar-aging",
+      "file": "app/dashboard/ar-aging/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/ar-aging — Accounts Receivable aging report for wholesale credit accounts. Pulls every order with payment_method='account' and payment_status='unpaid', buckets them into 0-30 / 31-60 / 61-90 / 90+ days, group…"
+    },
+    {
+      "url": "/dashboard/ar-aging/statement/[customerId]",
+      "file": "app/dashboard/ar-aging/statement/[customerId]/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/ar-aging/statement/[customerId] Customer statement — every unpaid account-credit invoice on a single printable document. Uses window.print() so the operator can \"Save as PDF\" or print to paper. Matches the vi…"
+    },
+    {
+      "url": "/dashboard/ar-aging/trends",
+      "file": "app/dashboard/ar-aging/trends/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/ar-aging/trends — per-customer payment behavior. Aggregates all account-credit orders (paid + unpaid) over a date window and shows each customer's payment habits: # invoices, $ billed, $ paid, current outstan…"
+    },
+    {
+      "url": "/dashboard/cashiers",
+      "file": "app/dashboard/cashiers/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/cashiers — live view of every cashier's drawer. Top section: OPEN shifts (real-time payment breakdown per cashier). Bottom section: recent CLOSED shifts with variance — sortable by date and filterable by cash…"
+    },
+    {
+      "url": "/dashboard/cashiers/trends",
+      "file": "app/dashboard/cashiers/trends/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/cashiers/trends — per-cashier monthly aggregates. Reads cash_drawer_session_totals over a date range, groups by cashier, computes: # closed sessions, total sales, cash sales, card sales, account sales, total…"
+    },
+    {
+      "url": "/dashboard/daily-briefing",
+      "file": "app/dashboard/daily-briefing/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/daily-briefing — archive view. Latest briefing pinned at the top + rolling 90-day history below. Founder + co_founder only (matches the rest of /dashboard). Search by date (YYYY-MM-DD). \"Re-send to me\" button…"
+    },
+    {
+      "url": "/dashboard/fishermen",
+      "file": "app/dashboard/fishermen/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/fishermen — Admin onboarding console for fisherman logins. One-click flow: enter name + email → API creates auth user + profile with role='fisherman' + links to (or creates) a supplier record. The page then d…"
+    },
+    {
+      "url": "/dashboard/health",
+      "file": "app/dashboard/health/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/health — operational health dashboard. Fires POST /api/health-check on load and on refresh. Renders the HealthReport returned by lib/health-check.ts: categorized findings with severity pills, sample IDs, and…"
+    },
+    {
+      "url": "/dashboard/listings/pending",
+      "file": "app/dashboard/listings/pending/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/listings/pending — admin queue for vendor listings. Shows all 3 traceability phases (with GPS map links) before approval. \"Approve & generate batch\" flips status='live', generates a batch number via the SQL f…"
+    },
+    {
+      "url": "/dashboard/payouts",
+      "file": "app/dashboard/payouts/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/payouts — bi-weekly vendor payout calculator + RBC CSV export. Disabled in beta mode (BETA_MODE_VENDORS=true → commission=0 → vendors get 100%, so payouts == total_sales)."
+    },
+    {
+      "url": "/dashboard/pricing-rules",
+      "file": "app/dashboard/pricing-rules/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/pricing-rules — admin console for the 5-channel pricing math. Shows the live pricing_rules table (5 channels: wholesale_in_store / wholesale_online / online_retail / nassau_pos / andros_pos) + the pricing_con…"
+    },
+    {
+      "url": "/dashboard/process-flow",
+      "file": "app/dashboard/process-flow/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/process-flow — single-page reference doc that walks through the full vendor → batch → label → trace lifecycle. Every stage links directly to the live page that performs that step + describes what data is capt…"
+    },
+    {
+      "url": "/dashboard/processing-batches",
+      "file": "app/dashboard/processing-batches/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/processing-batches — Spiny Tail processing facility view. Step 1 lives in /lobster-intake (vessel + GPS-stamped media). Step 2 (this page): freezer assignment, raw → finished weight, production date stamps ex…"
+    },
+    {
+      "url": "/dashboard/processing-batches/[id]/labels",
+      "file": "app/dashboard/processing-batches/[id]/labels/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/processing-batches/[id]/labels — printable Spiny Tails Co. labels (FDA-compliant layout). One label per finished box; print directly from the browser. Reference: /Users/dedrickstorr/Downloads/IMG_1131.HEIC SP…"
+    },
+    {
+      "url": "/dashboard/quality-control",
+      "file": "app/dashboard/quality-control/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/quality-control — Spiny Tail inspection queue. Visible to processor / receiver / control_admin / founder / co_founder / manager. Inspector can pass/reject; reject bumps vendor.quality_rejections_count."
+    },
+    {
+      "url": "/dashboard/vendors/approved",
+      "file": "app/dashboard/vendors/approved/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/vendors/approved — manage active + suspended vendors. Founder / co_founder / control_admin / manager only."
+    },
+    {
+      "url": "/dashboard/vendors/pending",
+      "file": "app/dashboard/vendors/pending/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/vendors/pending — admin queue for new vendor signups. Founder / co_founder / control_admin / manager only."
+    },
+    {
+      "url": "/expenses",
+      "file": "app/expenses/page.tsx",
+      "category": "other",
+      "purpose": "Full expense tracking — entry form + list + mark-paid action. Backed by public.expenses (see sql/2026-05-08-expenses.sql)."
+    },
+    {
+      "url": "/fleet",
+      "file": "app/fleet/page.tsx",
+      "category": "other",
+      "purpose": "Internal fleet management — BSC's own delivery vehicles, mailboats, pickup trucks. Distinct from /vehicles (which is customer-facing sales/rentals). Three sections: 1. Vehicle list (status, last service, next service du…"
+    },
+    {
+      "url": "/founder-ai",
+      "file": "app/founder-ai/page.tsx",
+      "category": "founder-ai",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/founder-ai/flyer-maker",
+      "file": "app/founder-ai/flyer-maker/page.tsx",
+      "category": "founder-ai",
+      "purpose": "BSC Flyer Maker ───────────── Two-panel UI for composing ChatGPT prompts that produce BSC-branded marketing flyers, then optionally blasting an email announcement to every opted-in customer. LEFT — Brand reference: stan…"
+    },
+    {
+      "url": "/founder-ai/products/pending",
+      "file": "app/founder-ai/products/pending/page.tsx",
+      "category": "founder-ai",
+      "purpose": "/founder-ai/products/pending Review-and-approve queue for child products created by the Founder AI's explode_product tool. Each child lands here with all sell_* flags off (the \"pending\" state) — this page lets the found…"
+    },
+    {
+      "url": "/help",
+      "file": "app/help/page.tsx",
+      "category": "other",
+      "purpose": "FAQ."
+    },
+    {
+      "url": "/igloo",
+      "file": "app/igloo/page.tsx",
+      "category": "other",
+      "purpose": "Build #6 - Igloo Integration. The final piece of the lobster pipeline. Tracks BSC's full export workflow through Igloo Miami: - Shipments OUT (Spiny Tail Nassau -> Igloo Miami via freight forwarder) - Sales executed by…"
+    },
+    {
+      "url": "/intake",
+      "file": "app/intake/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/intake/scan-invoice",
+      "file": "app/intake/scan-invoice/page.tsx",
+      "category": "other",
+      "purpose": "Invoice / receipt scanner used by TJ, Claff, Nicholson at intake. Flow: 1. Capture or upload the invoice photo (Camera / Gallery / Files). 2. Image uploads to Supabase storage and we get a public URL back. 3. User taps…"
+    },
+    {
+      "url": "/inventory",
+      "file": "app/inventory/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/inventory/scan",
+      "file": "app/inventory/scan/page.tsx",
+      "category": "other",
+      "purpose": "BSC Day 6 (Path A) — server-side auth gate for the scanner. Uses Day 5 helper function is_staff() to gate access cleanly."
+    },
+    {
+      "url": "/invoice",
+      "file": "app/invoice/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/jaquel",
+      "file": "app/jaquel/page.tsx",
+      "category": "other",
+      "purpose": "File: app/jaquel/page.tsx"
+    },
+    {
+      "url": "/johnette",
+      "file": "app/johnette/page.tsx",
+      "category": "other",
+      "purpose": "File: app/johnette/page.tsx"
+    },
+    {
+      "url": "/jorge",
+      "file": "app/jorge/page.tsx",
+      "category": "other",
+      "purpose": "File: app/jorge/page.tsx"
+    },
+    {
+      "url": "/labels",
+      "file": "app/labels/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/landed-cost",
+      "file": "app/landed-cost/page.tsx",
+      "category": "other",
+      "purpose": "Bahamas landed-cost calculator. Pick a duty category, enter FOB cost + freight + insurance + (optional) weight or case quantity, see the full landed cost breakdown + sacred-rule retail pricing per channel. Used by staff…"
+    },
+    {
+      "url": "/legal",
+      "file": "app/legal/page.tsx",
+      "category": "other",
+      "purpose": "File: app/legal/page.tsx"
+    },
+    {
+      "url": "/lobster-intake",
+      "file": "app/lobster-intake/page.tsx",
+      "category": "other",
+      "purpose": "STEP 1 of the lobster pipeline — boat receive at Spiny Tail door. Captures vessel + captain + photos/videos WITH GPS so we have full provenance before processing begins. Each intake lands in public.yield_lots with appro…"
+    },
+    {
+      "url": "/lobster-labels",
+      "file": "app/lobster-labels/page.tsx",
+      "category": "other",
+      "purpose": "Build #5 - Trilingual export-grade case labels for lobster tail shipments. Supports all three printer formats: P1 - Zebra ZD420 thermal, 4\" x 6\" single label per page P2 - Avery 5163, 4\" x 2\", 10 labels per 8.5x11 sheet…"
+    },
+    {
+      "url": "/local-wholesale",
+      "file": "app/local-wholesale/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/login",
+      "file": "app/login/page.tsx",
+      "category": "other",
+      "purpose": "/login — customer sign-in / register. Tailwind redesign. Two tabs: Sign In and Register. All auth logic preserved."
+    },
+    {
+      "url": "/logs/catch",
+      "file": "app/logs/catch/page.tsx",
+      "category": "logs",
+      "purpose": "Staff-facing catch log. Designed for TJ / right-hand to fill in every time a boat supplier delivers. Big buttons, simple steps."
+    },
+    {
+      "url": "/logs/processing",
+      "file": "app/logs/processing/page.tsx",
+      "category": "logs",
+      "purpose": "Staff-facing processing-batch log. For Nicholson / Dashnelle at Spiny Tail. Pulls catch_log_id from a dropdown of recent catches, auto-fills species and raw weight, calculates yield % / loss % live before submit."
+    },
+    {
+      "url": "/logs/traceability",
+      "file": "app/logs/traceability/page.tsx",
+      "category": "logs",
+      "purpose": "Manager-facing traceability view. Joins catch → processing → sale. QR codes are rendered via the public api.qrserver.com image endpoint so we avoid adding a QR npm dependency. \"Export to PDF\" uses the browser's print →…"
+    },
+    {
+      "url": "/market",
+      "file": "app/market/page.tsx",
+      "category": "customer",
+      "purpose": "/market — public storefront Design: Amazon-style dense product grid, mobile-first, navy + gold brand. Built with Tailwind. All product/cart/order logic preserved from the prior implementation; only the presentation laye…"
+    },
+    {
+      "url": "/my-orders",
+      "file": "app/my-orders/page.tsx",
+      "category": "other",
+      "purpose": "Signed-in customer's order history. Pulls every orders row keyed to their user_id (set at checkout). For guests / not-signed-in, shows the lookup form pointing at /track/[orderId]."
+    },
+    {
+      "url": "/notifications",
+      "file": "app/notifications/page.tsx",
+      "category": "other",
+      "purpose": "Staff view of the outbound notification queue. Filter by status, search by recipient/body. \"Process queue\" button calls /api/notifications/send to fire any queued items. Until Twilio/SendGrid creds are wired, sent notif…"
+    },
+    {
+      "url": "/onboarding",
+      "file": "app/onboarding/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/order-fulfillment",
+      "file": "app/order-fulfillment/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/orders",
+      "file": "app/orders/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/page.tsx",
+      "file": "app/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/partner-tokens",
+      "file": "app/partner-tokens/page.tsx",
+      "category": "other",
+      "purpose": "Founder admin for generating + managing partner-portal access tokens. Pick a supplier, label the link, optionally set expiry, get back a shareable URL to send via WhatsApp."
+    },
+    {
+      "url": "/partner/[token]",
+      "file": "app/partner/[token]/page.tsx",
+      "category": "other",
+      "purpose": "Public Partner Portal — token-scoped, no login required. Mobile-first because partners open this from WhatsApp links. Per-partner view of: - Outstanding balance (the headline number) - Payment terms BSC commits to (Net-…"
+    },
+    {
+      "url": "/payroll",
+      "file": "app/payroll/page.tsx",
+      "category": "other",
+      "purpose": "Pay period tracker. One row per (staff × period). Hourly or salaried. On \"Mark paid\", also writes a matching expenses row in the 'payroll' category so AP / reports stay consistent."
+    },
+    {
+      "url": "/pick-ticket/[orderId]",
+      "file": "app/pick-ticket/[orderId]/page.tsx",
+      "category": "other",
+      "purpose": "Warehouse-facing pick ticket. NO customer info — staff just see what to pack. Pick ticket # is deterministic from order id so it's repeatedly printable. Shows items + quantities + delivery method (so packers know if it'…"
+    },
+    {
+      "url": "/pickup-queue",
+      "file": "app/pickup-queue/page.tsx",
+      "category": "other",
+      "purpose": "Staff fulfillment view. Lists every still-open order (today + the 48-hour rolling window before it) grouped by delivery destination so the warehouse can pack, label, and route a whole batch in one pass. Groups: Nassau p…"
+    },
+    {
+      "url": "/pos",
+      "file": "app/pos/page.tsx",
+      "category": "pos",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/pos-andros",
+      "file": "app/pos-andros/page.tsx",
+      "category": "pos",
+      "purpose": "Andros POS — DB-backed catalog mirror of /pos (Nassau), with the andros_pos channel (43% margin) and the existing CETA2024 PIN gate. Architecture is intentionally a near-twin of the Nassau register so the same fixes / f…"
+    },
+    {
+      "url": "/pos/inventory",
+      "file": "app/pos/inventory/page.tsx",
+      "category": "pos",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/pos/sales-history",
+      "file": "app/pos/sales-history/page.tsx",
+      "category": "pos",
+      "purpose": "Cashier-facing list of POS sales (Nassau + Andros), filterable by location and date range. Reads orders.order_type IN ('pos_sale_nassau', 'pos_sale_andros') and shows total + payment + customer + items count for each. T…"
+    },
+    {
+      "url": "/pos/scan",
+      "file": "app/pos/scan/page.tsx",
+      "category": "pos",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/prep",
+      "file": "app/prep/page.tsx",
+      "category": "other",
+      "purpose": "Demand prep — \"Who's buying on Saturday and what do they want?\" Pulls the last 90 days of orders that had a named customer, groups by day-of-week, and for the target day shows every repeat customer (2+ visits on that DO…"
+    },
+    {
+      "url": "/processor",
+      "file": "app/processor/page.tsx",
+      "category": "other",
+      "purpose": "Server-side auth gate for the processor workspace. Requires a signed-in staff user whose role is processor (or founder/co_founder/manager for oversight). Pulls the user's role + name + location so the client UI can gree…"
+    },
+    {
+      "url": "/product/[id]",
+      "file": "app/product/[id]/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/products",
+      "file": "app/products/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/promos",
+      "file": "app/promos/page.tsx",
+      "category": "other",
+      "purpose": "Staff console for promo codes. Lists all codes with usage + validity, lets staff create new codes, toggle active, and view recent redemptions. Inline styles to match the rest of the back-office UI (per Sacred BSC rules:…"
+    },
+    {
+      "url": "/pulse",
+      "file": "app/pulse/page.tsx",
+      "category": "other",
+      "purpose": "Live operations pulse for BSC. Single-glance answer to \"what's happening today?\" — today's revenue per channel, open orders by status, low-stock alerts, today's promo redemptions + new customers, and a recent-orders tic…"
+    },
+    {
+      "url": "/purchase-orders",
+      "file": "app/purchase-orders/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/receipt/[orderId]",
+      "file": "app/receipt/[orderId]/page.tsx",
+      "category": "other",
+      "purpose": "Customer-facing receipt. Public route — accessed via the order UUID (non-guessable). Shows full customer info: name, phone, address, delivery method, items, total, payment status. Print-friendly. Linked from /checkout's…"
+    },
+    {
+      "url": "/report",
+      "file": "app/report/page.tsx",
+      "category": "other",
+      "purpose": "File: app/report/page.tsx"
+    },
+    {
+      "url": "/reports",
+      "file": "app/reports/page.tsx",
+      "category": "reports",
+      "purpose": "Operational reports + CSV exports. Five reports: 1. Sales by day (range) 2. Sales by channel (range) 3. Expenses by category (range) 4. Customer lifetime value (top 50) 5. COGS report (orders with cost / margin breakdow…"
+    },
+    {
+      "url": "/returns",
+      "file": "app/returns/page.tsx",
+      "category": "other",
+      "purpose": "refund / replacement policy."
+    },
+    {
+      "url": "/reviews-admin",
+      "file": "app/reviews-admin/page.tsx",
+      "category": "other",
+      "purpose": "Staff console for moderating customer product reviews. Shows every review across all products with quick approve / reject / delete actions. Routed at /reviews-admin to leave room for a future customer-facing /reviews de…"
+    },
+    {
+      "url": "/shipping",
+      "file": "app/shipping/page.tsx",
+      "category": "other",
+      "purpose": "delivery + mailboat policy."
+    },
+    {
+      "url": "/shop/farm-fresh",
+      "file": "app/shop/farm-fresh/page.tsx",
+      "category": "other",
+      "purpose": "/shop/farm-fresh — customer marketplace for farmer listings. Delegates to the shared <VendorMarketShop kind=\"farmer\" /> component."
+    },
+    {
+      "url": "/shop/fresh-catch",
+      "file": "app/shop/fresh-catch/page.tsx",
+      "category": "other",
+      "purpose": "/shop/fresh-catch — customer marketplace for fisherman listings. Delegates to the shared <VendorMarketShop kind=\"fisherman\" /> component."
+    },
+    {
+      "url": "/spinytails",
+      "file": "app/spinytails/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails — hub for Spiny Tails Processing Co. HACCP + traceability. Live stats across the spinytails_* tables, plus nav to sub-sections and a bridge back to /lobster-intake (where Step 1 originates)."
+    },
+    {
+      "url": "/spinytails/audit/[token]",
+      "file": "app/spinytails/audit/[token]/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/audit/[token] — Inspector landing page. No authentication required. Token-gated via SECURITY DEFINER RPCs. Calls spinytails_audit_session_open() to validate + log the visit, then spinytails_audit_view_lots()…"
+    },
+    {
+      "url": "/spinytails/audit/[token]/documents",
+      "file": "app/spinytails/audit/[token]/documents/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/audit/[token]/documents — Inspector-facing SOP/SSOP/HACCP library. Read-only. Pulled via spinytails_audit_view_documents() RPC which validates the token + logs the visit."
+    },
+    {
+      "url": "/spinytails/audit/[token]/lots/[lot_code]",
+      "file": "app/spinytails/audit/[token]/lots/[lot_code]/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/audit/[token]/lots/[lot_code] Read-only full-chain view of one lot for an inspector. Pulls the scoped trace via spinytails_audit_view_lot_trace() RPC — which validates the token + scope + logs the view in on…"
+    },
+    {
+      "url": "/spinytails/audits",
+      "file": "app/spinytails/audits/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/audits — Admin console for inspector audit sessions. Create a time-bound, scope-limited, read-only access window for fisheries inspectors. Shareable URL + QR. Live view counter so BSC sees what the inspector…"
+    },
+    {
+      "url": "/spinytails/documents",
+      "file": "app/spinytails/documents/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/documents — SSOP / SOP / HACCP / Forms library. All authenticated users can READ (so future inspectors with a scoped role get access). Staff can INSERT/UPDATE new versions; only admins can DELETE per RLS. Th…"
+    },
+    {
+      "url": "/spinytails/intake",
+      "file": "app/spinytails/intake/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/intake — Step 1-2, CCP-1 (receiving). Single page that: 1. Optionally pulls an already-approved /lobster-intake yield_lot (so admin doesn't re-type weight + vessel info captured upstream) 2. Generates the ne…"
+    },
+    {
+      "url": "/spinytails/lots/[lot_code]",
+      "file": "app/spinytails/lots/[lot_code]/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/lots/[lot_code] Full chain view of one lot with inline action panels: - Vessel + intake snapshot (Step 1-2) - QC inspections list + Add - Temperature logs list + Add - Processing batches list + Add (with per…"
+    },
+    {
+      "url": "/spinytails/lots/[lot_code]/stickers",
+      "file": "app/spinytails/lots/[lot_code]/stickers/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/lots/[lot_code]/stickers Printable Avery 5163 trace-QR sticker sheet — 2\"×4\" labels, 10 per US-Letter page (2 cols × 5 rows). Each sticker carries the QR for https://bscbahamas.com/trace/<lot_code> plus the…"
+    },
+    {
+      "url": "/spinytails/steps",
+      "file": "app/spinytails/steps/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/steps — Step-by-step walkthrough. Linear view of the 11 lobster-export steps with each step's SOP doc + CCP markers + related SSOPs cross-referenced. Read-only, inspector-friendly. Renders SOP body inline vi…"
+    },
+    {
+      "url": "/spinytails/vessels",
+      "file": "app/spinytails/vessels/page.tsx",
+      "category": "spinytails",
+      "purpose": "/spinytails/vessels — Spiny Tails vessel registry. Each vessel = one supplying boat. The 2-letter vessel_code becomes the VV in every lot code (STPC-YYYYMMDD-VV-NN), so codes are validated as ^[A-Z]{2}$ and uniqueness i…"
+    },
+    {
+      "url": "/staff",
+      "file": "app/staff/page.tsx",
+      "category": "staff",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/staff-login",
+      "file": "app/staff-login/page.tsx",
+      "category": "staff",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/staff/activate",
+      "file": "app/staff/activate/page.tsx",
+      "category": "staff",
+      "purpose": "First-time staff sign-in. Staff arrive here with ?token=... in the URL, set their own password, and get routed to their role's landing page."
+    },
+    {
+      "url": "/staff/audit",
+      "file": "app/staff/audit/page.tsx",
+      "category": "staff",
+      "purpose": "Founder / co-founder review of every staff change: create / update / deactivate / reactivate / regenerate_token / reset_password / delete. Reads from /api/staff/admin (action='audit'), which returns the last 100 staff_c…"
+    },
+    {
+      "url": "/supplier",
+      "file": "app/supplier/page.tsx",
+      "category": "other",
+      "purpose": "trigger rebuild"
+    },
+    {
+      "url": "/supplier-portal",
+      "file": "app/supplier-portal/page.tsx",
+      "category": "other",
+      "purpose": "Authenticated supplier dashboard. Server-side gates to users with role 'supplier' or 'partner_us'. Resolves the suppliers row by portal_user_id and renders the client view with their personal data: products, invoices, p…"
+    },
+    {
+      "url": "/supplier-purchases",
+      "file": "app/supplier-purchases/page.tsx",
+      "category": "other",
+      "purpose": "\"What to buy from each supplier next.\" Aggregates the items sold across every channel (POS Nassau, POS Andros, online checkout, wholesale) over a date range, joins each line item to its products.primary_supplier_id, and…"
+    },
+    {
+      "url": "/test",
+      "file": "app/test/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/trace",
+      "file": "app/trace/page.tsx",
+      "category": "customer",
+      "purpose": "/trace — Public traceability search. Customer landing for \"verify your seafood\" QR codes printed on receipts + BSC product labels. Enter a lot/batch code and we redirect to the existing /trace/[batch_number] page which…"
+    },
+    {
+      "url": "/trace/[batch_number]",
+      "file": "app/trace/[batch_number]/page.tsx",
+      "category": "customer",
+      "purpose": "/trace/[batch_number] — public traceability view. Reached by scanning the QR code on a finished-product label. Reads via the SECURITY DEFINER function get_public_trace() so RLS on traceability_batches stays strict; only…"
+    },
+    {
+      "url": "/track/[orderId]",
+      "file": "app/track/[orderId]/page.tsx",
+      "category": "other",
+      "purpose": "Public order tracking page — anyone with the order UUID can see its status. Customer-facing, no login required. Shows the standard fulfillment timeline (Pending → Processing → Ready → Delivered) and a link to the printa…"
+    },
+    {
+      "url": "/us-products",
+      "file": "app/us-products/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/us-shopping/[store]",
+      "file": "app/us-shopping/[store]/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/utilities",
+      "file": "app/utilities/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/vehicles",
+      "file": "app/vehicles/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/vendor/dashboard",
+      "file": "app/vendor/dashboard/page.tsx",
+      "category": "vendor",
+      "purpose": "/vendor/dashboard — vendor's own dashboard. Status badge, pending vs live listings, sales + payouts summary, + self-serve vessel/farm info card so fishermen and farmers can update their own registration + upload the yea…"
+    },
+    {
+      "url": "/vendor/listings/new",
+      "file": "app/vendor/listings/new/page.tsx",
+      "category": "vendor",
+      "purpose": "/vendor/listings/new — create a listing with 3-phase traceability media. Phases vary by vendor_type (lib/traceability/batch.ts). Each phase captures a media file (photo or video) AND the device GPS at upload time so the…"
+    },
+    {
+      "url": "/vendor/signup",
+      "file": "app/vendor/signup/page.tsx",
+      "category": "vendor",
+      "purpose": "/vendor/signup — public vendor application form. Mobile-first. BSC brand. Uploads ID photo + at least 3 operation photos + optional video to the vendor-documents bucket under a signed-in-only folder. Anonymous applicant…"
+    },
+    {
+      "url": "/wholesale-orders",
+      "file": "app/wholesale-orders/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/wholesale-products",
+      "file": "app/wholesale-products/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/wishlist",
+      "file": "app/wishlist/page.tsx",
+      "category": "other",
+      "purpose": "/wishlist — saved-products page for signed-in customers. Reads from public.wishlists (RLS limits the rows to the current user) and joins to public.products to render image / name / price + actions."
+    },
+    {
+      "url": "/yield",
+      "file": "app/yield/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/yield-measure",
+      "file": "app/yield-measure/page.tsx",
+      "category": "other",
+      "purpose": "Build #4 - Yield Measurement. Operates on real lot intakes from /lobster-intake (and any other yield_lots row). Lets staff record the actual measured output of a processing batch: - finished_weight_lb (saleable weight a…"
+    }
+  ],
+  "api_routes": [
+    {
+      "url": "/api/admin/fishermen/invite",
+      "file": "app/api/admin/fishermen/invite/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/admin/fishermen/invite One-click fisherman onboarding for BSC staff. Performs the three linked actions that previously had to be done manually in Supabase: 1) Create auth user with temp password (admin API) 2)…"
+    },
+    {
+      "url": "/api/ar/aging-alert",
+      "file": "app/api/ar/aging-alert/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/ar/aging-alert Two paths: GET — Vercel cron daily. Requires CRON_SECRET in Authorization header. POST — Admin manual trigger. Requires staff JWT. Both paths do the same work: scan ar_unpaid_orders, group by custome…"
+    },
+    {
+      "url": "/api/ar/send-reminder",
+      "file": "app/api/ar/send-reminder/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/ar/send-reminder Send a wholesale-credit aging reminder email to a customer. Pulls every unpaid account order, renders the same aging summary the statement PDF shows, and emails it via Resend. Caller must be s…"
+    },
+    {
+      "url": "/api/barcode/[code]",
+      "file": "app/api/barcode/[code]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "BSC Day 6 — barcode lookup Order: (1) Auth check (2) BSC products.barcode lookup (3) Open Food Facts fallback Schema-matched to Day 5: products.barcode (text), unit_of_measure, primary_supplier_id"
+    },
+    {
+      "url": "/api/cashiers/variance-alert",
+      "file": "app/api/cashiers/variance-alert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/cashiers/variance-alert Fire-and-forget alert after a cashier shift closes. Server-side re-reads the session (so the client can't lie about the variance), checks whether the variance breached the threshold, an…"
+    },
+    {
+      "url": "/api/cashiers/weekly-digest",
+      "file": "app/api/cashiers/weekly-digest/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/cashiers/weekly-digest Monday morning recap of last calendar week's cashier drawer activity. Mirror of /api/ar/aging-alert pattern: GET = Vercel cron (CRON_SECRET), POST = admin manual trigger (staff JWT). Pulls fr…"
+    },
+    {
+      "url": "/api/contact",
+      "file": "app/api/contact/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Public contact form sink. Writes the inbound message into the notifications queue addressed to BSC's mailbox so it shows up on /notifications alongside outbound messages — single inbox. Until SendGrid is wired the row l…"
+    },
+    {
+      "url": "/api/cron/daily-briefing",
+      "file": "app/api/cron/daily-briefing/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "Vercel cron — /api/cron/daily-briefing Scheduled in vercel.json at \"0 1 * * *\" UTC (= 9 PM AST during EDT, which Bahamas observes most of the year). Tweak to \"0 2 * * *\" for EST months if the timing drifts. SCAFFOLD ONL…"
+    },
+    {
+      "url": "/api/customers/upsert",
+      "file": "app/api/customers/upsert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Find-or-create a customer record + bump their tracking stats. Used by: - POS Nassau / Andros: BEFORE order insert, get customer_id - Checkout: same pattern - /login signup: fire-and-forget after profile upsert Dedup pri…"
+    },
+    {
+      "url": "/api/dashboard/daily-briefing/test-send",
+      "file": "app/api/dashboard/daily-briefing/test-send/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/dashboard/daily-briefing/test-send Manual trigger for the Daily Briefing pipeline. Lets the founder fire a sample email TONIGHT to verify Resend delivery + email rendering before the bank-data aggregator is wi…"
+    },
+    {
+      "url": "/api/email/order-status",
+      "file": "app/api/email/order-status/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/email/order-status Body: { order_id: string; new_status: string; message?: string } Looks up the order + linked customer's email, then fires Resend's sendOrderStatusUpdate template. No-ops when no email is on…"
+    },
+    {
+      "url": "/api/flyer-blast",
+      "file": "app/api/flyer-blast/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/flyer-blast Called by the Flyer Maker page after the founder has generated the ChatGPT prompt and (optionally) has the final flyer image URL. Builds an HTML email containing the deal name, product list with pr…"
+    },
+    {
+      "url": "/api/founder-ai",
+      "file": "app/api/founder-ai/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "The Founder AI endpoint. Two design choices: 1. SYSTEM PROMPT IS SLIM. Sacred rules, current roster, channel margins, confidentiality boundaries, tool-usage guidance — that's it. Everything else (file contents, live DB…"
+    },
+    {
+      "url": "/api/health-check",
+      "file": "app/api/health-check/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/health-check Two paths: GET — Vercel cron daily at 6am AST. Requires CRON_SECRET in Authorization. Runs the anomaly scanner; if ANY critical findings, sends a digest email. Warning/info-only days stay silent (no in…"
+    },
+    {
+      "url": "/api/inventory-movement",
+      "file": "app/api/inventory-movement/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "BSC Day 6 — record an inventory movement (receive shipment OR adjustment) Schema-matched to Day 5: inventory_movements uses product_id (uuid), to_location_id (uuid), quantity (numeric), unit (text), source_supplier_id,…"
+    },
+    {
+      "url": "/api/inventory/movements/onboard",
+      "file": "app/api/inventory/movements/onboard/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "BSC Inventory Onboard API Creates a new product + cost row + per-channel pricing rows. Manager+ -> status='active' (live immediately) Other staff roles -> status='pending_approval' (Dedrick reviews) Honors sell_nassau /…"
+    },
+    {
+      "url": "/api/inventory/movements/update",
+      "file": "app/api/inventory/movements/update/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "BSC Inventory Update API — 5 actions update_cost, update_price, update_status, update_channels, update_image All writes are audited (recorded_by, recorded_at)."
+    },
+    {
+      "url": "/api/invoice-save",
+      "file": "app/api/invoice-save/route.ts",
+      "methods": [
+        "POST",
+        "PATCH"
+      ],
+      "purpose": "============================================================ BSC MARKETPLACE — INVOICE SAVE API File: app/api/invoice-save/route.ts Saves invoice to DB, tracks balance owed Inventory insertion handled separately (see pr…"
+    },
+    {
+      "url": "/api/invoice-scan",
+      "file": "app/api/invoice-scan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "============================================================ BSC MARKETPLACE — INVOICE SCAN API File: app/api/invoice-scan/route.ts Multi-page, location-aware, wholesale/retail split ====================================…"
+    },
+    {
+      "url": "/api/landed-cost/calculate",
+      "file": "app/api/landed-cost/calculate/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Server-side landed-cost calculator. Pulls the current duty rate for a category from public.customs_duty_rates, then computes the full Bahamas import cost stack: FOB + freight + insurance + duty + stamp tax + environment…"
+    },
+    {
+      "url": "/api/locations",
+      "file": "app/api/locations/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "BSC Day 6 — return inventory_locations for the scanner dropdown. 14 locations from Day 5/5.5 (incl. BSC-US-MIAMI hub). Schema: id (uuid PK), code (text), name (text), is_active (boolean)"
+    },
+    {
+      "url": "/api/newsletter/subscribe",
+      "file": "app/api/newsletter/subscribe/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Email-list signup. Stores subscribers as customer rows with source='newsletter' so they show up alongside other customer records and can be reached from the same notification queue. Idempotent: if the email or phone alr…"
+    },
+    {
+      "url": "/api/notifications/multi-channel",
+      "file": "app/api/notifications/multi-channel/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/notifications/multi-channel Auth-gated wrapper around lib/notifications/multi-channel.ts so we can fire admin-only fan-outs from the client when needed. Most of our server code calls notifyMultiChannel() direc…"
+    },
+    {
+      "url": "/api/notifications/queue",
+      "file": "app/api/notifications/queue/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Queue an outbound notification. Used internally by POS / checkout / stock alerts / etc. Inserts a row in public.notifications with status='queued'; the sender route processes the queue. Validates minimum recipient info…"
+    },
+    {
+      "url": "/api/notifications/send",
+      "file": "app/api/notifications/send/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Process queued notifications. Until provider creds are wired, this runs in STUB mode — it marks rows as 'stub_sent' so we can verify the flow end-to-end and see what would-have-been-sent on /notifications. When you add…"
+    },
+    {
+      "url": "/api/orders/cancel",
+      "file": "app/api/orders/cancel/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Customer-initiated order cancellation. Server-side so we don't need permissive customer-update RLS — the caller's auth token is verified against orders.user_id before any update happens. Allowed only when: - the caller…"
+    },
+    {
+      "url": "/api/orders/create",
+      "file": "app/api/orders/create/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/api/partner-portal/admin",
+      "file": "app/api/partner-portal/admin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Admin API for managing partner access tokens. Founder/co_founder gated. Actions: list / create / revoke / delete."
+    },
+    {
+      "url": "/api/partner-portal/data",
+      "file": "app/api/partner-portal/data/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Returns scoped partner data for a /partner/[token] page. The token IS the auth - no login needed. Service role bypasses RLS so we can scope the response strictly to that partner's records. Body: { token: string } Respon…"
+    },
+    {
+      "url": "/api/payment/charge",
+      "file": "app/api/payment/charge/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "============================================================ BSC MARKETPLACE — RBC PLUG & PAY PAYMENT ROUTE File: app/api/payment/charge/route.ts ============================================================ STATUS: SKEL…"
+    },
+    {
+      "url": "/api/payment/webhook",
+      "file": "app/api/payment/webhook/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "============================================================ BSC MARKETPLACE — RBC PLUG & PAY WEBHOOK HANDLER File: app/api/payment/webhook/route.ts Webhook URL: https://bscbahamas.com/api/payment/webhook Send this URL…"
+    },
+    {
+      "url": "/api/processor/batches/approve",
+      "file": "app/api/processor/batches/approve/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Founder/co_founder approves or rejects a draft processing batch. Uses the service role to bypass RLS on the update so the server-side role check is the single source of truth."
+    },
+    {
+      "url": "/api/products/bulk-import",
+      "file": "app/api/products/bulk-import/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "CSV bulk-import for the products catalog. Used by /products → Import CSV. Headers (first row) — matched case-insensitively, all but `name` optional: name, description, category, price_nassau, price_andros, price_online,…"
+    },
+    {
+      "url": "/api/promos/redeem",
+      "file": "app/api/promos/redeem/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Record that a promo was applied to an order. Increments uses_count and inserts a promo_redemptions row. Called server-side from checkout right after the order insert succeeds. Body: { promo_id, promo_code, order_id, cus…"
+    },
+    {
+      "url": "/api/promos/validate",
+      "file": "app/api/promos/validate/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Validate a promo code against the cart subtotal + (optionally) a customer identifier (email or phone). Returns the discount amount that would apply or a friendly reason why the code is invalid. This is the source of tru…"
+    },
+    {
+      "url": "/api/purchase-orders/receive",
+      "file": "app/api/purchase-orders/receive/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Hook fired after a purchase order is processed (weight in/out captured). What it does: 1. Looks up the matching public.products row for the linked supplier product by name (best-effort) 2. Updates products.cost_per_unit…"
+    },
+    {
+      "url": "/api/sales/inventory-write",
+      "file": "app/api/sales/inventory-write/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Decrements inventory after a sale by writing inventory_movements rows. One row per line item that has a real product_id. Wire from POS Nassau, POS Andros, online checkout. Callers fire-and-forget with .catch() — a faile…"
+    },
+    {
+      "url": "/api/spinytails/ssop-reminder",
+      "file": "app/api/spinytails/ssop-reminder/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/spinytails/ssop-reminder Two paths (mirror of /api/ar/aging-alert): GET — Vercel cron daily. CRON_SECRET in Authorization header. POST — Admin manual trigger. Staff JWT required. Both produce one branded HTML diges…"
+    },
+    {
+      "url": "/api/staff/activate",
+      "file": "app/api/staff/activate/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "Staff account activation. Flow: GET ?token=... -> { email, role, name } for a valid token, else 404 POST { token, pwd } -> sets the auth password, marks user active, clears the token Tokens are one-shot — they're cleare…"
+    },
+    {
+      "url": "/api/staff/admin",
+      "file": "app/api/staff/admin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/api/supplier-portal/po-status",
+      "file": "app/api/supplier-portal/po-status/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "Lets a signed-in supplier advance the status on a purchase_orders row THAT BELONGS TO THEM. Auth flow: 1. Resolve auth.uid() → users.role (must be supplier or partner_us) 2. Resolve user → suppliers.portal_user_id 3. Ve…"
+    },
+    {
+      "url": "/api/unsubscribe",
+      "file": "app/api/unsubscribe/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "One-click unsubscribe endpoint linked from the footer of every blast. Validates the HMAC token, flips customers.email_marketing_consent=FALSE, records the timestamp + source, then renders a tiny confirmation page."
+    },
+    {
+      "url": "/api/vendor-listings/create",
+      "file": "app/api/vendor-listings/create/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/vendor-listings/create Vendor creates a new listing + its 3 traceability phases in one call. Status is forced to 'pending_approval'; admin approval generates the batch number + writes traceability_batches."
+    },
+    {
+      "url": "/api/vendors/signup",
+      "file": "app/api/vendors/signup/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/vendors/signup Public vendor signup endpoint. Anyone (authenticated or not) can apply. Writes vendors row with approval_status='pending', then fans out a multi-channel notification to BSC admins."
+    },
+    {
+      "url": "/sw.js",
+      "file": "app/sw.js/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "GET /sw.js Dynamic service worker. Every Vercel deploy embeds a fresh build hash (or build-time fallback) into the SW body, so the byte content changes per deploy. Browsers compare the new bytes against the cached SW, s…"
+    }
+  ],
+  "tables": [
+    {
+      "name": "ai_writes",
+      "columns": [
+        "id",
+        "tool",
+        "caller_id",
+        "input",
+        "result",
+        "status",
+        "error",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260516120000_ai_writes_audit.sql"
+    },
+    {
+      "name": "cash_drawer_sessions",
+      "columns": [
+        "id",
+        "cashier_user_id",
+        "location",
+        "status",
+        "opened_at",
+        "opening_float_cents",
+        "opening_notes",
+        "closed_at",
+        "closed_by",
+        "closing_cash_counted_cents",
+        "closing_notes",
+        "variance_cents"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519020000_cash_drawer_sessions.sql"
+    },
+    {
+      "name": "catch_logs",
+      "columns": [
+        "id",
+        "supplier_id",
+        "supplier_name",
+        "species",
+        "catch_location",
+        "catch_date",
+        "raw_weight_lb",
+        "condition",
+        "notes",
+        "logged_by",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260515150000_add_log_tables.sql"
+    },
+    {
+      "name": "daily_briefings",
+      "columns": [
+        "id",
+        "briefing_date",
+        "raw_data_json",
+        "generated_content",
+        "sent_to",
+        "sent_at",
+        "status",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260517190000_daily_briefings.sql"
+    },
+    {
+      "name": "flyers",
+      "columns": [
+        "id",
+        "title",
+        "body",
+        "image_url",
+        "cta_label",
+        "cta_url",
+        "background_color",
+        "text_color",
+        "valid_from",
+        "valid_to",
+        "is_active",
+        "display_order"
+      ],
+      "first_seen_migration": "supabase/migrations/20260516190000_flyers.sql"
+    },
+    {
+      "name": "pricing_config",
+      "columns": [
+        "key",
+        "value",
+        "notes"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519010000_pricing_and_customers.sql"
+    },
+    {
+      "name": "pricing_rules",
+      "columns": [
+        "channel",
+        "markup_pct",
+        "vat_pct",
+        "description",
+        "effective_from",
+        "updated_at",
+        "updated_by"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519010000_pricing_and_customers.sql"
+    },
+    {
+      "name": "pricing_rules_audit",
+      "columns": [
+        "id",
+        "channel",
+        "old_markup_pct",
+        "new_markup_pct",
+        "old_vat_pct",
+        "new_vat_pct",
+        "changed_by",
+        "changed_at",
+        "operation"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519010000_pricing_and_customers.sql"
+    },
+    {
+      "name": "processing_logs",
+      "columns": [
+        "id",
+        "catch_log_id",
+        "species",
+        "raw_weight_lb",
+        "finished_weight_lb",
+        "yield_pct",
+        "loss_pct",
+        "process_type",
+        "quality_grade",
+        "notes",
+        "logged_by",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260515150000_add_log_tables.sql"
+    },
+    {
+      "name": "spinytails_audit_sessions",
+      "columns": [
+        "id",
+        "token",
+        "inspector_name",
+        "inspector_agency",
+        "inspector_id_doc",
+        "purpose",
+        "scope_lot_ids",
+        "scope_date_from",
+        "scope_date_to",
+        "granted_by",
+        "granted_at",
+        "expires_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519070000_spinytails_audit_access.sql"
+    },
+    {
+      "name": "spinytails_audit_views",
+      "columns": [
+        "id",
+        "session_id",
+        "resource_kind",
+        "resource_id",
+        "viewed_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519070000_spinytails_audit_access.sql"
+    },
+    {
+      "name": "spinytails_batch_grades",
+      "columns": [
+        "id",
+        "batch_id",
+        "grade",
+        "weight_lbs",
+        "box_count"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_calibration_logs",
+      "columns": [
+        "id",
+        "performed_at",
+        "equipment_id",
+        "equipment_type",
+        "calibration_method",
+        "result",
+        "performed_by",
+        "next_due",
+        "notes"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_corrective_actions",
+      "columns": [
+        "id",
+        "ca_number",
+        "opened_at",
+        "closed_at",
+        "failure_at_step",
+        "ccp_reference",
+        "ssop_reference",
+        "lot_id",
+        "what_failed",
+        "immediate_action",
+        "root_cause",
+        "long_term_action"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_documents",
+      "columns": [
+        "id",
+        "slug",
+        "title",
+        "doc_kind",
+        "version",
+        "applies_to_step",
+        "applies_to_ssop",
+        "applies_to_ccp",
+        "summary",
+        "body_md",
+        "file_url",
+        "is_current"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519060000_spinytails_documents.sql"
+    },
+    {
+      "name": "spinytails_lot_intakes",
+      "columns": [
+        "id",
+        "lot_id",
+        "intake_time",
+        "quantity_lbs",
+        "product_state",
+        "fishing_area",
+        "fishing_date_start",
+        "fishing_date_end",
+        "core_temp_f_at_receipt",
+        "received_by",
+        "notes",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_lots",
+      "columns": [
+        "id",
+        "lot_code",
+        "receipt_date",
+        "vessel_id",
+        "daily_sequence",
+        "status",
+        "created_at",
+        "created_by",
+        "rejected_at",
+        "rejected_reason",
+        "shipped_at",
+        "recalled_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_master_packagings",
+      "columns": [
+        "id",
+        "lot_id",
+        "packaged_at",
+        "primary_boxes_10lb",
+        "master_cartons_40lb",
+        "sulfite_declaration_present",
+        "allergen_declaration_present",
+        "scientific_name_present",
+        "lot_code_matches_inside",
+        "production_date_printed",
+        "best_before_date_printed",
+        "supervisor_id"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_processing_batches",
+      "columns": [
+        "id",
+        "lot_id",
+        "started_at",
+        "ended_at",
+        "lbs_in",
+        "lbs_graded",
+        "lbs_not_for_export",
+        "yield_pct",
+        "sulfite_recheck_ppm",
+        "boxes_packed",
+        "supervisor_id",
+        "sign_off_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_quality_inspections",
+      "columns": [
+        "id",
+        "lot_id",
+        "inspected_at",
+        "sample_lbs",
+        "sulfite_ppm",
+        "tail_length_ok",
+        "egg_bearing_found",
+        "clipped_fins_found",
+        "off_odor",
+        "melanosis_ok",
+        "soft_shell_found",
+        "foreign_matter_found"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_sanitation_checks",
+      "columns": [
+        "id",
+        "check_date",
+        "check_phase",
+        "sanitation_lead",
+        "ssop",
+        "compliant",
+        "corrective_action_notes",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_shipment_lots",
+      "columns": [
+        "shipment_id",
+        "lot_id",
+        "master_cartons",
+        "weight_lbs"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_shipments",
+      "columns": [
+        "id",
+        "shipment_number",
+        "shipped_at",
+        "destination_customer",
+        "destination_country",
+        "total_master_cartons",
+        "total_weight_lbs",
+        "truck_temp_f_at_load",
+        "coi_number",
+        "coi_issued_at",
+        "coi_inspector_name",
+        "temp_chip_serials"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_temperature_logs",
+      "columns": [
+        "id",
+        "logged_at",
+        "location",
+        "lot_id",
+        "reading_f",
+        "within_limit",
+        "data_logger_confirms",
+        "recorded_by",
+        "action_if_fail",
+        "notes"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_training_records",
+      "columns": [
+        "id",
+        "trained_at",
+        "staff_id",
+        "topic",
+        "trainer",
+        "outcome",
+        "notes"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "spinytails_vessels",
+      "columns": [
+        "id",
+        "vessel_code",
+        "vessel_name",
+        "fisherman_name",
+        "fisherman_phone",
+        "fisherman_address",
+        "license_number",
+        "color_tag",
+        "status",
+        "approved_at",
+        "approved_by",
+        "suspended_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260519050000_spinytails_haccp_traceability.sql"
+    },
+    {
+      "name": "staff_changes",
+      "columns": [
+        "id",
+        "user_id",
+        "action",
+        "changed_by",
+        "changed_at",
+        "details"
+      ],
+      "first_seen_migration": "supabase/migrations/20260515210000_staff_payroll_columns_and_audit.sql"
+    },
+    {
+      "name": "traceability_batches",
+      "columns": [
+        "id",
+        "batch_number",
+        "listing_id",
+        "vendor_id",
+        "vendor_type",
+        "product_name",
+        "scientific_name",
+        "quantity_units",
+        "quantity_unit_type",
+        "raw_weight_lbs",
+        "vendor_payout_snapshot",
+        "finished_boxes"
+      ],
+      "first_seen_migration": "supabase/migrations/20260518010000_traceability.sql"
+    },
+    {
+      "name": "traceability_phases",
+      "columns": [
+        "id",
+        "listing_id",
+        "vendor_id",
+        "phase_number",
+        "phase_label",
+        "media_type",
+        "media_url",
+        "latitude",
+        "longitude",
+        "gps_accuracy_m",
+        "captured_at",
+        "uploaded_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260518010000_traceability.sql"
+    },
+    {
+      "name": "traceability_records",
+      "columns": [
+        "id",
+        "catch_log_id",
+        "processing_log_id",
+        "order_id",
+        "species",
+        "qr_payload",
+        "export_status",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260515150000_add_log_tables.sql"
+    },
+    {
+      "name": "vendor_documents",
+      "columns": [
+        "id",
+        "vendor_id",
+        "document_type",
+        "file_url",
+        "description",
+        "uploaded_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260517210000_vendor_marketplace.sql"
+    },
+    {
+      "name": "vendor_listings",
+      "columns": [
+        "id",
+        "vendor_id",
+        "title",
+        "description",
+        "product_type",
+        "quantity_available",
+        "unit",
+        "price_per_unit",
+        "currency",
+        "status",
+        "harvest_status",
+        "harvest_or_catch_time"
+      ],
+      "first_seen_migration": "supabase/migrations/20260517210000_vendor_marketplace.sql"
+    },
+    {
+      "name": "vendor_orders",
+      "columns": [
+        "id",
+        "listing_id",
+        "customer_id",
+        "vendor_id",
+        "quantity",
+        "total_price",
+        "commission_amount",
+        "vendor_payout",
+        "status",
+        "dropoff_at",
+        "qc_inspected_at",
+        "qc_inspector_id"
+      ],
+      "first_seen_migration": "supabase/migrations/20260517210000_vendor_marketplace.sql"
+    },
+    {
+      "name": "vendor_payouts",
+      "columns": [
+        "id",
+        "vendor_id",
+        "period_start",
+        "period_end",
+        "total_sales",
+        "total_commission",
+        "net_payout",
+        "status",
+        "paid_at",
+        "payment_reference",
+        "created_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260517210000_vendor_marketplace.sql"
+    },
+    {
+      "name": "vendors",
+      "columns": [
+        "id",
+        "user_id",
+        "business_name",
+        "vendor_type",
+        "contact_name",
+        "phone",
+        "email",
+        "government_id_number",
+        "license_number",
+        "location",
+        "bank_account_name",
+        "bank_account_number"
+      ],
+      "first_seen_migration": "supabase/migrations/20260517210000_vendor_marketplace.sql"
+    }
+  ],
+  "business_rules": [
+    {
+      "rule": "Sacred Bill Casale 5% share",
+      "detail": "bill_casale_share = gross_profit × 0.05 on every sale. Never override."
+    },
+    {
+      "rule": "5-channel pricing markups",
+      "detail": "wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40% — all +10% VAT."
+    },
+    {
+      "rule": "Wholesale auto-upgrade",
+      "detail": "Cart line auto-promotes to wholesale_online price when qty ≥ 10 lbs OR unit_type=case."
+    },
+    {
+      "rule": "Walk-In Anonymous singleton",
+      "detail": "customer_id 00000000-0000-0000-0000-000000000001 catches every unattributed POS sale. Never delete."
+    },
+    {
+      "rule": "Miami processor confidentiality",
+      "detail": "BSC Miami processing partner is a protected trade secret. Refuse to name or confirm. Even to named staff."
+    },
+    {
+      "rule": "Suspended / terminated staff",
+      "detail": "Dashnelle (suspended), Ashley (terminated), Guito (terminated) — never reference as active."
+    },
+    {
+      "rule": "Lock RBAC",
+      "detail": "Only founder + co_founder + control_admin can unlock locked orders. lock.ts enforces."
+    },
+    {
+      "rule": "Spinytails HACCP lot code",
+      "detail": "Format STPC-YYYYMMDD-VV-NN via spinytails_next_lot_code(catch_date, vessel_id). 5 CCPs via CHECK constraints."
+    },
+    {
+      "rule": "Vessel registration is annual",
+      "detail": "Boat registration uploaded once per gov renewal year, stored on supplier record. Auto-fills future intakes."
+    },
+    {
+      "rule": "Intake step ownership",
+      "detail": "Step 1 = fisherman/receiver (vessel + GPS media + raw weight). Step 2/3 = processing operator. Never put grading on Step 1."
+    },
+    {
+      "rule": "Pricing via calculatePrice()",
+      "detail": "Always use lib/pricing.ts calculatePrice() or RPC bsc_calculate_price() — never hand-calculate channel margins."
+    },
+    {
+      "rule": "Customer phone unification",
+      "detail": "All channels look up customers by phone-E.164 via CustomerPhoneLookup component. One row per phone."
+    },
+    {
+      "rule": "product_costs.cost_type enum",
+      "detail": "Only 'opening_balance' seeded. Inserting 'direct' / 'landed' / 'fob' errors. Check enum before inserts."
+    }
+  ]
+}

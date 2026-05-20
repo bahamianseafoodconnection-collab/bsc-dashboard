@@ -70,6 +70,32 @@ export default function CashierTrendsPage() {
     return d.toISOString().slice(0, 10);
   });
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10));
+  const [digestBusy,  setDigestBusy]  = useState(false);
+  const [digestToast, setDigestToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function sendWeeklyDigest() {
+    setDigestBusy(true); setDigestToast(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/cashiers/weekly-digest', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
+      body: '{}',
+    });
+    const json = await res.json();
+    setDigestBusy(false);
+    if (json.ok && json.alerted) {
+      const s = json.stats ?? {};
+      setDigestToast({ ok: true, msg: `✓ Digest sent — week ${json.week?.from} → ${json.week?.to}, ${s.cashiers} cashiers, ${s.short_shifts} short, ${s.over_shifts} over` });
+    } else if (json.ok && !json.alerted) {
+      setDigestToast({ ok: true, msg: `ℹ ${json.reason}` });
+    } else {
+      setDigestToast({ ok: false, msg: `⚠ ${json.error ?? 'unknown error'}` });
+    }
+    setTimeout(() => setDigestToast(null), 6000);
+  }
 
   useEffect(() => {
     (async () => {
@@ -185,11 +211,26 @@ export default function CashierTrendsPage() {
     <div style={pg}>
       <header style={hdr}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <Link href="/dashboard/cashiers" style={back}>← Live cashier drawers</Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/dashboard/cashiers" style={back}>← Live cashier drawers</Link>
+            <button onClick={sendWeeklyDigest} disabled={digestBusy}
+              style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid #16a34a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: digestBusy ? 0.5 : 1 }}
+              title="Email last week's per-cashier digest (HTML table + CSV attachment). Also auto-runs Mondays 7am AST.">
+              {digestBusy ? 'Sending…' : '📧 Email last week\'s digest'}
+            </button>
+          </div>
           <h1 style={h1}>📈 Cashier trends — by cashier</h1>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
             Closed sessions only · {dateFrom} → {dateTo} · {trends.length} cashier{trends.length === 1 ? '' : 's'}
           </p>
+          {digestToast && (
+            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+              background: digestToast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+              color:      digestToast.ok ? '#4ade80' : '#f87171',
+              border:    `1px solid ${digestToast.ok ? '#16a34a' : '#f87171'}` }}>
+              {digestToast.msg}
+            </div>
+          )}
         </div>
       </header>
 
