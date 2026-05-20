@@ -49,6 +49,12 @@ interface HistoryRow {
   error:        string | null;
   ran_at:       string;
 }
+interface SavedQuery {
+  id:         string;
+  label:      string;
+  sql_text:   string;
+  created_at: string;
+}
 
 const PRESETS: Array<{ label: string; sql: string }> = [
   { label: 'Schema integrity — all tables', sql: "SELECT * FROM bsc_admin_schema_overview() ORDER BY row_estimate DESC;" },
@@ -76,6 +82,7 @@ export default function SqlEditorPage() {
   const [schemaErr, setSchemaErr] = useState<string | null>(null);
 
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [saved,   setSaved]   = useState<SavedQuery[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -111,7 +118,33 @@ export default function SqlEditorPage() {
     setHistory((data ?? []) as HistoryRow[]);
   }, []);
 
-  useEffect(() => { if (authed) { loadSchema(); loadHistory(); } }, [authed, loadSchema, loadHistory]);
+  const loadSaved = useCallback(async () => {
+    const { data } = await supabase
+      .from('sql_query_saved')
+      .select('id, label, sql_text, created_at')
+      .order('created_at', { ascending: false });
+    setSaved((data ?? []) as SavedQuery[]);
+  }, []);
+
+  async function saveCurrent() {
+    if (!sql.trim()) return;
+    const label = prompt('Label for this query?');
+    if (!label || !label.trim()) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error } = await supabase.from('sql_query_saved').insert({
+      owner_id: session.user.id, label: label.trim(), sql_text: sql,
+    });
+    if (error) { alert('Save failed: ' + error.message); return; }
+    loadSaved();
+  }
+  async function deleteSaved(id: string) {
+    if (!confirm('Delete this saved query?')) return;
+    await supabase.from('sql_query_saved').delete().eq('id', id);
+    loadSaved();
+  }
+
+  useEffect(() => { if (authed) { loadSchema(); loadHistory(); loadSaved(); } }, [authed, loadSchema, loadHistory, loadSaved]);
 
   async function run() {
     if (!sql.trim()) return;
@@ -209,12 +242,32 @@ export default function SqlEditorPage() {
           </div>
 
           <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={paneTitle}>Presets</div>
+            <div style={paneTitle}>Presets (built-in)</div>
             {PRESETS.map(p => (
               <button key={p.label} onClick={() => setSql(p.sql)}
                 style={{ ...tableBtn, display: 'block', textAlign: 'left' }}>
                 <span style={{ fontSize: 11, color: '#f5c518' }}>{p.label}</span>
               </button>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+              <div style={paneTitle}>My saved ({saved.length})</div>
+              <button onClick={saveCurrent} disabled={!sql.trim()}
+                style={{ background: 'transparent', color: '#4ade80', border: 'none', fontSize: 10, cursor: 'pointer', opacity: sql.trim() ? 1 : 0.4 }}
+                title="Save current SQL with a label">+ Save current</button>
+            </div>
+            {saved.length === 0 && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>None yet. Write a query, click + Save current.</div>}
+            {saved.map(s => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button onClick={() => setSql(s.sql_text)} style={{ ...tableBtn, flex: 1, display: 'block', textAlign: 'left' }}>
+                  <span style={{ fontSize: 11, color: '#4ade80' }}>{s.label}</span>
+                </button>
+                <button onClick={() => deleteSaved(s.id)}
+                  style={{ background: 'transparent', color: '#f87171', border: 'none', cursor: 'pointer', fontSize: 10, padding: '2px 4px' }}
+                  title="Delete">🗑</button>
+              </div>
             ))}
           </div>
         </aside>

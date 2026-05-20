@@ -264,10 +264,33 @@ export default function AndrosPOSPage() {
       });
       if (error) throw error;
 
+      // Side-fetch closed-date specials and override unit_price when a
+      // product is currently inside its special window. Same rule as
+      // /market + /pos (Nassau).
+      const catalogIds = ((rows as CatalogRow[]) || []).map(r => r.id);
+      const specialMap = new Map<string, number>();
+      if (catalogIds.length > 0) {
+        const { data: specials } = await supabase
+          .from('products')
+          .select('id, special_price, special_starts_at, special_ends_at')
+          .in('id', catalogIds)
+          .not('special_price', 'is', null);
+        const nowMs = Date.now();
+        for (const s of (specials ?? []) as Array<{ id: string; special_price: number | null; special_starts_at: string | null; special_ends_at: string | null }>) {
+          const startMs = s.special_starts_at ? new Date(s.special_starts_at).getTime() : -Infinity;
+          const endMs   = s.special_ends_at   ? new Date(s.special_ends_at).getTime()   :  Infinity;
+          if (s.special_price != null && startMs <= nowMs && nowMs <= endMs) {
+            specialMap.set(s.id, Number(s.special_price));
+          }
+        }
+      }
+
       const sellable: SellableProduct[] = [];
       let unsellable = 0;
       ((rows as CatalogRow[]) || []).forEach((r) => {
-        const unit_price = computePrice(r);
+        const regular_price = computePrice(r);
+        const special = specialMap.get(r.id);
+        const unit_price = special != null ? special : regular_price;
         if (unit_price <= 0) {
           unsellable++;
           return;

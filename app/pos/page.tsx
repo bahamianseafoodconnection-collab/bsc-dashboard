@@ -194,9 +194,11 @@ export default function POSPage() {
       setIsWednesday(today === 3)
 
       // Fetch products — get the nassau_pos snapshot as the retail price.
+      // Also pull special_price + window so a closed-date special overrides
+      // the regular price at POS just like it does on /market.
       const { data: productsRaw, error: prodErr } = await supabase
         .from('products')
-        .select('id, sku, barcode, name, category, is_bsc_processed, unit_type, product_pricing!inner(manual_unit_price)')
+        .select('id, sku, barcode, name, category, is_bsc_processed, unit_type, special_price, special_starts_at, special_ends_at, special_label, product_pricing!inner(manual_unit_price)')
         .eq('sell_nassau', true)
         .eq('status', 'active')
         .eq('product_pricing.channel', 'nassau_pos')
@@ -238,16 +240,33 @@ export default function POSPage() {
 
       const promoMap = new Map(promos.map(pr => [pr.product_id, pr]))
 
+      const nowMs = Date.now()
       const merged: Product[] = (productsRaw ?? []).map((p: any) => {
         const pricing = Array.isArray(p.product_pricing) ? p.product_pricing[0] : p.product_pricing
         const promo   = promoMap.get(p.id)
+        // Closed-date special — applies if NOW() is within the window.
+        // When active, special_price feeds priceCartLine.promo_price so it
+        // wins over the weekly Wednesday promo only if higher priority; we
+        // pick whichever is lower (best for the customer).
+        const startMs = p.special_starts_at ? new Date(p.special_starts_at).getTime() : -Infinity
+        const endMs   = p.special_ends_at   ? new Date(p.special_ends_at).getTime()   :  Infinity
+        const specialActive = p.special_price != null && startMs <= nowMs && nowMs <= endMs
+        const weeklyPromoPrice  = promo ? Number(promo.promo_price) : null
+        const specialPriceValue = specialActive ? Number(p.special_price) : null
+        // If both apply, take the lower (customer-best) price.
+        const effectivePromo = (weeklyPromoPrice != null && specialPriceValue != null)
+          ? Math.min(weeklyPromoPrice, specialPriceValue)
+          : (weeklyPromoPrice ?? specialPriceValue)
+        const effectiveLabel = effectivePromo === specialPriceValue && specialActive
+          ? (p.special_label ?? 'SPECIAL')
+          : promo?.display_label ?? null
         return {
           id: p.id, sku: p.sku, barcode: p.barcode, name: p.name,
           category: p.category, is_bsc_processed: p.is_bsc_processed,
           sell_price:      Number(pricing?.manual_unit_price ?? 0),
           wholesale_price: wholesaleMap.get(p.id) ?? null,
-          promo_price:     promo ? Number(promo.promo_price) : null,
-          promo_label:     promo?.display_label ?? null,
+          promo_price:     effectivePromo,
+          promo_label:     effectiveLabel,
           is_per_lb:       p.unit_type === 'lb',
         }
       })

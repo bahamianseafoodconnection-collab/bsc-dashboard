@@ -18,11 +18,12 @@ import type { SaleUnit } from '@/lib/pricing';
 // at 10+ lbs of one product (or by-case) when a wholesale snapshot exists.
 // Carts persisted before this code shipped lack wholesale_price / unit_type —
 // fall back to retail in that case (no badge, no upgrade).
-function linePricing(item: { price: number; wholesale_price?: number | null; unit_type?: string; qty: number }) {
+function linePricing(item: { price: number; wholesale_price?: number | null; unit_type?: string; qty: number; special_price?: number | null }) {
   const snap: ProductPriceSnapshot = {
     retail_price: item.price,
     wholesale_price: item.wholesale_price ?? null,
-    promo_price: null,
+    // Active special wins over wholesale auto-upgrade — see priceCartLine logic in lib/cart-pricing.ts.
+    promo_price: item.special_price != null && item.special_price > 0 ? item.special_price : null,
   };
   const unit: SaleUnit = item.unit_type === 'lb' ? 'lb' : item.unit_type === 'case' ? 'case' : 'each';
   return priceCartLine(snap, item.qty, unit);
@@ -73,8 +74,8 @@ interface MarketProduct {
   name: string;
   description: string;
   category: string;
-  price: number;                // effective price — special_price if on special, else regular
-  regular_price?: number;       // original online_market price; shown as strikethrough when on special
+  price: number;                // regular online_market price (NEVER overridden — keeps wholesale-upgrade math sane)
+  special_price?: number | null; // active special_price within the window; passed as promo_price to cart pricing so it wins over wholesale upgrade
   wholesale_price?: number | null; // local_wholesale snapshot — drives auto-upgrade at 10+ lbs / by case
   unit: string;
   unit_type?: string;           // 'lb' | 'each' | 'case' — used by priceCartLine to qualify wholesale
@@ -216,7 +217,6 @@ function MarketPageInner() {
         const startMs = p.special_starts_at ? new Date(p.special_starts_at).getTime() : -Infinity;
         const endMs   = p.special_ends_at   ? new Date(p.special_ends_at).getTime()   :  Infinity;
         const onSpecial = p.special_price != null && startMs <= nowMs && nowMs <= endMs;
-        const effectivePrice = onSpecial ? Number(p.special_price) : regular;
         return {
           id: p.id,
           source: 'market' as const,
@@ -224,8 +224,8 @@ function MarketPageInner() {
           name: p.name,
           description: p.description || '',
           category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
-          price: effectivePrice,
-          regular_price: onSpecial ? regular : undefined,
+          price: regular,
+          special_price: onSpecial ? Number(p.special_price) : null,
           wholesale_price: wholesaleMap.get(p.id) ?? null,
           unit_type: p.unit_type ?? 'each',
           unit: p.unit_type === 'lb' ? 'lb' : 'each',
@@ -824,10 +824,10 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
         )}
         {product.description && <p className="clamp-2 text-xs text-slate-500">{product.description}</p>}
         <div className="mt-auto flex items-baseline gap-1 pt-1">
-          <span className={`text-lg font-extrabold sm:text-xl ${product.is_on_special ? 'text-red-600' : 'text-navy'}`}>BSD ${product.price.toFixed(2)}</span>
+          <span className={`text-lg font-extrabold sm:text-xl ${product.is_on_special ? 'text-red-600' : 'text-navy'}`}>BSD ${(product.is_on_special && product.special_price != null ? product.special_price : product.price).toFixed(2)}</span>
           <span className="text-xs text-slate-400">/ {product.unit}</span>
-          {product.is_on_special && typeof product.regular_price === 'number' && (
-            <span className="ml-1 text-[11px] font-semibold text-slate-400 line-through">${product.regular_price.toFixed(2)}</span>
+          {product.is_on_special && product.special_price != null && (
+            <span className="ml-1 text-[11px] font-semibold text-slate-400 line-through">${product.price.toFixed(2)}</span>
           )}
         </div>
         {product.is_on_special && product.special_ends_at && (

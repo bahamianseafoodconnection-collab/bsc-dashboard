@@ -35,7 +35,8 @@ interface CartItem {
   id: string;
   source: 'market' | 'wholesale' | 'us';
   name: string;
-  price: number;                    // online_market snapshot (retail)
+  price: number;                    // online_market snapshot (retail — never overridden)
+  special_price?: number | null;    // active closed-date special; passed through priceCartLine.promo_price (wins over wholesale)
   wholesale_price?: number | null;  // local_wholesale snapshot — drives auto-upgrade
   unit_type?: string;               // 'lb' | 'case' | 'each'
   qty: number;
@@ -51,7 +52,8 @@ function linePricing(item: CartItem) {
   const snap: ProductPriceSnapshot = {
     retail_price: item.price,
     wholesale_price: item.wholesale_price ?? null,
-    promo_price: null,
+    // Active special wins over wholesale auto-upgrade — see lib/cart-pricing.ts.
+    promo_price: item.special_price != null && item.special_price > 0 ? item.special_price : null,
   };
   const unit: SaleUnit = item.unit_type === 'lb' ? 'lb' : item.unit_type === 'case' ? 'case' : 'each';
   return priceCartLine(snap, item.qty, unit);

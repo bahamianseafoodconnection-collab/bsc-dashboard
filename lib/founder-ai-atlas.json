@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-20T23:02:52.801Z",
+  "generated_at": "2026-05-20T23:19:13.523Z",
   "stats": {
     "pages": 129,
     "api_routes": 47,
-    "tables": 37,
-    "migrations": 39,
+    "tables": 38,
+    "migrations": 40,
     "business_rules": 13
   },
   "pages": [
@@ -1602,6 +1602,18 @@
         "ran_at"
       ],
       "first_seen_migration": "supabase/migrations/20260520230000_sql_editor_audit_rpc.sql"
+    },
+    {
+      "name": "sql_query_saved",
+      "columns": [
+        "id",
+        "owner_id",
+        "label",
+        "sql_text",
+        "created_at",
+        "updated_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260520240000_sql_query_saved.sql"
     },
     {
       "name": "staff_changes",
