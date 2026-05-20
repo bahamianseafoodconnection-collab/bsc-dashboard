@@ -8,6 +8,10 @@
     {
       "path": "/api/ar/aging-alert",
       "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/spinytails/ssop-reminder",
+      "schedule": "0 15 * * *"
     }
   ]
 }

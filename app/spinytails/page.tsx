@@ -35,6 +35,32 @@ export default function SpinytailsHubPage() {
   const [openCapas, setOpenCapas]           = useState(0);
   const [pendingQc, setPendingQc]           = useState(0);
   const [loading, setLoading]   = useState(true);
+  const [ssopBusy, setSsopBusy] = useState(false);
+  const [ssopToast, setSsopToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function sendSsopDigest() {
+    setSsopBusy(true); setSsopToast(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/spinytails/ssop-reminder', {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+      },
+      body: '{}',
+    });
+    const json = await res.json();
+    setSsopBusy(false);
+    if (json.ok && json.alerted) {
+      const s = json.stats ?? {};
+      setSsopToast({ ok: true, msg: `✓ SSOP digest sent — ${s.missing} missing · ${s.unresolved} unresolved · ${s.calib_due} calib · ${s.training_expiring} training` });
+    } else if (json.ok && !json.alerted) {
+      setSsopToast({ ok: true, msg: `ℹ ${json.reason}` });
+    } else {
+      setSsopToast({ ok: false, msg: `⚠ ${json.error ?? 'unknown error'}` });
+    }
+    setTimeout(() => setSsopToast(null), 6000);
+  }
 
   useEffect(() => {
     (async () => {
@@ -86,11 +112,26 @@ export default function SpinytailsHubPage() {
     <div style={pg}>
       <header style={hdr}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <Link href="/dashboard" style={back}>← BSC Control</Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/dashboard" style={back}>← BSC Control</Link>
+            <button onClick={sendSsopDigest} disabled={ssopBusy}
+              style={{ background: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', opacity: ssopBusy ? 0.5 : 1 }}
+              title="Email today's SSOP compliance digest to admins now (also auto-runs daily at 11am AST)">
+              {ssopBusy ? 'Sending…' : '🔔 Send SSOP digest now'}
+            </button>
+          </div>
           <h1 style={h1}>🦞 Spiny Tails Processing Co.</h1>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
             HACCP + SSOP + traceability · {openLots.length} active lot{openLots.length === 1 ? '' : 's'}
           </p>
+          {ssopToast && (
+            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+              background: ssopToast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+              color:      ssopToast.ok ? '#4ade80' : '#f87171',
+              border:    `1px solid ${ssopToast.ok ? '#16a34a' : '#f87171'}` }}>
+              {ssopToast.msg}
+            </div>
+          )}
         </div>
       </header>
 
