@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-20T23:19:13.523Z",
+  "generated_at": "2026-05-20T23:26:05.977Z",
   "stats": {
     "pages": 129,
-    "api_routes": 47,
+    "api_routes": 48,
     "tables": 38,
-    "migrations": 40,
+    "migrations": 41,
     "business_rules": 13
   },
   "pages": [
@@ -846,9 +846,18 @@
       "url": "/api/cron/daily-briefing",
       "file": "app/api/cron/daily-briefing/route.ts",
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "Vercel cron — /api/cron/daily-briefing Scheduled in vercel.json at \"0 1 * * *\" UTC (= 9 PM AST during EDT, the Bahamian default most of the year). Real implementation (replaces the prior scaffold): pulls today's custome…"
+    },
+    {
+      "url": "/api/cron/schema-integrity",
+      "file": "app/api/cron/schema-integrity/route.ts",
+      "methods": [
         "GET"
       ],
-      "purpose": "Vercel cron — /api/cron/daily-briefing Scheduled in vercel.json at \"0 1 * * *\" UTC (= 9 PM AST during EDT, which Bahamas observes most of the year). Tweak to \"0 2 * * *\" for EST months if the timing drifts. SCAFFOLD ONL…"
+      "purpose": "/api/cron/schema-integrity Daily 6am AST. Runs bsc_admin_schema_overview() with the service-role key (which is permitted because the RPC's gate is \"founder/co_founder/ control_admin\"; we synthesize a verified call by us…"
     },
     {
       "url": "/api/customers/upsert",
