@@ -226,6 +226,55 @@ export const TOOLS = [
       required: ['subject', 'headline', 'body_html'],
     },
   },
+  {
+    name: 'list_customers',
+    description:
+      'Filtered list of BSC customers with their lifetime stats. Use when the founder asks things like "show me my top spenders", "who has email consent", "list customers from Nassau POS", "who hasn\'t ordered in 90 days". Read-only. Returns up to 50 rows by default. Excludes the singleton Walk-In Anonymous record.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        search:          { type: 'string', description: 'Optional substring match on full_name / phone / phone_e164 / email.' },
+        opted_in_only:   { type: 'boolean', description: 'If true, only customers with email_marketing_consent=true. Default false.' },
+        consent_source:  { type: 'string', description: 'Filter by where consent was captured: "nassau_pos","newsletter","signup".' },
+        origin_channel:  { type: 'string', description: 'Filter by the channel that first created the customer: "nassau_pos","andros_pos","online","qr_scan","wholesale","imported".' },
+        min_total_spent: { type: 'number', description: 'Only customers with total_spent >= this BSD amount.' },
+        min_total_orders:{ type: 'number', description: 'Only customers with total_orders >= this count.' },
+        last_seen_within_days: { type: 'number', description: 'Only customers active within the last N days.' },
+        last_seen_before_days: { type: 'number', description: 'Only customers whose last_seen_at is OLDER than N days (use to find dormant / lost customers).' },
+        sort_by:         { type: 'string', description: '"total_spent" (default) | "total_orders" | "last_seen" | "name".' },
+        limit:           { type: 'number', description: 'Default 50, max 200.' },
+      },
+    },
+  },
+  {
+    name: 'segment_customers',
+    description:
+      'Group BSC customers into segments with counts + dollar totals. Use when the founder asks "how many customers are big spenders", "which cohort is lapsing", "break down customers by recency / frequency / origin / consent". Read-only. Each segment returns: name, count, total_spent_sum, avg_spent, plus up to 5 sample customer ids.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          description: '"recency" (active<30d, dormant 30-90d, lapsed 90-180d, lost 180d+) · "frequency" (occasional 1-2 orders, regular 3-9, loyal 10+) · "monetary" (small <$50, mid $50-200, big $200+) · "origin" (group by origin_channel) · "consent" (opted-in vs not, by source).',
+        },
+      },
+      required: ['mode'],
+    },
+  },
+  {
+    name: 'customer_history',
+    description:
+      'Full deep-dive on one customer: lifetime stats + recent orders + top items + first/last seen + consent status. Use when the founder asks "what does Sarah usually buy", "show me history for 242-555-0100", or "pull everything on customer X". Read-only. Look up by customer_id (UUID) OR phone OR email — at least one required. Returns up to 30 most-recent orders + the top 15 items by frequency.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string', description: 'UUID — most precise. Use when known.' },
+        phone:       { type: 'string', description: 'Phone in any format. Will normalize to E.164 via bsc_normalize_phone() and match phone_e164 first, then legacy phone column.' },
+        email:       { type: 'string', description: 'Email — case-insensitive match.' },
+        order_limit: { type: 'number', description: 'How many recent orders to include. Default 30, max 100.' },
+      },
+    },
+  },
 ] as const;
 
 interface ReadFileInput { path?: unknown }
@@ -267,6 +316,27 @@ interface DemandPatternInput {
   day_of_week?:   unknown;
   customer_id?:   unknown;
   lookback_days?: unknown;
+}
+interface ListCustomersInput {
+  search?:                unknown;
+  opted_in_only?:         unknown;
+  consent_source?:        unknown;
+  origin_channel?:        unknown;
+  min_total_spent?:       unknown;
+  min_total_orders?:      unknown;
+  last_seen_within_days?: unknown;
+  last_seen_before_days?: unknown;
+  sort_by?:               unknown;
+  limit?:                 unknown;
+}
+interface SegmentCustomersInput {
+  mode?: unknown;
+}
+interface CustomerHistoryInput {
+  customer_id?: unknown;
+  phone?:       unknown;
+  email?:       unknown;
+  order_limit?: unknown;
 }
 interface SendEmailBlastInput {
   subject?:   unknown;
@@ -368,6 +438,9 @@ export async function dispatchTool(
       case 'list_flyers':          return await listFlyersTool(admin);
       case 'create_flyer':         return await createFlyerTool(input as CreateFlyerInput, admin, callerId);
       case 'set_flyer_active':     return await setFlyerActiveTool(input as SetFlyerActiveInput, admin, callerId);
+      case 'list_customers':       return await listCustomersTool(input as ListCustomersInput, admin);
+      case 'segment_customers':    return await segmentCustomersTool(input as SegmentCustomersInput, admin);
+      case 'customer_history':     return await customerHistoryTool(input as CustomerHistoryInput, admin);
       default:                     return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
   } catch (e) {
@@ -1001,5 +1074,250 @@ async function demandPatternTool(input: DemandPatternInput, admin: SupabaseClien
     total_spend:   orders.reduce((s, o) => s + Number(o.total ?? 0), 0),
     by_day:        byDow,
     top_items:     Array.from(itemMap.values()).sort((a, b) => b.times - a.times).slice(0, 15),
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 4 — customer-base introspection tools
+// All READ-only. Skip the singleton Walk-In Anonymous record so it doesn't
+// pollute counts / segments.
+// ────────────────────────────────────────────────────────────────────
+
+interface CustomerSummary {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  phone_e164: string | null;
+  email: string | null;
+  origin_channel: string | null;
+  source: string | null;
+  email_marketing_consent: boolean | null;
+  email_consent_source: string | null;
+  total_orders: number | null;
+  total_spent: number | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  is_walk_in_anonymous: boolean | null;
+}
+
+async function listCustomersTool(input: ListCustomersInput, admin: SupabaseClient): Promise<string> {
+  const limit = Math.min(200, Math.max(1, Number(input.limit ?? 50)));
+  let q = admin.from('customers')
+    .select('id, full_name, phone, phone_e164, email, origin_channel, source, email_marketing_consent, email_consent_source, total_orders, total_spent, first_seen_at, last_seen_at, is_walk_in_anonymous')
+    .or('is_walk_in_anonymous.is.null,is_walk_in_anonymous.eq.false');
+
+  if (typeof input.search === 'string' && input.search.trim()) {
+    const s = input.search.trim().replace(/[%_]/g, m => `\\${m}`);
+    q = q.or(`full_name.ilike.%${s}%,phone.ilike.%${s}%,phone_e164.ilike.%${s}%,email.ilike.%${s}%`);
+  }
+  if (input.opted_in_only === true)                                  q = q.eq('email_marketing_consent', true);
+  if (typeof input.consent_source === 'string' && input.consent_source) q = q.eq('email_consent_source', input.consent_source);
+  if (typeof input.origin_channel === 'string' && input.origin_channel) q = q.eq('origin_channel', input.origin_channel);
+  if (Number.isFinite(Number(input.min_total_spent)))                q = q.gte('total_spent', Number(input.min_total_spent));
+  if (Number.isFinite(Number(input.min_total_orders)))               q = q.gte('total_orders', Number(input.min_total_orders));
+  if (Number.isFinite(Number(input.last_seen_within_days))) {
+    const cutoff = new Date(Date.now() - Number(input.last_seen_within_days) * 86_400_000).toISOString();
+    q = q.gte('last_seen_at', cutoff);
+  }
+  if (Number.isFinite(Number(input.last_seen_before_days))) {
+    const cutoff = new Date(Date.now() - Number(input.last_seen_before_days) * 86_400_000).toISOString();
+    q = q.lte('last_seen_at', cutoff);
+  }
+
+  const sortBy = typeof input.sort_by === 'string' ? input.sort_by : 'total_spent';
+  switch (sortBy) {
+    case 'total_orders': q = q.order('total_orders', { ascending: false, nullsFirst: false }); break;
+    case 'last_seen':    q = q.order('last_seen_at', { ascending: false, nullsFirst: false }); break;
+    case 'name':         q = q.order('full_name',    { ascending: true,  nullsFirst: false }); break;
+    case 'total_spent':
+    default:             q = q.order('total_spent',  { ascending: false, nullsFirst: false }); break;
+  }
+
+  const { data, error } = await q.limit(limit);
+  if (error) return JSON.stringify({ error: error.message });
+
+  const rows = (data ?? []) as CustomerSummary[];
+  return JSON.stringify({
+    count: rows.length,
+    sort_by: sortBy,
+    customers: rows.map(c => ({
+      id: c.id,
+      full_name: c.full_name,
+      phone: c.phone_e164 ?? c.phone,
+      email: c.email,
+      origin: c.origin_channel ?? c.source,
+      consent: !!c.email_marketing_consent,
+      consent_source: c.email_consent_source,
+      total_orders: Number(c.total_orders ?? 0),
+      total_spent:  Number(c.total_spent ?? 0),
+      first_seen:   c.first_seen_at,
+      last_seen:    c.last_seen_at,
+    })),
+  });
+}
+
+async function segmentCustomersTool(input: SegmentCustomersInput, admin: SupabaseClient): Promise<string> {
+  const mode = typeof input.mode === 'string' ? input.mode : '';
+  if (!['recency','frequency','monetary','origin','consent'].includes(mode)) {
+    return JSON.stringify({ error: 'mode must be one of: recency, frequency, monetary, origin, consent' });
+  }
+
+  // Pull everyone (capped at 5000 to be safe). For BSC scale this is fine.
+  const { data, error } = await admin.from('customers')
+    .select('id, total_orders, total_spent, last_seen_at, origin_channel, source, email_marketing_consent, email_consent_source, is_walk_in_anonymous')
+    .or('is_walk_in_anonymous.is.null,is_walk_in_anonymous.eq.false')
+    .limit(5000);
+  if (error) return JSON.stringify({ error: error.message });
+  const rows = (data ?? []) as CustomerSummary[];
+
+  type Seg = { name: string; count: number; total_spent_sum: number; avg_spent: number; sample_customer_ids: string[] };
+  const segs = new Map<string, Seg>();
+  function bump(name: string, c: CustomerSummary) {
+    const s = segs.get(name) ?? { name, count: 0, total_spent_sum: 0, avg_spent: 0, sample_customer_ids: [] };
+    s.count += 1;
+    s.total_spent_sum += Number(c.total_spent ?? 0);
+    if (s.sample_customer_ids.length < 5) s.sample_customer_ids.push(c.id);
+    segs.set(name, s);
+  }
+
+  const now = Date.now();
+  for (const c of rows) {
+    if (mode === 'recency') {
+      if (!c.last_seen_at) { bump('never_seen', c); continue; }
+      const days = Math.floor((now - new Date(c.last_seen_at).getTime()) / 86_400_000);
+      if      (days <  30) bump('active_under_30d', c);
+      else if (days <  90) bump('dormant_30_90d',   c);
+      else if (days < 180) bump('lapsed_90_180d',   c);
+      else                 bump('lost_180d_plus',   c);
+    } else if (mode === 'frequency') {
+      const n = Number(c.total_orders ?? 0);
+      if      (n === 0)  bump('no_orders_yet', c);
+      else if (n <= 2)   bump('occasional_1_2', c);
+      else if (n <= 9)   bump('regular_3_9',   c);
+      else               bump('loyal_10_plus', c);
+    } else if (mode === 'monetary') {
+      const spent = Number(c.total_spent ?? 0);
+      if      (spent === 0)  bump('no_spend_yet', c);
+      else if (spent <  50)  bump('small_under_50',     c);
+      else if (spent < 200)  bump('mid_50_to_200',      c);
+      else                   bump('big_200_plus',       c);
+    } else if (mode === 'origin') {
+      bump((c.origin_channel ?? c.source ?? 'unknown'), c);
+    } else if (mode === 'consent') {
+      if (!c.email_marketing_consent) bump('not_opted_in', c);
+      else                            bump(`opted_in_via_${c.email_consent_source ?? 'unknown'}`, c);
+    }
+  }
+
+  const out = Array.from(segs.values()).map(s => ({
+    ...s,
+    avg_spent: s.count > 0 ? Math.round((s.total_spent_sum / s.count) * 100) / 100 : 0,
+    total_spent_sum: Math.round(s.total_spent_sum * 100) / 100,
+  })).sort((a, b) => b.count - a.count);
+
+  return JSON.stringify({
+    mode,
+    universe_size: rows.length,
+    segments: out,
+  });
+}
+
+async function customerHistoryTool(input: CustomerHistoryInput, admin: SupabaseClient): Promise<string> {
+  const orderLimit = Math.min(100, Math.max(1, Number(input.order_limit ?? 30)));
+
+  // Resolve to a single customer row via id → phone (E.164 or legacy) → email.
+  let customer: CustomerSummary | null = null;
+  if (typeof input.customer_id === 'string' && input.customer_id) {
+    const { data } = await admin.from('customers').select('*').eq('id', input.customer_id).maybeSingle();
+    customer = (data ?? null) as CustomerSummary | null;
+  }
+  if (!customer && typeof input.phone === 'string' && input.phone.trim()) {
+    const raw = input.phone.trim();
+    const { data: viaRpc } = await admin.rpc('bsc_lookup_customer_by_phone', { p_raw_phone: raw });
+    const match = Array.isArray(viaRpc) && viaRpc.length > 0 ? (viaRpc[0] as { id: string }) : null;
+    if (match) {
+      const { data } = await admin.from('customers').select('*').eq('id', match.id).maybeSingle();
+      customer = (data ?? null) as CustomerSummary | null;
+    } else {
+      // Fall back to legacy phone column substring match
+      const { data } = await admin.from('customers').select('*').or(`phone.eq.${raw},phone_e164.eq.${raw}`).maybeSingle();
+      customer = (data ?? null) as CustomerSummary | null;
+    }
+  }
+  if (!customer && typeof input.email === 'string' && input.email.trim()) {
+    const e = input.email.trim().toLowerCase();
+    const { data } = await admin.from('customers').select('*').ilike('email', e).maybeSingle();
+    customer = (data ?? null) as CustomerSummary | null;
+  }
+
+  if (!customer) {
+    return JSON.stringify({ error: 'customer not found. Provide customer_id (uuid), phone, or email.' });
+  }
+  if (customer.is_walk_in_anonymous) {
+    return JSON.stringify({ error: 'this is the shared Walk-In Anonymous record — no individual history available.' });
+  }
+
+  type HistoryOrderRow = {
+    id: string; created_at: string; order_type: string | null; channel: string | null;
+    location: string | null; payment_method: string | null; payment_status: string | null;
+    total: number | null; wholesale_items: unknown;
+  };
+  const { data: orderRows } = await admin.from('orders')
+    .select('id, created_at, order_type, channel, location, payment_method, payment_status, total, wholesale_items')
+    .eq('customer_id', customer.id)
+    .order('created_at', { ascending: false })
+    .limit(orderLimit);
+  const orders = (orderRows ?? []) as HistoryOrderRow[];
+
+  // Top items across all orders
+  const itemMap = new Map<string, { sku?: string; name: string; times: number; total_qty: number; total_revenue: number }>();
+  for (const o of orders) {
+    const items: RawOrderItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawOrderItem[]) : [];
+    for (const it of items) {
+      const key = it.sku ?? it.name ?? 'unknown';
+      const ex = itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
+      ex.times         += 1;
+      ex.total_qty     += Number(it.weight_lb ?? it.quantity ?? 0);
+      ex.total_revenue += Number(it.line_total ?? 0);
+      itemMap.set(key, ex);
+    }
+  }
+  const topItems = Array.from(itemMap.values()).sort((a, b) => b.times - a.times).slice(0, 15);
+
+  // Channel mix
+  const byChannel: Record<string, { orders: number; revenue: number }> = {};
+  for (const o of orders) {
+    const ch = o.channel ?? o.order_type ?? 'unknown';
+    const e  = byChannel[ch] ?? { orders: 0, revenue: 0 };
+    e.orders  += 1;
+    e.revenue += Number(o.total ?? 0);
+    byChannel[ch] = e;
+  }
+
+  return JSON.stringify({
+    customer: {
+      id: customer.id,
+      full_name: customer.full_name,
+      phone: customer.phone_e164 ?? customer.phone,
+      email: customer.email,
+      origin: customer.origin_channel ?? customer.source,
+      consent: !!customer.email_marketing_consent,
+      consent_source: customer.email_consent_source,
+      lifetime_orders: Number(customer.total_orders ?? 0),
+      lifetime_spent:  Number(customer.total_spent ?? 0),
+      first_seen:      customer.first_seen_at,
+      last_seen:       customer.last_seen_at,
+    },
+    recent_orders: orders.map(o => ({
+      id: o.id,
+      created_at: o.created_at,
+      channel: o.channel ?? o.order_type,
+      payment_method: o.payment_method,
+      payment_status: o.payment_status,
+      total: Number(o.total ?? 0),
+      line_count: Array.isArray(o.wholesale_items) ? o.wholesale_items.length : 0,
+    })),
+    channel_mix: byChannel,
+    top_items: topItems,
   });
 }
