@@ -67,15 +67,18 @@ export default function PendingProductsPage() {
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
-    // Pending = has a parent_product_id AND all sell_* flags are off.
+    // Pending = ALL sell_* flags off. This catches: explode_product children,
+    // lobster-grade publishes from /spinytails/lots/<code>, and AI photo-intake
+    // submissions — anything created without channels-on is considered awaiting
+    // founder review here.
     const { data: prods, error } = await supabase
       .from('products')
       .select('id, sku, name, category, unit_of_measure, parent_product_id, portion_size, portion_unit, portions_per_parent, created_at')
-      .not('parent_product_id', 'is', null)
       .eq('sell_nassau', false)
       .eq('sell_andros', false)
       .eq('sell_online', false)
       .eq('sell_wholesale', false)
+      .eq('status', 'active')
       .order('created_at', { ascending: false });
     if (error) { setErr(error.message); setLoading(false); return; }
     const rows = prods ?? [];

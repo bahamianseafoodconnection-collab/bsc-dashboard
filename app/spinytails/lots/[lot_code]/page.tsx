@@ -275,6 +275,58 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
     setTimeout(() => setConToast(null), 4000);
   }
 
+  // Aggregate grades across all batches for this lot — one row per grade name.
+  const gradeAggregates = useMemo(() => {
+    const m = new Map<string, { grade: string; weight_lbs: number; box_count: number }>();
+    for (const g of grades) {
+      const cur = m.get(g.grade) ?? { grade: g.grade, weight_lbs: 0, box_count: 0 };
+      cur.weight_lbs += Number(g.weight_lbs ?? 0);
+      cur.box_count  += Number(g.box_count ?? 0);
+      m.set(g.grade, cur);
+    }
+    return Array.from(m.values()).sort((a, b) => a.grade.localeCompare(b.grade));
+  }, [grades]);
+
+  const [pubBusy, setPubBusy] = useState<Record<string, boolean>>({});
+  const [pubToast, setPubToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function publishGrade(gr: { grade: string; weight_lbs: number; box_count: number }) {
+    if (!lot) return;
+    setPubBusy(b => ({ ...b, [gr.grade]: true }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const callerId = session?.user?.id ?? null;
+      const sku = `${lot.lot_code}-${gr.grade.toUpperCase().replace(/[^A-Z0-9]+/g, '')}`;
+      const name = `Spiny Lobster Tail ${gr.grade} · Lot ${lot.lot_code}`;
+
+      const { data: prod, error } = await supabase
+        .from('products')
+        .insert({
+          sku, name,
+          description: `Wild-caught Bahamian spiny lobster tail, grade ${gr.grade}. ${gr.weight_lbs.toFixed(1)} lbs available from lot ${lot.lot_code}.`,
+          category: 'frozen_seafood',
+          unit_of_measure: 'lb',
+          unit_type: 'lb',
+          is_bsc_processed: true,
+          status: 'active',
+          sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false,
+          stock_lbs: gr.weight_lbs,
+          created_by: callerId,
+        })
+        .select('id, sku')
+        .single();
+      if (error || !prod) {
+        const dup = /duplicate key/i.test(error?.message ?? '');
+        setPubToast({ ok: false, msg: dup ? `⚠ ${sku} already published — find it at /founder-ai/products/pending` : `⚠ ${error?.message ?? 'insert failed'}` });
+        return;
+      }
+      setPubToast({ ok: true, msg: `✓ ${prod.sku} created in pending — set cost + price + channels at /founder-ai/products/pending` });
+    } finally {
+      setPubBusy(b => ({ ...b, [gr.grade]: false }));
+      setTimeout(() => setPubToast(null), 7000);
+    }
+  }
+
   if (authed === null) return <div style={pg}>Loading…</div>;
   if (err) return <div style={pg}><div style={{ padding: 20, color: '#f87171' }}>⚠ {err} <Link href="/spinytails" style={{ color: '#f5c518' }}>← back</Link></div></div>;
   if (loading || !lot) return <div style={pg}><div style={{ padding: 20, color: 'rgba(255,255,255,0.55)' }}>Loading…</div></div>;
@@ -510,6 +562,38 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
                 </div>
               </div>
             ))}
+          </Section>
+        )}
+
+        {/* Publish grades as retail products */}
+        {gradeAggregates.length > 0 && (
+          <Section title="🦞 Publish grades as retail products" countLabel={`${gradeAggregates.length}`}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 8 }}>
+              One-click publish per grade. Each becomes a PENDING product (channels off, no price yet) — set cost + price + channels at
+              <Link href="/founder-ai/products/pending" style={{ color: '#4ade80', marginLeft: 4 }}>/founder-ai/products/pending</Link>.
+            </div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {gradeAggregates.map(gr => (
+                <div key={gr.grade} style={row}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, color: '#fff', fontWeight: 700 }}>{gr.grade}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{gr.weight_lbs.toFixed(1)} lbs · {gr.box_count} box(es)</div>
+                  </div>
+                  <button onClick={() => publishGrade(gr)} disabled={pubBusy[gr.grade]}
+                    style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 800, cursor: 'pointer', opacity: pubBusy[gr.grade] ? 0.5 : 1 }}>
+                    {pubBusy[gr.grade] ? 'Publishing…' : '✓ Publish'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {pubToast && (
+              <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: pubToast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                color:      pubToast.ok ? '#4ade80' : '#f87171',
+                border:    `1px solid ${pubToast.ok ? '#16a34a' : '#f87171'}` }}>
+                {pubToast.msg}
+              </div>
+            )}
           </Section>
         )}
 
