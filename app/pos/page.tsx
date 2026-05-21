@@ -119,6 +119,10 @@ export default function POSPage() {
   const [customerEmail, setCustomerEmail]       = useState('')
   const [emailConsent, setEmailConsent]         = useState(false)
   const [foundCustomer, setFoundCustomer]       = useState<Customer | null>(null)
+  // Explicit "Save customer" action — captures the customer record
+  // ahead of (or independent from) a sale so history-tracking holds.
+  const [savingCustomer, setSavingCustomer]     = useState(false)
+  const [customerSaveToast, setCustomerSaveToast] = useState<{ ok: boolean; msg: string } | null>(null)
   const [customerLookingUp, setCustomerLookingUp] = useState(false)
   const [customerStatus, setCustomerStatus]     = useState<'idle' | 'found' | 'new'>('idle')
   const phoneSearchTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -442,6 +446,62 @@ export default function POSPage() {
   const cashTenderedNum = parseFloat(cashTendered) || 0
   const changeDue     = paymentMethod === 'cash' && cashTenderedNum >= total ? cashTenderedNum - total : 0
   const checkoutReady = paymentMethod === 'cash' ? (cashTenderedNum >= total && total > 0) : true
+
+  // Explicit "Save customer" — fires the server-side /api/pos/save-customer
+  // route so RLS doesn't block the cashier. Cashier sees an inline toast
+  // with the resulting customer's lifetime totals. Founder AI receives
+  // the save via ai_writes (audit pipeline already wired).
+  async function handleSaveCustomer() {
+    const nameClean  = customerName.trim()
+    const phoneClean = customerPhone.trim()
+    const emailClean = customerEmail.trim().toLowerCase()
+    if (!nameClean) { setCustomerSaveToast({ ok: false, msg: '⚠ Name required' }); setTimeout(() => setCustomerSaveToast(null), 5000); return }
+    if (!phoneClean && !emailClean) { setCustomerSaveToast({ ok: false, msg: '⚠ Phone OR email required' }); setTimeout(() => setCustomerSaveToast(null), 5000); return }
+    setSavingCustomer(true); setCustomerSaveToast(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+      if (!accessToken) { setCustomerSaveToast({ ok: false, msg: '⚠ Sign-in expired — refresh.' }); return }
+      const res = await fetch('/api/pos/save-customer', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body:    JSON.stringify({
+          name:           nameClean,
+          phone:          phoneClean || null,
+          email:          emailClean || null,
+          origin_channel: 'nassau_pos',
+          email_consent:  emailConsent,
+        }),
+      })
+      const j = await res.json()
+      if (!res.ok || !j.ok) {
+        setCustomerSaveToast({ ok: false, msg: `⚠ ${j.error ?? `Failed (${res.status})`}` })
+        return
+      }
+      // Mirror the "found customer" state so the cashier sees the success
+      // panel + lifetime stats immediately.
+      setFoundCustomer({
+        id:                       j.customer_id,
+        full_name:                j.full_name,
+        phone:                    phoneClean || null,
+        phone_e164:               null,
+        email:                    emailClean || null,
+        total_orders:             j.total_orders ?? 0,
+        total_spent:              j.total_spent ?? 0,
+        email_marketing_consent:  emailConsent && !!emailClean,
+      } as unknown as Customer)
+      setCustomerStatus('found')
+      setCustomerSaveToast({
+        ok: true,
+        msg: `✓ ${j.was_new ? 'Created' : 'Updated'} ${j.full_name} · ${j.total_orders} order${j.total_orders === 1 ? '' : 's'} · $${Number(j.total_spent).toFixed(2)} lifetime`,
+      })
+      setTimeout(() => setCustomerSaveToast(null), 6000)
+    } catch (e) {
+      setCustomerSaveToast({ ok: false, msg: `⚠ ${e instanceof Error ? e.message : 'Save failed'}` })
+    } finally {
+      setSavingCustomer(false)
+    }
+  }
 
   async function handleCheckout() {
     if (!cart.length) return
@@ -1044,6 +1104,29 @@ export default function POSPage() {
 
               {customerStatus === 'idle' && !customerLookingUp && (
                 <p className="text-xs text-gray-500">Optional — enter phone to look up or create customer</p>
+              )}
+
+              {/* Explicit save — captures the customer record now so
+                  history-tracking holds even if no sale completes today. */}
+              {(customerStatus === 'new' || customerStatus === 'found') && customerName.trim() && (customerPhone.trim() || customerEmail.trim()) && (
+                <button
+                  onClick={handleSaveCustomer}
+                  disabled={savingCustomer}
+                  className="w-full mt-3 rounded-xl py-2.5 text-sm font-bold disabled:opacity-50"
+                  style={{ backgroundColor: '#16a34a', color: '#fff', border: 'none' }}>
+                  {savingCustomer ? 'Saving customer…' : '✓ Save customer to history'}
+                </button>
+              )}
+
+              {customerSaveToast && (
+                <div className="mt-2 rounded-lg p-2 text-xs font-semibold"
+                  style={{
+                    backgroundColor: customerSaveToast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                    color:           customerSaveToast.ok ? '#4ade80' : '#f87171',
+                    border:          `1px solid ${customerSaveToast.ok ? '#16a34a' : '#f87171'}`,
+                  }}>
+                  {customerSaveToast.msg}
+                </div>
               )}
             </div>
 

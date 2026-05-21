@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-21T15:13:41.440Z",
+  "generated_at": "2026-05-21T15:25:31.996Z",
   "stats": {
     "pages": 138,
-    "api_routes": 55,
+    "api_routes": 56,
     "tables": 40,
     "migrations": 44,
     "business_rules": 13
@@ -1131,6 +1131,14 @@
         "POST"
       ],
       "purpose": "/api/pos/receipt Auto-send the POS receipt at checkout completion. Channel decision is server-side based on what the customer gave us: 1. Customer has email on file → branded HTML email via Resend 2. No email but has ph…"
+    },
+    {
+      "url": "/api/pos/save-customer",
+      "file": "app/api/pos/save-customer/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/pos/save-customer Explicit \"save customer\" action from the POS customer-entry box. Cashier can capture a customer's contact info BEFORE ringing up a sale (or even if they don't buy today) so history-tracking is pre…"
     },
     {
       "url": "/api/pos/whatsapp-receipt",
