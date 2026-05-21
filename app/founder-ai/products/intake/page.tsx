@@ -79,9 +79,14 @@ function ProductIntakeInner() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
 
-  const [photo,    setPhoto]    = useState<File | null>(null);
-  const [preview,  setPreview]  = useState<string | null>(null);
-  const [photoGeo, setPhotoGeo] = useState<PhotoGeoMeta | null>(null);
+  // Up to 3 photos per submission. Each photo carries its own GPS metadata
+  // (geos[i] aligned to photos[i] aligned to previews[i]). First photo is
+  // the "primary" — copied to products.image_url so /market displays it.
+  // All photos + geos travel together in product_intake_log.
+  const MAX_PHOTOS = 3;
+  const [photos,    setPhotos]    = useState<File[]>([]);
+  const [previews,  setPreviews]  = useState<string[]>([]);
+  const [photoGeos, setPhotoGeos] = useState<PhotoGeoMeta[]>([]);
   const [submitterRole, setSubmitterRole] = useState<KnownRole | null>(null);
   const [name,     setName]     = useState('');
   const [description, setDescription] = useState('');
@@ -116,18 +121,25 @@ function ProductIntakeInner() {
     })();
   }, [roleParam]);
 
-  async function onPickFile(file: File | null) {
-    setPhoto(file);
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(file ? URL.createObjectURL(file) : null);
-    // Capture GPS the moment the photo lands. GPS denied is NOT a blocker —
-    // capturePhotoGeoMeta returns { gps_status: 'denied' } in that case.
-    if (file) {
-      const geo = await capturePhotoGeoMeta();
-      setPhotoGeo(geo);
-    } else {
-      setPhotoGeo(null);
+  async function onAddPhoto(file: File | null) {
+    if (!file) return;
+    if (photos.length >= MAX_PHOTOS) {
+      showToast(false, `⚠ Max ${MAX_PHOTOS} photos per submission`);
+      return;
     }
+    // Capture GPS the moment the photo lands — denied/timeout are NOT blockers.
+    const geo = await capturePhotoGeoMeta();
+    setPhotos(p => [...p, file]);
+    setPreviews(p => [...p, URL.createObjectURL(file)]);
+    setPhotoGeos(g => [...g, geo]);
+  }
+
+  function onRemovePhoto(index: number) {
+    const url = previews[index];
+    if (url) URL.revokeObjectURL(url);
+    setPhotos(p => p.filter((_, i) => i !== index));
+    setPreviews(p => p.filter((_, i) => i !== index));
+    setPhotoGeos(g => g.filter((_, i) => i !== index));
   }
 
   function previewPrices(): Array<{ db: string; label: string; price: number; markup: number; vat: number }> {
@@ -141,132 +153,94 @@ function ProductIntakeInner() {
   }
 
   function showToast(ok: boolean, msg: string) {
+    // PERSISTENT — no auto-dismiss. User dismisses with the × button.
+    // (Old 6-sec auto-dismiss meant Claff missed the error and re-tried;
+    // now it stays until acknowledged.)
     setToast({ ok, msg });
-    setTimeout(() => setToast(null), 6000);
+  }
+
+  function clearFormForNext() {
+    // Clear photo-related state but keep category / unit / vat / supplier
+    // so the user can rapid-fire similar products from the same shelf.
+    setPhotos([]);
+    for (const u of previews) URL.revokeObjectURL(u);
+    setPreviews([]);
+    setPhotoGeos([]);
+    setName('');
+    setDescription('');
+    setCost(0);
+    setSkuOverride('');
+    // Reset file input so the same file can be re-selected later.
+    if (fileRef.current) fileRef.current.value = '';
   }
 
   async function submit() {
-    if (!photo) { showToast(false, '⚠ Photo required'); return; }
+    if (photos.length === 0) { showToast(false, '⚠ At least 1 photo required'); return; }
     if (!name.trim()) { showToast(false, '⚠ Name required'); return; }
     if (!(cost > 0)) { showToast(false, '⚠ Cost must be greater than 0'); return; }
 
     setBusy(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const callerId = session?.user?.id ?? null;
+      const accessToken = session?.access_token;
+      if (!accessToken) { showToast(false, '⚠ Sign-in expired — refresh the page.'); return; }
 
       const sku = (skuOverride.trim() || `${slugifyForSku(name)}-${Date.now().toString(36).toUpperCase()}`).slice(0, 40);
 
-      // 1. Upload image to site-images/products/<sku>-<ts>.<ext>
-      const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `products/${sku}-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('site-images')
-        .upload(path, photo, { upsert: true, contentType: photo.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` });
-      if (upErr) { showToast(false, `⚠ Image upload: ${upErr.message}`); return; }
-      const { data: urlData } = supabase.storage.from('site-images').getPublicUrl(path);
-      const image_url = urlData.publicUrl;
+      // 1. Upload every photo client-side to site-images. This bucket is
+      //    publicly readable; uploads succeed for all authenticated users
+      //    (the bucket policy + service_role-on-server makes this safe).
+      const uploadedUrls: string[] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const file = photos[i];
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const path = `products/${sku}-${i}-${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from('site-images')
+          .upload(path, file, { upsert: true, contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+        if (upErr) { showToast(false, `⚠ Photo ${i + 1} upload: ${upErr.message}`); return; }
+        const { data: urlData } = supabase.storage.from('site-images').getPublicUrl(path);
+        uploadedUrls.push(urlData.publicUrl);
+      }
 
-      // 2. INSERT product (pending — all sell_* off)
-      const { data: prod, error: prodErr } = await supabase
-        .from('products')
-        .insert({
-          sku,
-          name: name.trim(),
-          description: description.trim() || null,
+      // 2. Send everything to the server-side API. The API uses
+      //    service_role to bypass RLS on products / product_costs /
+      //    product_pricing — which is why this works for cashier /
+      //    fisherman / supplier / etc. who don't have direct INSERT.
+      const res = await fetch('/api/products/intake-submit', {
+        method:  'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          sku, name: name.trim(),
+          description:    description.trim() || null,
           category,
-          unit_of_measure: unit,
-          unit_type: unit === 'lb' ? 'lb' : null,
-          is_bsc_processed: false,
-          primary_supplier_id: supplierId || null,
-          status: 'active',
-          sell_nassau:    false,
-          sell_andros:    false,
-          sell_online:    false,
-          sell_wholesale: false,
-          image_url,
-          vat_category: vatCategory,
-          created_by: callerId,
-        })
-        .select('id, sku, name')
-        .single();
-      if (prodErr || !prod) { showToast(false, `⚠ Product insert: ${prodErr?.message ?? 'no row'}`); return; }
-      const productId = prod.id as string;
-
-      // 3. INSERT product_costs (immutable; trigger expires nothing — first cost row)
-      const nowIso = new Date().toISOString();
-      const { error: costErr } = await supabase.from('product_costs').insert({
-        product_id:      productId,
-        supplier_id:     supplierId || null,
-        cost_type:       'opening_balance',
-        cost_per_unit:   cost,
-        unit_of_measure: unit,
-        shipping_per_lb: 0,
-        customs_duty_pct: 0,
-        vat_levy_pct:    0,
-        processing_fee:  0,
-        effective_from:  nowIso,
-        is_current:      true,
-        recorded_by:     callerId,
+          unit,
+          vat_category:   vatCategory,
+          cost_per_unit:  cost,
+          supplier_id:    supplierId || null,
+          prices:         previewPrices().map(p => ({ channel: p.db, price: p.price })),
+          image_url:      uploadedUrls[0],
+          photo_urls:     uploadedUrls,
+          photo_geo:      photoGeos,
+          submitted_by_role: submitterRole,
+        }),
       });
-      if (costErr) console.warn('cost insert failed:', costErr.message);
-
-      // 4. INSERT product_pricing for the 3 retail channels
-      const pricingRows = previewPrices().map(p => ({
-        product_id:         productId,
-        channel:            p.db,
-        pricing_mode:       'manual_override',
-        margin_multiplier:  1.0,
-        vat_multiplier:     1.0,
-        manual_unit_price:  p.price,
-        shipping_per_lb:    0,
-        customs_duty_pct:   0,
-        vat_levy_pct:       0,
-        per_transaction_fee: 0,
-        service_fee_pct:    0,
-        effective_from:     nowIso,
-        is_current:         true,
-        is_active:          true,
-        recorded_by:        callerId,
-      }));
-      const { error: prErr } = await supabase.from('product_pricing').insert(pricingRows);
-      if (prErr) {
-        // Roll back the product
-        await supabase.from('products').delete().eq('id', productId);
-        showToast(false, `⚠ Pricing insert: ${prErr.message} (rolled back product)`);
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        showToast(false, `⚠ ${json.error ?? `Submit failed (${res.status})`}`);
         return;
       }
 
-      // Audit log: insert the intake row so role + GPS travel with the
-      // submission to the approval queue. Non-blocking — if the log
-      // insert fails, the product is still created and the founder sees
-      // it in the pending queue. (The product row is the spec-compliant
-      // "nothing until Dedrick approves" point — see /founder-ai/products/pending.)
-      try {
-        await supabase.from('product_intake_log').insert({
-          submitted_by:      callerId,
-          submitted_by_role: submitterRole,
-          submission_source: 'web',
-          raw_payload: {
-            sku, name: name.trim(), description: description.trim() || null,
-            category, unit_of_measure: unit, cost_per_unit: cost,
-            vat_category: vatCategory, supplier_id: supplierId || null,
-          },
-          photo_urls:      [image_url],
-          photo_geo:       photoGeo ? [photoGeo] : [],
-          proposed_sku:    sku,
-          proposed_name:   name.trim(),
-          proposed_supplier_id: supplierId || null,
-          extracted_fields: null,
-          status:          'pending',
-          product_id:      productId,
-        });
-      } catch (logErr) {
-        console.warn('product_intake_log insert failed (non-blocking):', logErr);
-      }
-
-      showToast(true, `✓ ${prod.sku} added to pending queue — redirecting to review…`);
-      setTimeout(() => router.push('/founder-ai/products/pending'), 900);
+      // SUCCESS — clear form, STAY on page, show a sticky success that
+      // points to the pending queue. User can keep adding without
+      // navigating away (per Claff's feedback).
+      showToast(true, `✓ ${json.sku} saved — Dedrick will see it at /founder-ai/products/pending. Ready for the next product.`);
+      clearFormForNext();
+    } catch (e) {
+      showToast(false, `⚠ ${e instanceof Error ? e.message : 'Submit crashed'}`);
     } finally {
       setBusy(false);
     }
@@ -280,17 +254,23 @@ function ProductIntakeInner() {
     <div style={pg}>
       <header style={hdr}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          <Link href="/founder-ai" style={back}>← Founder AI</Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/dashboard" style={back}>← Back to Dashboard</Link>
+            <Link href="/founder-ai/products/pending" style={{ ...back, color: '#4ade80' }}>Pending queue →</Link>
+          </div>
           <h1 style={h1}>📷 New product intake</h1>
           <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
-            Upload a photo, fill the basics, hit submit. Lands in the pending queue with auto-computed retail prices. Approve at <Link href="/founder-ai/products/pending" style={{ color: '#4ade80' }}>/founder-ai/products/pending</Link>.
+            Upload up to 3 photos, fill the basics, hit submit. Lands in the pending queue with auto-computed retail prices. Form clears after each save — keep going.
           </p>
           {toast && (
-            <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: toast.ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+            <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 8, fontSize: 13, fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
+              background: toast.ok ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)',
               color:      toast.ok ? '#4ade80' : '#f87171',
               border:    `1px solid ${toast.ok ? '#16a34a' : '#f87171'}` }}>
-              {toast.msg}
+              <span>{toast.msg}</span>
+              <button onClick={() => setToast(null)}
+                style={{ background: 'transparent', color: 'inherit', border: 'none', cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
+                aria-label="Dismiss">×</button>
             </div>
           )}
         </div>
@@ -298,39 +278,57 @@ function ProductIntakeInner() {
 
       <main style={{ maxWidth: 720, margin: '0 auto', padding: 16 }}>
         <div style={card}>
-          <label style={lbl}>Photo *</label>
-          <div
-            onClick={() => fileRef.current?.click()}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) onPickFile(f); }}
-            style={{
-              border: '2px dashed rgba(245,197,24,0.4)', borderRadius: 12,
-              padding: preview ? 0 : 32, textAlign: 'center', cursor: 'pointer',
-              background: '#060d1f', overflow: 'hidden', minHeight: 140,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            {preview ? (
-              <img src={preview} alt="preview" style={{ maxWidth: '100%', maxHeight: 320, display: 'block' }} />
-            ) : (
+          <label style={lbl}>Photos * <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, marginLeft: 4 }}>(up to {MAX_PHOTOS} — front, label, wide)</span></label>
+
+          {/* Thumbnails grid — one per uploaded photo with GPS badge + remove */}
+          {photos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(photos.length, MAX_PHOTOS)}, 1fr)`, gap: 8, marginBottom: 8 }}>
+              {photos.map((file, i) => (
+                <div key={i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', background: '#060d1f', border: '1px solid rgba(245,197,24,0.25)' }}>
+                  <img src={previews[i]} alt={`photo ${i + 1}`} style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                  <button onClick={() => onRemovePhoto(i)} type="button"
+                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: '#f87171', border: 'none', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', fontSize: 11, fontWeight: 800 }}
+                    title="Remove">🗑</button>
+                  <div style={{ position: 'absolute', bottom: 4, left: 4, display: 'flex', gap: 4 }}>
+                    {i === 0 && <span style={{ background: 'rgba(245,197,24,0.9)', color: '#060d1f', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 800 }}>PRIMARY</span>}
+                    <GpsBadge geo={photoGeos[i]} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add-another button (or initial drop zone) */}
+          {photos.length < MAX_PHOTOS && (
+            <div
+              onClick={() => fileRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) onAddPhoto(f); }}
+              style={{
+                border: '2px dashed rgba(245,197,24,0.4)', borderRadius: 12,
+                padding: photos.length === 0 ? 32 : 14, textAlign: 'center', cursor: 'pointer',
+                background: '#060d1f', minHeight: photos.length === 0 ? 140 : 'auto',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
               <div>
-                <div style={{ fontSize: 36 }}>📷</div>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>Tap to pick, drag a photo, or use camera</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>JPG / PNG / HEIC, up to ~10MB</div>
+                <div style={{ fontSize: photos.length === 0 ? 36 : 22 }}>📷</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 6 }}>
+                  {photos.length === 0
+                    ? 'Tap to pick, drag a photo, or use back camera'
+                    : `Add another photo (${photos.length}/${MAX_PHOTOS})`}
+                </div>
+                {photos.length === 0 && <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>JPG / PNG / HEIC, up to ~10MB · GPS captures automatically</div>}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
           <input ref={fileRef} type="file" accept="image/*" capture="environment"
-            onChange={e => onPickFile(e.target.files?.[0] ?? null)}
+            onChange={e => { const f = e.target.files?.[0]; if (f) onAddPhoto(f); if (fileRef.current) fileRef.current.value = ''; }}
             style={{ display: 'none' }} />
 
-          {photo && (
-            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <GpsBadge geo={photoGeo} />
-              {submitterRole && (
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)' }}>
-                  Submitting as <strong style={{ color: '#f5c518' }}>{submitterRole}</strong>
-                </span>
-              )}
+          {photos.length > 0 && submitterRole && (
+            <div style={{ marginTop: 6, fontSize: 10, color: 'rgba(255,255,255,0.55)', textAlign: 'right' }}>
+              Submitting as <strong style={{ color: '#f5c518' }}>{submitterRole}</strong>
             </div>
           )}
 

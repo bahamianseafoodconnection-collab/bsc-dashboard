@@ -16,6 +16,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import GpsBadge from '@/components/intake/GpsBadge';
+import type { PhotoGeoMeta } from '@/lib/founder-ai/capture-gps';
 
 const ADMIN_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager']);
 
@@ -34,6 +36,10 @@ interface Pending {
   cost_per_unit:       number | null;
   channels:            Array<{ pricing_id: string; channel: string; price: number }>;
   created_at:          string;
+  // Hydrated from product_intake_log when this product has a submission row.
+  submitted_by_role:   string | null;
+  photo_urls:          string[];
+  photo_geos:          PhotoGeoMeta[];
 }
 
 const CHANNEL_FLAG: Record<string, 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale'> = {
@@ -113,22 +119,45 @@ export default function PendingProductsPage() {
       pmap2.set(pr.product_id, arr);
     }
 
-    const built: Pending[] = rows.map(r => ({
-      id:                  r.id,
-      sku:                 r.sku,
-      name:                r.name,
-      category:            r.category,
-      unit_of_measure:     r.unit_of_measure,
-      parent_product_id:   r.parent_product_id,
-      parent_sku:          r.parent_product_id ? pmap.get(r.parent_product_id)?.sku ?? null : null,
-      parent_name:         r.parent_product_id ? pmap.get(r.parent_product_id)?.name ?? null : null,
-      portion_size:        r.portion_size,
-      portion_unit:        r.portion_unit,
-      portions_per_parent: r.portions_per_parent,
-      cost_per_unit:       cmap.get(r.id) ?? null,
-      channels:            pmap2.get(r.id) ?? [],
-      created_at:          r.created_at,
-    }));
+    // Side-fetch product_intake_log entries for these pending products
+    // so the queue shows role badge + GPS pin + extra photos per card.
+    const { data: intakeRows } = await supabase
+      .from('product_intake_log')
+      .select('product_id, submitted_by_role, photo_urls, photo_geo')
+      .in('product_id', childIds)
+      .eq('status', 'pending');
+    const intakeMap = new Map<string, { role: string | null; urls: string[]; geos: PhotoGeoMeta[] }>();
+    for (const r of (intakeRows ?? []) as Array<{ product_id: string | null; submitted_by_role: string | null; photo_urls: string[] | null; photo_geo: PhotoGeoMeta[] | null }>) {
+      if (!r.product_id) continue;
+      intakeMap.set(r.product_id, {
+        role: r.submitted_by_role,
+        urls: Array.isArray(r.photo_urls) ? r.photo_urls : [],
+        geos: Array.isArray(r.photo_geo) ? r.photo_geo : [],
+      });
+    }
+
+    const built: Pending[] = rows.map(r => {
+      const intake = intakeMap.get(r.id);
+      return {
+        id:                  r.id,
+        sku:                 r.sku,
+        name:                r.name,
+        category:            r.category,
+        unit_of_measure:     r.unit_of_measure,
+        parent_product_id:   r.parent_product_id,
+        parent_sku:          r.parent_product_id ? pmap.get(r.parent_product_id)?.sku ?? null : null,
+        parent_name:         r.parent_product_id ? pmap.get(r.parent_product_id)?.name ?? null : null,
+        portion_size:        r.portion_size,
+        portion_unit:        r.portion_unit,
+        portions_per_parent: r.portions_per_parent,
+        cost_per_unit:       cmap.get(r.id) ?? null,
+        channels:            pmap2.get(r.id) ?? [],
+        created_at:          r.created_at,
+        submitted_by_role:   intake?.role ?? null,
+        photo_urls:          intake?.urls ?? [],
+        photo_geos:          intake?.geos ?? [],
+      };
+    });
     setItems(built);
     setLoading(false);
   }, []);
@@ -175,6 +204,18 @@ export default function PendingProductsPage() {
           if (prErr) { showToast(false, `⚠ Price update failed: ${prErr.message}`); return; }
         }
       }
+
+      // Flip any related product_intake_log row(s) to approved + stamp approver.
+      const { data: { session } } = await supabase.auth.getSession();
+      await supabase
+        .from('product_intake_log')
+        .update({
+          status:      'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: session?.user?.id ?? null,
+        })
+        .eq('product_id', p.id)
+        .eq('status', 'pending');
 
       showToast(true, `✓ Approved & published: ${p.sku}`);
       await load();
@@ -245,12 +286,46 @@ export default function PendingProductsPage() {
             return (
               <div key={p.id} style={card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'baseline' }}>
-                  <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#f5c518', fontWeight: 800 }}>{p.sku}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#f5c518', fontWeight: 800 }}>{p.sku}</div>
+                    {p.submitted_by_role && (
+                      <span style={{ background: 'rgba(96,165,250,0.18)', color: '#60a5fa', border: '1px solid #60a5fa', borderRadius: 12, padding: '2px 8px', fontSize: 10, fontWeight: 800, letterSpacing: 0.4 }}>
+                        ROLE: {p.submitted_by_role}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                    parent: <Link href={`/dashboard/products/${encodeURIComponent(p.parent_sku ?? '')}`} style={{ color: '#60a5fa' }}>{p.parent_sku ?? '—'}</Link>
-                    {p.parent_name && <span> · {p.parent_name}</span>}
+                    {p.parent_sku
+                      ? <>parent: <Link href={`/dashboard/products/${encodeURIComponent(p.parent_sku)}`} style={{ color: '#60a5fa' }}>{p.parent_sku}</Link>{p.parent_name && <span> · {p.parent_name}</span>}</>
+                      : <span style={{ color: 'rgba(255,255,255,0.4)' }}>(standalone)</span>}
                   </div>
                 </div>
+
+                {/* Photos + per-photo GPS (when product_intake_log has data) */}
+                {p.photo_urls.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    {p.photo_urls.map((url, i) => {
+                      const geo = p.photo_geos[i];
+                      const hasCoord = geo && geo.latitude != null && geo.longitude != null;
+                      const mapUrl = hasCoord ? `https://maps.google.com/?q=${geo.latitude},${geo.longitude}` : null;
+                      return (
+                        <div key={i} style={{ position: 'relative', borderRadius: 6, overflow: 'hidden', border: '1px solid rgba(245,197,24,0.2)' }}>
+                          <img src={url} alt={`photo ${i + 1}`} style={{ width: 90, height: 90, objectFit: 'cover', display: 'block' }} />
+                          <div style={{ position: 'absolute', bottom: 2, left: 2, display: 'flex', gap: 2 }}>
+                            {geo && <GpsBadge geo={geo} />}
+                          </div>
+                          {mapUrl && (
+                            <a href={mapUrl} target="_blank" rel="noreferrer"
+                              style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.6)', color: '#4ade80', borderRadius: 4, padding: '1px 5px', fontSize: 9, textDecoration: 'none', fontWeight: 800 }}
+                              title={`Open ${geo!.latitude!.toFixed(4)}, ${geo!.longitude!.toFixed(4)} in Google Maps`}>
+                              📍 map
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <label style={lbl}>Name</label>
                 <input type="text" value={editName}

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-21T03:56:49.026Z",
+  "generated_at": "2026-05-21T12:29:32.068Z",
   "stats": {
     "pages": 136,
-    "api_routes": 49,
+    "api_routes": 50,
     "tables": 39,
     "migrations": 43,
     "business_rules": 13
@@ -1111,6 +1111,14 @@
         "POST"
       ],
       "purpose": "CSV bulk-import for the products catalog. Used by /products → Import CSV. Headers (first row) — matched case-insensitively, all but `name` optional: name, description, category, price_nassau, price_andros, price_online,…"
+    },
+    {
+      "url": "/api/products/intake-submit",
+      "file": "app/api/products/intake-submit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/products/intake-submit Server-side intake submission. Why this exists: The /founder-ai/products/intake page used to write directly to `products` + `product_costs` + `product_pricing` using the caller's JWT. That wo…"
     },
     {
       "url": "/api/promos/redeem",

@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
 import NewBatchForm from './new-batch-form';
 import ApprovalQueue from './approval-queue';
+import AddInventoryButton from '@/components/intake/AddInventoryButton';
 
 const NAVY = '#060e1c';
 const PANEL = '#0f1a2e';
@@ -197,6 +198,14 @@ export default function ProcessorClient({
             BSC Control →
           </Link>
         </div>
+
+        {view === 'home' && (
+          <div style={{ marginBottom: 14 }}>
+            <AddInventoryButton role="processor" variant="card" icon="📷"
+              label="Log Intake / Output"
+              subLabel="Snap a photo of receiving or finished output. GPS + timestamp captured automatically. Lands in Dedrick's approval queue." />
+          </div>
+        )}
 
         {view === 'new-batch' && (
           <NewBatchForm
