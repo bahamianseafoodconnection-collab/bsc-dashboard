@@ -109,6 +109,10 @@ export default function POSPage() {
   const [cashTendered, setCashTendered] = useState('')
   const [wireRef, setWireRef]           = useState('')
   const [orderSuccess, setOrderSuccess] = useState(false)
+  // Receipt-channel feedback shown after every completed sale so the
+  // cashier (and Dedrick at /dashboard/cashiers) can see whether the
+  // email/SMS receipt actually went out.
+  const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'print'; to?: string; orderId?: string; error?: string } | null>(null)
   const [submitting, setSubmitting]     = useState(false)
   const [weightInput, setWeightInput]   = useState<{ productId: string; weight: string } | null>(null)
   const [overhead, setOverhead]         = useState<OverheadMetrics | null>(null)
@@ -619,9 +623,11 @@ export default function POSPage() {
       const orderId = newOrder?.id
 
       // Auto-send receipt: email if on file, SMS if not, print fallback.
-      // The /api/pos/receipt endpoint decides server-side based on what
-      // the customer provided. We fire-and-forget so the UI stays snappy.
+      // Result is visible to the cashier via lastReceipt state so failures
+      // don't get hidden by the fire-and-forget pattern.
       let receiptChannel: 'email' | 'sms' | 'print' = 'print'
+      let receiptTo: string | undefined
+      let receiptError: string | undefined
       if (orderId) {
         try {
           const { data: { session } } = await supabase.auth.getSession()
@@ -640,6 +646,7 @@ export default function POSPage() {
                 customer_phone: phoneClean || null,
                 customer_name:  nameClean || null,
                 channel_label:  'BSC Marketplace Nassau',
+                cashier_name:   user?.user_metadata?.full_name || user?.email || null,
                 subtotal, vat: vatAmount, total,
                 items: items.map((i: any) => ({
                   name:       i.name,
@@ -651,9 +658,15 @@ export default function POSPage() {
             const j = await res.json().catch(() => ({}))
             if (j?.ok && (j.channel === 'email' || j.channel === 'sms')) {
               receiptChannel = j.channel
+              receiptTo      = j.to
+            } else if (!j?.ok) {
+              receiptError = j?.error ?? `HTTP ${res.status}`
             }
+          } else if (!validEmail && !phoneClean) {
+            // No customer info — print receipt is the right answer.
           }
         } catch (err) {
+          receiptError = err instanceof Error ? err.message : 'fetch failed'
           console.warn('Receipt send failed:', err)
         }
       }
@@ -663,12 +676,16 @@ export default function POSPage() {
         window.open(`/receipt/${orderId}`, '_blank')
       }
 
+      // Surface the result so Claff/TJ see it for ~10 seconds.
+      setLastReceipt({ channel: receiptChannel, to: receiptTo, orderId, error: receiptError })
+      setTimeout(() => setLastReceipt(null), 10000)
+
       setOrderSuccess(true)
       setCart([])
       resetCheckout()
       setShowCheckout(false)
       setShowCart(false)
-      setTimeout(() => setOrderSuccess(false), 4000)
+      setTimeout(() => setOrderSuccess(false), 10000)
     } catch (err: any) {
       alert('Order failed: ' + (plainError(err) || 'Unknown error'))
     } finally {
@@ -774,6 +791,22 @@ export default function POSPage() {
       {orderSuccess && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-xl px-6 py-3 text-sm font-bold shadow-xl" style={{ backgroundColor: '#16a34a', color: 'white' }}>
           ✓ Sale saved successfully
+        </div>
+      )}
+
+      {/* ── Receipt-channel feedback ── */}
+      {lastReceipt && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 rounded-xl px-5 py-3 text-xs font-bold shadow-xl max-w-md text-center"
+          style={{
+            backgroundColor: lastReceipt.error ? '#7f1d1d' : lastReceipt.channel === 'email' ? '#16a34a' : lastReceipt.channel === 'sms' ? '#0369a1' : '#525252',
+            color: 'white',
+          }}>
+          {lastReceipt.error
+            ? `⚠ Receipt FAILED: ${lastReceipt.error}${lastReceipt.orderId ? ` — open /receipt/${lastReceipt.orderId.slice(0, 8)} manually` : ''}`
+            : lastReceipt.channel === 'email' ? `📧 Email receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
+            : lastReceipt.channel === 'sms'   ? `📱 SMS receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
+            : `🖨 Print receipt opened (no customer email or phone on file)`}
+          <button onClick={() => setLastReceipt(null)} className="ml-3 opacity-70 hover:opacity-100" aria-label="Dismiss">×</button>
         </div>
       )}
 
