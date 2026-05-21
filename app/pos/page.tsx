@@ -11,6 +11,7 @@ import {
 } from '@/lib/profit'
 import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
 import AddInventoryButton from '@/components/intake/AddInventoryButton'
+import EditPriceModal from '@/components/pos/EditPriceModal'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -94,6 +95,8 @@ export default function POSPage() {
   const [products, setProducts]         = useState<Product[]>([])
   const [cart, setCart]                 = useState<CartItem[]>([])
   const [search, setSearch]             = useState('')
+  // Inline price-edit modal — Claff opens it from a cart line.
+  const [editingPriceFor, setEditingPriceFor] = useState<{ id: string; sku: string; name: string; current_price: number; cartIndex: number } | null>(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [isWednesday, setIsWednesday]   = useState(false)
   const [loading, setLoading]           = useState(true)
@@ -577,6 +580,24 @@ export default function POSPage() {
       {/* Universal Inventory Intake FAB — cashier role tag */}
       <AddInventoryButton role="cashier" variant="fab" />
 
+      {/* Inline price-edit modal — opens from any cart line's ✏ button */}
+      {editingPriceFor && (
+        <EditPriceModal
+          product={editingPriceFor}
+          channelSet="nassau_pos"
+          onClose={() => setEditingPriceFor(null)}
+          onSaved={(newPrice) => {
+            // Optimistic local update so the cart reflects Claff's new
+            // price instantly. The catalog will fully refresh on the
+            // next load() (or when she scans the same product again).
+            setCart(prev => prev.map((c, idx) => {
+              if (idx !== editingPriceFor.cartIndex) return c
+              return { ...c, product: { ...c.product, sell_price: newPrice } }
+            }))
+          }}
+        />
+      )}
+
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-gray-900 border-b border-gray-800 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
@@ -889,6 +910,19 @@ export default function POSPage() {
                               <button onClick={() => adjustQty(i, 1)} className="w-7 h-7 bg-gray-700 rounded-full text-sm font-bold flex items-center justify-center">+</button>
                             </>
                           )}
+                          <button
+                            onClick={() => setEditingPriceFor({
+                              id:            item.product.id,
+                              sku:           item.product.sku,
+                              name:          item.product.name,
+                              current_price: pricing.unit_price,
+                              cartIndex:     i,
+                            })}
+                            className="w-7 h-7 rounded-full text-xs flex items-center justify-center"
+                            style={{ backgroundColor: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518' }}
+                            title="Edit selling price">
+                            ✏
+                          </button>
                           <span className="text-sm font-bold ml-1" style={{ color: '#f5c518' }}>${line_subtotal.toFixed(2)}</span>
                           <button onClick={() => removeFromCart(i)} className="text-red-400 text-xl ml-1 leading-none">×</button>
                         </div>

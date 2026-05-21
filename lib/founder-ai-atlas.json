@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-21T12:29:32.068Z",
+  "generated_at": "2026-05-21T13:02:55.324Z",
   "stats": {
-    "pages": 136,
-    "api_routes": 50,
-    "tables": 39,
-    "migrations": 43,
+    "pages": 137,
+    "api_routes": 51,
+    "tables": 40,
+    "migrations": 44,
     "business_rules": 13
   },
   "pages": [
@@ -139,6 +139,12 @@
       "file": "app/dashboard/bill-payout/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/bill-payout Bill Casale's sacred 5% gross-profit share, broken out by month. orders.bill_casale_share is populated by the per-transaction allocation hook on every sale. This page sums it by month, shows lifet…"
+    },
+    {
+      "url": "/dashboard/cashier-price-edits",
+      "file": "app/dashboard/cashier-price-edits/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/cashier-price-edits Dedrick's 4-5 day review queue for cashier-initiated POS price edits. Lists every edit (newest first) with: cashier name, product, old vs new POS price, derived cost, channel snapshot, opt…"
     },
     {
       "url": "/dashboard/cashiers",
@@ -1113,6 +1119,14 @@
       "purpose": "CSV bulk-import for the products catalog. Used by /products → Import CSV. Headers (first row) — matched case-insensitively, all but `name` optional: name, description, category, price_nassau, price_andros, price_online,…"
     },
     {
+      "url": "/api/products/cashier-price-edit",
+      "file": "app/api/products/cashier-price-edit/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/products/cashier-price-edit Claff (cashier) — and any allowed POS role — sets the live POS price at the register. We back-compute the product's cost from her new POS price + the product's vat_category, then forward…"
+    },
+    {
       "url": "/api/products/intake-submit",
       "file": "app/api/products/intake-submit/route.ts",
       "methods": [
@@ -1267,6 +1281,24 @@
         "variance_cents"
       ],
       "first_seen_migration": "supabase/migrations/20260519020000_cash_drawer_sessions.sql"
+    },
+    {
+      "name": "cashier_price_edits",
+      "columns": [
+        "id",
+        "product_id",
+        "product_sku",
+        "cashier_user_id",
+        "cashier_role",
+        "channel_set",
+        "vat_category",
+        "old_cost_per_unit",
+        "new_cost_per_unit",
+        "old_nassau_price",
+        "new_nassau_price",
+        "channel_prices"
+      ],
+      "first_seen_migration": "supabase/migrations/20260521000000_cashier_price_edits.sql"
     },
     {
       "name": "catch_logs",

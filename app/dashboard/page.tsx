@@ -93,6 +93,7 @@ const NAV_GROUPS = [
       { icon: '🤖', label: 'Founder AI',        href: '#ai' },
       { icon: '👥', label: 'Customer pulse (founder)',  href: '/dashboard/customer-pulse' },
       { icon: '⚡', label: 'SQL editor (founder)',      href: '/dashboard/sql-editor' },
+      { icon: '💸', label: 'Cashier price edits',       href: '/dashboard/cashier-price-edits' },
       { icon: '📷', label: 'New product intake',     href: '/founder-ai/products/intake' },
       { icon: '🧪', label: 'Pending products review', href: '/founder-ai/products/pending' },
       { icon: '🩺', label: 'Operational health',     href: '/dashboard/health' },
