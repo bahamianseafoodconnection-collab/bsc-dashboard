@@ -66,6 +66,7 @@ const NAV_GROUPS = [
       { icon: '🤝', label: "Bill Casale 5% ledger", href: '/dashboard/bill-payout' },
       { icon: '👥', label: 'Customers',         href: '/customers' },
       { icon: '🪪', label: 'Staff',             href: '/staff' },
+      { icon: '🏷', label: 'Invite supplier portal user', href: '/dashboard/staff/invite-supplier' },
       { icon: '🔗', label: 'Partner Links',     href: '/partner-tokens' },
       { icon: '🎟️', label: 'Promo Codes',       href: '/promos' },
       { icon: '⭐', label: 'Reviews',            href: '/reviews-admin' },

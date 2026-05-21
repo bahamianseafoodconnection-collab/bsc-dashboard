@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-21T13:22:14.649Z",
+  "generated_at": "2026-05-21T13:37:52.501Z",
   "stats": {
-    "pages": 137,
-    "api_routes": 52,
+    "pages": 138,
+    "api_routes": 54,
     "tables": 40,
     "migrations": 44,
     "business_rules": 13
@@ -235,6 +235,12 @@
       "file": "app/dashboard/sql-editor/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/sql-editor Founder-only SQL editor — runs queries against the live BSC database via the bsc_admin_exec_sql() SECURITY DEFINER RPC. Role check happens in Postgres (founder / co_founder / control_admin). Every…"
+    },
+    {
+      "url": "/dashboard/staff/invite-supplier",
+      "file": "app/dashboard/staff/invite-supplier/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/staff/invite-supplier One-click supplier portal onboarding. Founder picks an existing supplier from the list (e.g. Tropic Seafood) — or creates a new one — and types the contact's name + email + temp password…"
     },
     {
       "url": "/dashboard/vendors/approved",
@@ -839,6 +845,22 @@
         "POST"
       ],
       "purpose": "POST /api/admin/fishermen/invite One-click fisherman onboarding for BSC staff. Performs the three linked actions that previously had to be done manually in Supabase: 1) Create auth user with temp password (admin API) 2)…"
+    },
+    {
+      "url": "/api/admin/suppliers/invite",
+      "file": "app/api/admin/suppliers/invite/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/admin/suppliers/invite One-click supplier onboarding. Same shape as /api/admin/fishermen/invite but writes role='supplier'. Performs three linked actions: 1) Create auth user with the supplied password (admin…"
+    },
+    {
+      "url": "/api/admin/whatsapp-test",
+      "file": "app/api/admin/whatsapp-test/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/admin/whatsapp-test Founder-only smoke test for the Twilio WhatsApp pipeline. Sends a short \"test from BSC\" message to a phone number the founder supplies (defaults to his own from the env DEFAULT_WHATSAPP_TEST_TO…"
     },
     {
       "url": "/api/ar/aging-alert",
