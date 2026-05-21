@@ -151,8 +151,6 @@ export async function POST(req: NextRequest) {
       total_orders:    0,
       total_spent:     0,
       origin_channel:  origin,
-      source:          origin,                 // legacy column
-      created_by:      user.id,
     };
     if (validEmail && consent) {
       insertRow.email_marketing_consent = true;
