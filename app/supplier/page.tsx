@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { canLock, useUserRole } from '@/lib/role';
+import AddInventoryButton from '@/components/intake/AddInventoryButton';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
@@ -353,6 +354,8 @@ style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }}
 
 return (
 <div className="min-h-screen text-white" style={{ backgroundColor: '#060d1f', fontFamily: "'DM Sans', sans-serif" }}>
+
+<AddInventoryButton role="supplier" variant="fab" />
 
 {toast && (
 <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-xl"

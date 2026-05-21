@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import { plainError } from '@/lib/plain-error';
 import { splitSale, recordSaleFinancials } from '@/lib/finance';
+import AddInventoryButton from '@/components/intake/AddInventoryButton';
 import {
   fetchOverheadMetrics,
   computeProfitSplit,
@@ -679,6 +680,8 @@ export default function AndrosPOSPage() {
 
   /* ─── REGISTER ─── */
   return (
+    <>
+    <AddInventoryButton role="andros_staff" variant="fab" />
     <div
       style={{
         display: 'flex',
@@ -1250,6 +1253,7 @@ export default function AndrosPOSPage() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

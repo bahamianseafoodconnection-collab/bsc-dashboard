@@ -190,6 +190,12 @@ export default function FounderAIPage() {
       {/* Header */}
       <header style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(6,13,31,0.95)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <a href="/dashboard"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#f5c518', fontSize: 12, textDecoration: 'none', marginBottom: 8, opacity: 0.85 }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.85'; }}>
+            ← Back to Dashboard
+          </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #f5c518, #e6b000)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>🦞</div>
             <div>

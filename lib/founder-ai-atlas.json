@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-21T03:14:40.553Z",
+  "generated_at": "2026-05-21T03:56:49.026Z",
   "stats": {
-    "pages": 130,
+    "pages": 136,
     "api_routes": 49,
-    "tables": 38,
-    "migrations": 42,
+    "tables": 39,
+    "migrations": 43,
     "business_rules": 13
   },
   "pages": [
@@ -41,6 +41,12 @@
     {
       "url": "/bills",
       "file": "app/bills/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/captain",
+      "file": "app/captain/page.tsx",
       "category": "other",
       "purpose": "(no top-of-file purpose comment)"
     },
@@ -243,6 +249,18 @@
       "purpose": "Full expense tracking — entry form + list + mark-paid action. Backed by public.expenses (see sql/2026-05-08-expenses.sql)."
     },
     {
+      "url": "/farmer",
+      "file": "app/farmer/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/fisherman",
+      "file": "app/fisherman/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
       "url": "/fleet",
       "file": "app/fleet/page.tsx",
       "category": "other",
@@ -393,6 +411,12 @@
       "purpose": "Manager-facing traceability view. Joins catch → processing → sale. QR codes are rendered via the public api.qrserver.com image endpoint so we avoid adding a QR npm dependency. \"Export to PDF\" uses the browser's print →…"
     },
     {
+      "url": "/manager",
+      "file": "app/manager/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
       "url": "/market",
       "file": "app/market/page.tsx",
       "category": "customer",
@@ -431,6 +455,12 @@
     {
       "url": "/page.tsx",
       "file": "app/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/partner",
+      "file": "app/partner/page.tsx",
       "category": "other",
       "purpose": "(no top-of-file purpose comment)"
     },
@@ -541,6 +571,12 @@
       "file": "app/receipt/[orderId]/page.tsx",
       "category": "other",
       "purpose": "Customer-facing receipt. Public route — accessed via the order UUID (non-guessable). Shows full customer info: name, phone, address, delivery method, items, total, payment status. Print-friendly. Linked from /checkout's…"
+    },
+    {
+      "url": "/receiver",
+      "file": "app/receiver/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
     },
     {
       "url": "/report",
@@ -1341,6 +1377,24 @@
         "created_at"
       ],
       "first_seen_migration": "supabase/migrations/20260515150000_add_log_tables.sql"
+    },
+    {
+      "name": "product_intake_log",
+      "columns": [
+        "id",
+        "submitted_at",
+        "submitted_by",
+        "submitted_by_role",
+        "submission_source",
+        "raw_payload",
+        "photo_urls",
+        "photo_geo",
+        "proposed_sku",
+        "proposed_name",
+        "proposed_supplier_id",
+        "extracted_fields"
+      ],
+      "first_seen_migration": "supabase/migrations/20260520270000_intake_role_and_geo.sql"
     },
     {
       "name": "spinytails_audit_sessions",

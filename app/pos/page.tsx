@@ -10,6 +10,7 @@ import {
   type OverheadMetrics,
 } from '@/lib/profit'
 import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
+import AddInventoryButton from '@/components/intake/AddInventoryButton'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -572,6 +573,9 @@ export default function POSPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+
+      {/* Universal Inventory Intake FAB — cashier role tag */}
+      <AddInventoryButton role="cashier" variant="fab" />
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 bg-gray-900 border-b border-gray-800 px-4 py-3">

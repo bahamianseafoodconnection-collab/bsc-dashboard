@@ -14,15 +14,24 @@
 //
 // Storage: site-images bucket, path products/<sku>-<timestamp>.<ext>.
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { calculatePrice, vatPctForCategory, type PricingChannel, type SaleUnit } from '@/lib/pricing';
+import { capturePhotoGeoMeta, type PhotoGeoMeta } from '@/lib/founder-ai/capture-gps';
+import { resolveSubmitterRole, type KnownRole } from '@/lib/founder-ai/role-tagging';
+import GpsBadge from '@/components/intake/GpsBadge';
 
 export const dynamic = 'force-dynamic';
 
-const ADMIN_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager']);
+// Wider role set — Universal Inventory Intake means every authenticated
+// user with a known role can submit. Approval still gated to admins.
+const ALLOWED_ROLES = new Set([
+  'founder','co_founder','control_admin','basic_admin','manager',
+  'cashier','andros_staff','processor','supplier','fisherman',
+  'captain','farmer','partner','receiver',
+]);
 
 const CATEGORIES = [
   'fresh_seafood','frozen_seafood','meat','frozen_meat',
@@ -55,12 +64,25 @@ function slugifyForSku(name: string): string {
 }
 
 export default function ProductIntakePage() {
+  // Suspense boundary required for useSearchParams under Next 15 App Router.
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#060d1f', color: '#fff', padding: 24 }}>Loading…</div>}>
+      <ProductIntakeInner />
+    </Suspense>
+  );
+}
+
+function ProductIntakeInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleParam = searchParams?.get('role') ?? null;
   const fileRef = useRef<HTMLInputElement>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   const [photo,    setPhoto]    = useState<File | null>(null);
   const [preview,  setPreview]  = useState<string | null>(null);
+  const [photoGeo, setPhotoGeo] = useState<PhotoGeoMeta | null>(null);
+  const [submitterRole, setSubmitterRole] = useState<KnownRole | null>(null);
   const [name,     setName]     = useState('');
   const [description, setDescription] = useState('');
   const [cost,     setCost]     = useState<number>(0);
@@ -80,20 +102,32 @@ export default function ProductIntakePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { window.location.href = '/staff-login?next=/founder-ai/products/intake'; return; }
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-      if (!prof || !ADMIN_ROLES.has(prof.role as string)) { window.location.href = '/market'; return; }
+      if (!prof || !ALLOWED_ROLES.has(prof.role as string)) { window.location.href = '/market'; return; }
       setAuthed(true);
+
+      // Resolve role tag for this submission — URL param wins, else session.
+      const r = await resolveSubmitterRole(roleParam);
+      setSubmitterRole(r);
 
       // Load supplier list for the picker
       const { data: sups } = await supabase
         .from('suppliers').select('id, name, code').eq('is_active', true).order('name');
       setSuppliers((sups ?? []) as Array<{ id: string; name: string; code: string | null }>);
     })();
-  }, []);
+  }, [roleParam]);
 
-  function onPickFile(file: File | null) {
+  async function onPickFile(file: File | null) {
     setPhoto(file);
     if (preview) URL.revokeObjectURL(preview);
     setPreview(file ? URL.createObjectURL(file) : null);
+    // Capture GPS the moment the photo lands. GPS denied is NOT a blocker —
+    // capturePhotoGeoMeta returns { gps_status: 'denied' } in that case.
+    if (file) {
+      const geo = await capturePhotoGeoMeta();
+      setPhotoGeo(geo);
+    } else {
+      setPhotoGeo(null);
+    }
   }
 
   function previewPrices(): Array<{ db: string; label: string; price: number; markup: number; vat: number }> {
@@ -203,6 +237,34 @@ export default function ProductIntakePage() {
         return;
       }
 
+      // Audit log: insert the intake row so role + GPS travel with the
+      // submission to the approval queue. Non-blocking — if the log
+      // insert fails, the product is still created and the founder sees
+      // it in the pending queue. (The product row is the spec-compliant
+      // "nothing until Dedrick approves" point — see /founder-ai/products/pending.)
+      try {
+        await supabase.from('product_intake_log').insert({
+          submitted_by:      callerId,
+          submitted_by_role: submitterRole,
+          submission_source: 'web',
+          raw_payload: {
+            sku, name: name.trim(), description: description.trim() || null,
+            category, unit_of_measure: unit, cost_per_unit: cost,
+            vat_category: vatCategory, supplier_id: supplierId || null,
+          },
+          photo_urls:      [image_url],
+          photo_geo:       photoGeo ? [photoGeo] : [],
+          proposed_sku:    sku,
+          proposed_name:   name.trim(),
+          proposed_supplier_id: supplierId || null,
+          extracted_fields: null,
+          status:          'pending',
+          product_id:      productId,
+        });
+      } catch (logErr) {
+        console.warn('product_intake_log insert failed (non-blocking):', logErr);
+      }
+
       showToast(true, `✓ ${prod.sku} added to pending queue — redirecting to review…`);
       setTimeout(() => router.push('/founder-ai/products/pending'), 900);
     } finally {
@@ -260,6 +322,17 @@ export default function ProductIntakePage() {
           <input ref={fileRef} type="file" accept="image/*" capture="environment"
             onChange={e => onPickFile(e.target.files?.[0] ?? null)}
             style={{ display: 'none' }} />
+
+          {photo && (
+            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <GpsBadge geo={photoGeo} />
+              {submitterRole && (
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)' }}>
+                  Submitting as <strong style={{ color: '#f5c518' }}>{submitterRole}</strong>
+                </span>
+              )}
+            </div>
+          )}
 
           <label style={lbl}>Name *</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)}

@@ -7,6 +7,7 @@ import InvoiceScanner from '@/components/InvoiceScanner';
 import DashboardSnapshot from './snapshot';
 import { fetchOverheadMetrics, type OverheadMetrics } from '@/lib/profit';
 import { useUserRole, canLock } from '@/lib/role';
+import AddInventoryButton from '@/components/intake/AddInventoryButton';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -600,6 +601,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {pendingWholesale > 0 && <Link href="/wholesale-orders" style={{ backgroundColor: '#fde8e8', color: '#dc2626', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', textDecoration: 'none' }}>🇧🇸 {pendingWholesale} wholesale pending</Link>}
               <span style={{ backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px' }}>● System Live</span>
+              <AddInventoryButton />
               <Link href="/market" style={{ fontSize: '12px', color: '#1a2e5a', fontWeight: 700, textDecoration: 'none', backgroundColor: '#f0f4ff', padding: '6px 12px', borderRadius: '8px' }}>Market →</Link>
             </div>
           </div>
