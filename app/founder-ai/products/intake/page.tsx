@@ -18,7 +18,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { calculatePrice, type PricingChannel, type SaleUnit } from '@/lib/pricing';
+import { calculatePrice, vatPctForCategory, type PricingChannel, type SaleUnit } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +30,12 @@ const CATEGORIES = [
 ] as const;
 
 const UNITS = ['lb','each','bag','case','pack','portion'] as const;
+
+const VAT_CATEGORIES: Array<{ value: string; label: string; vat: number; hint: string }> = [
+  { value: 'uncooked_food',   label: 'Uncooked food (0% VAT)',     vat: 0,  hint: 'Raw seafood, frozen seafood, raw produce, grocery — DEFAULT' },
+  { value: 'cooked_prepared', label: 'Cooked / prepared (10% VAT)', vat: 10, hint: 'Juice bar smoothies, kitchen-prepped meals, hot food' },
+  { value: 'service',         label: 'Service (0% VAT)',           vat: 0,  hint: 'Labour / consulting / delivery — rare for product catalog' },
+];
 
 // Channels we'll create pricing rows for. DB uses 'online_market'
 // (canonical column value), but pricing.ts uses 'online_retail' for the
@@ -60,6 +66,7 @@ export default function ProductIntakePage() {
   const [cost,     setCost]     = useState<number>(0);
   const [category, setCategory] = useState<string>('grocery');
   const [unit,     setUnit]     = useState<string>('each');
+  const [vatCategory, setVatCategory] = useState<string>('uncooked_food');
   const [supplierId, setSupplierId] = useState<string>('');
   const [skuOverride, setSkuOverride] = useState('');
 
@@ -89,12 +96,13 @@ export default function ProductIntakePage() {
     setPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  function previewPrices(): Array<{ db: string; label: string; price: number; markup: number }> {
+  function previewPrices(): Array<{ db: string; label: string; price: number; markup: number; vat: number }> {
     const c = cost > 0 ? cost : 0;
     const u = (UNITS.includes(unit as typeof UNITS[number]) ? unit : 'each') as SaleUnit;
+    const vat = vatPctForCategory(vatCategory);
     return RETAIL_CHANNELS.map(ch => {
-      const r = calculatePrice({ cost: c, channel: ch.pricingCalc, quantity: 1, unit: u });
-      return { db: ch.db, label: ch.label, price: Math.round(r.finalPrice * 100) / 100, markup: ch.markup };
+      const r = calculatePrice({ cost: c, channel: ch.pricingCalc, quantity: 1, unit: u, vatPct: vat });
+      return { db: ch.db, label: ch.label, price: Math.round(r.finalPrice * 100) / 100, markup: ch.markup, vat };
     });
   }
 
@@ -143,6 +151,7 @@ export default function ProductIntakePage() {
           sell_online:    false,
           sell_wholesale: false,
           image_url,
+          vat_category: vatCategory,
           created_by: callerId,
         })
         .select('id, sku, name')
@@ -291,6 +300,14 @@ export default function ProductIntakePage() {
             </div>
           </div>
 
+          <label style={lbl}>VAT category (Bahamas tax law)</label>
+          <select value={vatCategory} onChange={e => setVatCategory(e.target.value)} style={inp}>
+            {VAT_CATEGORIES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+          </select>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+            {VAT_CATEGORIES.find(v => v.value === vatCategory)?.hint}
+          </div>
+
           <label style={lbl}>SKU (auto if blank)</label>
           <input type="text" value={skuOverride} onChange={e => setSkuOverride(e.target.value)}
             placeholder={name ? `${slugifyForSku(name)}-…` : 'auto-generated from name'} style={inp} />
@@ -307,7 +324,7 @@ export default function ProductIntakePage() {
                 <div key={p.db} style={priceCell}>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>{p.label}</div>
                   <div style={{ fontSize: 18, fontWeight: 900, color: '#f5c518' }}>${p.price.toFixed(2)}</div>
-                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{p.markup}% markup + 10% VAT</div>
+                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{p.markup}% markup + {p.vat}% VAT</div>
                 </div>
               ))}
             </div>

@@ -27,6 +27,30 @@ export interface PricingInput {
   channel:  PricingChannel;
   quantity: number;
   unit:     SaleUnit;
+  /**
+   * Optional VAT override. Pass the % directly (0 or 10), OR pass the
+   * product's vat_category and use vatPctForCategory() to derive it.
+   * When omitted, the channel's default vatPct is used (currently 10
+   * for all channels — preserved for backward compat with older
+   * callsites that haven't been patched yet).
+   */
+  vatPct?:  number;
+}
+
+/**
+ * Bahamas VAT mapping by product category.
+ *   uncooked_food   →  0%  (raw seafood / produce / dry grocery)
+ *   cooked_prepared → 10%  (juice bar / kitchen-prepped)
+ *   service         →  0%  (labour / consulting)
+ *   anything else   →  10% (defensive — defaults to "taxable" until classified)
+ */
+export function vatPctForCategory(category: string | null | undefined): number {
+  switch ((category ?? '').toLowerCase()) {
+    case 'uncooked_food': return 0;
+    case 'service':       return 0;
+    case 'cooked_prepared': return 10;
+    default: return 10;
+  }
 }
 
 export interface PricingResult {
@@ -117,8 +141,14 @@ export function calculatePrice(input: PricingInput): PricingResult {
   const rule = BSC_PRICING_RULES[effectiveChannel];
   if (!rule) throw new Error(`No pricing rule for channel ${effectiveChannel}`);
 
+  // VAT precedence:
+  //   1. explicit input.vatPct (callsite passed product's vat_category result)
+  //   2. channel default (currently 10 — kept for legacy callers; will be
+  //      culled once every callsite passes vat_category through)
+  const effectiveVatPct = typeof input.vatPct === 'number' ? input.vatPct : rule.vatPct;
+
   const subtotal           = round2(cost * (1 + rule.markupPct / 100));
-  const vatAmount          = round2(subtotal * (rule.vatPct / 100));
+  const vatAmount          = round2(subtotal * (effectiveVatPct / 100));
   const finalPrice         = round2(subtotal + vatAmount);
   const unitPrice          = round2(finalPrice / quantity);
   const marginDollars      = round2(subtotal - cost);
@@ -127,7 +157,7 @@ export function calculatePrice(input: PricingInput): PricingResult {
   return {
     effectiveChannel,
     markupPct: rule.markupPct,
-    vatPct:    rule.vatPct,
+    vatPct:    effectiveVatPct,
     subtotal,
     vatAmount,
     finalPrice,

@@ -26,7 +26,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { healthCheck } from './health-check';
 import { buildBlastHtml, sendBatch } from './email';
-import { calculatePrice, type PricingChannel, type SaleUnit } from './pricing';
+import { calculatePrice, vatPctForCategory, type PricingChannel, type SaleUnit } from './pricing';
 
 const REPO_ROOT = process.cwd();
 const ALLOWED_READ_PREFIXES = [
@@ -132,6 +132,7 @@ export const TOOLS = [
         stock_lbs:     { type: 'number', description: 'Optional starting inventory in lbs.' },
         image_url:     { type: 'string', description: 'Optional. Public URL of the product photo. When the founder uploads a photo in chat, the persisted URL appears in a "📷 Uploaded image" text block in the user turn — pass that URL here so /market displays the photo on the product card. Must be a fully-qualified https:// URL.' },
         description:   { type: 'string', description: 'Optional. Short customer-facing description shown on /market and product pages. Extract from any photo you were shown (label text, ingredients, weight, brand) when relevant.' },
+        vat_category:  { type: 'string', description: 'Bahamas tax classification. "uncooked_food" (default — 0% VAT, covers raw seafood/produce/grocery), "cooked_prepared" (10% VAT — juice bar smoothies, kitchen-prepped meals), or "service" (0% VAT — labour). When the photo shows a smoothie / juice / hot food, pass "cooked_prepared". For raw seafood, frozen seafood, packaged grocery, or produce, omit or pass "uncooked_food".' },
         confirmed:     { type: 'boolean', description: 'MUST be true to perform the insert. False (or omitted) returns a preview only.' },
       },
       required: ['name', 'sku', 'category', 'unit_of_measure', 'pricing'],
@@ -356,6 +357,7 @@ interface AddProductInput {
   stock_lbs?: unknown;
   image_url?: unknown;
   description?: unknown;
+  vat_category?: unknown;
   confirmed?: unknown;
 }
 interface SetProductChannelsInput {
@@ -651,6 +653,10 @@ async function addProductTool(
   const cost_per_unit = typeof input.cost_per_unit === 'number' ? input.cost_per_unit : null;
   const image_url = typeof input.image_url === 'string' && /^https?:\/\//.test(input.image_url) ? input.image_url : null;
   const description = typeof input.description === 'string' ? input.description.trim() : null;
+  const VAT_CATS = new Set(['uncooked_food','cooked_prepared','service']);
+  const vat_category = typeof input.vat_category === 'string' && VAT_CATS.has(input.vat_category)
+    ? input.vat_category
+    : 'uncooked_food';
   const confirmed = input.confirmed === true;
 
   if (!name || !sku || !category || !unit_of_measure) {
@@ -712,6 +718,7 @@ async function addProductTool(
         status: 'active',
         stock_lbs,
         image_url,
+        vat_category,
         ...channelFlags,
         created_by: callerId,
       })
@@ -1488,7 +1495,7 @@ async function explodeProductTool(
   // Look up parent product.
   const { data: parent, error: parentErr } = await admin
     .from('products')
-    .select('id, sku, name, category, primary_supplier_id, parent_product_id, unit_of_measure')
+    .select('id, sku, name, category, primary_supplier_id, parent_product_id, unit_of_measure, vat_category')
     .eq('sku', parentSku)
     .maybeSingle();
   if (parentErr || !parent) {
@@ -1517,6 +1524,8 @@ async function explodeProductTool(
   const parentCostPerUnit = Number(parentCost.cost_per_unit);
 
   // Compute every child SKU, cost, and per-channel sell prices.
+  // Inherit parent's vat_category so child pricing respects Bahamas VAT law.
+  const parentVatPct = vatPctForCategory((parent as { vat_category?: string | null }).vat_category ?? 'uncooked_food');
   const previews = divisions.map(d => {
     const suffix    = d.sku_suffix  ?? `${d.portion_size}${d.portion_unit.toUpperCase()}`;
     const childSku  = `${parentSku}-${suffix}`;
@@ -1524,7 +1533,7 @@ async function explodeProductTool(
     const childName = `${parent.name} · ${nameSfx}`;
     const childCost = Math.round((parentCostPerUnit / d.count_per_parent) * 10000) / 10000;
     const prices    = channels.map(ch => {
-      const r = calculatePrice({ cost: childCost, channel: ch, quantity: 1, unit: d.sale_unit });
+      const r = calculatePrice({ cost: childCost, channel: ch, quantity: 1, unit: d.sale_unit, vatPct: parentVatPct });
       return {
         channel:      ch,
         markup_pct:   r.markupPct,
@@ -1592,9 +1601,7 @@ async function explodeProductTool(
 
     // 1. INSERT product (child) in PENDING state — all sell_* flags off
     //    until founder reviews + approves at /founder-ai/products/pending.
-    //    The intended channels are still captured in the product_pricing
-    //    rows below (one row per channel with the computed price), so the
-    //    approval UI can derive which channel flags to flip on.
+    //    Child inherits parent's vat_category (Bahamas tax law).
     const { data: childRow, error: prodErr } = await admin
       .from('products')
       .insert({
@@ -1614,6 +1621,7 @@ async function explodeProductTool(
         portion_size:        p.portion_size,
         portion_unit:        p.portion_unit,
         portions_per_parent: p.portions_per_parent,
+        vat_category:        (parent as { vat_category?: string | null }).vat_category ?? 'uncooked_food',
         created_by:          callerId,
       })
       .select('id, sku, name')

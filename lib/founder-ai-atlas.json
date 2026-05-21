@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-21T00:28:00.499Z",
+  "generated_at": "2026-05-21T03:14:40.553Z",
   "stats": {
     "pages": 130,
     "api_routes": 49,
     "tables": 38,
-    "migrations": 41,
+    "migrations": 42,
     "business_rules": 13
   },
   "pages": [
@@ -1791,7 +1791,7 @@
     },
     {
       "rule": "5-channel pricing markups",
-      "detail": "wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40% — all +10% VAT."
+      "detail": "wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40%. VAT comes from products.vat_category: 0% uncooked_food (default — covers raw seafood/produce/grocery), 10% cooked_prepared (juice/kitchen), 0% service."
     },
     {
       "rule": "Wholesale auto-upgrade",

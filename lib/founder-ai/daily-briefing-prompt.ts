@@ -26,13 +26,15 @@ export interface DailyBriefingDataInput {
   inventory?:         Array<Record<string, unknown>>;
 }
 
-// Sacred BSC margins (per founder, 2026-05-17). Update here when the
-// founder bumps them and the AI's reasoning will follow.
+// Sacred BSC channel markups (ratified 2026-05-20 — 5-channel model).
+// VAT is per-product via products.vat_category — 0% uncooked food,
+// 10% cooked/prepared, 0% service. NOT a flat channel adder.
 export const SACRED_MARGINS = {
-  nassau_pos:      0.38,
-  andros_pos:      0.43,
-  online_market:   0.25,
-  local_wholesale: 0.12,
+  wholesale_in_store: 0.22,
+  wholesale_online:   0.19,
+  online_retail:      0.35,
+  nassau_pos:         0.40,
+  andros_pos:         0.40,
 } as const;
 
 // Bill's standing cut — 5% of gross profit on every sale. Sacred.
@@ -84,12 +86,14 @@ VOICE
     "*Salmon* sold out by 2 PM. *Snapper* never opened the door."
 
 SACRED RULES (NEVER VIOLATE OR ROUND)
-- Channel margins: Nassau POS ${(SACRED_MARGINS.nassau_pos * 100).toFixed(0)}%,
-  Andros POS ${(SACRED_MARGINS.andros_pos * 100).toFixed(0)}%,
-  Online Market ${(SACRED_MARGINS.online_market * 100).toFixed(0)}%,
-  Local Wholesale ${(SACRED_MARGINS.local_wholesale * 100).toFixed(0)}%.
+- Channel markups: wholesale_in_store ${(SACRED_MARGINS.wholesale_in_store * 100).toFixed(0)}%,
+  wholesale_online ${(SACRED_MARGINS.wholesale_online * 100).toFixed(0)}%,
+  online_retail ${(SACRED_MARGINS.online_retail * 100).toFixed(0)}%,
+  nassau_pos ${(SACRED_MARGINS.nassau_pos * 100).toFixed(0)}%,
+  andros_pos ${(SACRED_MARGINS.andros_pos * 100).toFixed(0)}%.
+- VAT: 0% on uncooked food / 10% on cooked-prepared / 0% on services. Per products.vat_category.
 - Bill's cut: ${(BILL_CASALE_RATE * 100).toFixed(0)}% of gross profit on every sale.
-- If any sale violated a margin, flag it in "What I Noticed".
+- If any sale violated a markup OR was VAT-misclassified, flag it in "What I Noticed".
 
 THE TWELVE FOUNDING PRINCIPLES (cite by number when a recommendation
 hangs on one):

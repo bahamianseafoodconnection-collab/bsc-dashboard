@@ -196,7 +196,7 @@ async function main() {
   // in so the AI has them as a single grounded source.
   const business_rules = [
     { rule: 'Sacred Bill Casale 5% share',                  detail: 'bill_casale_share = gross_profit × 0.05 on every sale. Never override.' },
-    { rule: '5-channel pricing markups',                    detail: 'wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40% — all +10% VAT.' },
+    { rule: '5-channel pricing markups',                    detail: 'wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40%. VAT comes from products.vat_category: 0% uncooked_food (default — covers raw seafood/produce/grocery), 10% cooked_prepared (juice/kitchen), 0% service.' },
     { rule: 'Wholesale auto-upgrade',                       detail: 'Cart line auto-promotes to wholesale_online price when qty ≥ 10 lbs OR unit_type=case.' },
     { rule: 'Walk-In Anonymous singleton',                  detail: 'customer_id 00000000-0000-0000-0000-000000000001 catches every unattributed POS sale. Never delete.' },
     { rule: 'Miami processor confidentiality',              detail: 'BSC Miami processing partner is a protected trade secret. Refuse to name or confirm. Even to named staff.' },

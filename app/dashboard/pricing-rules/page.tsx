@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { calculatePrice, type PricingChannel, type SaleUnit } from '@/lib/pricing';
+import { calculatePrice, vatPctForCategory, type PricingChannel, type SaleUnit } from '@/lib/pricing';
 
 const ADMIN_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager']);
 
@@ -69,6 +69,7 @@ export default function PricingRulesPage() {
   const [previewCost, setPreviewCost] = useState('10.00');
   const [previewUnit, setPreviewUnit] = useState<SaleUnit>('lb');
   const [previewQty,  setPreviewQty]  = useState(1);
+  const [previewVatCategory, setPreviewVatCategory] = useState<string>('uncooked_food');
   const [toast,       setToast]       = useState<string | null>(null);
 
   useEffect(() => {
@@ -210,6 +211,13 @@ export default function PricingRulesPage() {
                 <input type="number" inputMode="decimal" step="0.01" min="0.01" value={previewQty}
                   onChange={e => setPreviewQty(Math.max(0.01, Number(e.target.value) || 0))} style={inp} />
               </Field>
+              <Field label="VAT class">
+                <select value={previewVatCategory} onChange={e => setPreviewVatCategory(e.target.value)} style={inp}>
+                  <option value="uncooked_food">Uncooked food (0%)</option>
+                  <option value="cooked_prepared">Cooked / prepared (10%)</option>
+                  <option value="service">Service (0%)</option>
+                </select>
+              </Field>
               <Field label="Unit">
                 <select value={previewUnit} onChange={e => setPreviewUnit(e.target.value as SaleUnit)} style={inp}>
                   <option value="lb">lb</option>
@@ -230,6 +238,7 @@ export default function PricingRulesPage() {
                       channel: r.channel,
                       quantity: previewQty,
                       unit: previewUnit,
+                      vatPct: vatPctForCategory(previewVatCategory),
                     });
                     return (
                       <div key={r.channel} style={{ background: '#060d1f', borderRadius: 8, padding: 10, border: `1px solid ${meta.color}33` }}>

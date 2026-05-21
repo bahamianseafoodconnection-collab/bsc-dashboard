@@ -43,7 +43,7 @@
 - [x] ✅ Promo prices win over wholesale upgrade
 - [x] ✅ `/dashboard/pricing-rules` admin UI + audit
 - [x] ✅ Tue Shrimp + Wed Salmon promos live
-- [ ] ⚠️ **VAT rule** — Bahamas law: 0% uncooked / 10% cooked. **Code currently blanket-charges 10% on every channel.** Material money/legal bug. See `project_vat_rule.md` memory.
+- [x] ✅ VAT rule — `vat_category` column on products (`uncooked_food` 0% default, `cooked_prepared` 10%, `service` 0%). `calculatePrice()` takes `vatPct` override. `vatPctForCategory()` helper. Patched: photo intake, pricing-rules preview, explode_product (inherits parent's category), add_product tool, Daily Briefing prompt, Founder AI system prompt. **Existing product_pricing snapshots NOT auto-recomputed** — founder runs the price refresh helper SQL when ready.
 - [ ] ❌ Thursday Conch promo (planned)
 - [ ] ❌ US resale pricing model (no Bahamas duty, no mailboat)
 
@@ -201,7 +201,7 @@
 - [x] ✅ Trade secret protection (Igloo refusal in AI prompt)
 - [x] ✅ Bill Casale 5% sacred contract
 - [x] ✅ BSC Platform Vision doc (investor/legal)
-- [ ] ⚠️ Bahamas VAT compliance — see Section 2
+- [x] ✅ Bahamas VAT compliance (per-product vat_category, 0/10/0 mapping)
 - [ ] ❌ Vendor commission legal review
 
 ## 15. Marketing & content
@@ -260,3 +260,4 @@
 | Date | Compiler | Notes |
 |---|---|---|
 | 2026-05-20 | Claude Code (Opus 4.7) | Initial compilation from master context + atlas + memory |
+| 2026-05-20 | Claude Code (Opus 4.7) | VAT fix shipped — vat_category column + per-product VAT mapping. Migration `20260520260000_products_vat_category.sql`. |
