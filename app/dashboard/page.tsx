@@ -209,33 +209,54 @@ export default function DashboardPage() {
   const { role: userRole } = useUserRole();
   const canEditStock = canLock(userRole); // founder + co_founder only
 
-  useEffect(() => {
-    async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { window.location.href = '/staff-login'; return; }
+  // Hard timeout for the auth check — if Supabase queries hang on a
+  // slow LTE connection, show a "retry" UI instead of "Loading…" forever.
+  const [authError, setAuthError] = useState<string | null>(null);
 
-      // Dashboard is locked to founder + co_founder (Dedrick + Jaquel).
-      // Every other role gets bounced — basic_admin → /jaquel,
-      // everyone else → /market. Profile.role is the source of truth.
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      const role = (prof?.role as string | null) ?? null;
-      if (role !== 'founder' && role !== 'co_founder') {
-        if (role === 'basic_admin')     window.location.href = '/jaquel';
-        else if (role === 'manager')    window.location.href = '/jaquel';
-        else if (role === 'cashier')    window.location.href = '/pos';
-        else if (role === 'receiver')   window.location.href = '/intake/scan-invoice';
-        else if (role === 'processor')  window.location.href = '/processor';
-        else if (role === 'supplier')   window.location.href = '/supplier';
-        else                            window.location.href = '/market';
-        return;
+  useEffect(() => {
+    let cancelled = false;
+    const TIMEOUT_MS = 8000;
+
+    function withTimeout<T>(p: PromiseLike<T>, label: string): Promise<T> {
+      return Promise.race<T>([
+        Promise.resolve(p),
+        new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${TIMEOUT_MS / 1000}s`)), TIMEOUT_MS)),
+      ]);
+    }
+
+    async function checkAuth() {
+      try {
+        const sessionRes = await withTimeout(supabase.auth.getSession(), 'auth.getSession');
+        if (cancelled) return;
+        const session = sessionRes.data.session;
+        if (!session) { window.location.href = '/staff-login'; return; }
+
+        const profRes = await withTimeout<{ data: { role?: string | null } | null }>(
+          supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle(),
+          'profiles fetch',
+        );
+        if (cancelled) return;
+        const prof = profRes.data;
+        const role = prof?.role ?? null;
+        if (role !== 'founder' && role !== 'co_founder') {
+          if (role === 'basic_admin')     window.location.href = '/jaquel';
+          else if (role === 'manager')    window.location.href = '/jaquel';
+          else if (role === 'cashier')    window.location.href = '/pos';
+          else if (role === 'receiver')   window.location.href = '/intake/scan-invoice';
+          else if (role === 'processor')  window.location.href = '/processor';
+          else if (role === 'supplier')   window.location.href = '/supplier';
+          else                            window.location.href = '/market';
+          return;
+        }
+        if (cancelled) return;
+        setAuthChecked(true);
+      } catch (e) {
+        if (cancelled) return;
+        setAuthError(e instanceof Error ? e.message : 'Auth check failed');
       }
-      setAuthChecked(true);
     }
     checkAuth();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -537,8 +558,35 @@ export default function DashboardPage() {
 
   if (!authChecked) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#060d1f', color: '#f4c842', fontFamily: 'system-ui', fontSize: '14px' }}>
-        Loading BSC Control...
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#060d1f', color: '#f4c842', fontFamily: 'system-ui', fontSize: '14px', padding: 20, textAlign: 'center' }}>
+        {authError ? (
+          <>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠</div>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Can't load dashboard</div>
+            <div style={{ fontSize: 12, color: '#fbbf24', marginBottom: 16, maxWidth: 360 }}>{authError}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button onClick={() => window.location.reload()}
+                style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 800, cursor: 'pointer' }}>
+                🔁 Retry
+              </button>
+              <button onClick={() => { supabase.auth.signOut().then(() => { window.location.href = '/staff-login'; }); }}
+                style={{ background: 'transparent', color: '#fbbf24', border: '1px solid #fbbf24', borderRadius: 8, padding: '8px 16px', fontWeight: 800, cursor: 'pointer' }}>
+                Sign out + sign back in
+              </button>
+              <a href="/pos" style={{ background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: 8, padding: '8px 16px', fontWeight: 800, textDecoration: 'none' }}>
+                → POS
+              </a>
+            </div>
+            <div style={{ fontSize: 10, color: '#64748b', marginTop: 18 }}>
+              Common cause: slow LTE + stale session. Sign out + back in fixes 95% of these.
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginBottom: 8 }}>Loading BSC Control…</div>
+            <div style={{ fontSize: 10, color: '#94a3b8' }}>(If this stays longer than 10 seconds, refresh the page)</div>
+          </>
+        )}
       </div>
     );
   }

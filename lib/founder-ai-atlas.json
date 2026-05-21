@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-21T13:02:55.324Z",
+  "generated_at": "2026-05-21T13:22:14.649Z",
   "stats": {
     "pages": 137,
-    "api_routes": 51,
+    "api_routes": 52,
     "tables": 40,
     "migrations": 44,
     "business_rules": 13
@@ -1101,6 +1101,14 @@
         "POST"
       ],
       "purpose": "============================================================ BSC MARKETPLACE — RBC PLUG & PAY WEBHOOK HANDLER File: app/api/payment/webhook/route.ts Webhook URL: https://bscbahamas.com/api/payment/webhook Send this URL…"
+    },
+    {
+      "url": "/api/pos/whatsapp-receipt",
+      "file": "app/api/pos/whatsapp-receipt/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/pos/whatsapp-receipt Send a customer-facing WhatsApp receipt after a POS sale. Transactional (the customer just bought from us, so freeform within Twilio's 24-hour session window is allowed). Falls back to SMS if W…"
     },
     {
       "url": "/api/processor/batches/approve",

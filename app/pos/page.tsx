@@ -557,7 +557,43 @@ export default function POSPage() {
       if (orderErr) throw orderErr
 
       const orderId = newOrder?.id
-      if (orderId) {
+
+      // WhatsApp receipt — fire-and-forget when we have a phone. Falls
+      // back to SMS automatically inside the API. No-op if the
+      // customer refused to give a phone (Walk-In Anonymous flow).
+      if (phoneClean) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          const accessToken = session?.access_token
+          if (accessToken) {
+            fetch('/api/pos/whatsapp-receipt', {
+              method: 'POST',
+              headers: {
+                'Content-Type':  'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                order_id:       orderId,
+                customer_phone: phoneClean,
+                customer_name:  nameClean || null,
+                channel_label:  'BSC Marketplace Nassau',
+                subtotal, vat: vatAmount, total,
+                items: items.map((i: any) => ({
+                  name:       i.name,
+                  qty:        i.quantity ?? i.qty ?? 1,
+                  unit_price: i.unit_price ?? i.price ?? 0,
+                })),
+              }),
+            }).catch(err => console.warn('WhatsApp receipt fire-and-forget failed:', err))
+          }
+        } catch (err) {
+          console.warn('WhatsApp receipt setup failed:', err)
+        }
+      }
+
+      // Open the print-friendly receipt only if there's no phone
+      // (otherwise the customer gets the WhatsApp message instead).
+      if (orderId && !phoneClean) {
         window.open(`/receipt/${orderId}`, '_blank')
       }
 
