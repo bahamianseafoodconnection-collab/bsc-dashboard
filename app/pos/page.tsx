@@ -558,15 +558,16 @@ export default function POSPage() {
 
       const orderId = newOrder?.id
 
-      // WhatsApp receipt — fire-and-forget when we have a phone. Falls
-      // back to SMS automatically inside the API. No-op if the
-      // customer refused to give a phone (Walk-In Anonymous flow).
-      if (phoneClean) {
+      // Auto-send receipt: email if on file, SMS if not, print fallback.
+      // The /api/pos/receipt endpoint decides server-side based on what
+      // the customer provided. We fire-and-forget so the UI stays snappy.
+      let receiptChannel: 'email' | 'sms' | 'print' = 'print'
+      if (orderId) {
         try {
           const { data: { session } } = await supabase.auth.getSession()
           const accessToken = session?.access_token
-          if (accessToken) {
-            fetch('/api/pos/whatsapp-receipt', {
+          if (accessToken && (validEmail || phoneClean)) {
+            const res = await fetch('/api/pos/receipt', {
               method: 'POST',
               headers: {
                 'Content-Type':  'application/json',
@@ -574,7 +575,9 @@ export default function POSPage() {
               },
               body: JSON.stringify({
                 order_id:       orderId,
-                customer_phone: phoneClean,
+                customer_id:    customerId,
+                customer_email: validEmail || null,
+                customer_phone: phoneClean || null,
                 customer_name:  nameClean || null,
                 channel_label:  'BSC Marketplace Nassau',
                 subtotal, vat: vatAmount, total,
@@ -584,16 +587,19 @@ export default function POSPage() {
                   unit_price: i.unit_price ?? i.price ?? 0,
                 })),
               }),
-            }).catch(err => console.warn('WhatsApp receipt fire-and-forget failed:', err))
+            })
+            const j = await res.json().catch(() => ({}))
+            if (j?.ok && (j.channel === 'email' || j.channel === 'sms')) {
+              receiptChannel = j.channel
+            }
           }
         } catch (err) {
-          console.warn('WhatsApp receipt setup failed:', err)
+          console.warn('Receipt send failed:', err)
         }
       }
 
-      // Open the print-friendly receipt only if there's no phone
-      // (otherwise the customer gets the WhatsApp message instead).
-      if (orderId && !phoneClean) {
+      // If no email + no phone (or both failed), open the print receipt.
+      if (orderId && receiptChannel === 'print') {
         window.open(`/receipt/${orderId}`, '_blank')
       }
 

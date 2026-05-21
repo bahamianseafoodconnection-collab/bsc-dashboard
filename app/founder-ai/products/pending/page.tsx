@@ -34,6 +34,7 @@ interface Pending {
   portion_unit:        string | null;
   portions_per_parent: number | null;
   cost_per_unit:       number | null;
+  vat_category:        string;
   channels:            Array<{ pricing_id: string; channel: string; price: number }>;
   created_at:          string;
   // Hydrated from product_intake_log when this product has a submission row.
@@ -79,7 +80,7 @@ export default function PendingProductsPage() {
     // founder review here.
     const { data: prods, error } = await supabase
       .from('products')
-      .select('id, sku, name, category, unit_of_measure, parent_product_id, portion_size, portion_unit, portions_per_parent, created_at')
+      .select('id, sku, name, category, unit_of_measure, parent_product_id, portion_size, portion_unit, portions_per_parent, vat_category, created_at')
       .eq('sell_nassau', false)
       .eq('sell_andros', false)
       .eq('sell_online', false)
@@ -151,6 +152,7 @@ export default function PendingProductsPage() {
         portion_unit:        r.portion_unit,
         portions_per_parent: r.portions_per_parent,
         cost_per_unit:       cmap.get(r.id) ?? null,
+        vat_category:        (r as { vat_category?: string | null }).vat_category ?? 'uncooked_food',
         channels:            pmap2.get(r.id) ?? [],
         created_at:          r.created_at,
         submitted_by_role:   intake?.role ?? null,
@@ -179,6 +181,7 @@ export default function PendingProductsPage() {
       if (typeof e.portion_size === 'number' && e.portion_size !== p.portion_size) updates.portion_size = e.portion_size;
       if (typeof e.portion_unit === 'string' && e.portion_unit && e.portion_unit !== p.portion_unit) updates.portion_unit = e.portion_unit.toLowerCase();
       if (typeof e.portions_per_parent === 'number' && e.portions_per_parent !== p.portions_per_parent) updates.portions_per_parent = e.portions_per_parent;
+      if (typeof e.vat_category === 'string' && e.vat_category !== p.vat_category) updates.vat_category = e.vat_category;
 
       // 2. Flip the channel flags ON for channels that have a pricing row.
       const flags = new Set<string>();
@@ -356,6 +359,19 @@ export default function PendingProductsPage() {
                       style={inp} />
                   </div>
                 </div>
+
+                {/* VAT category — confirm before approving. Default
+                    is uncooked_food (0% VAT); flip to cooked_prepared
+                    only when the product is juice-bar / kitchen-prepped. */}
+                <label style={lbl}>VAT category (Bahamas law)</label>
+                <select
+                  value={(edits[p.id]?.vat_category as string | undefined) ?? p.vat_category}
+                  onChange={ev => setEdits(s => ({ ...s, [p.id]: { ...s[p.id], vat_category: ev.target.value as Pending['vat_category'] } }))}
+                  style={inp}>
+                  <option value="uncooked_food">Uncooked food — 0% VAT (raw seafood, frozen, produce, grocery)</option>
+                  <option value="cooked_prepared">Cooked / prepared — 10% VAT (juice bar, kitchen)</option>
+                  <option value="service">Service — 0% VAT</option>
+                </select>
 
                 <div style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>
                   Derived cost per unit: <strong style={{ color: '#fff' }}>${(p.cost_per_unit ?? 0).toFixed(2)}</strong> · proposed channels:

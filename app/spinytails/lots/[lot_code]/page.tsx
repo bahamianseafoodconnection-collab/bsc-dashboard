@@ -311,6 +311,8 @@ export default function LotDetailPage({ params }: { params: Promise<{ lot_code: 
           status: 'active',
           sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false,
           stock_lbs: gr.weight_lbs,
+          // Lobster is uncooked seafood → 0% VAT (Bahamas tax law).
+          vat_category: 'uncooked_food',
           created_by: callerId,
         })
         .select('id, sku')

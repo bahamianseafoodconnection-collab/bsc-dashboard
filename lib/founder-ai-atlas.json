@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-21T13:37:52.501Z",
+  "generated_at": "2026-05-21T15:13:41.440Z",
   "stats": {
     "pages": 138,
-    "api_routes": 54,
+    "api_routes": 55,
     "tables": 40,
     "migrations": 44,
     "business_rules": 13
@@ -1123,6 +1123,14 @@
         "POST"
       ],
       "purpose": "============================================================ BSC MARKETPLACE — RBC PLUG & PAY WEBHOOK HANDLER File: app/api/payment/webhook/route.ts Webhook URL: https://bscbahamas.com/api/payment/webhook Send this URL…"
+    },
+    {
+      "url": "/api/pos/receipt",
+      "file": "app/api/pos/receipt/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/pos/receipt Auto-send the POS receipt at checkout completion. Channel decision is server-side based on what the customer gave us: 1. Customer has email on file → branded HTML email via Resend 2. No email but has ph…"
     },
     {
       "url": "/api/pos/whatsapp-receipt",
