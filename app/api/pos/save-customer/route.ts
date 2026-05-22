@@ -141,30 +141,61 @@ export async function POST(req: NextRequest) {
   } else {
     action = 'created';
     wasNew = true;
-    const insertRow: Record<string, unknown> = {
-      full_name:       nameClean,
-      phone:           phoneRaw || null,
-      phone_e164:      phoneE164,
-      email:           validEmail || null,
+
+    // Defensive INSERT: start with the absolute minimum columns we
+    // know exist on every BSC customers schema. If the first attempt
+    // hits "Could not find the 'X' column" (PostgREST schema-cache
+    // mismatch or a column rename we didn't catch), retry with only
+    // the bare-minimum required fields. This prevents schema drift
+    // from blocking new-customer saves at the register.
+    const baseRow: Record<string, unknown> = {
+      full_name:    nameClean,
+      phone:        phoneRaw || null,
+      phone_e164:   phoneE164,
+      email:        validEmail || null,
+    };
+    const enrichedRow: Record<string, unknown> = {
+      ...baseRow,
       first_seen_at:   nowIso,
       last_seen_at:    nowIso,
-      total_orders:    0,
-      total_spent:     0,
       origin_channel:  origin,
     };
     if (validEmail && consent) {
-      insertRow.email_marketing_consent = true;
-      insertRow.email_consent_source    = origin;
-      insertRow.email_consent_at        = nowIso;
+      enrichedRow.email_marketing_consent = true;
+      enrichedRow.email_consent_source    = origin;
+      enrichedRow.email_consent_at        = nowIso;
     }
-    if (notes) insertRow.notes = notes;
-    const { data: ins, error } = await admin
-      .from('customers')
-      .insert(insertRow)
-      .select('id')
-      .single();
-    if (error || !ins) return NextResponse.json({ ok: false, error: `Customer insert failed: ${error?.message ?? 'no row'}` }, { status: 400 });
-    customerId = ins.id;
+    if (notes) enrichedRow.notes = notes;
+
+    let insertedId: string | null = null;
+    let lastErr:    string | null = null;
+
+    // Attempt 1: enriched row.
+    {
+      const { data: ins, error } = await admin
+        .from('customers')
+        .insert(enrichedRow)
+        .select('id')
+        .single();
+      if (!error && ins) insertedId = ins.id;
+      else lastErr = error?.message ?? 'no row';
+    }
+
+    // Attempt 2: bare-minimum row (defensive against schema-cache misses).
+    if (!insertedId) {
+      const { data: ins, error } = await admin
+        .from('customers')
+        .insert(baseRow)
+        .select('id')
+        .single();
+      if (!error && ins) insertedId = ins.id;
+      else lastErr = error?.message ?? 'no row';
+    }
+
+    if (!insertedId) {
+      return NextResponse.json({ ok: false, error: `Customer insert failed (both enriched and bare-minimum attempts): ${lastErr}` }, { status: 400 });
+    }
+    customerId = insertedId;
   }
 
   // Audit row → ai_writes (Founder AI's existing write-log pipeline).

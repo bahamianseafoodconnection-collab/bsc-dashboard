@@ -12,6 +12,7 @@ import {
 import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
 import AddInventoryButton from '@/components/intake/AddInventoryButton'
 import EditPriceModal from '@/components/pos/EditPriceModal'
+import CustomerNameLookup, { type CustomerMatch } from '@/components/pos/CustomerNameLookup'
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -1089,6 +1090,29 @@ export default function POSPage() {
 
             {/* Customer lookup */}
             <div className="mb-5 rounded-xl p-4" style={{ backgroundColor: '#0d1117', border: '1px solid #374151' }}>
+              {/* Name autocomplete — type 2+ chars to surface existing customers.
+                  Picking a match autofills phone/name/email + flips the panel
+                  to "Returning Customer" so Claff confirms identity instantly.
+                  See memory: project-customer-name-autocomplete. */}
+              <CustomerNameLookup
+                onPick={(c: CustomerMatch) => {
+                  const phone = c.phone || c.phone_e164 || ''
+                  setCustomerPhone(phone)
+                  setCustomerName(c.full_name)
+                  setCustomerEmail(c.email ?? '')
+                  setEmailConsent(Boolean(c.email_marketing_consent))
+                  setFoundCustomer({
+                    id:                       c.id,
+                    full_name:                c.full_name,
+                    phone:                    phone,
+                    email:                    c.email ?? null,
+                    total_orders:             c.total_orders ?? 0,
+                    total_spent:              Number(c.total_spent ?? 0),
+                    email_marketing_consent:  Boolean(c.email_marketing_consent),
+                  })
+                  setCustomerStatus('found')
+                }}
+              />
               <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Customer Phone</label>
               <input type="tel" placeholder="e.g. 242-555-0100"
                 value={customerPhone} onChange={e => handlePhoneChange(e.target.value)}
