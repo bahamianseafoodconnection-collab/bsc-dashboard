@@ -549,20 +549,31 @@ export default function POSPage() {
           await supabase.from('customers').update(updates).eq('id', foundCustomer.id)
           customerId = foundCustomer.id
         } else {
+          // No matching customer in state — route through /api/pos/save-customer
+          // (service-role, bypasses RLS). The previous inline INSERT used the
+          // anon-key client which was silently blocked by RLS — that's why
+          // every order rang through this branch saved with customer_id = NULL.
+          // We fail loud here instead of silently writing a null customer_id.
+          const { data: { session } } = await supabase.auth.getSession()
+          const accessToken = session?.access_token
+          if (!accessToken) throw new Error('Sign-in expired — sign in again before ringing this sale.')
           const consentNow = emailConsent && !!validEmail
-          const { data: newCust } = await supabase.from('customers').insert({
-            full_name:     nameClean,
-            phone:         phoneClean,
-            phone_e164:    normalized,                // populate the new lookup key
-            origin_channel: 'nassau_pos',             // unify origin tracking
-            email:         validEmail || null,
-            email_marketing_consent: consentNow,
-            email_consent_at:     consentNow ? new Date().toISOString() : null,
-            email_consent_source: consentNow ? 'nassau_pos' : null,
-            total_orders: 1, total_spent: total,
-            created_by: '7b62672c-9259-4c1b-98d4-3b78369a52ab',
-          }).select('id').single()
-          customerId = newCust?.id ?? null
+          const saveRes = await fetch('/api/pos/save-customer', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+            body:    JSON.stringify({
+              name:           nameClean,
+              phone:          phoneClean,
+              email:          validEmail || null,
+              origin_channel: 'nassau_pos',
+              email_consent:  consentNow,
+            }),
+          })
+          const saveJson = await saveRes.json().catch(() => ({}))
+          if (!saveRes.ok || !saveJson.ok || !saveJson.customer_id) {
+            throw new Error(`Customer save failed: ${saveJson.error ?? `HTTP ${saveRes.status}`}`)
+          }
+          customerId = saveJson.customer_id
         }
       }
 
