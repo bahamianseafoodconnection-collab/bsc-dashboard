@@ -634,6 +634,35 @@ export default function POSPage() {
 
       const orderId = newOrder?.id
 
+      // Inventory decrement at NASSAU location. Fire-and-forget per the
+      // /api/sales/inventory-write contract — a failed write must never
+      // block a completed sale. Mirrors /pos-andros and /checkout wiring.
+      // owner_id is resolved server-side from products.owner_id (Build 1).
+      ;(async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+          if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+          await fetch('/api/sales/inventory-write', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              location_code: 'NASSAU',
+              order_id:      orderId,
+              channel:       'nassau_pos',
+              items: items.map((i: any) => ({
+                product_id: i.product_id,
+                sku:        i.sku,
+                qty:        i.weight_lb ?? i.quantity ?? 1,
+                unit:       i.weight_lb != null ? 'lb' : 'unit',
+              })),
+            }),
+          })
+        } catch (err) {
+          console.warn('Inventory decrement failed:', err)
+        }
+      })()
+
       // Auto-send receipt: email if on file, SMS if not, print fallback.
       // Result is visible to the cashier via lastReceipt state so failures
       // don't get hidden by the fire-and-forget pattern.

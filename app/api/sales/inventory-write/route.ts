@@ -148,6 +148,24 @@ export async function POST(req: Request) {
   }
   const toLocationId = locRow.id as string;
 
+  // Resolve owner_id per product for vendor isolation tagging.
+  // Build 1 model: products.owner_id is NULL for BSC-owned stock,
+  // non-null for vendor-owned. Each sale movement carries the owner
+  // it decremented from, so vendor RLS lets that vendor see their own
+  // sale rows. service_role bypasses products RLS — no isolation risk
+  // from the lookup itself.
+  const productIds = Array.from(new Set(decrementable.map((d) => d.product_id)));
+  const { data: productOwners } = await admin
+    .from('products')
+    .select('id, owner_id')
+    .in('id', productIds);
+  const ownerByProductId = new Map<string, string | null>(
+    (productOwners ?? []).map((p) => [
+      p.id as string,
+      (p as { owner_id?: string | null }).owner_id ?? null,
+    ])
+  );
+
   // Audit metadata
   const userAgent = req.headers.get('user-agent') ?? null;
   const fwd = req.headers.get('x-forwarded-for') ?? '';
@@ -169,6 +187,7 @@ export async function POST(req: Request) {
     recorded_by: recordedBy,
     device_info: userAgent,
     ip_address: ip,
+    owner_id: ownerByProductId.get(it.product_id) ?? null,
   }));
 
   const { error: insErr, data: inserted } = await admin
