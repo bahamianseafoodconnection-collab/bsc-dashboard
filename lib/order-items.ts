@@ -13,15 +13,16 @@
 // =====================================================================
 
 export interface NormalizedLineItem {
-  name:        string;
-  qty:         number;       // canonical — normalized from `quantity` or `qty`
-  unit?:       string;
-  unit_price?: number;       // canonical — normalized from `unit_price` or `price`
-  line_total?: number;
-  sku?:        string;
-  weight_lb?:  number;
-  product_id?: string;
-  emoji?:      string;       // legacy items column flair (orders.tsx)
+  name:           string;
+  qty:            number;       // canonical — normalized from `quantity` or `qty`
+  unit?:          string;
+  unit_price?:    number;       // canonical — normalized from `unit_price` or `price`
+  line_total?:    number;
+  sku?:           string;
+  weight_lb?:     number;
+  product_id?:    string;
+  emoji?:         string;       // legacy items column flair (orders.tsx)
+  cost_per_unit?: number;       // wholesale-side cost (supplier-purchases reads it for COGS rollup)
 }
 
 export function parseOrderItems(raw: unknown): NormalizedLineItem[] {
@@ -39,10 +40,11 @@ export function parseOrderItems(raw: unknown): NormalizedLineItem[] {
               : it.price      != null ? Number(it.price)
               : undefined,
     line_total: it.line_total != null ? Number(it.line_total) : undefined,
-    sku:        it.sku as string | undefined,
-    weight_lb:  it.weight_lb  != null ? Number(it.weight_lb)  : undefined,
-    product_id: it.product_id as string | undefined,
-    emoji:      it.emoji      != null ? String(it.emoji)      : undefined,
+    sku:           it.sku as string | undefined,
+    weight_lb:     it.weight_lb    != null ? Number(it.weight_lb)    : undefined,
+    product_id:    it.product_id as string | undefined,
+    emoji:         it.emoji        != null ? String(it.emoji)        : undefined,
+    cost_per_unit: it.cost_per_unit != null ? Number(it.cost_per_unit) : undefined,
   }));
 }
 

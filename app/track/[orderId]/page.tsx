@@ -267,7 +267,7 @@ export default function TrackOrderPage() {
           ) : (
             items.map((it, i) => {
               const qty = it.qty;
-              const lineTotal = typeof it.price === 'number' ? it.price * qty : null;
+              const lineTotal = typeof it.unit_price === 'number' ? it.unit_price * qty : null;
               return (
                 <div
                   key={i}
@@ -277,8 +277,8 @@ export default function TrackOrderPage() {
                     <div className="truncate text-slate-700">{it.name || 'Item'}</div>
                     <div className="text-[11px] text-slate-500">
                       {qty}{it.unit ? ` ${it.unit}` : ''}
-                      {typeof it.price === 'number' && (
-                        <> · BSD ${it.price.toFixed(2)} each</>
+                      {typeof it.unit_price === 'number' && (
+                        <> · BSD ${it.unit_price.toFixed(2)} each</>
                       )}
                     </div>
                   </div>

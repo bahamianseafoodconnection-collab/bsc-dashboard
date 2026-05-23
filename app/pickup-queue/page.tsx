@@ -277,9 +277,9 @@ export default function PickupQueuePage() {
                           {it.name || '(unnamed)'}
                           {it.unit && <span style={{ color: '#94a3b8' }}> /{it.unit}</span>}
                         </span>
-                        {typeof it.price === 'number' && (
+                        {typeof it.unit_price === 'number' && (
                           <span style={{ color: '#cbd5e1', fontFamily: 'monospace' }}>
-                            ${(qty * it.price).toFixed(2)}
+                            ${(qty * it.unit_price).toFixed(2)}
                           </span>
                         )}
                       </li>
