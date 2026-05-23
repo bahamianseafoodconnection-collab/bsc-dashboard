@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,15 +33,6 @@ type LineItem = {
   unit?: string;
   sku?: string;
 };
-
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
 
 export default function PickTicketPage() {
   const params = useParams<{ orderId: string }>();
@@ -67,8 +59,8 @@ export default function PickTicketPage() {
   if (loading) return <Centered>Loading pick ticket…</Centered>;
   if (!order) return <Centered>Order not found.</Centered>;
 
-  const items = parseItems(order.wholesale_items);
-  const totalUnits = items.reduce((s, it) => s + Number(it.qty ?? it.quantity ?? 0), 0);
+  const items = parseOrderItems(order.wholesale_items);
+  const totalUnits = items.reduce((s, it) => s + it.qty, 0);
   const pickNo = `PICK-${order.id.slice(0, 8).toUpperCase()}`;
   const invoiceNo = `INV-${order.id.slice(0, 8).toUpperCase()}`;
 
@@ -171,7 +163,7 @@ export default function PickTicketPage() {
             </thead>
             <tbody>
               {items.map((it, i) => {
-                const qty = Number(it.qty ?? it.quantity ?? 0);
+                const qty = it.qty;
                 return (
                   <tr key={i} style={{ borderBottom: '1px solid #ccc' }}>
                     <td style={{ ...tdStyle, textAlign: 'center', fontSize: 18 }}>☐</td>

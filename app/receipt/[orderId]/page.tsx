@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,15 +43,6 @@ type LineItem = {
   line_total?: number;
 };
 
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
-
 export default function ReceiptPage() {
   const params = useParams<{ orderId: string }>();
   const orderId = params?.orderId;
@@ -76,7 +68,7 @@ export default function ReceiptPage() {
   if (loading) return <Centered>Loading receipt…</Centered>;
   if (!order) return <Centered>Receipt not found.</Centered>;
 
-  const items = parseItems(order.wholesale_items);
+  const items = parseOrderItems(order.wholesale_items);
   const total = Number(order.total ?? order.wholesale_cost_total ?? 0);
   const subtotal = total / 1.10;
   const vat = total - subtotal;
@@ -172,8 +164,8 @@ export default function ReceiptPage() {
               </thead>
               <tbody>
                 {items.map((it, i) => {
-                  const qty = Number(it.qty ?? it.quantity ?? 0);
-                  const price = Number(it.unit_price ?? it.price ?? 0);
+                  const qty = it.qty;
+                  const price = it.unit_price ?? 0;
                   const line = Number(it.line_total ?? price * qty);
                   return (
                     <tr key={i} style={{ borderBottom: '1px dotted #eee' }}>

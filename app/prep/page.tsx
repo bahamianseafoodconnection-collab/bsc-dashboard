@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 const DAYS = [
   { dow: 6, name: 'Saturday',  tier: 'PEAK',   color: '#16a34a' },
@@ -24,13 +25,6 @@ const DAYS = [
   { dow: 1, name: 'Monday',    tier: 'QUIET',  color: '#64748b' },
 ];
 
-interface RawItem {
-  sku?: string;
-  name?: string;
-  quantity?: number;
-  weight_lb?: number | null;
-  line_total?: number;
-}
 interface RawOrder {
   id: string;
   created_at: string;
@@ -140,12 +134,12 @@ export default function PrepPage() {
       bucket.c.visits      += 1;
       bucket.c.total_spend += Number(o.total ?? 0);
       if (!bucket.c.last_visit || o.created_at > bucket.c.last_visit) bucket.c.last_visit = o.created_at;
-      const items: RawItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawItem[]) : [];
+      const items = parseOrderItems(o.wholesale_items);
       for (const it of items) {
         const key = it.sku ?? it.name ?? 'unknown';
-        const ex  = bucket.itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0 };
+        const ex  = bucket.itemMap.get(key) ?? { sku: it.sku, name: it.name || 'Unknown item', times: 0, total_qty: 0 };
         ex.times    += 1;
-        ex.total_qty += Number(it.weight_lb ?? it.quantity ?? 0);
+        ex.total_qty += it.weight_lb ?? it.qty;
         bucket.itemMap.set(key, ex);
       }
     }
@@ -170,13 +164,13 @@ export default function PrepPage() {
     const dayOrders = orders.filter(o => new Date(o.created_at).getDay() === targetDow);
     const byKey = new Map<string, { sku?: string; name: string; times: number; total_qty: number; total_revenue: number }>();
     for (const o of dayOrders) {
-      const items: RawItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawItem[]) : [];
+      const items = parseOrderItems(o.wholesale_items);
       for (const it of items) {
         const key = it.sku ?? it.name ?? 'unknown';
-        const ex  = byKey.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
+        const ex  = byKey.get(key) ?? { sku: it.sku, name: it.name || 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
         ex.times         += 1;
-        ex.total_qty     += Number(it.weight_lb ?? it.quantity ?? 0);
-        ex.total_revenue += Number(it.line_total ?? 0);
+        ex.total_qty     += it.weight_lb ?? it.qty;
+        ex.total_revenue += it.line_total ?? 0;
         byKey.set(key, ex);
       }
     }
@@ -195,12 +189,12 @@ export default function PrepPage() {
     });
     const itemMap = new Map<string, { sku?: string; name: string; times: number; total_qty: number }>();
     for (const o of all) {
-      const items: RawItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawItem[]) : [];
+      const items = parseOrderItems(o.wholesale_items);
       for (const it of items) {
         const key = it.sku ?? it.name ?? 'unknown';
-        const ex  = itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0 };
+        const ex  = itemMap.get(key) ?? { sku: it.sku, name: it.name || 'Unknown item', times: 0, total_qty: 0 };
         ex.times    += 1;
-        ex.total_qty += Number(it.weight_lb ?? it.quantity ?? 0);
+        ex.total_qty += it.weight_lb ?? it.qty;
         itemMap.set(key, ex);
       }
     }

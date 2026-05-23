@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { parseOrderItems } from '@/lib/order-items';
 
 type CustomerRow = {
   id: string;
@@ -293,7 +294,7 @@ function CustomerDetail({
   const topItems = useMemo(() => {
     const counts = new Map<string, { name: string; qty: number; spend: number }>();
     for (const o of orders) {
-      const items = parseItems(o.wholesale_items);
+      const items = parseOrderItems(o.wholesale_items);
       for (const it of items) {
         const key = (it.name || '').trim() || 'Unknown';
         const existing = counts.get(key) || { name: key, qty: 0, spend: 0 };
@@ -494,7 +495,7 @@ function CustomerDetail({
               {o.payment_status || '—'}
             </div>
             {(() => {
-              const items = parseItems(o.wholesale_items);
+              const items = parseOrderItems(o.wholesale_items);
               if (items.length === 0) return null;
               return (
                 <div
@@ -526,19 +527,6 @@ function CustomerDetail({
 }
 
 /* ─── helpers ─── */
-
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try {
-      raw = JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();

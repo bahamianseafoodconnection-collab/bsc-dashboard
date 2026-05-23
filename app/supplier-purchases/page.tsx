@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,15 +99,6 @@ function rangeBounds(r: Range): { from: string; to: string; label: string } {
   return                       { from: isoNDaysAgo(30),         to: new Date().toISOString(), label: 'last 30 days' };
 }
 
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
-
 export default function SupplierPurchasesPage() {
   const [range, setRange] = useState<Range>('today');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -141,7 +133,7 @@ export default function SupplierPurchasesPage() {
     // Pull every distinct product_id seen in this range
     const productIds = new Set<string>();
     for (const o of orderList) {
-      for (const it of parseItems(o.wholesale_items)) {
+      for (const it of parseOrderItems(o.wholesale_items)) {
         if (it.product_id) productIds.add(it.product_id);
       }
     }
@@ -190,9 +182,9 @@ export default function SupplierPurchasesPage() {
     let unmatched: ProductRollup[] = [];
 
     for (const o of orders) {
-      const items = parseItems(o.wholesale_items);
+      const items = parseOrderItems(o.wholesale_items);
       for (const it of items) {
-        const qty = Number(it.qty ?? it.quantity ?? 0);
+        const qty = it.qty;
         if (!qty || qty <= 0) continue;
         const pid = it.product_id;
         if (!pid) {

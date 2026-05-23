@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
 import { notifyOrderStatusChange } from '@/lib/notify-status-change';
 import LockButton from '@/components/LockButton';
+import { parseOrderItems } from '@/lib/order-items';
 
 // Skip prerendering. Orders page is per-user, runtime-only.
 export const dynamic = 'force-dynamic';
@@ -50,24 +51,14 @@ function mapOrder(row: Record<string, unknown>): Order {
   const id = String(row.id ?? '');
   const orderType = (row.order_type as string) || '';
 
-  // Items: prefer wholesale_items, fall back to items column.
-  const rawItems = row.wholesale_items ?? row.items ?? [];
-  const itemsArr = (typeof rawItems === 'string' ? safeParse(rawItems) : rawItems) as
-    | unknown[]
-    | null;
-  const items: OrderItem[] = Array.isArray(itemsArr)
-    ? itemsArr.map((it) => {
-        const i = it as Record<string, unknown>;
-        const qty = Number(i.qty ?? i.quantity ?? 0);
-        const price = Number(i.unit_price ?? i.price ?? 0);
-        return {
-          name: String(i.name ?? i.sku ?? 'Item'),
-          qty,
-          price,
-          emoji: String(i.emoji ?? ''),
-        };
-      })
-    : [];
+  // Items: prefer wholesale_items, fall back to items column. parseOrderItems
+  // canonicalizes both the qty (quantity/qty) and price (unit_price/price) splits.
+  const items: OrderItem[] = parseOrderItems(row.wholesale_items ?? row.items).map((it) => ({
+    name:  it.name || 'Item',
+    qty:   it.qty,
+    price: it.unit_price ?? 0,
+    emoji: it.emoji ?? '',
+  }));
 
   // Total: orders table sometimes has `total`, sometimes only `wholesale_cost_total`.
   const total = Number(

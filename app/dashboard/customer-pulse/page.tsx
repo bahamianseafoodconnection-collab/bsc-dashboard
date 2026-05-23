@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,14 +87,6 @@ function isoEndOfDay(d: Date): string {
   const x = new Date(d); x.setHours(23, 59, 59, 999); return x.toISOString();
 }
 
-interface OrderItem { name?: string; sku?: string; quantity?: number; qty?: number; }
-function extractItems(wholesale_items: unknown): OrderItem[] {
-  if (Array.isArray(wholesale_items)) return wholesale_items as OrderItem[];
-  if (typeof wholesale_items === 'string') {
-    try { const p = JSON.parse(wholesale_items); return Array.isArray(p) ? p : []; } catch { return []; }
-  }
-  return [];
-}
 
 // Heuristic — pull anything that LOOKS like a lot code (STPC-YYYYMMDD-VV-NN or
 // BSC-FISH-...) from an order's items / notes. Until order_items.lot_code is
@@ -187,7 +180,7 @@ export default function CustomerPulsePage() {
       // Top items by frequency from lifetime
       const itemCounts = new Map<string, number>();
       for (const o of lifetime) {
-        for (const item of extractItems(o.wholesale_items)) {
+        for (const item of parseOrderItems(o.wholesale_items)) {
           const k = (item.name ?? item.sku ?? '').trim();
           if (!k) continue;
           itemCounts.set(k, (itemCounts.get(k) ?? 0) + 1);
@@ -435,9 +428,9 @@ function CustomerCard({ c }: { c: PulseCustomer }) {
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>What they came back for</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
             {c.today_orders.map(o => {
-              const items = extractItems(o.wholesale_items);
+              const items = parseOrderItems(o.wholesale_items);
               const summary = items.length > 0
-                ? items.slice(0, 3).map(it => `${it.name ?? it.sku ?? '?'}${it.quantity ?? it.qty ? ` ×${it.quantity ?? it.qty}` : ''}`).join(', ')
+                ? items.slice(0, 3).map(it => `${it.name || it.sku || '?'}${it.qty ? ` ×${it.qty}` : ''}`).join(', ')
                 : `${o.order_type ?? 'order'} #${o.id.slice(0, 8)}`;
               return <div key={o.id}>• {summary} <span style={{ color: 'rgba(255,255,255,0.5)' }}>— {dollars(Number(o.total ?? 0))}</span></div>;
             })}

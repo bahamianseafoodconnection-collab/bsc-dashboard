@@ -8,6 +8,7 @@ import DashboardSnapshot from './snapshot';
 import { fetchOverheadMetrics, type OverheadMetrics } from '@/lib/profit';
 import { useUserRole, canLock } from '@/lib/role';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
+import { parseOrderItems } from '@/lib/order-items';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,7 +149,7 @@ type WholesaleOrder = {
   wholesaler: string;
   customer_name?: string;
   wholesale_cost_total: number;
-  wholesale_items: { name: string; quantity: number; unit: string; price: number }[];
+  wholesale_items: unknown;
   payment_status: string;
   admin_purchased: boolean;
 };
@@ -787,7 +788,7 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {wholesaleOrders.map((order) => {
                       const wInfo = WHOLESALERS.find(w => w.key === order.wholesaler) || { name: order.wholesaler || 'Unknown', color: '#1a2e5a', logo: '🏪' };
-                      const items = order.wholesale_items || [];
+                      const items = parseOrderItems(order.wholesale_items);
                       const bscProfit = (order.total || 0) - (order.wholesale_cost_total || 0);
                       return (
                         <div key={order.id} style={{ backgroundColor: '#f8f9fa', borderRadius: '12px', padding: '14px', borderLeft: `4px solid ${wInfo.color}` }}>
@@ -810,7 +811,7 @@ export default function DashboardPage() {
                               {items.map((item, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#1a2e5a', padding: '3px 0', borderBottom: i < items.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
                                   <span style={{ fontWeight: 600 }}>{item.name}</span>
-                                  <span style={{ color: '#666' }}>{item.quantity} {item.unit}</span>
+                                  <span style={{ color: '#666' }}>{item.qty} {item.unit}</span>
                                 </div>
                               ))}
                             </div>

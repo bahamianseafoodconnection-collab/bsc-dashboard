@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,25 +72,6 @@ function startOfTodayIso(): string {
   return d.toISOString();
 }
 
-function topItem(raw: unknown): { name: string; qty: number } | null {
-  if (!raw) return null;
-  let arr: unknown = raw;
-  if (typeof raw === 'string') {
-    try { arr = JSON.parse(raw); } catch { return null; }
-  }
-  if (!Array.isArray(arr) || arr.length === 0) return null;
-  const items = arr as Array<{ name?: string; qty?: number; quantity?: number }>;
-  const totals = new Map<string, number>();
-  for (const it of items) {
-    if (!it.name) continue;
-    totals.set(it.name, (totals.get(it.name) || 0) + Number(it.qty ?? it.quantity ?? 1));
-  }
-  let best: { name: string; qty: number } | null = null;
-  for (const [name, qty] of totals.entries()) {
-    if (!best || qty > best.qty) best = { name, qty };
-  }
-  return best;
-}
 
 export default function PulsePage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -195,9 +177,15 @@ export default function PulsePage() {
   const topProducts = useMemo(() => {
     const totals = new Map<string, number>();
     for (const o of orders) {
-      const t = topItem(o.wholesale_items);
-      if (!t) continue;
-      totals.set(t.name, (totals.get(t.name) || 0) + t.qty);
+      const items = parseOrderItems(o.wholesale_items);
+      if (items.length === 0) continue;
+      // Pick this order's heaviest line (matches the old per-order top-item behavior).
+      const top = items.reduce(
+        (best, it) => (best && best.qty >= it.qty ? best : it),
+        items[0],
+      );
+      if (!top.name) continue;
+      totals.set(top.name, (totals.get(top.name) || 0) + top.qty);
     }
     return Array.from(totals.entries())
       .sort((a, b) => b[1] - a[1])

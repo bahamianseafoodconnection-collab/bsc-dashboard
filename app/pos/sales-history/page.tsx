@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { countOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,18 +49,6 @@ function startOfRange(r: DateRange): string | null {
   return d.toISOString();
 }
 
-function itemsCount(raw: unknown): number {
-  if (!raw) return 0;
-  let arr: unknown = raw;
-  if (typeof raw === 'string') {
-    try { arr = JSON.parse(raw); } catch { return 0; }
-  }
-  if (!Array.isArray(arr)) return 0;
-  return (arr as Array<{ qty?: number; quantity?: number }>).reduce(
-    (s, it) => s + Number(it.qty ?? it.quantity ?? 1),
-    0,
-  );
-}
 
 export default function PosSalesHistoryPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -196,7 +185,7 @@ export default function PosSalesHistoryPage() {
         const tone = o.order_type === 'pos_sale_andros' ? '#a78bfa' : '#1a6fb5';
         const pm   = (o.payment_method || '').toLowerCase();
         const ts   = new Date(o.created_at);
-        const items = itemsCount(o.wholesale_items);
+        const items = countOrderItems(o.wholesale_items);
         return (
           <div key={o.id} style={{ ...cardStyle, borderLeft: `4px solid ${tone}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>

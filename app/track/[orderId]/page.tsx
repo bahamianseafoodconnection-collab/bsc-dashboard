@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,15 +53,6 @@ const CANCEL_WINDOW_MS = 30 * 60 * 1000;
 const CANCELLABLE = new Set([
   'Pending', 'Confirmed', 'pending', 'processing', 'payment_pending',
 ]);
-
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
 
 function flowFor(o: Order): string[] {
   const dt = (o.delivery_type || '').toLowerCase();
@@ -145,10 +137,10 @@ export default function TrackOrderPage() {
   const flow = flowFor(order);
   const tl = timelineStep(order, flow);
   const total = Number(order.total ?? order.wholesale_cost_total ?? 0);
-  const items = parseItems(order.wholesale_items);
-  const itemsHavePrice = items.some((it) => typeof it.price === 'number');
+  const items = parseOrderItems(order.wholesale_items);
+  const itemsHavePrice = items.some((it) => typeof it.unit_price === 'number');
   const subtotal = itemsHavePrice
-    ? items.reduce((s, it) => s + (Number(it.price ?? 0) * Number(it.qty ?? it.quantity ?? 1)), 0)
+    ? items.reduce((s, it) => s + (it.unit_price ?? 0) * it.qty, 0)
     : null;
   const discount = Number(order.promo_discount || 0);
   const refNo = `INV-${order.id.slice(0, 8).toUpperCase()}`;
@@ -274,7 +266,7 @@ export default function TrackOrderPage() {
             <p className="text-sm text-slate-500">No line items recorded.</p>
           ) : (
             items.map((it, i) => {
-              const qty = Number(it.qty ?? it.quantity ?? 0);
+              const qty = it.qty;
               const lineTotal = typeof it.price === 'number' ? it.price * qty : null;
               return (
                 <div

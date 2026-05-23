@@ -1068,7 +1068,7 @@ async function setFlyerActiveTool(
 // Both aggregate from orders.wholesale_items (JSONB) in JS, using a single
 // scan of the last `lookback_days` (default 90) of orders. No SQL CTEs.
 
-interface RawOrderItem { sku?: string; name?: string; quantity?: number; weight_lb?: number | null; line_total?: number }
+import { parseOrderItems } from './order-items';
 interface OrderRow {
   id: string;
   created_at: string;
@@ -1111,13 +1111,13 @@ async function demandPatternTool(input: DemandPatternInput, admin: SupabaseClien
     const dayOrders = orders.filter(o => new Date(o.created_at).getDay() === dow);
     const byKey = new Map<string, { sku?: string; name: string; times: number; total_qty: number; total_revenue: number }>();
     for (const o of dayOrders) {
-      const items: RawOrderItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawOrderItem[]) : [];
+      const items = parseOrderItems(o.wholesale_items);
       for (const it of items) {
         const key = it.sku ?? it.name ?? 'unknown';
-        const ex  = byKey.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
+        const ex  = byKey.get(key) ?? { sku: it.sku, name: it.name || 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
         ex.times         += 1;
-        ex.total_qty     += Number(it.weight_lb ?? it.quantity ?? 0);
-        ex.total_revenue += Number(it.line_total ?? 0);
+        ex.total_qty     += it.weight_lb ?? it.qty;
+        ex.total_revenue += it.line_total ?? 0;
         byKey.set(key, ex);
       }
     }
@@ -1145,12 +1145,12 @@ async function demandPatternTool(input: DemandPatternInput, admin: SupabaseClien
   });
   const itemMap = new Map<string, { sku?: string; name: string; times: number; total_qty: number }>();
   for (const o of orders) {
-    const items: RawOrderItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawOrderItem[]) : [];
+    const items = parseOrderItems(o.wholesale_items);
     for (const it of items) {
       const key = it.sku ?? it.name ?? 'unknown';
-      const ex  = itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0 };
+      const ex  = itemMap.get(key) ?? { sku: it.sku, name: it.name || 'Unknown item', times: 0, total_qty: 0 };
       ex.times    += 1;
-      ex.total_qty += Number(it.weight_lb ?? it.quantity ?? 0);
+      ex.total_qty += it.weight_lb ?? it.qty;
       itemMap.set(key, ex);
     }
   }
@@ -1361,13 +1361,13 @@ async function customerHistoryTool(input: CustomerHistoryInput, admin: SupabaseC
   // Top items across all orders
   const itemMap = new Map<string, { sku?: string; name: string; times: number; total_qty: number; total_revenue: number }>();
   for (const o of orders) {
-    const items: RawOrderItem[] = Array.isArray(o.wholesale_items) ? (o.wholesale_items as RawOrderItem[]) : [];
+    const items = parseOrderItems(o.wholesale_items);
     for (const it of items) {
       const key = it.sku ?? it.name ?? 'unknown';
-      const ex = itemMap.get(key) ?? { sku: it.sku, name: it.name ?? 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
+      const ex = itemMap.get(key) ?? { sku: it.sku, name: it.name || 'Unknown item', times: 0, total_qty: 0, total_revenue: 0 };
       ex.times         += 1;
-      ex.total_qty     += Number(it.weight_lb ?? it.quantity ?? 0);
-      ex.total_revenue += Number(it.line_total ?? 0);
+      ex.total_qty     += it.weight_lb ?? it.qty;
+      ex.total_revenue += it.line_total ?? 0;
       itemMap.set(key, ex);
     }
   }

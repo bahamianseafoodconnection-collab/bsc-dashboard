@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState, use as usePromise } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 const ADMIN_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager','processor','receiver']);
 
@@ -40,11 +41,6 @@ interface LineItem {
   line_total?:  number;
 }
 
-function parseItems(raw: unknown): LineItem[] {
-  if (Array.isArray(raw)) return raw as LineItem[];
-  if (typeof raw === 'string') { try { return JSON.parse(raw) as LineItem[]; } catch { return []; } }
-  return [];
-}
 
 function fmtDate(s: string): string {
   return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -207,10 +203,10 @@ export default function StatementPage({ params }: { params: Promise<{ customerId
               </thead>
               <tbody>
                 {orders.map((o) => {
-                  const items = parseItems(o.wholesale_items);
+                  const items = parseOrderItems(o.wholesale_items);
                   const itemPreview = items.length === 0
                     ? '—'
-                    : items.slice(0, 2).map(it => `${it.quantity ?? it.weight_lb ?? ''} ${it.name ?? ''}`.trim()).join(', ') + (items.length > 2 ? `, +${items.length - 2} more` : '');
+                    : items.slice(0, 2).map(it => `${it.qty || it.weight_lb || ''} ${it.name}`.trim()).join(', ') + (items.length > 2 ? `, +${items.length - 2} more` : '');
                   const ageColor = o.age_days > 90 ? '#9b1c1c' : o.age_days > 60 ? '#c2410c' : o.age_days > 30 ? '#b45309' : '#0f7a3f';
                   return (
                     <tr key={o.id} style={{ borderBottom: '1px solid #e2e8f0' }}>

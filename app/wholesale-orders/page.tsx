@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { parseOrderItems } from '@/lib/order-items';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,13 +29,7 @@ type WholesaleOrder = {
   total: number;
   wholesale_cost_total: number;
   wholesaler: string;
-  wholesale_items: {
-    name: string;
-    quantity: number;
-    unit: string;
-    price: number;
-    wholesale_cost: number;
-  }[];
+  wholesale_items: unknown;
   payment_method: string;
   payment_status: string;
   status: string;
@@ -241,7 +236,7 @@ export default function WholesaleOrdersPage() {
               const wInfo     = getWholesaler(order.wholesaler);
               const sc        = statusColor(order.payment_status || order.status);
               const bscProfit = (order.total || 0) - (order.wholesale_cost_total || 0);
-              const items     = order.wholesale_items || [];
+              const items     = parseOrderItems(order.wholesale_items);
               const isSelected = selectedOrder?.id === order.id;
 
               return (
@@ -316,12 +311,12 @@ export default function WholesaleOrdersPage() {
                               <div>
                                 <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{item.name}</div>
                                 <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 }}>
-                                  Qty: {item.quantity} {item.unit}
+                                  Qty: {item.qty} {item.unit}
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <div style={{ color: '#f4c842', fontWeight: 900, fontSize: 15 }}>
-                                  {fmtBSD(item.wholesale_cost || (item.price / 1.232))}
+                                  {fmtBSD((item.unit_price ?? 0) / 1.232)}
                                 </div>
                                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>wholesale cost</div>
                               </div>

@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,15 +53,6 @@ type LineItem = {
   unit?: string;
   image_url?: string;
 };
-
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
 
 function statusTone(s: string | null): { bg: string; text: string; label: string } {
   const v = (s || '').toLowerCase();
@@ -117,7 +109,7 @@ export default function MyOrdersPage() {
       const current: LineItem[] = stored ? JSON.parse(stored) : [];
       for (const it of items) {
         if (!it.id || !it.name || typeof it.price !== 'number') continue;
-        const qty = Number(it.qty ?? it.quantity ?? 1);
+        const qty = it.qty || 1;
         const source = (it.source as 'market' | 'wholesale' | 'us') || 'market';
         const idx = current.findIndex((c) => c.id === it.id && c.source === source);
         if (idx >= 0) {
@@ -275,7 +267,7 @@ export default function MyOrdersPage() {
         {!loading && orders.map((o) => {
           const tone = statusTone(o.status || o.payment_status);
           const total = Number(o.total ?? o.wholesale_cost_total ?? 0);
-          const items = parseItems(o.wholesale_items);
+          const items = parseOrderItems(o.wholesale_items);
           const refNo = `INV-${o.id.slice(0, 8).toUpperCase()}`;
           return (
             <div key={o.id} className="mb-3 rounded-2xl bg-white p-5 shadow-card">

@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { parseOrderItems } from '@/lib/order-items';
 
 const NAVY = '#1a2e5a';
 const GOLD = '#f4c842';
@@ -146,7 +147,7 @@ export default function DashboardSnapshot() {
       // ─── Top products (last 30 days) ───
       const productAcc = new Map<string, { qty: number; revenue: number }>();
       for (const o of thirtyOrders) {
-        const items = parseLineItems((o as Record<string, unknown>).wholesale_items);
+        const items = parseOrderItems((o as Record<string, unknown>).wholesale_items);
         for (const it of items) {
           const name = (it.name || '').trim() || 'Unknown';
           const qty = Number(it.qty || 0);
@@ -330,14 +331,6 @@ export default function DashboardSnapshot() {
 
 /* helpers */
 
-function parseLineItems(raw: unknown): { name?: string; qty?: number; line_total?: number; unit_price?: number }[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as { name?: string; qty?: number; line_total?: number; unit_price?: number }[];
-}
 
 /* primitives */
 

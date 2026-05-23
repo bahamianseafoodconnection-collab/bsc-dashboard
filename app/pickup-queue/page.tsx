@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
 import { notifyOrderStatusChange } from '@/lib/notify-status-change';
+import { parseOrderItems } from '@/lib/order-items';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,15 +60,6 @@ type Group = {
   emoji: string;
   orders: Order[];
 };
-
-function parseItems(raw: unknown): LineItem[] {
-  if (!raw) return [];
-  if (typeof raw === 'string') {
-    try { raw = JSON.parse(raw); } catch { return []; }
-  }
-  if (!Array.isArray(raw)) return [];
-  return raw as LineItem[];
-}
 
 function islandFromAdminNotes(notes: string | null): string | null {
   if (!notes) return null;
@@ -238,7 +230,7 @@ export default function PickupQueuePage() {
             {g.label} <span style={{ color: '#94a3b8', fontWeight: 600 }}>· {g.orders.length} order{g.orders.length === 1 ? '' : 's'}</span>
           </div>
           {g.orders.map((o) => {
-            const items = parseItems(o.wholesale_items);
+            const items = parseOrderItems(o.wholesale_items);
             const total = Number(o.total ?? o.wholesale_cost_total ?? 0);
             const live = o.status || o.payment_status || 'Pending';
             const next = nextStatus(o);
@@ -277,7 +269,7 @@ export default function PickupQueuePage() {
                     <li style={{ color: '#94a3b8', fontSize: 12 }}>(no item detail on this order)</li>
                   )}
                   {items.map((it, i) => {
-                    const qty = Number(it.qty ?? it.quantity ?? 1);
+                    const qty = it.qty || 1;
                     return (
                       <li key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0' }}>
                         <span style={{ color: '#fff' }}>
