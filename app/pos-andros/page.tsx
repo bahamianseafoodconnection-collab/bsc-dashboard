@@ -29,7 +29,11 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-const ANDROS_PIN = 'CETA2024';
+// Numeric PIN to match the digit-only keypad. The previous 'CETA2024'
+// included letters that the keypad couldn't input — page was effectively
+// inaccessible. Founder bypasses via role check (see useEffect below);
+// everyone else enters this 4-digit PIN.
+const ANDROS_PIN = '2024';
 
 type CatalogRow = {
   id: string;
@@ -140,9 +144,37 @@ function genRef() {
 
 export default function AndrosPOSPage() {
   // ─── PIN gate ─────────────────────────────────────────────────────
-  const [unlocked, setUnlocked] = useState(false);
+  // Founder (Dedrick) auto-unlocks via role check on mount; everyone
+  // else (cashier / andros_staff / manager / co_founder / supplier)
+  // enters the numeric PIN.
+  const [unlocked, setUnlocked]             = useState(false);
+  const [unlockChecking, setUnlockChecking] = useState(true);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+
+  // Founder auto-unlock — role check on mount. Fails safe: any error
+  // or non-founder role leaves the PIN gate visible.
+  useEffect(() => {
+    const supabase = getSupabase();
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (profile?.role === 'founder') {
+          setUnlocked(true);
+        }
+      } catch {
+        /* fail-safe: stay locked, user types the PIN */
+      } finally {
+        setUnlockChecking(false);
+      }
+    })();
+  }, []);
 
   function tryPin() {
     if (pinInput === ANDROS_PIN) {
@@ -154,7 +186,7 @@ export default function AndrosPOSPage() {
     }
   }
   function addPinDigit(d: string) {
-    if (pinInput.length < 8) setPinInput((p) => p + d);
+    if (pinInput.length < ANDROS_PIN.length) setPinInput((p) => p + d);
   }
 
   // ─── Register state ───────────────────────────────────────────────
@@ -546,6 +578,17 @@ export default function AndrosPOSPage() {
 
   /* ─── PIN SCREEN ─── */
   if (!unlocked) {
+    // Founder auto-unlock check is async — show a brief loading state
+    // so Dedrick doesn't see the PIN gate flicker before bypassing.
+    if (unlockChecking) {
+      return (
+        <div style={{ minHeight: '100vh', backgroundColor: '#1a0a2e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+          <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: 600 }}>
+            Checking access…
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         style={{
@@ -618,7 +661,7 @@ export default function AndrosPOSPage() {
                 marginBottom: '10px',
               }}
             >
-              {Array.from({ length: 8 }).map((_, i) => (
+              {Array.from({ length: ANDROS_PIN.length }).map((_, i) => (
                 <div
                   key={i}
                   style={{
