@@ -83,6 +83,18 @@ export async function POST(req: NextRequest) {
   const channelSet  = (body.channel_set === 'andros_pos') ? 'andros_pos' : 'nassau_pos';
   const reason      = typeof body.reason === 'string' ? body.reason.trim() : null;
 
+  // Item 12: role-to-channel binding — register staff can only edit
+  // their own store's pricing. Higher roles (manager / founder /
+  // co_founder / control_admin / basic_admin) cover both stores and
+  // remain unrestricted. Closes the silent cross-store edit vector
+  // flagged in the 2026-05-24 assumptions sweep.
+  if (callerRole === 'cashier'      && channelSet !== 'nassau_pos') {
+    return NextResponse.json({ ok: false, error: 'Nassau cashier can only edit Nassau POS prices.' }, { status: 403 });
+  }
+  if (callerRole === 'andros_staff' && channelSet !== 'andros_pos') {
+    return NextResponse.json({ ok: false, error: 'Andros staff can only edit Andros POS prices.' }, { status: 403 });
+  }
+
   if (!productId || !Number.isFinite(newPosPrice) || newPosPrice <= 0) {
     return NextResponse.json({ ok: false, error: 'product_id + positive new_pos_price required.' }, { status: 400 });
   }
