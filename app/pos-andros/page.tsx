@@ -742,22 +742,17 @@ export default function AndrosPOSPage() {
     <>
     <AddInventoryButton role="andros_staff" variant="fab" />
     <div
+      className="flex flex-col lg:flex-row lg:h-screen"
       style={{
-        display: 'flex',
-        height: '100vh',
         backgroundColor: '#f5f0ff',
         fontFamily: 'system-ui, -apple-system, sans-serif',
       }}
     >
-      {/* LEFT — products */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
+      {/* LEFT — products. Mobile: fixed 55vh slice with internal scroll
+          on the product grid. Desktop (lg+): flex:1 fills the row, full
+          100vh tall. Same behavior as today on desktop. */}
+      <div className="flex flex-col overflow-hidden h-[55vh] lg:h-auto lg:flex-1">
+
         {/* Header */}
         <div
           style={{
@@ -954,15 +949,12 @@ export default function AndrosPOSPage() {
         </div>
       </div>
 
-      {/* RIGHT — cart */}
+      {/* RIGHT — cart. Mobile: full-width 45vh slice below the products,
+          top border to separate. Desktop (lg+): 360px wide column, left
+          border, full 100vh tall. Same behavior as today on desktop. */}
       <div
-        style={{
-          width: 360,
-          background: '#fff',
-          borderLeft: '1px solid #e5e7eb',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
+        className="flex flex-col w-full h-[45vh] lg:w-[360px] lg:h-auto border-t lg:border-t-0 lg:border-l border-gray-200"
+        style={{ background: '#fff' }}
       >
         <div
           style={{
