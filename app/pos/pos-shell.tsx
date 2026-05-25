@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
+import { clearSignIn } from '@/lib/staff-session';
 
 type UserRecord = {
   id: string;
@@ -122,6 +123,7 @@ export default function PosShell({ children }: { children: React.ReactNode }) {
 
   async function handleSignOut() {
     const supabase = getSupabase();
+    clearSignIn();
     await supabase.auth.signOut();
     router.replace('/staff-login');
   }

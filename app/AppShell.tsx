@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { PageErrorBoundary } from './ErrorBoundary';
 import { t, type Lang } from '@/lib/i18n';
+import { isStaffSessionExpired, staffSessionBypassesFor, clearSignIn } from '@/lib/staff-session';
 
 const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -155,6 +156,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // 10-hour staff session cap. Founder + co_founder are always-on
+        // (bypass via staffSessionBypassesFor). Customers + anyone
+        // without a recorded signin timestamp (pre-deploy sessions OR
+        // /login customer flow) pass through. Cashiers / managers /
+        // andros_staff / supplier / processor / etc. get force-signout
+        // when their staff-login signin is > 10h old.
+        if (!staffSessionBypassesFor(role) && isStaffSessionExpired()) {
+          clearSignIn();
+          await supabase.auth.signOut();
+          const nextParam = pathname && pathname !== '/staff-login' ? `?next=${encodeURIComponent(pathname)}` : '';
+          router.replace(`/staff-login${nextParam}`);
+          return;
+        }
+
         if (!STAFF_ROLES.has(role)) {
           const blocked =
             STAFF_ONLY_PREFIXES.some(p => pathname.startsWith(p)) ||
@@ -168,6 +183,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
     resolveRoleAndGuard();
   }, [pathname]);
+
+  // Periodic 60s check — enforces the 10h staff session cap even when
+  // the user stays on a single page (the pathname-change useEffect
+  // above only runs on navigation). Founder + co_founder bypass.
+  // No-ops cleanly when role is still loading, unauthenticated, or
+  // when there's no recorded signin (customer login flow / pre-deploy
+  // sessions). See lib/staff-session.ts for the cap logic.
+  useEffect(() => {
+    if (roleState === 'loading' || roleState === 'unauthenticated') return;
+    if (staffSessionBypassesFor(roleState)) return;
+    const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
+    const tick = async () => {
+      if (isStaffSessionExpired()) {
+        clearSignIn();
+        await supabase.auth.signOut();
+        const nextParam = pathname && pathname !== '/staff-login' ? `?next=${encodeURIComponent(pathname)}` : '';
+        router.replace(`/staff-login${nextParam}`);
+      }
+    };
+    const t = setInterval(tick, 60_000);
+    return () => clearInterval(t);
+  }, [roleState, pathname, router]);
 
   const hideNav =
     pathname === '/' ||

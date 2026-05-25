@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
 import Link from 'next/link';
+import { clearSignIn } from '@/lib/staff-session';
 
 // ── CONSTANTS ──
 const MAILBOAT_PER_LB = 0.50; // Florida → Nassau mailboat freight per lb
@@ -380,7 +381,7 @@ return (
 <p style={{ margin: 0, color: '#4a5568', fontSize: 11 }}>{supplierName} · US Supplier & Lobster Sales</p>
 </div>
 <button
-onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
+onClick={() => { clearSignIn(); supabase.auth.signOut().then(() => router.push('/login')); }}
 style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#0d1f3c', color: '#6b7280', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}
 >
 Sign Out

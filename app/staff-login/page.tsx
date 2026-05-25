@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { recordSignIn, clearSignIn } from '@/lib/staff-session';
 
 export default function StaffLoginPage() {
   const [email, setEmail] = useState('');
@@ -39,6 +40,7 @@ export default function StaffLoginPage() {
       const { data: roleData, error: roleErr } = await supabase.rpc('get_my_role');
 
       if (roleErr) {
+        clearSignIn();
         await supabase.auth.signOut();
         setError('Could not verify your staff role. Contact Dedrick or Jaquel.');
         setLoading(false);
@@ -48,11 +50,16 @@ export default function StaffLoginPage() {
       const role = roleData as string | null;
 
       if (!role) {
+        clearSignIn();
         await supabase.auth.signOut();
         setError('This sign-in is for BSC staff only. Customers: use the customer sign-in page.');
         setLoading(false);
         return;
       }
+
+      // Record the signin timestamp so AppShell can enforce the 10-hour
+      // staff session cap (founder + co_founder bypass — see lib/staff-session.ts).
+      recordSignIn();
 
       const dashboardRoles = ['control_admin', 'founder', 'co_founder', 'manager', 'cashier', 'right_hand', 'supervisor'];
 

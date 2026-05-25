@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
+import { clearSignIn } from '@/lib/staff-session';
 
 const MONTHLY_EXPENSES = [
 { label: 'Store Rent — Nassau', amount: 4150 },
@@ -92,7 +93,7 @@ return (
 <div style={{ display: 'flex', gap: 8 }}>
 <AddInventoryButton role="co_founder" variant="primary" label="+ Add" icon="📷" />
 <Link href="/pos" style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#f5c518', color: '#000', fontWeight: 'bold', fontSize: 12, textDecoration: 'none' }}>🛒 POS</Link>
-<button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#0d1f3c', color: '#6b7280', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}>Out</button>
+<button onClick={() => { clearSignIn(); supabase.auth.signOut().then(() => router.push('/login')); }} style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#0d1f3c', color: '#6b7280', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}>Out</button>
 </div>
 </div>
 </div>

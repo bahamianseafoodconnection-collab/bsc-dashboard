@@ -10,6 +10,7 @@ import { fetchOverheadMetrics, type OverheadMetrics } from '@/lib/profit';
 import { useUserRole, canLock } from '@/lib/role';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
 import { parseOrderItems } from '@/lib/order-items';
+import { clearSignIn } from '@/lib/staff-session';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -555,6 +556,7 @@ export default function DashboardPage() {
   }
 
   async function handleSignOut() {
+    clearSignIn();
     await supabase.auth.signOut();
     window.location.href = '/staff-login';
   }
@@ -572,7 +574,7 @@ export default function DashboardPage() {
                 style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 800, cursor: 'pointer' }}>
                 🔁 Retry
               </button>
-              <button onClick={() => { supabase.auth.signOut().then(() => { window.location.href = '/staff-login'; }); }}
+              <button onClick={() => { clearSignIn(); supabase.auth.signOut().then(() => { window.location.href = '/staff-login'; }); }}
                 style={{ background: 'transparent', color: '#fbbf24', border: '1px solid #fbbf24', borderRadius: 8, padding: '8px 16px', fontWeight: 800, cursor: 'pointer' }}>
                 Sign out + sign back in
               </button>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { clearSignIn } from '@/lib/staff-session';
 
 type Order = {
   id: string;
@@ -80,6 +81,7 @@ export default function CustomerDashboard() {
   }
 
   async function handleSignOut() {
+    clearSignIn();
     await supabase.auth.signOut();
     router.replace('/');
   }

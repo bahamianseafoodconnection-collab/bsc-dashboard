@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { clearSignIn } from '@/lib/staff-session';
 
 const CAR_MARKUP = 650;
 const RENTAL_MARKUP = 10;
@@ -71,7 +72,7 @@ return (
 + Upload
 </Link>
 <button
-onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
+onClick={() => { clearSignIn(); supabase.auth.signOut().then(() => router.push('/login')); }}
 style={{ padding: '7px 12px', borderRadius: 10, backgroundColor: '#0d1f3c', color: '#6b7280', border: '1px solid #1e3a5f', fontSize: 12, cursor: 'pointer' }}
 >
 Sign Out
