@@ -74,6 +74,19 @@ const PAYMENT_METHODS = [
   { value: 'account', label: '🧾 Account (wholesale credit)' },
 ]
 
+// 10-hour cashier shift cap. Founder + co_founder bypass entirely
+// (they're always-on via the dashboard); every other role MUST close
+// their shift within this window so /dashboard/cashiers totals stay
+// reconcilable.
+const SHIFT_MAX_MS = 10 * 60 * 60 * 1000
+
+function formatRemaining(ms: number): string {
+  const totalMin = Math.floor(ms / 60_000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
 interface CashierSession {
   id: string
   cashier_user_id: string
@@ -134,6 +147,8 @@ export default function POSPage() {
 
   // Cashier shift / cash drawer
   const [cashierSession, setCashierSession] = useState<CashierSession | null>(null)
+  const [userRole,        setUserRole]        = useState<string | null>(null)  // founder + co_founder bypass shift requirement
+  const [nowTick,         setNowTick]         = useState(() => Date.now())     // ticks every 60s for the countdown badge
   const [shiftOpenModal,  setShiftOpenModal]  = useState(false)
   const [shiftCloseModal, setShiftCloseModal] = useState(false)
   const [openFloatDollars,setOpenFloatDollars]= useState('')
@@ -156,7 +171,35 @@ export default function POSPage() {
       .maybeSingle()
     setCashierSession((data as CashierSession | null) ?? null)
   }
-  useEffect(() => { loadCashierSession() }, [])
+  useEffect(() => {
+    loadCashierSession()
+    // Fetch current user's role so the submit handler can let founder /
+    // co_founder bypass the shift-required + 10h-cap guards.
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) return
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (profile?.role) setUserRole(profile.role as string)
+    })()
+  }, [])
+
+  // Minute-tick so the shift-remaining countdown badge updates live.
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Derived shift age + remaining-time signals (only meaningful when a
+  // shift is open). Founder + co_founder ignore these entirely.
+  const shiftOpenedMs = cashierSession?.opened_at ? new Date(cashierSession.opened_at).getTime() : null
+  const shiftAgeMs    = shiftOpenedMs ? nowTick - shiftOpenedMs : 0
+  const shiftMsLeft   = shiftOpenedMs ? Math.max(0, SHIFT_MAX_MS - shiftAgeMs) : null
+  const shiftExpired  = shiftOpenedMs != null && shiftAgeMs > SHIFT_MAX_MS
+  const shiftIsBypassed = userRole === 'founder' || userRole === 'co_founder'
 
   async function handleOpenShift() {
     const dollars = parseFloat(openFloatDollars)
@@ -520,6 +563,24 @@ export default function POSPage() {
     }
 
     setSubmitting(true)
+
+    // Founder + co_founder are always-on via the dashboard and can ring
+    // any sale without a cash_drawer_session. Every other role MUST open
+    // a shift, and the shift expires after 10 hours so /dashboard/cashiers
+    // totals stay reconcilable.
+    if (!shiftIsBypassed) {
+      if (!cashierSession?.id) {
+        alert('Open a shift before ringing a sale. Tap "🔴 No shift" → enter opening cash.')
+        setSubmitting(false)
+        return
+      }
+      if (shiftExpired) {
+        alert('Shift has been open for more than 10 hours. Close it first — tap the shift badge → Close Shift → count the drawer. Open a new shift to keep ringing.')
+        setSubmitting(false)
+        return
+      }
+    }
+
     try {
       let customerId: string | null = null
       const phoneClean = customerPhone.trim()
@@ -777,13 +838,43 @@ export default function POSPage() {
                 🐟 Wed Special
               </span>
             )}
-            {/* Shift status chip — open/close drawer for this cashier */}
-            {cashierSession ? (
-              <button onClick={() => setShiftCloseModal(true)}
+            {/* Shift status chip — open/close drawer + 10h countdown
+                (countdown hidden for founder/co_founder who are exempt
+                from the cap). */}
+            {shiftIsBypassed ? (
+              <span
                 className="text-xs font-bold px-2.5 py-1.5 rounded-lg"
-                style={{ backgroundColor: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid #16a34a' }}
-                title={`Open ${cashierSession.location} · float $${(cashierSession.opening_float_cents/100).toFixed(2)}`}>
-                🟢 Shift open
+                style={{ backgroundColor: 'rgba(245,197,24,0.15)', color: '#f5c518', border: '1px solid #f5c518' }}
+                title="Always-on shift via /dashboard">
+                ⭐ Always on
+              </span>
+            ) : cashierSession ? (
+              <button onClick={() => setShiftCloseModal(true)}
+                className={[
+                  'text-xs font-bold px-2.5 py-1.5 rounded-lg',
+                  shiftExpired ? 'animate-pulse' : '',
+                ].join(' ')}
+                style={{
+                  backgroundColor:
+                    shiftExpired                                  ? 'rgba(239,68,68,0.20)' :
+                    shiftMsLeft != null && shiftMsLeft <= 30*60*1000 ? 'rgba(239,68,68,0.15)' :
+                    shiftMsLeft != null && shiftMsLeft <= 60*60*1000 ? 'rgba(234,179,8,0.15)' :
+                    'rgba(34,197,94,0.15)',
+                  color:
+                    shiftExpired                                  ? '#f87171' :
+                    shiftMsLeft != null && shiftMsLeft <= 30*60*1000 ? '#fca5a5' :
+                    shiftMsLeft != null && shiftMsLeft <= 60*60*1000 ? '#fbbf24' :
+                    '#4ade80',
+                  border:
+                    shiftExpired                                  ? '1px solid #ef4444' :
+                    shiftMsLeft != null && shiftMsLeft <= 30*60*1000 ? '1px solid #ef4444' :
+                    shiftMsLeft != null && shiftMsLeft <= 60*60*1000 ? '1px solid #eab308' :
+                    '1px solid #16a34a',
+                }}
+                title={`Open ${cashierSession.location} · float $${(cashierSession.opening_float_cents/100).toFixed(2)} · opened ${new Date(cashierSession.opened_at).toLocaleTimeString()}`}>
+                {shiftExpired
+                  ? '🔴 Shift expired — close now'
+                  : `🟢 Shift · ${formatRemaining(shiftMsLeft ?? 0)} left`}
               </button>
             ) : (
               <button onClick={() => setShiftOpenModal(true)}
