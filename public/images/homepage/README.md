@@ -15,10 +15,10 @@ Match the navy `#020B1C` + gold `#F5C518` palette wherever possible.
 | 1 | `hero-seafood-lobster-fish.jpg` | 4:5 mobile / 4:3 desktop / 1:1 large | ≥ 1600 × 1600 | Main hero photo, right side. Lobster, fish, shrimp on ice, lemon, dark ocean lighting. |
 | 2 | `ocean-dark-texture.jpg` | wide | 1920 × 600 | Optional full-hero overlay texture. Dark navy ocean water, subtle blue highlights. *(not currently rendered — reserved for a future overlay)* |
 | 3 | `bsc-direct-wholesale-boxes.jpg` | 4:3 | ≥ 1200 × 900 | BSC Direct Wholesale gold card, right side. Stacked wholesale boxes / warehouse pallets / delivery supply. |
-| 4 | `fresh-catch-tuna.jpg` | 4:3 | ≥ 1200 × 900 | "Fresh Catch" service card. Premium fish on ice, dark blue tone. |
-| 5 | `farm-fresh-produce.jpg` | 4:3 | ≥ 1200 × 900 | "Farm Fresh" service card. Bahamian produce — greens, tomatoes, peppers. |
-| 6 | `pay-bills-lightning.jpg` | 4:3 | ≥ 1200 × 900 | "Pay Bills" service card. Gold lightning / electric payment energy. |
-| 7 | `sell-on-bsc-handshake.jpg` | 4:3 | ≥ 1200 × 900 | "Sell on BSC" service card. Business handshake, premium dark bg. |
+| 4 | `shop-bsc-online-marketplace.jpg` | 4:3 | ≥ 1200 × 900 | "Shop BSC Online" service card (first position). Branded online marketplace mockup / curated delivery box / shopping flatlay on dark premium bg. |
+| 5 | `fresh-catch-tuna.jpg` | 4:3 | ≥ 1200 × 900 | "Fresh from Bahamian Fishermen" service card. Premium fish on ice, dark blue tone. |
+| 6 | `farm-fresh-produce.jpg` | 4:3 | ≥ 1200 × 900 | "From our Bahamian Farmers Farm" service card. Bahamian produce — greens, tomatoes, peppers. |
+| 7 | `pay-bills-lightning.jpg` | 4:3 | ≥ 1200 × 900 | "Pay your bills" service card. Gold lightning / electric payment energy. |
 | 8 | `category-seafood-lobster.jpg` | 4:5 | ≥ 900 × 1100 | "Seafood" category tile. Lobster on ice. |
 | 9 | `category-meat-steak.jpg` | 4:5 | ≥ 900 × 1100 | "Meat" category tile. Premium steak cuts on dark bg. |
 | 10 | `category-produce-market.jpg` | 4:5 | ≥ 900 × 1100 | "Produce" category tile. Colorful fresh vegetables. |

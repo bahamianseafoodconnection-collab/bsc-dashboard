@@ -244,32 +244,32 @@ function BSCDirectCard() {
 
 const SERVICE_CARDS = [
   {
+    href:     '/market',
+    title:    'Shop BSC Online',
+    blurb:    'Browse our full online marketplace',
+    filename: 'shop-bsc-online-marketplace.jpg',
+    alt:      'BSC online marketplace — Bahamian groceries delivered',
+  },
+  {
     href:     '/shop/fresh-catch',
-    title:    'Fresh Catch',
-    blurb:    'Direct from Bahamian fishermen',
+    title:    'Fresh from Bahamian Fishermen',
+    blurb:    'Premium catch straight from local boats',
     filename: 'fresh-catch-tuna.jpg',
-    alt:      'Premium fresh fish on ice',
+    alt:      'Premium fresh fish on ice from Bahamian fishermen',
   },
   {
     href:     '/shop/farm-fresh',
-    title:    'Farm Fresh',
-    blurb:    'Direct from Bahamian farmers',
+    title:    'From our Bahamian Farmers Farm',
+    blurb:    'Fresh produce grown across the islands',
     filename: 'farm-fresh-produce.jpg',
     alt:      'Bahamian farm produce — greens, tomatoes, peppers',
   },
   {
     href:     '/utilities',
-    title:    'Pay Bills',
+    title:    'Pay your bills',
     blurb:    'Quick, secure bill payments',
     filename: 'pay-bills-lightning.jpg',
     alt:      'Lightning-fast bill payment',
-  },
-  {
-    href:     '/vendor/signup',
-    title:    'Sell on BSC',
-    blurb:    'Start selling to thousands of customers',
-    filename: 'sell-on-bsc-handshake.jpg',
-    alt:      'Business partnership handshake',
   },
 ] as const;
 
@@ -426,10 +426,11 @@ function SiteFooter() {
 
         {/* Links */}
         <nav className="flex flex-col gap-2 text-sm text-white/70" aria-label="Footer">
-          <Link href={ROUTES.about}   className="transition hover:text-gold-brand">About Us</Link>
-          <Link href={ROUTES.legal}   className="transition hover:text-gold-brand">Privacy Policy</Link>
-          <Link href={ROUTES.legal}   className="transition hover:text-gold-brand">Terms &amp; Conditions</Link>
-          <Link href={ROUTES.contact} className="transition hover:text-gold-brand">Contact Us</Link>
+          <Link href={ROUTES.about}     className="transition hover:text-gold-brand">About Us</Link>
+          <Link href={ROUTES.sellOnBsc} className="transition hover:text-gold-brand">Sell on BSC</Link>
+          <Link href={ROUTES.legal}     className="transition hover:text-gold-brand">Privacy Policy</Link>
+          <Link href={ROUTES.legal}     className="transition hover:text-gold-brand">Terms &amp; Conditions</Link>
+          <Link href={ROUTES.contact}   className="transition hover:text-gold-brand">Contact Us</Link>
         </nav>
 
         {/* Social. TODO(founder): replace # with real Instagram + Facebook URLs when ready. */}
