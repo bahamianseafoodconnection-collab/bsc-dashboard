@@ -69,6 +69,10 @@ export default function CheckoutPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  // Item 8 / Task #72: optional email so guests (not signed in) can
+  // still receive their receipt + order confirmation. Logged-in users
+  // fall back to session?.user?.email when this is blank.
+  const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [island, setIsland] = useState('Nassau');
   const [note, setNote] = useState('');
@@ -261,7 +265,9 @@ export default function CheckoutPage() {
           body: JSON.stringify({
             name: name.trim(),
             phone: phone.trim() || null,
-            email: session?.user?.email || null,
+            // Item 8: typed email wins; falls back to session email for
+            // logged-in users who didn't retype it.
+            email: email.trim() || session?.user?.email || null,
             source: 'online',
             auth_user_id: session?.user?.id || null,
             order_total_bsd: total,
@@ -336,7 +342,7 @@ export default function CheckoutPage() {
           promo_code: promoApplied.code,
           order_id: orderIdInserted,
           customer_id: customerIdLinked,
-          customer_email: session?.user?.email ?? null,
+          customer_email: email.trim() || session?.user?.email || null,   // Item 8: typed email wins
           customer_phone: phone.trim() || null,
           applied_amount: promoDiscount,
         }),
@@ -393,9 +399,14 @@ export default function CheckoutPage() {
     }
 
     // Queue an order confirmation. WhatsApp first if we have a phone,
-    // email otherwise. Fire-and-forget.
-    if (name.trim() && (phone.trim() || (await supabase.auth.getUser()).data?.user?.email)) {
-      const userEmail = (await supabase.auth.getUser()).data?.user?.email ?? null;
+    // email otherwise. Fire-and-forget. Guest checkout now gets email
+    // confirmation when they typed one (Item 8 / Task #72) — previously
+    // only logged-in users got email when no phone was provided.
+    const sessionEmail = (await supabase.auth.getUser()).data?.user?.email ?? null;
+    const candidateEmail = email.trim() || sessionEmail;
+    // Light shape check so we don't queue garbage. Same regex used elsewhere.
+    const validEmail = candidateEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateEmail) ? candidateEmail : null;
+    if (name.trim() && (phone.trim() || validEmail)) {
       const channel = phone.trim() ? 'whatsapp' : 'email';
       const body = `Hi ${name.trim()}, thanks for ordering from BSC Marketplace. Total: BSD $${total.toFixed(2)}. ${
         payMethod === 'cod'
@@ -408,7 +419,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           channel,
           recipient_phone: phone.trim() || null,
-          recipient_email: channel === 'email' ? userEmail : null,
+          recipient_email: channel === 'email' ? validEmail : null,
           recipient_name: name.trim(),
           template_key: 'order_confirmation_online',
           subject: 'Your BSC Marketplace order',
@@ -491,6 +502,18 @@ export default function CheckoutPage() {
                     />
                   </Field>
                 </div>
+                <Field label="Email (optional — get your receipt + faster reorders)">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@email.com"
+                    inputMode="email"
+                    autoCapitalize="off"
+                    autoComplete="email"
+                    className={INPUT}
+                  />
+                </Field>
                 <Field label="Delivery address *">
                   <input
                     value={address}
