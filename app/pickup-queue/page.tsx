@@ -77,8 +77,15 @@ function groupKeyFor(o: Order): { key: string; label: string; emoji: string } {
   if (dt === 'pickup') {
     return { key: 'pickup', label: '🏪 Nassau pickup', emoji: '🏪' };
   }
-  // nassau or null → assume Nassau delivery
-  return { key: 'nassau', label: '📍 Nassau delivery', emoji: '📍' };
+  if (dt === 'nassau') {
+    return { key: 'nassau', label: '📍 Nassau delivery', emoji: '📍' };
+  }
+  // Item 11: null OR unexpected value → DON'T silently assume Nassau.
+  // Surface so the warehouse can decide. POS in-store sales (which write
+  // delivery_type = null) land here too — admin confirms "walked out
+  // with goods" and dismisses, instead of polluting the Nassau delivery
+  // queue with already-completed sales.
+  return { key: 'review', label: '❓ Needs review — delivery type missing or unknown', emoji: '❓' };
 }
 
 function flowFor(o: Order) {
@@ -152,10 +159,15 @@ export default function PickupQueuePage() {
       if (existing) existing.orders.push(o);
       else map.set(g.key, { key: g.key, label: g.label, emoji: g.emoji, orders: [o] });
     }
-    // Sort: Nassau delivery → pickup → mailboat groups (alpha by island).
+    // Item 11: ❓ Needs review floats to the TOP so warehouse sees
+    // unrouted / unknown-delivery-type orders before fulfillment work.
+    // Then: Nassau delivery → pickup → mailboat groups (alpha by island).
     return Array.from(map.values()).sort((a, b) => {
       const order = (k: string) =>
-        k === 'nassau' ? 0 : k === 'pickup' ? 1 : 2;
+        k === 'review' ? 0 :
+        k === 'nassau' ? 1 :
+        k === 'pickup' ? 2 :
+        3;
       return order(a.key) - order(b.key) || a.label.localeCompare(b.label);
     });
   }, [orders, hideDelivered]);
