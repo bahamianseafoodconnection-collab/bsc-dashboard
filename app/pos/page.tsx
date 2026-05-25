@@ -1018,7 +1018,7 @@ export default function POSPage() {
               ))}
             </div>
             <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Opening float (BSD)</label>
-            <input type="number" step="0.01" min="0" inputMode="decimal" placeholder="e.g. 200.00"
+            <input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" placeholder="e.g. 200.00"
               value={openFloatDollars} onChange={e => setOpenFloatDollars(e.target.value)} autoFocus
               className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 mb-3" />
             <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Notes (optional)</label>
@@ -1047,7 +1047,7 @@ export default function POSPage() {
               Count the cash in the drawer NOW (including the original float). The system computes the variance against your cash sales.
             </p>
             <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Counted cash (BSD)</label>
-            <input type="number" step="0.01" min="0" inputMode="decimal" placeholder="e.g. 1245.50"
+            <input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" placeholder="e.g. 1245.50"
               value={closeCounted} onChange={e => setCloseCounted(e.target.value)} autoFocus
               className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 border border-gray-600 focus:outline-none focus:border-yellow-400 mb-3" />
             <label className="text-xs uppercase tracking-wide text-gray-400 block mb-1">Close notes (optional)</label>
@@ -1074,9 +1074,7 @@ export default function POSPage() {
               {products.find(p => p.id === weightInput.productId)?.name}
             </p>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
+              type="text"
               inputMode="decimal"
               pattern="[0-9]*\.?[0-9]*"
               placeholder="e.g. 2.45"
@@ -1360,7 +1358,7 @@ export default function POSPage() {
             {paymentMethod === 'cash' && (
               <>
                 <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Cash Tendered ($)</label>
-                <input type="number" step="0.01" min="0" placeholder={total.toFixed(2)}
+                <input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" placeholder={total.toFixed(2)}
                   value={cashTendered} onChange={e => setCashTendered(e.target.value)}
                   className="w-full bg-gray-800 text-white text-xl rounded-xl px-4 py-3 mb-3 border border-gray-700 text-center focus:outline-none focus:border-yellow-400"
                   autoFocus />
