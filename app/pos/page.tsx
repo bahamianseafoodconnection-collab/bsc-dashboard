@@ -127,6 +127,10 @@ export default function POSPage() {
   // cashier (and Dedrick at /dashboard/cashiers) can see whether the
   // email/SMS receipt actually went out.
   const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'print'; to?: string; orderId?: string; error?: string } | null>(null)
+  // Item 7: separate toast for inventory-write failures (fire-and-forget
+  // path that historically failed silently). 30s visibility so cashier
+  // sees the order ID to email Dedrick before it auto-clears.
+  const [lastInventoryWarning, setLastInventoryWarning] = useState<{ orderId: string; error: string } | null>(null)
   const [submitting, setSubmitting]     = useState(false)
   const [weightInput, setWeightInput]   = useState<{ productId: string; weight: string } | null>(null)
   const [overhead, setOverhead]         = useState<OverheadMetrics | null>(null)
@@ -590,6 +594,11 @@ export default function POSPage() {
       return
     }
 
+    // Item 7: Track INSERT success outside the try so the outer catch can
+    // distinguish "sale not saved — safe to retry" from "sale saved but a
+    // side-effect failed — DO NOT re-ring (would duplicate)."
+    let savedOrderId: string | null = null
+
     try {
       let customerId: string | null = null
       const phoneClean = customerPhone.trim()
@@ -704,6 +713,8 @@ export default function POSPage() {
       if (orderErr) throw orderErr
 
       const orderId = newOrder?.id
+      if (!orderId) throw new Error('Order INSERT returned no id')
+      savedOrderId = orderId   // Item 7: from here on, the sale IS in the DB
 
       // Inventory decrement at NASSAU location. Fire-and-forget per the
       // /api/sales/inventory-write contract — a failed write must never
@@ -731,6 +742,15 @@ export default function POSPage() {
           })
         } catch (err) {
           console.warn('Inventory decrement failed:', err)
+          // Item 7: surface to the cashier UI so they immediately know
+          // to email Dedrick. Auto-clears after 30s. orderId is captured
+          // from the outer scope (closure) — guaranteed set here because
+          // the IIFE only fires after a successful INSERT.
+          const errMsg = err instanceof Error ? err.message : 'fetch failed'
+          if (orderId) {
+            setLastInventoryWarning({ orderId, error: errMsg })
+            setTimeout(() => setLastInventoryWarning(null), 30000)
+          }
         }
       })()
 
@@ -805,7 +825,21 @@ export default function POSPage() {
       setShowCart(false)
       setTimeout(() => setOrderSuccess(false), 10000)
     } catch (err: any) {
-      alert('Order failed: ' + (plainError(err) || 'Unknown error'))
+      // Item 7: distinguish "sale not saved (safe to retry)" from "sale
+      // saved but a side-effect failed (DO NOT re-ring — duplicates)."
+      const msg = plainError(err) || 'Unknown error'
+      if (savedOrderId) {
+        alert(
+          `✓ Sale ${savedOrderId.slice(0, 8)} was SAVED.\n\n` +
+          `But a follow-up step failed: ${msg}\n\n` +
+          `Do NOT re-ring this sale. Open /pos/sales-history to retry the receipt manually or flag stock to admin.`
+        )
+      } else {
+        alert(
+          `Order failed: ${msg}\n\n` +
+          `The sale was NOT saved — try again. If it keeps failing, take cash + write a paper receipt + call Dedrick.`
+        )
+      }
     } finally {
       setSubmitting(false)
     }
@@ -955,6 +989,19 @@ export default function POSPage() {
             : lastReceipt.channel === 'sms'   ? `📱 SMS receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : `🖨 Print receipt opened (no customer email or phone on file)`}
           <button onClick={() => setLastReceipt(null)} className="ml-3 opacity-70 hover:opacity-100" aria-label="Dismiss">×</button>
+        </div>
+      )}
+
+      {/* ── Inventory-write warning (Item 7) ──
+          Renders below the receipt toast when fire-and-forget stock
+          decrement failed. Amber so cashier sees it's not a sale
+          failure (sale already saved) but still needs admin action. */}
+      {lastInventoryWarning && (
+        <div className="fixed top-28 left-1/2 -translate-x-1/2 z-50 rounded-xl px-5 py-3 text-xs font-bold shadow-xl max-w-md text-center"
+          style={{ backgroundColor: '#92400e', color: 'white', border: '1px solid #f59e0b' }}>
+          ⚠ Sale saved — stock NOT updated. Email Dedrick:
+          <span style={{ fontFamily: 'monospace', marginLeft: 6 }}>order {lastInventoryWarning.orderId.slice(0, 8)}</span>
+          <button onClick={() => setLastInventoryWarning(null)} className="ml-3 opacity-70 hover:opacity-100" aria-label="Dismiss">×</button>
         </div>
       )}
 
