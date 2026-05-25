@@ -471,10 +471,33 @@ function SocialLink({
 /* ─── PhotoSlot — fail-soft photo placeholder ─────────────────────── */
 //
 // Each photo slot renders a branded box showing the EXPECTED filename so
-// the founder knows exactly which image to drop where. When ready, swap
-// the placeholder body for a Next/Image — see
-// /public/images/homepage/README.md for the photo manifest + upload
-// instructions.
+// the founder knows exactly which image to drop where. The placeholder
+// is intentionally rich (radial glow + giant category icon) so the
+// landing reads premium even before photos arrive. When real photos
+// land in /public/images/homepage/, swap the <PhotoSlot> for a
+// <next/image> per the activation snippet in the manifest README.
+
+// Pick a category-appropriate icon from the filename keyword. The
+// giant icon sits at very low opacity behind the filename label —
+// reads as ambient decoration, not a UI control.
+function pickPlaceholderIcon(filename: string): string {
+  const f = filename.toLowerCase();
+  if (f.includes('hero') && f.includes('seafood')) return '🦞';
+  if (f.includes('lobster')) return '🦞';
+  if (f.includes('ocean'))   return '🌊';
+  if (f.includes('wholesale') || f.includes('boxes')) return '📦';
+  if (f.includes('shop-bsc-online') || f.includes('marketplace')) return '🛒';
+  if (f.includes('tuna') || f.includes('catch') || f.includes('fish')) return '🐟';
+  if (f.includes('farm') || f.includes('produce')) return '🌱';
+  if (f.includes('pay-bills') || f.includes('lightning')) return '⚡';
+  if (f.includes('handshake') || f.includes('sell-on-bsc')) return '🤝';
+  if (f.includes('meat') || f.includes('steak')) return '🥩';
+  if (f.includes('produce-market')) return '🥦';
+  if (f.includes('beverages')) return '🥤';
+  if (f.includes('flag')) return '🇧🇸';
+  if (f.includes('logo')) return '⭐';
+  return '📷';
+}
 
 function PhotoSlot({
   filename,
@@ -489,6 +512,7 @@ function PhotoSlot({
   ring?: boolean;
   rounded?: boolean;
 }) {
+  const icon = pickPlaceholderIcon(filename);
   return (
     <div
       className={[
@@ -501,17 +525,43 @@ function PhotoSlot({
       data-photo-slot={filename}
       aria-label={`Photo placeholder — ${filename}`}
     >
+      {/* Layer 1 — base diagonal gradient (navy depth). */}
       <div
         aria-hidden="true"
         className="absolute inset-0 bg-gradient-to-br from-navy-card via-navy-brand to-navy-card"
       />
-      <div className="absolute inset-0 flex flex-col items-center justify-center p-5 text-center">
-        <span className="text-3xl opacity-30" aria-hidden="true">📷</span>
-        <span className="mt-2 font-mono text-[10px] tracking-tight text-white/45 break-all">
-          {filename}
+      {/* Layer 2 — cyan + gold radial glow (premium ambient). */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            'radial-gradient(ellipse at 30% 25%, rgba(0,212,255,0.10), transparent 60%), radial-gradient(ellipse at 75% 80%, rgba(245,197,24,0.08), transparent 60%)',
+        }}
+      />
+      {/* Layer 3 — giant category icon at low opacity. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-center"
+      >
+        <span
+          className="leading-none select-none"
+          style={{
+            fontSize: 'clamp(4.5rem, 18vw, 10rem)',
+            opacity: 0.10,
+            filter: 'drop-shadow(0 4px 32px rgba(0,212,255,0.25))',
+          }}
+        >
+          {icon}
         </span>
-        <span className="mt-1 text-[9px] uppercase tracking-[0.25em] text-white/25">
-          /public/images/homepage/
+      </div>
+      {/* Layer 4 — filename label (small, monospaced, bottom-aligned). */}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-1 p-4 text-center">
+        <span className="text-[9px] uppercase tracking-[0.25em] text-white/30">
+          Photo coming
+        </span>
+        <span className="font-mono text-[10px] text-white/55 break-all">
+          {filename}
         </span>
       </div>
     </div>
