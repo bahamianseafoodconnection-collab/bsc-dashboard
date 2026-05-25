@@ -85,7 +85,12 @@ export default function CheckoutPage() {
     fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null));
   }, []);
   const [last4, setLast4] = useState('');
-  const [payMethod, setPayMethod] = useState<'card' | 'cod'>('card');
+  // Launch posture (β 2026-06-08): online card payments are deferred
+  // until the real RBC integration ships + AVS-gated card-on-file
+  // flow lands. /checkout defaults to (and currently only offers)
+  // cash on delivery. The 'card' branch + CardPaymentModal render
+  // below stay intact so re-enabling is a single options-array edit.
+  const [payMethod, setPayMethod] = useState<'card' | 'cod'>('cod');
   // Where this order is going. 'nassau' = pickup or local delivery in
   // Nassau. 'mailboat' = ship to Family Island via mailboat.
   const [deliveryMethod, setDeliveryMethod] = useState<'nassau' | 'mailboat'>('nassau');
@@ -596,7 +601,11 @@ export default function CheckoutPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(
                     [
-                      { key: 'card', label: 'Debit / credit card', sub: 'Visa, Mastercard, Discover' },
+                      // Card option removed for launch (β 2026-06-08) —
+                      // online RBC integration not yet active. Re-add
+                      // { key: 'card', label: 'Debit / credit card',
+                      //   sub: 'Visa, Mastercard, Discover' }
+                      // here when the AVS-gated card-on-file flow ships.
                       { key: 'cod',  label: 'Cash on delivery',     sub: 'Pay when your order arrives' },
                     ] as const
                   ).map((m) => {
@@ -618,7 +627,7 @@ export default function CheckoutPage() {
                   })}
                 </div>
                 <div className="mt-3.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
-                  BSC does not accept wire transfers for online orders. Card or COD only.
+                  Cash on delivery only — pay the driver at handoff. Online card payments are coming soon.
                 </div>
               </Card>
             </>
