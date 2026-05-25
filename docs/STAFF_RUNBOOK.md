@@ -10,11 +10,11 @@ silently work around it.
 
 | # | Who | Phone | When |
 |---|---|---|---|
-| 1 | **Dedrick** (founder) | _____________________ | Any money issue, any system error you can't resolve in 60 seconds, any customer complaint |
+| 1 | **Dedrick** (founder) | **+1 (242) 361-3474** (call or WhatsApp) | Any money issue, any system error you can't resolve in 60 seconds, any customer complaint |
 | 2 | **Jaquel** (co-founder) | _____________________ | If Dedrick unreachable, OR Dedrick on rest cycle (June 30 – July 31) |
 | 3 | **TJ** (manager) | _____________________ | Inventory + processing + freezer questions |
 
-*Fill the numbers in pen before posting.*
+*Write Jaquel's + TJ's numbers in pen before posting.*
 
 ---
 
@@ -108,6 +108,22 @@ Symptom: the sale succeeded, receipt sent, but no `inventory_movements` row was 
 
 ---
 
+## SCENARIO 10 — POS shows "🔴 Shift expired — close now" (10-hour cap)
+
+Every cashier shift has a **10-hour maximum** so cash totals stay reconcilable.
+At 10 hours, the shift badge turns red and pulses, and **new sales are blocked**.
+
+1. Tap the red **🔴 Shift expired** badge in the POS header → Close Shift modal opens.
+2. **Count the cash drawer NOW** (including the opening float).
+3. Enter the counted total in BSD. Variance computes automatically.
+4. After close → tap **🔴 No shift** → Open Shift → enter a new opening float to keep ringing.
+
+**If you ignore the alert:** the system auto-closes the shift at the next 15-minute mark and emails Dedrick. Auto-closed shifts show **[AUTO-CLOSED ...]** in the notes and need admin reconciliation via "Close on behalf" at `/dashboard/cashiers`. **Always close manually** — auto-close is the safety net, not the plan.
+
+**Founder (Dedrick) + co-founder (Jaquel) exception:** their POS shows a gold "⭐ Always on" badge instead. They are exempt from the 10h cap — they ring from the dashboard side, not the cashier shift.
+
+---
+
 ## QUICK REFERENCE — common actions
 
 | Task | How |
@@ -135,4 +151,4 @@ Symptom: the sale succeeded, receipt sent, but no `inventory_movements` row was 
 
 ---
 
-*Last updated 2026-05-24. Reach Dedrick for any update.*
+*Last updated 2026-05-25. Reach Dedrick at +1 (242) 361-3474 for any update.*
