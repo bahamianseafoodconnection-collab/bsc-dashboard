@@ -422,20 +422,36 @@ export default function AndrosPOSPage() {
         : null;
 
       const paymentStatus = paymentMethod === 'account' ? 'unpaid' : 'paid_in_full';
+
+      // Andros prices INCLUDE the channel-level VAT markup at the catalog
+      // stage (subtotal here = sum of unit_price × qty at line 368, where
+      // unit_price comes from get_pos_catalog('andros_pos')). For order
+      // accounting, Ceta's Variety Store is NOT VAT-registered per founder
+      // direction, so vat_amount = 0 and total = subtotal — matches what
+      // the D1 receipt fix made customers see. Post-launch Andros pricing
+      // recompute lifts the 10% channel-stage markup entirely.
+      const totalDollars = Number(subtotal.toFixed(2));
+
       const { data: insertedOrder, error: insertError } = await supabase
         .from('orders')
         .insert({
           order_type: 'pos_sale_andros',
+          location:   'cetas_andros',
+          channel:    'andros_pos',
+          status:     'completed',
           payment_method: paymentMethod,
           payment_status: paymentStatus,
           wholesale_items: lineItems,
-          wholesale_cost_total: Number(subtotal.toFixed(2)),
+          wholesale_cost_total: totalDollars,  // legacy field, kept for back-compat
+          subtotal:   totalDollars,
+          vat_amount: 0,
+          total:      totalDollars,
           customer_name: customerNameClean || 'Walk-in',
           customer_phone: customerPhoneClean || null,
           customer_id: customerIdLinked,
           admin_notes:
             paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
-          user_id: userId,
+          user_id: userId,  // legacy column — same value as cashier_user_id; column-audit post-launch
           // Andros cashier shift linkage — admin dashboard joins these.
           cashier_session_id: cashierSession?.id ?? null,
           cashier_user_id:    userId,
