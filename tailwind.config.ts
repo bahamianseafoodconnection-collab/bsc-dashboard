@@ -28,6 +28,9 @@ const config: Config = {
           700: "#101c36",
           800: "#0a1325",
           900: "#060d1f",
+          // Founder-spec for bscbahamas.com landing (2026-05-24).
+          brand: "#020B1C",
+          card:  "#071225",
         },
         gold: {
           DEFAULT: "#f4c842",
@@ -41,6 +44,13 @@ const config: Config = {
           700: "#9b6711",
           800: "#7e5215",
           900: "#6c4318",
+          // Founder-spec for bscbahamas.com landing (2026-05-24).
+          brand: "#F5C518",
+          hover: "#FFD84D",
+        },
+        // Cyan accent for the "BROWSE BY CATEGORY" label + small details.
+        cyan: {
+          brand: "#00D4FF",
         },
       },
       fontFamily: {
