@@ -22,6 +22,8 @@ type OrderRow = {
   payment_method: string | null;
   payment_status: string | null;
   payment_ref: string | null;
+  card_ref: string | null;        // Item 6: RBC terminal reference for card sales (column added 2026-05-25)
+  terminal_type: string | null;   // Item 6: which RBC terminal handled the swipe
   status: string | null;
   customer_name: string | null;
   customer_phone: string | null;
@@ -233,6 +235,33 @@ export default function ReceiptPage() {
               </span>
             )}
           </div>
+          {/* Item 6: structured card reference + terminal — populated by
+              Nassau POS when payment_method === 'card'. Renders only when
+              present so non-card sales stay clean. */}
+          {(order.card_ref || order.terminal_type) && (
+            <div style={{
+              marginTop: 8,
+              padding: '8px 10px',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              fontSize: 13,
+              color: '#1a2e5a',
+              lineHeight: 1.5,
+            }}>
+              {order.card_ref && (
+                <div>
+                  <span style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginRight: 6 }}>card ref</span>
+                  <span style={{ fontFamily: 'SF Mono, Menlo, monospace', fontWeight: 700 }}>{order.card_ref}</span>
+                </div>
+              )}
+              {order.terminal_type && (
+                <div style={{ marginTop: order.card_ref ? 2 : 0, fontSize: 12, color: '#475569', fontWeight: 500 }}>
+                  {labelForTerminal(order.terminal_type)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Trace QR — customer self-verification of provenance */}
@@ -322,7 +351,15 @@ function labelForPayment(m: string) {
   if (m === 'cod') return '💵 Cash on delivery';
   if (m === 'cash') return '💵 Cash';
   if (m === 'transfer') return '🏦 Transfer';
+  if (m === 'wire') return '🏦 Wire';
+  if (m === 'account') return '🧾 Account';
   return m;
+}
+
+function labelForTerminal(t: string) {
+  if (t === 'rbc_plug_and_play')     return '📱 RBC Plug & Play';
+  if (t === 'rbc_physical_terminal') return '🖥️ RBC Physical Terminal';
+  return t;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

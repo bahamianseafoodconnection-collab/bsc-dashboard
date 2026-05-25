@@ -760,6 +760,12 @@ export default function POSPage() {
                 channel_label:  'BSC Marketplace Nassau',
                 cashier_name:   user?.user_metadata?.full_name || user?.email || null,
                 subtotal, vat: vatAmount, total,
+                // Payment info (Item 6) — receipt email/SMS + public receipt
+                // page render these so customers + RBC reconciliation can
+                // match each sale to its terminal slip.
+                payment_method: paymentMethod,
+                card_ref:       paymentMethod === 'card' ? cardRef.trim() : null,
+                terminal_type:  paymentMethod === 'card' ? terminal      : null,
                 items: items.map((i: any) => ({
                   name:       i.name,
                   qty:        i.quantity ?? i.qty ?? 1,

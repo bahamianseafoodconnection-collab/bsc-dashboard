@@ -44,6 +44,21 @@ function dollars(n: number): string {
   return n < 0 ? `-$${Math.abs(n).toFixed(2)}` : `$${n.toFixed(2)}`;
 }
 
+// Pretty labels for receipt presentation. Falls back to raw value if
+// caller passes anything outside the known set (forward-compat).
+const PAYMENT_LABEL: Record<string, string> = {
+  cash:    '💵 Cash',
+  card:    '💳 Card',
+  wire:    '🏦 Wire',
+  account: '🧾 Account',
+};
+const TERMINAL_LABEL: Record<string, string> = {
+  rbc_plug_and_play:     '📱 RBC Plug & Play',
+  rbc_physical_terminal: '🖥️ RBC Physical Terminal',
+};
+function humanPayment(m: string | null): string { return m ? (PAYMENT_LABEL[m] ?? m) : ''; }
+function humanTerminal(t: string | null): string { return t ? (TERMINAL_LABEL[t] ?? t) : ''; }
+
 interface ReceiptItem { name: string; qty: number; unit_price: number; }
 interface ReceiptInput {
   order_id?:       unknown;
@@ -57,12 +72,16 @@ interface ReceiptInput {
   total?:          unknown;
   items?:          unknown;
   cashier_name?:   unknown;
+  payment_method?: unknown;  // 'cash' | 'card' | 'wire' | 'account'
+  card_ref?:       unknown;  // RBC terminal reference (card sales only)
+  terminal_type?:  unknown;  // 'rbc_plug_and_play' | 'rbc_physical_terminal'
 }
 
 function renderEmailHtml(p: {
   customerName: string; channelLabel: string; items: ReceiptItem[];
   subtotal: number; vat: number; total: number; orderId: string | null;
   cashierName: string;
+  paymentMethod: string | null; cardRef: string | null; terminalType: string | null;
 }): string {
   const rows = p.items.map(it => `
     <tr style="border-bottom:1px solid #e7e7e7;">
@@ -97,6 +116,18 @@ function renderEmailHtml(p: {
           </tfoot>
         </table>
       </td></tr>
+      ${p.paymentMethod ? `
+      <tr><td style="padding:0 24px 4px;">
+        <table style="width:100%;border-collapse:collapse;background:#fafafa;border:1px solid #e7e7e7;border-radius:8px;margin-top:6px;">
+          <tr><td style="padding:12px 14px;">
+            <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px;">Paid by</div>
+            <div style="font-size:14px;color:#1a2e5a;font-weight:700;line-height:1.5;">
+              ${humanPayment(p.paymentMethod)}${p.cardRef ? ` <span style="color:#475569;font-weight:500;">·</span> <span style="font-family:'SF Mono',Menlo,monospace;color:#475569;font-weight:600;">ref ${p.cardRef}</span>` : ''}
+              ${p.terminalType ? `<div style="font-size:11px;color:#94a3b8;font-weight:400;margin-top:2px;">${humanTerminal(p.terminalType)}</div>` : ''}
+            </div>
+          </td></tr>
+        </table>
+      </td></tr>` : ''}
       <tr><td style="padding:14px 24px 22px;">
         ${p.orderId ? `<p style="font-size:11px;color:#94a3b8;margin:0 0 6px;">Order ${p.orderId.slice(0, 8)} · Trace any item at <a href="https://bscbahamas.com/trace" style="color:#1a2e5a;">bscbahamas.com/trace</a></p>` : ''}
         ${p.cashierName ? `<p style="font-size:11px;color:#94a3b8;margin:0;">Served by: ${p.cashierName}</p>` : ''}
@@ -113,6 +144,7 @@ function renderEmailHtml(p: {
 function renderSmsText(p: {
   customerName: string; channelLabel: string; items: ReceiptItem[];
   subtotal: number; vat: number; total: number; orderId: string | null;
+  paymentMethod: string | null; cardRef: string | null;
 }): string {
   const lines: string[] = [];
   lines.push(`🇧🇸 BSC · ${p.channelLabel}`);
@@ -124,6 +156,9 @@ function renderSmsText(p: {
   if (p.items.length > 8) lines.push(`+ ${p.items.length - 8} more items`);
   if (p.vat > 0) lines.push(`Sub ${dollars(p.subtotal)} · VAT ${dollars(p.vat)}`);
   lines.push(`Total: ${dollars(p.total)}`);
+  if (p.paymentMethod) {
+    lines.push(`Paid: ${humanPayment(p.paymentMethod)}${p.cardRef ? ` · ref ${p.cardRef}` : ''}`);
+  }
   if (p.orderId) lines.push(`Order ${p.orderId.slice(0, 8)} · bscbahamas.com/trace`);
   return lines.join('\n');
 }
@@ -159,6 +194,9 @@ export async function POST(req: NextRequest) {
   const vat          = typeof body.vat === 'number' ? body.vat : 0;
   const total        = typeof body.total === 'number' ? body.total : 0;
   const cashierName  = typeof body.cashier_name === 'string' ? body.cashier_name.trim() : '';
+  const paymentMethod = typeof body.payment_method === 'string' ? body.payment_method : null;
+  const cardRef       = typeof body.card_ref === 'string'       ? body.card_ref.trim() : null;
+  const terminalType  = typeof body.terminal_type === 'string'  ? body.terminal_type   : null;
   const itemsRaw     = Array.isArray(body.items) ? body.items : [];
   const items: ReceiptItem[] = itemsRaw.filter((i): i is ReceiptItem =>
     !!i && typeof i === 'object'
@@ -193,13 +231,13 @@ export async function POST(req: NextRequest) {
   const e164 = toE164(phone);
 
   if (validEmail) {
-    const html = renderEmailHtml({ customerName, channelLabel, items, subtotal, vat, total, orderId, cashierName });
+    const html = renderEmailHtml({ customerName, channelLabel, items, subtotal, vat, total, orderId, cashierName, paymentMethod, cardRef, terminalType });
     const subject = `BSC receipt · ${channelLabel} · ${dollars(total)} · ${new Date().toLocaleDateString()}`;
     const r = await sendEmail({ to: validEmail, subject, html });
     if (r.error) {
       // Email failed — try SMS fallback if we have a phone.
       if (e164) {
-        const smsR = await sendSMS({ to: e164, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId }) });
+        const smsR = await sendSMS({ to: e164, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
         if (smsR.ok) return NextResponse.json({ ok: true, channel: 'sms', id: smsR.sid, note: `Email failed (${r.error}), SMS sent.` });
         return NextResponse.json({ ok: false, channel: 'print', error: `Email and SMS both failed: ${r.error} / ${smsR.error}` }, { status: 502 });
       }
@@ -209,7 +247,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (e164) {
-    const r = await sendSMS({ to: e164, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId }) });
+    const r = await sendSMS({ to: e164, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
     if (!r.ok) return NextResponse.json({ ok: false, channel: 'print', error: `SMS failed: ${r.error}` }, { status: 502 });
     return NextResponse.json({ ok: true, channel: 'sms', id: r.sid, to: e164 });
   }
