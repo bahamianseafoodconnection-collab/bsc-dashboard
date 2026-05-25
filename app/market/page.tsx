@@ -800,11 +800,9 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
             🔥 {product.special_label ?? 'SPECIAL'}
           </div>
         )}
-        {typeof product.stock_qty === 'number' && product.stock_qty > 0 && product.stock_qty <= 5 && (
-          <div className="absolute bottom-2 left-2 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
-            Only {Math.floor(product.stock_qty)} left
-          </div>
-        )}
+        {/* Stock badge intentionally hidden until D-ii reconciliation lands
+            post-launch. inventory_batches snapshot does not update from
+            POS sales, so any "Only X left" count lies after the first sale. */}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
