@@ -609,24 +609,40 @@ export default function POSPage() {
       if (phoneClean && nameClean) {
         const normalized = normalizePhone(phoneClean)
         if (foundCustomer) {
-          // Update returning customer; only flip consent ON (never silently
-          // OFF — the cashier could have just left the checkbox unchecked).
-          const updates: Record<string, unknown> = {
-            last_seen_at: new Date().toISOString(),
-            total_orders: foundCustomer.total_orders + 1,
-            total_spent:  Number(foundCustomer.total_spent) + total,
-          }
-          // Backfill phone_e164 on legacy rows so future lookups via the
-          // RPC find them on the next visit.
-          if (normalized) updates.phone_e164 = normalized
-          if (validEmail) updates.email = validEmail
-          if (emailConsent && validEmail && !foundCustomer.email_marketing_consent) {
-            updates.email_marketing_consent = true
-            updates.email_consent_at        = new Date().toISOString()
-            updates.email_consent_source    = 'nassau_pos'
-          }
-          await supabase.from('customers').update(updates).eq('id', foundCustomer.id)
+          // Item 9 / Task #74: returning-customer totals + opportunistic
+          // backfill now route through /api/pos/record-customer-purchase
+          // (service-role). The previous client-side UPDATE was silently
+          // RLS-blocked for non-founder cashiers (Bill / Roselins /
+          // andros_staff) — every sale they rang for a returning customer
+          // was leaving total_orders + total_spent stale.
+          //
+          // Fire-and-forget: the sale is already saved by the time we get
+          // here (Item 7 atomic savedOrderId). Failure here surfaces as
+          // the "Sale saved but follow-up failed" alert path, not a
+          // re-ringable error.
           customerId = foundCustomer.id
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const accessToken = session?.access_token
+            if (accessToken) {
+              await fetch('/api/pos/record-customer-purchase', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+                body: JSON.stringify({
+                  customer_id:     foundCustomer.id,
+                  order_total_bsd: total,
+                  phone_e164:      normalized || null,
+                  email:           validEmail || null,
+                  email_consent:   emailConsent && !!validEmail && !foundCustomer.email_marketing_consent,
+                  consent_source:  'nassau_pos',
+                }),
+              })
+            }
+          } catch (err) {
+            // Don't throw — sale is already saved. Surfacing via console
+            // here matches the inventory-IIFE pattern at line ~735.
+            console.warn('Customer purchase record failed (non-fatal):', err)
+          }
         } else {
           // No matching customer in state — route through /api/pos/save-customer
           // (service-role, bypasses RLS). The previous inline INSERT used the
