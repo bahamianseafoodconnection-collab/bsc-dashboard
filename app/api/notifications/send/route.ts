@@ -1,18 +1,25 @@
 // app/api/notifications/send/route.ts
 //
-// Process queued notifications. Until provider creds are wired, this runs
-// in STUB mode — it marks rows as 'stub_sent' so we can verify the flow
-// end-to-end and see what would-have-been-sent on /notifications.
+// Process queued notifications. Real-sends when provider creds are set
+// in env; otherwise falls back to marking rows 'stub_sent' so we can
+// verify the flow end-to-end and see what would-have-been-sent on
+// /notifications.
 //
-// When you add credentials, swap the stub sender for actual provider
-// calls (Twilio for SMS/WhatsApp, SendGrid/Resend/Postmark for email).
-// The sender contract (success/failure/error) stays the same.
+// Providers:
+//   - SMS + WhatsApp → Twilio (inline implementations below)
+//   - Email          → Resend via lib/email.ts (single source of truth;
+//                       same provider POS receipts use, so credentials
+//                       are configured once)
 //
-// Trigger: call from cron or manually from /notifications "Process queue"
-// button. Server only — service role.
+// Triggers:
+//   - POST → /notifications admin "Process queue" button (cashier UI)
+//   - GET  → Vercel cron every 10 min (CRON_SECRET in Authorization)
+//
+// Server only — service-role for the notifications table.
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendEmail } from '@/lib/email';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,8 +28,6 @@ const TWILIO_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_FROM_SMS = process.env.TWILIO_SMS_FROM;
 const TWILIO_FROM_WA = process.env.TWILIO_WHATSAPP_FROM;
-const SENDGRID_KEY = process.env.SENDGRID_API_KEY;
-const SENDGRID_FROM = process.env.SENDGRID_FROM_EMAIL;
 
 type Notification = {
   id: string;
@@ -35,7 +40,10 @@ type Notification = {
   attempts: number;
 };
 
-export async function POST() {
+// Shared worker — drains up to 50 queued notifications and updates each
+// row with the send result. Called by both POST (admin button) and GET
+// (Vercel cron). Returns a NextResponse so callers can pass it through.
+async function processQueue(): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !service) {
@@ -84,6 +92,29 @@ export async function POST() {
   return NextResponse.json({ ok: true, processed: results.length, results });
 }
 
+// POST → admin "Process queue" button on /notifications. Open today
+// (admin page hits it with a session token but the route doesn't check).
+// Follow-up hardening: add session-role check. For now matches existing
+// behavior; the cron path below is the secured trigger.
+export async function POST() {
+  return processQueue();
+}
+
+// GET → Vercel cron. Every 10 minutes per vercel.json. CRON_SECRET in
+// Authorization header is required (mirrors the pattern used by
+// /api/ar/aging-alert, /api/cron/daily-briefing, /api/health-check).
+export async function GET(req: NextRequest) {
+  const expected = process.env.CRON_SECRET;
+  if (!expected) {
+    return NextResponse.json({ ok: false, error: 'CRON_SECRET not configured' }, { status: 500 });
+  }
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (authHeader !== `Bearer ${expected}`) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+  return processQueue();
+}
+
 type SendResult = { status: 'sent' | 'stub_sent' | 'failed'; error?: string; providerId?: string };
 
 async function trySend(n: Notification): Promise<SendResult> {
@@ -101,10 +132,10 @@ async function trySend(n: Notification): Promise<SendResult> {
       return await sendTwilioWhatsApp(n);
     }
     if (n.channel === 'email') {
-      if (!SENDGRID_KEY || !SENDGRID_FROM) {
+      if (!process.env.RESEND_API_KEY) {
         return { status: 'stub_sent' };
       }
-      return await sendSendgridEmail(n);
+      return await sendResendEmail(n);
     }
     return { status: 'failed', error: `Unknown channel: ${n.channel}` };
   } catch (e) {
@@ -163,28 +194,24 @@ async function sendTwilioWhatsApp(n: Notification): Promise<SendResult> {
   return { status: 'sent', providerId: json.sid };
 }
 
-async function sendSendgridEmail(n: Notification): Promise<SendResult> {
-  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${SENDGRID_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [
-        {
-          to: [{ email: n.recipient_email!, name: n.recipient_name || undefined }],
-          subject: n.subject || 'BSC Marketplace',
-        },
-      ],
-      from: { email: SENDGRID_FROM!, name: 'BSC Marketplace' },
-      content: [{ type: 'text/plain', value: n.body }],
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    return { status: 'failed', error: `SendGrid ${res.status}: ${text.slice(0, 200)}` };
+// Resend via lib/email.ts — same provider POS receipts use, so the
+// RESEND_API_KEY + RESEND_FROM_ADDRESS env vars are configured once.
+async function sendResendEmail(n: Notification): Promise<SendResult> {
+  if (!n.recipient_email) {
+    return { status: 'failed', error: 'recipient_email missing' };
   }
-  const id = res.headers.get('x-message-id') || undefined;
-  return { status: 'sent', providerId: id };
+  // Wrap the plain-text queue body in minimal HTML so Resend renders
+  // cleanly. Newlines preserved, content escaped to prevent injection.
+  const html = `<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.6; padding: 16px; color: #1c1c1c;">${escapeHtml(n.body).replace(/\n/g, '<br>')}</div>`;
+  const r = await sendEmail({
+    to:      n.recipient_email,
+    subject: n.subject || 'BSC Marketplace',
+    html,
+  });
+  if (r.error) return { status: 'failed', error: r.error };
+  return { status: 'sent', providerId: r.id };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
