@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import InvoiceScanner from '@/components/InvoiceScanner';
 import DashboardSnapshot from './snapshot';
+import CashiersNowWidget from '@/components/CashiersNowWidget';
 import { fetchOverheadMetrics, type OverheadMetrics } from '@/lib/profit';
 import { useUserRole, canLock } from '@/lib/role';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
@@ -695,6 +696,11 @@ export default function DashboardPage() {
                   <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySupplier)}</div>
                 </div>
               </div>
+
+              {/* Phase 2b: live cashiers-on-shift widget. Reads
+                  cash_drawer_session_totals + profiles. Each row links
+                  to /dashboard/cashiers for the full view. 30s auto-refresh. */}
+              <CashiersNowWidget />
 
               {/* Expense coverage progress — month-to-date net profit vs monthly fixed overhead. */}
               {overhead !== null && overhead.monthly_overhead > 0 && (() => {
