@@ -581,6 +581,15 @@ export default function POSPage() {
       }
     }
 
+    // Card sales require a reference from the RBC terminal slip for
+    // RBC daily reconciliation (Items 6 receipt display + Task #77 RBC
+    // ingest cron post-launch). Applies to ALL roles — founder included.
+    if (paymentMethod === 'card' && !cardRef.trim()) {
+      alert('Card reference required. Type the reference number from the RBC terminal slip, then Complete Sale.')
+      setSubmitting(false)
+      return
+    }
+
     try {
       let customerId: string | null = null
       const phoneClean = customerPhone.trim()
@@ -679,7 +688,8 @@ export default function POSPage() {
         payment_method: paymentMethod,
         payment_status: paymentStatus,
         terminal_type:  paymentMethod === 'card' ? terminal : null,
-        admin_notes: adminNotes, status: 'completed',
+        card_ref:       paymentMethod === 'card' ? cardRef.trim() : null,  // NEW — structured column added by migration 20260525000000
+        admin_notes: adminNotes, status: 'completed',                       // back-compat: keeps writing the buried "Card ref: XXX" string for any legacy reader
         customer_id:    customerId,
         customer_name:  nameClean || null,
         customer_phone: phoneClean || null,
@@ -1340,7 +1350,7 @@ export default function POSPage() {
                   className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400">
                   {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
-                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # (optional)</label>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # <span className="text-yellow-400">(required)</span></label>
                 <input type="text" placeholder="e.g. 4521" value={cardRef} onChange={e => setCardRef(e.target.value)}
                   className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
               </>
