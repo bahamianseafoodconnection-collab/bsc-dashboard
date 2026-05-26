@@ -3,7 +3,7 @@
 // /checkout — premium ecommerce flow.
 // Tailwind redesign. Three views: summary -> payment -> done.
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -63,7 +63,26 @@ type View = 'summary' | 'payment' | 'done';
 
 const ISLANDS = ['Nassau', 'Andros', 'Exuma', 'Grand Bahama', 'Abaco', 'Eleuthera', 'Other'];
 
+// Suspense wrapper required by Next 15 because CheckoutInner calls
+// useSearchParams() to read the PnP return-redirect banner params
+// (?declined=1 / ?problem=1 / ?msg=...). Without this wrapper the
+// prerender pass at build time bails out — same pattern the founder-AI
+// intake page uses (per feedback_nextjs_page_exports memory rule).
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-100 font-sans text-slate-900 antialiased">
+        <div className="mx-auto max-w-screen-md px-4 py-12 text-sm text-slate-500">
+          Loading checkout…
+        </div>
+      </div>
+    }>
+      <CheckoutInner />
+    </Suspense>
+  );
+}
+
+function CheckoutInner() {
   const router = useRouter();
 
   const [cart, setCart] = useState<CartItem[]>([]);
