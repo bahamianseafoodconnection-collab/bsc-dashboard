@@ -3,8 +3,8 @@
 // /checkout — premium ecommerce flow.
 // Tailwind redesign. Three views: summary -> payment -> done.
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import {
@@ -18,7 +18,7 @@ import {
   ONLINE_MARGIN,
   type OverheadMetrics,
 } from '@/lib/profit';
-import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
+import type { PaymentPayload } from '@/components/CardPaymentModal';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import type { SaleUnit } from '@/lib/pricing';
 
@@ -85,6 +85,26 @@ export default function CheckoutPage() {
     fetchOverheadMetrics().then(setOverhead).catch(() => setOverhead(null));
   }, []);
   const [last4, setLast4] = useState('');
+
+  // ─── Plug'n Pay return banner ─────────────────────────────────────
+  // When PnP redirects the customer back to /checkout after a declined
+  // or problem outcome, /api/payment/return/* attaches ?declined=1 or
+  // ?problem=1 along with the human-readable message from
+  // lib/plugnpay/rbc-codes.ts. We surface that as a banner above the
+  // payment-method picker. Successful payments redirect to
+  // /account/orders/[id]?paid=1 and never come back through here.
+  const searchParams = useSearchParams();
+  const pnpDeclined = searchParams?.get('declined') === '1';
+  const pnpProblem  = searchParams?.get('problem');
+  const pnpMessage  = searchParams?.get('msg');
+  const pnpBanner: { kind: 'declined' | 'problem'; message: string } | null =
+    pnpDeclined
+      ? { kind: 'declined',
+          message: pnpMessage || 'Payment declined by your bank. Please contact your financial institution and try again.' }
+      : pnpProblem
+      ? { kind: 'problem',
+          message: pnpMessage || 'We had a temporary problem reaching your bank. Please try again in a moment.' }
+      : null;
   // Launch posture (β 2026-06-08): online card payments are deferred
   // until the real RBC integration ships + AVS-gated card-on-file
   // flow lands. /checkout defaults to (and currently only offers)
@@ -303,7 +323,11 @@ export default function CheckoutPage() {
     const orderRow: Record<string, unknown> = {
       order_type: 'online_market',
       payment_method: payMethod,
-      payment_status: payMethod === 'cod' ? 'pending' : 'processing',
+      // 'card' starts as 'payment_pending' — /api/payment/start flips it
+      // to 'paid' on a successful PnP return (after hash + Query Tx
+      // verify), or back to 'pending' on decline/retry. The simulator's
+      // legacy 'processing' state is no longer used.
+      payment_status: payMethod === 'cod' ? 'pending' : 'payment_pending',
       wholesale_items: stampedItems,
       wholesale_cost_total: total,
       customer_name: name.trim() || null,
@@ -442,6 +466,9 @@ export default function CheckoutPage() {
     if (!name.trim() || !phone.trim() || !address.trim()) return;
     const id = await createOrder();
     setOrderId(id);
+    // Card flow → 'payment' view renders <PnpRedirect> which POSTs to
+    // /api/payment/start and auto-submits the returned form to
+    // pay1.plugnpay.com (customer leaves bscbahamas.com).
     setView(payMethod === 'cod' ? 'done' : 'payment');
   }
 
@@ -598,14 +625,33 @@ export default function CheckoutPage() {
               </Card>
 
               <Card title="Payment method">
+                {/* Decline / retry banner — populated when PnP redirects the
+                    customer back to /checkout with ?declined=1 or ?problem=1.
+                    The message comes from lib/plugnpay/rbc-codes.ts via the
+                    return-handler so it matches the founder's PCI spec
+                    exactly. */}
+                {pnpBanner && (
+                  <div
+                    className={`mb-3 rounded-lg border-2 px-3.5 py-3 text-sm font-semibold ${
+                      pnpBanner.kind === 'declined'
+                        ? 'border-red-300 bg-red-50 text-red-900'
+                        : 'border-amber-300 bg-amber-50 text-amber-900'
+                    }`}
+                  >
+                    {pnpBanner.kind === 'declined' ? '⚠️ ' : '⏳ '}
+                    {pnpBanner.message}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(
                     [
-                      // Card option removed for launch (β 2026-06-08) —
-                      // online RBC integration not yet active. Re-add
-                      // { key: 'card', label: 'Debit / credit card',
-                      //   sub: 'Visa, Mastercard, Discover' }
-                      // here when the AVS-gated card-on-file flow ships.
+                      // Card option — wired to Plug'n Pay (RBC) Smart
+                      // Screens v2 hosted page. PAN never touches BSC;
+                      // the customer enters their card on pay1.plugnpay.com.
+                      // /api/payment/start returns 503 + friendly fallback
+                      // if the PNP_* env vars are not set, so this button
+                      // is always shown — server enforces the gate.
+                      { key: 'card', label: 'Debit / credit card', sub: 'Visa, Mastercard, Discover — secured by RBC' },
                       { key: 'cod',  label: 'Cash on delivery',     sub: 'Pay when your order arrives' },
                     ] as const
                   ).map((m) => {
@@ -626,27 +672,28 @@ export default function CheckoutPage() {
                     );
                   })}
                 </div>
-                <div className="mt-3.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
-                  Cash on delivery only — pay the driver at handoff. Online card payments are coming soon.
-                </div>
+                {payMethod === 'card' && (
+                  <div className="mt-3.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
+                    🔒 You'll be redirected to RBC's secure payment page to enter your card details. BSC never sees or stores your card number, CVV, or expiry date.
+                  </div>
+                )}
+                {payMethod === 'cod' && (
+                  <div className="mt-3.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
+                    💵 Cash on delivery — pay the driver at handoff.
+                  </div>
+                )}
               </Card>
             </>
           )}
 
           {view === 'payment' && (
-            <Card title="Card payment">
+            <Card title="Secure card payment">
               <p className="-mt-2 mb-5 text-sm text-slate-500">
-                Enter your debit or credit card details to complete your order.
+                You'll be redirected to RBC's secure payment page to enter your card details. BSC never sees or stores your card number, CVV, or expiry date.
               </p>
-              <CardPaymentModal
-                payload={payload}
-                onApproved={(ref, l4) => {
-                  setRefNo(ref);
-                  setLast4(l4);
-                  setView('done');
-                }}
-                onDeclined={() => {}}
-                onCancel={() => setView('summary')}
+              <PnpRedirect
+                orderId={orderId ?? ''}
+                onBack={() => setView('summary')}
               />
             </Card>
           )}
@@ -861,6 +908,127 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       <h2 className="mb-4 text-base font-extrabold text-navy sm:text-lg">{title}</h2>
       <div className="space-y-3.5">{children}</div>
     </section>
+  );
+}
+
+/**
+ * PnpRedirect — bridges /checkout to Plug'n Pay's Smart Screens v2 HPP.
+ *
+ * Flow:
+ *   1. Mount → POST to /api/payment/start with the order_id.
+ *   2. Server validates ownership + amount + env + creates pending
+ *      payment_transactions row, returns { action, fields }.
+ *   3. We render a hidden <form method="POST" action={action}> with
+ *      each field as a hidden input.
+ *   4. Auto-submit after ~1.5s OR manual click on the visible button —
+ *      whichever fires first. Browser navigates to pay1.plugnpay.com.
+ *
+ * Errors (env not set, order missing, network) → friendly message + a
+ * "Back to summary" link so the customer can pick COD or fix the issue.
+ *
+ * NO CARD DATA HANDLED HERE. The form fields are the Smart Screens v2
+ * non-PCI params (pt_gateway_account, pt_transaction_amount, etc.).
+ */
+function PnpRedirect({
+  orderId,
+  onBack,
+}: {
+  orderId: string;
+  onBack: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [submission, setSubmission] = useState<{ action: string; fields: Record<string, string> } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Step 1 — call /api/payment/start the moment we mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        const res = await fetch('/api/payment/start', {
+          method: 'POST',
+          headers,
+          body:   JSON.stringify({ order_id: orderId }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        if (!cancelled) setSubmission({ action: json.action, fields: json.fields });
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [orderId]);
+
+  // Step 2 — auto-submit ~1.5s after we have the form data. The delay
+  // gives the customer a visual confirmation that we're redirecting
+  // them (vs. an abrupt blank-tab flash).
+  useEffect(() => {
+    if (!submission || !formRef.current) return;
+    const timer = setTimeout(() => formRef.current?.submit(), 1500);
+    return () => clearTimeout(timer);
+  }, [submission]);
+
+  if (error) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-900">
+          <p className="mb-1 font-extrabold">Could not start card payment</p>
+          <p className="text-xs font-medium text-red-700">{error}</p>
+          <p className="mt-2 text-xs text-red-600">
+            Please choose Cash on Delivery, or contact BSC support at +1 (242) 558-4495.
+          </p>
+        </div>
+        <button
+          onClick={onBack}
+          className="w-full rounded-lg border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-extrabold text-navy hover:border-navy"
+        >
+          ← Back to order summary
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="h-8 w-8 shrink-0 animate-spin rounded-full border-4 border-slate-200 border-t-navy" />
+        <div className="flex-1">
+          <p className="text-sm font-extrabold text-navy">
+            {submission ? 'Redirecting to RBC secure payment…' : 'Preparing secure payment…'}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Do not close this window. Your browser will navigate to RBC&apos;s payment page.
+          </p>
+        </div>
+      </div>
+
+      {submission && (
+        <>
+          <form ref={formRef} method="POST" action={submission.action} className="hidden">
+            {Object.entries(submission.fields).map(([k, v]) => (
+              <input key={k} type="hidden" name={k} value={v} />
+            ))}
+          </form>
+          <button
+            onClick={() => formRef.current?.submit()}
+            className="w-full rounded-lg bg-navy px-4 py-3 text-sm font-extrabold text-gold transition hover:opacity-90"
+          >
+            🔒 Continue to RBC secure payment
+          </button>
+        </>
+      )}
+
+      <button
+        onClick={onBack}
+        className="w-full rounded-lg border-2 border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 hover:border-slate-400"
+      >
+        ← Back to order summary (cancel card payment)
+      </button>
+    </div>
   );
 }
 
