@@ -369,22 +369,22 @@ const BLANK_PRODUCT: AddProductForm = {
   channels: { nassau: true, andros: true, online: true, wholesale: false },
 };
 
-// Category list — covers everything the live POS / online market uses
-// today. Founder can add more in the DB enum later; this dropdown is
-// the safe-known subset.
+// Category list — must match live product_category enum exactly. Pulled
+// from the founder-AI intake page set + frozen_meat (added to enum via
+// migration 20260526133000_add_frozen_meat_category.sql after the
+// "Seara whole chicken griller" submit was rejected on 2026-05-26).
+// If you add an option here you MUST also add it to the DB enum first
+// (verify-against-live-not-artifact memory).
 const PRODUCT_CATEGORIES: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'fresh_seafood',     label: '🐟 Fresh seafood' },
-  { value: 'frozen_seafood',    label: '🧊 Frozen seafood' },
-  { value: 'processed_seafood', label: '📦 Processed seafood (HACCP)' },
-  { value: 'meat',              label: '🥩 Meat' },
-  { value: 'produce',           label: '🥬 Produce' },
-  { value: 'juice_smoothie',    label: '🥤 Juice / smoothie' },
-  { value: 'wellness_shot',     label: '💪 Wellness shot' },
-  { value: 'grocery',           label: '🛒 Grocery' },
-  { value: 'snack',             label: '🍪 Snack' },
-  { value: 'beverage',          label: '🥃 Beverage' },
-  { value: 'household',         label: '🏠 Household' },
-  { value: 'toiletry',          label: '🧴 Toiletry' },
+  { value: 'fresh_seafood',  label: '🐟 Fresh seafood' },
+  { value: 'frozen_seafood', label: '🧊 Frozen seafood' },
+  { value: 'meat',           label: '🥩 Meat' },
+  { value: 'frozen_meat',    label: '🧊 Frozen meat' },
+  { value: 'produce',        label: '🥬 Produce' },
+  { value: 'grocery',        label: '🛒 Grocery' },
+  { value: 'spices',         label: '🌶 Spices' },
+  { value: 'dry_goods',      label: '📦 Dry goods' },
+  { value: 'beverages',      label: '🥃 Beverages' },
 ];
 
 const UNIT_OPTIONS = ['lb', 'each', 'case', 'bag', 'portion', 'kit', 'dozen', 'oz'];
@@ -393,10 +393,39 @@ const [addProduct, setAddProduct] = useState<{ supplier: Supplier } | null>(null
 const [addProductForm, setAddProductForm] = useState<AddProductForm>({ ...BLANK_PRODUCT });
 const [addProductSaving, setAddProductSaving] = useState(false);
 
+// Photo upload (founder direction 2026-05-26): up to 3 photos per
+// product, device-camera-capturable via input capture="environment".
+// First photo is primary → products.image_url; full set → photo_urls.
+const ADD_PRODUCT_MAX_PHOTOS = 3;
+const [addProductPhotos,   setAddProductPhotos]   = useState<File[]>([]);
+const [addProductPreviews, setAddProductPreviews] = useState<string[]>([]);
+
+function onAddProductPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0];
+  e.target.value = ''; // allow re-pick of same file
+  if (!file) return;
+  if (addProductPhotos.length >= ADD_PRODUCT_MAX_PHOTOS) {
+    showToast(`Max ${ADD_PRODUCT_MAX_PHOTOS} photos`, false); return;
+  }
+  setAddProductPhotos((p) => [...p, file]);
+  setAddProductPreviews((p) => [...p, URL.createObjectURL(file)]);
+}
+
+function onAddProductRemovePhoto(index: number) {
+  const url = addProductPreviews[index];
+  if (url) URL.revokeObjectURL(url);
+  setAddProductPhotos((p)   => p.filter((_, i) => i !== index));
+  setAddProductPreviews((p) => p.filter((_, i) => i !== index));
+}
+
 function openAddProduct(supplier: Supplier) {
   if (!canEdit) { showToast('Founder / co-founder only', false); return; }
   setAddProduct({ supplier });
   setAddProductForm({ ...BLANK_PRODUCT });
+  // Clear any leftover photos from prior session
+  for (const u of addProductPreviews) URL.revokeObjectURL(u);
+  setAddProductPhotos([]);
+  setAddProductPreviews([]);
 }
 
 async function submitAddProduct() {
@@ -427,6 +456,22 @@ async function submitAddProduct() {
     const token = session?.access_token;
     if (!token) throw new Error('Not signed in');
 
+    // Upload photos to site-images bucket first (so URLs are durable
+    // before we INSERT the products row). Same pattern as the founder-AI
+    // intake page (path: products/<sku>-<i>-<ts>.<ext>).
+    const uploadedUrls: string[] = [];
+    for (let i = 0; i < addProductPhotos.length; i++) {
+      const file = addProductPhotos[i];
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `products/${sku}-${i}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, file, { upsert: true, contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+      if (upErr) throw new Error(`Photo ${i + 1}: ${upErr.message}`);
+      const { data: urlData } = supabase.storage.from('site-images').getPublicUrl(path);
+      uploadedUrls.push(urlData.publicUrl);
+    }
+
     const res = await fetch('/api/supplier/add-product', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -438,6 +483,8 @@ async function submitAddProduct() {
         cost_per_unit:     costPerUnit,
         online_sell_price: onlinePrice,
         channels:          f.channels,
+        image_url:         uploadedUrls[0] ?? null,
+        photo_urls:        uploadedUrls,
       }),
     });
     const json = await res.json();
@@ -470,6 +517,10 @@ async function submitAddProduct() {
     ));
 
     showToast(`Added ${sku}`);
+    // Clear local photo state on success
+    for (const u of addProductPreviews) URL.revokeObjectURL(u);
+    setAddProductPhotos([]);
+    setAddProductPreviews([]);
     setAddProduct(null);
   } catch (err) {
     showToast('Add failed: ' + (err instanceof Error ? err.message : String(err)), false);
@@ -961,6 +1012,45 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
     </div>
 
     <div className="px-5 py-4 space-y-3">
+
+      {/* Photos — up to 3 per product, device-camera capable */}
+      <div>
+        <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>
+          Photos <span className="font-normal" style={{ color: '#565959' }}>
+            (up to {ADD_PRODUCT_MAX_PHOTOS} — front, label, wide)
+          </span>
+        </label>
+        {addProductPhotos.length > 0 && (
+          <div className="grid gap-2 mb-2"
+            style={{ gridTemplateColumns: `repeat(${Math.min(addProductPhotos.length, ADD_PRODUCT_MAX_PHOTOS)}, 1fr)` }}>
+            {addProductPhotos.map((_, i) => (
+              <div key={i} className="relative rounded-md overflow-hidden"
+                style={{ border: '1px solid #d5d9d9', backgroundColor: '#f7f8f8' }}>
+                <img src={addProductPreviews[i]} alt={`Photo ${i + 1}`}
+                  style={{ width: '100%', height: 96, objectFit: 'cover', display: 'block' }} />
+                <button type="button" onClick={() => onAddProductRemovePhoto(i)}
+                  className="absolute top-1 right-1 text-xs font-bold rounded px-1.5"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.65)', color: '#fff' }}
+                  aria-label="Remove photo">🗑</button>
+                {i === 0 && (
+                  <span className="absolute bottom-1 left-1 text-[9px] font-bold rounded px-1.5 py-0.5"
+                    style={{ backgroundColor: '#FFD814', color: '#0F1111' }}>PRIMARY</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {addProductPhotos.length < ADD_PRODUCT_MAX_PHOTOS && (
+          <label className="flex items-center justify-center text-sm font-medium rounded-md cursor-pointer py-3 px-3"
+            style={{ border: '1.5px dashed #d5d9d9', color: '#007185', backgroundColor: '#fafafa' }}>
+            📷 {addProductPhotos.length === 0
+                  ? 'Take photo or pick from library'
+                  : `Add another (${addProductPhotos.length}/${ADD_PRODUCT_MAX_PHOTOS})`}
+            <input type="file" accept="image/*" capture="environment"
+              onChange={onAddProductPickPhoto} className="hidden" />
+          </label>
+        )}
+      </div>
 
       {/* SKU + Name */}
       <div>

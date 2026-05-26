@@ -38,7 +38,13 @@ const CATEGORIES = [
   'produce','grocery','spices','dry_goods','beverages',
 ] as const;
 
-const UNITS = ['lb','each','bag','case','pack','portion'] as const;
+// UoM suggestions only — the input is free-text per founder direction
+// (2026-05-26: "ensure all unit of measure can be input per product").
+// Any value the supplier types is accepted at the DB layer (products
+// .unit_of_measure is plain TEXT, no enum).
+const UNIT_SUGGESTIONS = [
+  'lb','each','bag','case','pack','portion','kit','dozen','oz','g','kg','ml','L','box','tray','flat','bundle','head','bunch',
+] as const;
 
 const VAT_CATEGORIES: Array<{ value: string; label: string; vat: number; hint: string }> = [
   { value: 'uncooked_food',   label: 'Uncooked food (0% VAT)',     vat: 0,  hint: 'Raw seafood, frozen seafood, raw produce, grocery — DEFAULT' },
@@ -144,7 +150,11 @@ function ProductIntakeInner() {
 
   function previewPrices(): Array<{ db: string; label: string; price: number; markup: number; vat: number }> {
     const c = cost > 0 ? cost : 0;
-    const u = (UNITS.includes(unit as typeof UNITS[number]) ? unit : 'each') as SaleUnit;
+    // pricing.ts uses 'each' as the safe default for unknown UoM —
+    // pricing math doesn't actually depend on the unit string, only
+    // on quantity. Map anything we don't recognize to 'each'.
+    const KNOWN_FOR_PRICING = new Set<string>(['lb','each','bag','case','pack','portion']);
+    const u = (KNOWN_FOR_PRICING.has(unit) ? unit : 'each') as SaleUnit;
     const vat = vatPctForCategory(vatCategory);
     return RETAIL_CHANNELS.map(ch => {
       const r = calculatePrice({ cost: c, channel: ch.pricingCalc, quantity: 1, unit: u, vatPct: vat });
@@ -349,9 +359,20 @@ function ProductIntakeInner() {
             </div>
             <div>
               <label style={lbl}>Unit of measure</label>
-              <select value={unit} onChange={e => setUnit(e.target.value)} style={inp}>
-                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              <input
+                type="text"
+                value={unit}
+                onChange={e => setUnit(e.target.value)}
+                list="intake-uom-suggestions"
+                placeholder="e.g. lb, each, 3.3lb, 24ct case…"
+                style={inp}
+              />
+              <datalist id="intake-uom-suggestions">
+                {UNIT_SUGGESTIONS.map(u => <option key={u} value={u} />)}
+              </datalist>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                Type any unit — the suggestions list is just a starting point.
+              </div>
             </div>
           </div>
 

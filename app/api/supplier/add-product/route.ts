@@ -44,6 +44,8 @@ interface AddProductBody {
   cost_per_unit?:     unknown;
   online_sell_price?: unknown;
   channels?:          unknown;
+  image_url?:         unknown;
+  photo_urls?:        unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -94,6 +96,16 @@ export async function POST(req: NextRequest) {
   const sellOnline    = channelsRaw.online    === true;
   const sellWholesale = channelsRaw.wholesale === true;
 
+  // Photos uploaded client-side to site-images bucket. Primary photo
+  // → products.image_url so /market thumbnails render. Full set →
+  // products.photo_urls (text[]). Both optional — products can be
+  // added without photos when a founder is dumping a price list and
+  // will photo-pass later.
+  const imageUrl  = typeof body.image_url === 'string' && body.image_url.trim() ? body.image_url.trim() : null;
+  const photoUrls = Array.isArray(body.photo_urls)
+    ? (body.photo_urls as unknown[]).filter((u): u is string => typeof u === 'string' && u.length > 0)
+    : [];
+
   if (!supplierId || !sku || !name || !category || !unitOfMeasure) {
     return NextResponse.json(
       { ok: false, error: 'supplier_id + sku + name + category + unit_of_measure are all required.' },
@@ -128,7 +140,9 @@ export async function POST(req: NextRequest) {
     sell_wholesale:      sellWholesale,
     created_by:          user.id,
   };
-  if (packSize) productRow.pack_size = packSize;
+  if (packSize)    productRow.pack_size  = packSize;
+  if (imageUrl)    productRow.image_url  = imageUrl;
+  if (photoUrls.length > 0) productRow.photo_urls = photoUrls;
 
   const { data: inserted, error: insertErr } = await admin
     .from('products')
