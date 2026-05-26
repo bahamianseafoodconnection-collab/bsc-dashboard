@@ -350,6 +350,134 @@ async function saveChannels() {
   }
 }
 
+// ─── Phase 1B: Add Product (2026-05-26) ─────────────────────────────
+// Per-supplier "+ Add product" button + modal. Posts to
+// /api/supplier/add-product (service-role admin client server-side so
+// RLS on products / product_costs / product_pricing doesn't block).
+// Founder direction: real SKU (no auto-gen), required fields match
+// the actual products table schema, instant save.
+type AddProductForm = {
+  sku: string; name: string; category: string;
+  unit_of_measure: string; pack_size: string;
+  cost_per_unit: string; online_sell_price: string;
+  channels: { nassau: boolean; andros: boolean; online: boolean; wholesale: boolean };
+};
+const BLANK_PRODUCT: AddProductForm = {
+  sku: '', name: '', category: '',
+  unit_of_measure: 'lb', pack_size: '',
+  cost_per_unit: '', online_sell_price: '',
+  channels: { nassau: true, andros: true, online: true, wholesale: false },
+};
+
+// Category list — covers everything the live POS / online market uses
+// today. Founder can add more in the DB enum later; this dropdown is
+// the safe-known subset.
+const PRODUCT_CATEGORIES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'fresh_seafood',     label: '🐟 Fresh seafood' },
+  { value: 'frozen_seafood',    label: '🧊 Frozen seafood' },
+  { value: 'processed_seafood', label: '📦 Processed seafood (HACCP)' },
+  { value: 'meat',              label: '🥩 Meat' },
+  { value: 'produce',           label: '🥬 Produce' },
+  { value: 'juice_smoothie',    label: '🥤 Juice / smoothie' },
+  { value: 'wellness_shot',     label: '💪 Wellness shot' },
+  { value: 'grocery',           label: '🛒 Grocery' },
+  { value: 'snack',             label: '🍪 Snack' },
+  { value: 'beverage',          label: '🥃 Beverage' },
+  { value: 'household',         label: '🏠 Household' },
+  { value: 'toiletry',          label: '🧴 Toiletry' },
+];
+
+const UNIT_OPTIONS = ['lb', 'each', 'case', 'bag', 'portion', 'kit', 'dozen', 'oz'];
+
+const [addProduct, setAddProduct] = useState<{ supplier: Supplier } | null>(null);
+const [addProductForm, setAddProductForm] = useState<AddProductForm>({ ...BLANK_PRODUCT });
+const [addProductSaving, setAddProductSaving] = useState(false);
+
+function openAddProduct(supplier: Supplier) {
+  if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+  setAddProduct({ supplier });
+  setAddProductForm({ ...BLANK_PRODUCT });
+}
+
+async function submitAddProduct() {
+  if (!addProduct) return;
+  const f = addProductForm;
+  const sku            = f.sku.trim();
+  const name           = f.name.trim();
+  const category       = f.category;
+  const unitOfMeasure  = f.unit_of_measure.trim();
+  const packSize       = f.pack_size.trim();
+  const costPerUnit    = f.cost_per_unit    === '' ? null : Number(f.cost_per_unit);
+  const onlinePrice    = f.online_sell_price === '' ? null : Number(f.online_sell_price);
+
+  if (!sku)            { showToast('SKU is required',             false); return; }
+  if (!name)           { showToast('Name is required',            false); return; }
+  if (!category)       { showToast('Category is required',        false); return; }
+  if (!unitOfMeasure)  { showToast('Unit of measure is required', false); return; }
+  if (costPerUnit !== null && (Number.isNaN(costPerUnit) || costPerUnit < 0)) {
+    showToast('Cost must be a non-negative number', false); return;
+  }
+  if (onlinePrice !== null && (Number.isNaN(onlinePrice) || onlinePrice < 0)) {
+    showToast('Online price must be a non-negative number', false); return;
+  }
+
+  setAddProductSaving(true);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not signed in');
+
+    const res = await fetch('/api/supplier/add-product', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        supplier_id:       addProduct.supplier.id,
+        sku, name, category,
+        unit_of_measure:   unitOfMeasure,
+        pack_size:         packSize || undefined,
+        cost_per_unit:     costPerUnit,
+        online_sell_price: onlinePrice,
+        channels:          f.channels,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+
+    // Optimistic local insert so the founder sees the new product without
+    // a full reload. Use a minimal SupplierProduct shape — the next
+    // toggleExpanded refresh will pull the canonical row.
+    const newRow: SupplierProduct = {
+      id: json.product_id, sku, name, category,
+      unit_of_measure: unitOfMeasure,
+      pack_size: packSize || null,
+      status: 'active',
+      sell_nassau:    f.channels.nassau,
+      sell_andros:    f.channels.andros,
+      sell_online:    f.channels.online,
+      sell_wholesale: f.channels.wholesale,
+      cost_per_unit:     costPerUnit,
+      online_sell_price: onlinePrice && f.channels.online ? onlinePrice : null,
+    };
+    setProductsBySupplier((prev) => ({
+      ...prev,
+      [addProduct.supplier.id]: [newRow, ...(prev[addProduct.supplier.id] ?? [])],
+    }));
+    // Bump the supplier's product_count badge.
+    setSuppliers((prev) => prev.map((s) =>
+      s.id === addProduct.supplier.id
+        ? { ...s, product_count: (s.product_count ?? 0) + 1 }
+        : s,
+    ));
+
+    showToast(`Added ${sku}`);
+    setAddProduct(null);
+  } catch (err) {
+    showToast('Add failed: ' + (err instanceof Error ? err.message : String(err)), false);
+  } finally {
+    setAddProductSaving(false);
+  }
+}
+
 // Edit modal: name / cost / online sell price. Save fans out to three tables.
 const [editing, setEditing] = useState<{ product: SupplierProduct; supplierId: string } | null>(null);
 const [editForm, setEditForm] = useState<{ name: string; cost: string; online_price: string }>({ name: '', cost: '', online_price: '' });
@@ -592,6 +720,166 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
         className="text-sm font-bold px-5 py-1.5 rounded-full"
         style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
         {channelSaving ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+
+  </div>
+</div>
+)}
+
+{/* ─── Phase 1B: Add Product modal ─── */}
+{addProduct && (
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+  style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+  onClick={() => !addProductSaving && setAddProduct(null)}>
+  <div className="w-full max-w-lg rounded-lg bg-white max-h-[90vh] overflow-y-auto"
+    style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}
+    onClick={(e) => e.stopPropagation()}>
+
+    <div className="px-5 py-3 border-b sticky top-0 bg-white" style={{ borderColor: '#e7e7e7' }}>
+      <h2 className="text-base font-bold" style={{ color: '#0F1111' }}>
+        Add product to {addProduct.supplier.brand_name || addProduct.supplier.name}
+      </h2>
+      <p className="text-xs mt-0.5" style={{ color: '#565959' }}>
+        Founder enters real SKU — no auto-generate. Fields marked * are required.
+      </p>
+    </div>
+
+    <div className="px-5 py-4 space-y-3">
+
+      {/* SKU + Name */}
+      <div>
+        <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>SKU *</label>
+        <input type="text" value={addProductForm.sku}
+          onChange={(e) => setAddProductForm((f) => ({ ...f, sku: e.target.value }))}
+          placeholder="e.g. SCALLOPS-10LB-CASE"
+          className="w-full text-sm px-3 py-2 rounded-md font-mono"
+          style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+      </div>
+
+      <div>
+        <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>Name *</label>
+        <input type="text" value={addProductForm.name}
+          onChange={(e) => setAddProductForm((f) => ({ ...f, name: e.target.value }))}
+          placeholder="e.g. Sea Scallops 10/20 — 10lb Case"
+          className="w-full text-sm px-3 py-2 rounded-md"
+          style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+      </div>
+
+      {/* Category + Unit */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>Category *</label>
+          <select value={addProductForm.category}
+            onChange={(e) => setAddProductForm((f) => ({ ...f, category: e.target.value }))}
+            className="w-full text-sm px-3 py-2 rounded-md bg-white"
+            style={{ border: '1px solid #d5d9d9', color: '#0F1111' }}>
+            <option value="">Select…</option>
+            {PRODUCT_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>Unit *</label>
+          <input list="bsc-uom-options" value={addProductForm.unit_of_measure}
+            onChange={(e) => setAddProductForm((f) => ({ ...f, unit_of_measure: e.target.value }))}
+            className="w-full text-sm px-3 py-2 rounded-md"
+            style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+          <datalist id="bsc-uom-options">
+            {UNIT_OPTIONS.map((u) => <option key={u} value={u} />)}
+          </datalist>
+        </div>
+      </div>
+
+      {/* Pack size */}
+      <div>
+        <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>
+          Pack size <span className="font-normal" style={{ color: '#565959' }}>(optional)</span>
+        </label>
+        <input type="text" value={addProductForm.pack_size}
+          onChange={(e) => setAddProductForm((f) => ({ ...f, pack_size: e.target.value }))}
+          placeholder="e.g. 10 lb case, 6×500ml"
+          className="w-full text-sm px-3 py-2 rounded-md"
+          style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+      </div>
+
+      {/* Cost + Online price */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>
+            Cost <span className="font-normal" style={{ color: '#565959' }}>(optional)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
+            <input type="number" step="0.01" min="0" value={addProductForm.cost_per_unit}
+              onChange={(e) => setAddProductForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
+              className="w-full text-sm pl-7 pr-3 py-2 rounded-md"
+              style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold block mb-1" style={{ color: '#0F1111' }}>
+            Online price <span className="font-normal" style={{ color: '#565959' }}>(optional)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
+            <input type="number" step="0.01" min="0" value={addProductForm.online_sell_price}
+              onChange={(e) => setAddProductForm((f) => ({ ...f, online_sell_price: e.target.value }))}
+              className="w-full text-sm pl-7 pr-3 py-2 rounded-md"
+              style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+          </div>
+        </div>
+      </div>
+
+      {addProductForm.cost_per_unit && !Number.isNaN(Number(addProductForm.cost_per_unit)) && (
+        <p className="text-[11px]" style={{ color: '#565959' }}>
+          Online suggested @ 25% margin + 10% VAT:{' '}
+          <span className="font-bold">
+            ${(Number(addProductForm.cost_per_unit) / 0.75 * 1.10).toFixed(2)}
+          </span>
+        </p>
+      )}
+
+      {/* Channels */}
+      <div className="pt-2 border-t" style={{ borderColor: '#e7e7e7' }}>
+        <label className="text-xs font-bold block mb-2" style={{ color: '#0F1111' }}>Sell on which channels?</label>
+        <div className="space-y-1">
+          {([
+            { key: 'nassau',    label: '📍 Nassau POS' },
+            { key: 'andros',    label: '🟣 Andros POS' },
+            { key: 'online',    label: '🛒 Online Market' },
+            { key: 'wholesale', label: '📦 Wholesale' },
+          ] as const).map((c) => (
+            <label key={c.key} className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox"
+                checked={addProductForm.channels[c.key]}
+                onChange={(e) => setAddProductForm((f) => ({
+                  ...f, channels: { ...f.channels, [c.key]: e.target.checked },
+                }))}
+                className="w-4 h-4" />
+              <span className="text-sm" style={{ color: '#0F1111' }}>{c.label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-[11px] mt-2 px-1" style={{ color: '#565959' }}>
+          You can change channels anytime via the Channels button on the product row.
+        </p>
+      </div>
+
+    </div>
+
+    <div className="px-5 py-3 border-t flex justify-end gap-2 sticky bottom-0 bg-white"
+      style={{ borderColor: '#e7e7e7', backgroundColor: '#f7f8f8' }}>
+      <button onClick={() => setAddProduct(null)} disabled={addProductSaving}
+        className="text-sm px-4 py-1.5 rounded-full bg-white"
+        style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+        Cancel
+      </button>
+      <button onClick={submitAddProduct} disabled={addProductSaving}
+        className="text-sm font-bold px-5 py-1.5 rounded-full"
+        style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
+        {addProductSaving ? 'Adding…' : 'Add product'}
       </button>
     </div>
 
@@ -852,6 +1140,18 @@ Edit
 <p className="text-xs mb-2 px-2" style={{ color: '#565959' }}>
 View-only — founder or co-founder role required to enable, disable, or edit products.
 </p>
+)}
+{canEdit && (
+<div className="flex items-center justify-between mb-3 px-1">
+<p className="text-xs font-bold" style={{ color: '#565959' }}>
+Products under {s.brand_name || s.name}
+</p>
+<button onClick={() => openAddProduct(s)}
+className="text-xs font-bold px-3 py-1.5 rounded-full"
+style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
++ Add Product
+</button>
+</div>
 )}
 {productsLoading === s.id && (
 <p className="text-xs text-center py-6" style={{ color: '#565959' }}>Loading products…</p>
