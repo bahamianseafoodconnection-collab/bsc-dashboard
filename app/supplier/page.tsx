@@ -262,6 +262,94 @@ setProductsBySupplier((prev) => ({
 showToast(`${p.sku} → ${newOnline ? 'Enabled' : 'Disabled'}`);
 }
 
+// ─── Phase 1A: Active/Disabled + per-channel picker ─────────────────
+// Replaces the legacy single-tap sell_online toggle. "Active" = any of
+// the 4 sell_* flags is true. "Disable" instantly clears all 4 flags
+// (no confirmation per founder direction). "Enable / Channels" opens
+// the picker modal with current state pre-checked.
+const [channelPicker, setChannelPicker] = useState<{
+  product: SupplierProduct;
+  supplierId: string;
+  channels: { nassau: boolean; andros: boolean; online: boolean; wholesale: boolean };
+} | null>(null);
+const [channelSaving, setChannelSaving] = useState(false);
+
+function isProductActive(p: SupplierProduct): boolean {
+  return p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale;
+}
+
+function activeChannelsLabel(p: SupplierProduct): string {
+  const chans: string[] = [];
+  if (p.sell_nassau)    chans.push('Nassau');
+  if (p.sell_andros)    chans.push('Andros');
+  if (p.sell_online)    chans.push('Online');
+  if (p.sell_wholesale) chans.push('Wholesale');
+  if (chans.length === 0) return 'Disabled';
+  if (chans.length === 4) return 'Active · All channels';
+  return `Active · ${chans.join(' + ')}`;
+}
+
+async function disableProduct(p: SupplierProduct, supplierId: string) {
+  if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+  const { error } = await supabase.from('products').update({
+    sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false,
+  }).eq('id', p.id);
+  if (error) { showToast('Disable failed: ' + error.message, false); return; }
+  setProductsBySupplier((prev) => ({
+    ...prev,
+    [supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? {
+      ...row,
+      sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false,
+    } : row),
+  }));
+  showToast(`${p.sku} → Disabled (all channels off)`);
+}
+
+function openChannelPicker(p: SupplierProduct, supplierId: string) {
+  if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+  setChannelPicker({
+    product: p, supplierId,
+    channels: {
+      nassau:    p.sell_nassau,
+      andros:    p.sell_andros,
+      online:    p.sell_online,
+      wholesale: p.sell_wholesale,
+    },
+  });
+}
+
+async function saveChannels() {
+  if (!channelPicker) return;
+  const { product: p, supplierId, channels } = channelPicker;
+  setChannelSaving(true);
+  try {
+    const { error } = await supabase.from('products').update({
+      sell_nassau:    channels.nassau,
+      sell_andros:    channels.andros,
+      sell_online:    channels.online,
+      sell_wholesale: channels.wholesale,
+    }).eq('id', p.id);
+    if (error) throw error;
+    const updatedRow: SupplierProduct = {
+      ...p,
+      sell_nassau:    channels.nassau,
+      sell_andros:    channels.andros,
+      sell_online:    channels.online,
+      sell_wholesale: channels.wholesale,
+    };
+    setProductsBySupplier((prev) => ({
+      ...prev,
+      [supplierId]: (prev[supplierId] ?? []).map((row) => row.id === p.id ? updatedRow : row),
+    }));
+    showToast(`${p.sku} → ${activeChannelsLabel(updatedRow)}`);
+    setChannelPicker(null);
+  } catch (err) {
+    showToast('Save failed: ' + (err instanceof Error ? err.message : String(err)), false);
+  } finally {
+    setChannelSaving(false);
+  }
+}
+
 // Edit modal: name / cost / online sell price. Save fans out to three tables.
 const [editing, setEditing] = useState<{ product: SupplierProduct; supplierId: string } | null>(null);
 const [editForm, setEditForm] = useState<{ name: string; cost: string; online_price: string }>({ name: '', cost: '', online_price: '' });
@@ -431,6 +519,83 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
 </button>
 </div>
 </div>
+</div>
+)}
+
+{/* ─── Phase 1A: Channel picker modal ─── */}
+{channelPicker && (
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+  style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+  onClick={() => !channelSaving && setChannelPicker(null)}>
+  <div className="w-full max-w-md rounded-lg bg-white"
+    style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}
+    onClick={(e) => e.stopPropagation()}>
+
+    <div className="px-5 py-3 border-b" style={{ borderColor: '#e7e7e7' }}>
+      <h2 className="text-base font-bold" style={{ color: '#0F1111' }}>Where should this sell?</h2>
+      <p className="text-xs mt-0.5" style={{ color: '#565959' }}>
+        <span className="font-mono">{channelPicker.product.sku}</span> · {channelPicker.product.name}
+      </p>
+    </div>
+
+    <div className="px-5 py-4 space-y-1">
+      {([
+        { key: 'nassau',    label: '📍 Nassau POS' },
+        { key: 'andros',    label: '🟣 Andros POS' },
+        { key: 'online',    label: '🛒 Online Market' },
+        { key: 'wholesale', label: '📦 Wholesale' },
+      ] as const).map((c) => (
+        <label key={c.key}
+          className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer"
+          style={{ userSelect: 'none' }}>
+          <input type="checkbox"
+            checked={channelPicker.channels[c.key]}
+            onChange={(e) => setChannelPicker((p) => p ? {
+              ...p,
+              channels: { ...p.channels, [c.key]: e.target.checked },
+            } : null)}
+            className="w-4 h-4" />
+          <span className="text-sm" style={{ color: '#0F1111' }}>{c.label}</span>
+        </label>
+      ))}
+
+      <div className="flex gap-2 pt-3">
+        <button onClick={() => setChannelPicker((p) => p ? {
+          ...p, channels: { nassau: true, andros: true, online: true, wholesale: true },
+        } : null)}
+          className="text-xs font-medium px-3 py-1.5 rounded-full"
+          style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
+          ⭐ Select All
+        </button>
+        <button onClick={() => setChannelPicker((p) => p ? {
+          ...p, channels: { nassau: false, andros: false, online: false, wholesale: false },
+        } : null)}
+          className="text-xs font-medium px-3 py-1.5 rounded-full bg-white"
+          style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+          Clear
+        </button>
+      </div>
+
+      <p className="text-[11px] mt-3 px-1" style={{ color: '#565959' }}>
+        Save with zero channels checked = Disabled (same as the Disable button).
+      </p>
+    </div>
+
+    <div className="px-5 py-3 border-t flex justify-end gap-2"
+      style={{ borderColor: '#e7e7e7', backgroundColor: '#f7f8f8' }}>
+      <button onClick={() => setChannelPicker(null)} disabled={channelSaving}
+        className="text-sm px-4 py-1.5 rounded-full bg-white"
+        style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+        Cancel
+      </button>
+      <button onClick={saveChannels} disabled={channelSaving}
+        className="text-sm font-bold px-5 py-1.5 rounded-full"
+        style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
+        {channelSaving ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+
+  </div>
 </div>
 )}
 
@@ -699,7 +864,8 @@ No products assigned to this supplier yet.
 {productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length > 0 && (
 <div className="space-y-2">
 {(productsBySupplier[s.id] ?? []).map((p) => {
-const isActive = p.sell_online; // Enabled/Disabled tracks sell_online (see toggleProductActive)
+const isActive = isProductActive(p);
+const channelsLabel = activeChannelsLabel(p);
 return (
 <div key={p.id} className="rounded-lg bg-white px-3 py-3"
 style={{ border: '1px solid #d5d9d9', boxShadow: '0 1px 2px rgba(15,17,17,0.05)' }}>
@@ -737,22 +903,34 @@ cost ${p.cost_per_unit.toFixed(2)}
 style={{
 backgroundColor: isActive ? '#067D62' : '#565959',
 color: '#fff',
-}}>
-{isActive ? 'Enabled' : 'Disabled'}
+}}
+title={isActive ? 'Tap "Channels" to adjust where this sells' : 'Tap Enable to activate channels'}>
+{channelsLabel}
 </span>
 </div>
 
 {canEdit && (
-<div className="flex gap-2 mt-3 pt-3 border-t" style={{ borderColor: '#e7e7e7' }}>
-<button onClick={() => toggleProductActive(p, s.id)}
-className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
-style={{
-backgroundColor: isActive ? '#fff' : '#FFD814',
-color:           isActive ? '#0F1111' : '#0F1111',
-border: `1px solid ${isActive ? '#d5d9d9' : '#FCD200'}`,
-}}>
-{isActive ? 'Disable' : 'Enable'}
-</button>
+<div className="flex gap-2 mt-3 pt-3 border-t flex-wrap" style={{ borderColor: '#e7e7e7' }}>
+{isActive ? (
+  <>
+    <button onClick={() => disableProduct(p, s.id)}
+      className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors bg-white"
+      style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+      Disable
+    </button>
+    <button onClick={() => openChannelPicker(p, s.id)}
+      className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors bg-white"
+      style={{ color: '#007185', border: '1px solid #d5d9d9' }}>
+      Channels
+    </button>
+  </>
+) : (
+  <button onClick={() => openChannelPicker(p, s.id)}
+    className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
+    style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
+    Enable
+  </button>
+)}
 <button onClick={() => openEditProduct(p, s.id)}
 className="text-xs font-medium px-3 py-1.5 rounded-full bg-white"
 style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
