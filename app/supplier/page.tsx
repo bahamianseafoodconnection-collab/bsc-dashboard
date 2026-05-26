@@ -478,6 +478,221 @@ async function submitAddProduct() {
   }
 }
 
+// ─── Phase 2: Bulk CSV product upload (2026-05-26) ──────────────────
+// Founder pastes / uploads a CSV. Client parses + validates + previews.
+// Upload button sends valid rows to /api/supplier/bulk-add-products
+// which loops INSERTs and returns per-row inserted vs failed counts.
+type BulkRow = {
+  sku: string; name: string; category: string;
+  unit_of_measure: string; pack_size: string;
+  cost_per_unit: number | null;
+  online_sell_price: number | null;
+  channels: { nassau: boolean; andros: boolean; online: boolean; wholesale: boolean };
+  // Client-side validation error (per-row). Empty string = valid.
+  error: string;
+};
+type BulkResult = {
+  inserted: number;
+  failed: Array<{ row_index: number; sku: string; error: string }>;
+} | null;
+
+const [bulkUpload, setBulkUpload] = useState<{ supplier: Supplier } | null>(null);
+const [bulkText, setBulkText] = useState('');
+const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
+const [bulkUploading, setBulkUploading] = useState(false);
+const [bulkResult, setBulkResult] = useState<BulkResult>(null);
+
+// Tiny RFC-4180-ish CSV parser. Handles quoted fields with embedded
+// commas / newlines / escaped "" — covers everything spreadsheet
+// exports (Excel / Numbers / Sheets) emit.
+function parseCsvText(text: string): string[][] {
+  const rows: string[][] = [];
+  let cur: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++;
+      } else { field += c; i++; }
+    } else {
+      if      (c === '"')  { inQuotes = true; i++; }
+      else if (c === ',')  { cur.push(field); field = ''; i++; }
+      else if (c === '\r') { i++; }
+      else if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; i++; }
+      else                 { field += c; i++; }
+    }
+  }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
+  return rows;
+}
+
+// Interpret the channels cell. Accepts:
+//   "" / missing       → default to retail (nassau+andros+online)
+//   "all"              → all 4 true
+//   "retail"           → nassau+andros+online (no wholesale)
+//   "nassau,online"    → comma- or space-separated subset
+function parseChannelsCell(raw: string): BulkRow['channels'] {
+  const norm = raw.trim().toLowerCase();
+  if (!norm) return { nassau: true, andros: true, online: true, wholesale: false };
+  if (norm === 'all')    return { nassau: true,  andros: true,  online: true,  wholesale: true };
+  if (norm === 'retail') return { nassau: true,  andros: true,  online: true,  wholesale: false };
+  const tokens = norm.split(/[\s,;|]+/).filter(Boolean);
+  return {
+    nassau:    tokens.includes('nassau'),
+    andros:    tokens.includes('andros'),
+    online:    tokens.includes('online'),
+    wholesale: tokens.includes('wholesale'),
+  };
+}
+
+// Convert parsed CSV table → BulkRow[] (with per-row validation
+// errors). First row must be the header. Required columns:
+//   sku, name, category, unit_of_measure
+// Optional: pack_size, cost_per_unit, online_sell_price, channels
+function csvToBulkRows(text: string): BulkRow[] {
+  const table = parseCsvText(text).filter((r) => r.some((c) => c.trim() !== ''));
+  if (table.length < 2) return [];
+  const header = table[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  const idx = (name: string) => header.indexOf(name);
+  const iSku   = idx('sku');
+  const iName  = idx('name');
+  const iCat   = idx('category');
+  const iUOM   = idx('unit_of_measure');
+  const iPack  = idx('pack_size');
+  const iCost  = idx('cost_per_unit');
+  const iPrice = idx('online_sell_price');
+  const iChan  = idx('channels');
+  const out: BulkRow[] = [];
+  for (let r = 1; r < table.length; r++) {
+    const row = table[r];
+    const sku  = iSku   >= 0 ? (row[iSku]   ?? '').trim() : '';
+    const name = iName  >= 0 ? (row[iName]  ?? '').trim() : '';
+    const cat  = iCat   >= 0 ? (row[iCat]   ?? '').trim() : '';
+    const uom  = iUOM   >= 0 ? (row[iUOM]   ?? '').trim() : '';
+    const pack = iPack  >= 0 ? (row[iPack]  ?? '').trim() : '';
+    const costRaw  = iCost  >= 0 ? (row[iCost]  ?? '').trim() : '';
+    const priceRaw = iPrice >= 0 ? (row[iPrice] ?? '').trim() : '';
+    const chanRaw  = iChan  >= 0 ? (row[iChan]  ?? '').trim() : '';
+
+    let error = '';
+    if (!sku)  error = 'sku missing';
+    else if (!name) error = 'name missing';
+    else if (!cat)  error = 'category missing';
+    else if (!uom)  error = 'unit_of_measure missing';
+
+    const cost  = costRaw  === '' ? null : Number(costRaw);
+    const price = priceRaw === '' ? null : Number(priceRaw);
+    if (!error && cost  !== null && (Number.isNaN(cost)  || cost  < 0)) error = 'cost_per_unit must be ≥ 0';
+    if (!error && price !== null && (Number.isNaN(price) || price < 0)) error = 'online_sell_price must be ≥ 0';
+
+    out.push({
+      sku, name, category: cat, unit_of_measure: uom, pack_size: pack,
+      cost_per_unit: cost, online_sell_price: price,
+      channels: parseChannelsCell(chanRaw),
+      error,
+    });
+  }
+  return out;
+}
+
+function openBulkUpload(supplier: Supplier) {
+  if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+  setBulkUpload({ supplier });
+  setBulkText(''); setBulkRows([]); setBulkResult(null);
+}
+
+function applyBulkText(text: string) {
+  setBulkText(text);
+  setBulkRows(csvToBulkRows(text));
+  setBulkResult(null);
+}
+
+async function onBulkFile(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+  applyBulkText(text);
+}
+
+function downloadBulkTemplate() {
+  const csv = [
+    'sku,name,category,unit_of_measure,pack_size,cost_per_unit,online_sell_price,channels',
+    'SCALLOPS-10LB,Sea Scallops 10/20,frozen_seafood,lb,10 lb case,12.50,18.99,"nassau,online"',
+    'TILAPIA-WHOLE,Whole Tilapia Cleaned,fresh_seafood,lb,,4.25,6.50,retail',
+    'CONCH-MEAT,Cleaned Conch Meat,fresh_seafood,lb,,9.00,13.75,all',
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'bsc-products-template.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function submitBulkUpload() {
+  if (!bulkUpload) return;
+  const valid = bulkRows.filter((r) => !r.error);
+  if (valid.length === 0) { showToast('No valid rows to upload', false); return; }
+
+  setBulkUploading(true); setBulkResult(null);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not signed in');
+
+    const res = await fetch('/api/supplier/bulk-add-products', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        supplier_id: bulkUpload.supplier.id,
+        rows: valid.map((r) => ({
+          sku: r.sku, name: r.name, category: r.category,
+          unit_of_measure: r.unit_of_measure,
+          pack_size:         r.pack_size || undefined,
+          cost_per_unit:     r.cost_per_unit,
+          online_sell_price: r.online_sell_price,
+          channels:          r.channels,
+        })),
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+
+    setBulkResult({ inserted: json.inserted, failed: json.failed ?? [] });
+    if (json.inserted > 0) {
+      showToast(`Added ${json.inserted} product${json.inserted === 1 ? '' : 's'}` +
+                (json.failed?.length ? ` · ${json.failed.length} failed` : ''));
+      // Bump the supplier badge so the founder sees the new count.
+      setSuppliers((prev) => prev.map((s) =>
+        s.id === bulkUpload.supplier.id
+          ? { ...s, product_count: (s.product_count ?? 0) + json.inserted }
+          : s,
+      ));
+      // Force reload of products list on next expansion.
+      setProductsBySupplier((prev) => {
+        const next = { ...prev };
+        delete next[bulkUpload.supplier.id];
+        return next;
+      });
+      if (expandedId === bulkUpload.supplier.id) {
+        // Re-trigger expansion to reload products
+        setExpandedId(null);
+        setTimeout(() => setExpandedId(bulkUpload.supplier.id), 50);
+      }
+    } else {
+      showToast(`All ${valid.length} rows failed`, false);
+    }
+  } catch (err) {
+    showToast('Bulk upload failed: ' + (err instanceof Error ? err.message : String(err)), false);
+  } finally {
+    setBulkUploading(false);
+  }
+}
+
 // Edit modal: name / cost / online sell price. Save fans out to three tables.
 const [editing, setEditing] = useState<{ product: SupplierProduct; supplierId: string } | null>(null);
 const [editForm, setEditForm] = useState<{ name: string; cost: string; online_price: string }>({ name: '', cost: '', online_price: '' });
@@ -887,6 +1102,179 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
 </div>
 )}
 
+{/* ─── Phase 2: Bulk CSV upload modal ─── */}
+{bulkUpload && (() => {
+  const validCount  = bulkRows.filter((r) => !r.error).length;
+  const errorCount  = bulkRows.length - validCount;
+  return (
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+  style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+  onClick={() => !bulkUploading && setBulkUpload(null)}>
+  <div className="w-full max-w-3xl rounded-lg bg-white max-h-[92vh] overflow-y-auto"
+    style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}
+    onClick={(e) => e.stopPropagation()}>
+
+    <div className="px-5 py-3 border-b sticky top-0 bg-white z-10" style={{ borderColor: '#e7e7e7' }}>
+      <h2 className="text-base font-bold" style={{ color: '#0F1111' }}>
+        Bulk CSV upload — {bulkUpload.supplier.brand_name || bulkUpload.supplier.name}
+      </h2>
+      <p className="text-xs mt-0.5" style={{ color: '#565959' }}>
+        Upload a CSV with these columns:
+        <span className="font-mono ml-1">sku, name, category, unit_of_measure</span>
+        {' + optional '}
+        <span className="font-mono">pack_size, cost_per_unit, online_sell_price, channels</span>
+      </p>
+    </div>
+
+    <div className="px-5 py-4 space-y-4">
+
+      {/* Step 1 — get the file in */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm font-bold px-3 py-1.5 rounded-full cursor-pointer"
+          style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
+          📤 Pick CSV file
+          <input type="file" accept=".csv,text/csv" onChange={onBulkFile} className="hidden" />
+        </label>
+        <button onClick={downloadBulkTemplate}
+          className="text-sm font-medium px-3 py-1.5 rounded-full bg-white"
+          style={{ color: '#007185', border: '1px solid #d5d9d9' }}>
+          ⬇ Download template
+        </button>
+        <p className="text-[11px]" style={{ color: '#565959' }}>
+          Or paste CSV text below ↓
+        </p>
+      </div>
+
+      <textarea value={bulkText}
+        onChange={(e) => applyBulkText(e.target.value)}
+        placeholder="sku,name,category,unit_of_measure,...&#10;SCALLOPS-10LB,Sea Scallops 10/20,frozen_seafood,lb,..."
+        rows={5}
+        className="w-full text-xs font-mono px-3 py-2 rounded-md"
+        style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
+
+      {/* Step 2 — preview */}
+      {bulkRows.length > 0 && (
+        <div>
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
+            <span className="text-sm font-bold" style={{ color: '#0F1111' }}>
+              Preview: {bulkRows.length} row{bulkRows.length === 1 ? '' : 's'}
+            </span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded"
+              style={{ backgroundColor: '#067D62', color: '#fff' }}>
+              {validCount} valid
+            </span>
+            {errorCount > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded"
+                style={{ backgroundColor: '#dc2626', color: '#fff' }}>
+                {errorCount} error{errorCount === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+
+          <div className="overflow-x-auto rounded-md" style={{ border: '1px solid #e7e7e7' }}>
+            <table className="w-full text-xs">
+              <thead style={{ backgroundColor: '#f7f8f8' }}>
+                <tr>
+                  <th className="text-left px-2 py-1.5">#</th>
+                  <th className="text-left px-2 py-1.5">SKU</th>
+                  <th className="text-left px-2 py-1.5">Name</th>
+                  <th className="text-left px-2 py-1.5">Category</th>
+                  <th className="text-left px-2 py-1.5">UoM</th>
+                  <th className="text-right px-2 py-1.5">Cost</th>
+                  <th className="text-right px-2 py-1.5">Online</th>
+                  <th className="text-left px-2 py-1.5">Channels</th>
+                  <th className="text-left px-2 py-1.5">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bulkRows.slice(0, 100).map((r, i) => {
+                  const chans: string[] = [];
+                  if (r.channels.nassau)    chans.push('N');
+                  if (r.channels.andros)    chans.push('A');
+                  if (r.channels.online)    chans.push('O');
+                  if (r.channels.wholesale) chans.push('W');
+                  return (
+                    <tr key={i} style={{
+                      backgroundColor: r.error ? '#fef2f2' : 'white',
+                      borderTop: '1px solid #e7e7e7',
+                    }}>
+                      <td className="px-2 py-1" style={{ color: '#565959' }}>{i + 1}</td>
+                      <td className="px-2 py-1 font-mono">{r.sku}</td>
+                      <td className="px-2 py-1">{r.name}</td>
+                      <td className="px-2 py-1">{r.category}</td>
+                      <td className="px-2 py-1">{r.unit_of_measure}</td>
+                      <td className="px-2 py-1 text-right">{r.cost_per_unit !== null ? '$' + r.cost_per_unit.toFixed(2) : '—'}</td>
+                      <td className="px-2 py-1 text-right">{r.online_sell_price !== null ? '$' + r.online_sell_price.toFixed(2) : '—'}</td>
+                      <td className="px-2 py-1">{chans.join('') || '—'}</td>
+                      <td className="px-2 py-1" style={{ color: r.error ? '#dc2626' : '#067D62' }}>
+                        {r.error || '✓ valid'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {bulkRows.length > 100 && (
+              <p className="text-[11px] px-2 py-1.5" style={{ color: '#565959', backgroundColor: '#f7f8f8' }}>
+                Showing first 100 of {bulkRows.length} rows. All valid rows will be uploaded.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Step 3 — upload result */}
+      {bulkResult && (
+        <div className="rounded-md p-3" style={{ backgroundColor: bulkResult.failed.length > 0 ? '#fef2f2' : '#f0fdf4', border: '1px solid #e7e7e7' }}>
+          <p className="text-sm font-bold" style={{ color: '#0F1111' }}>
+            ✅ Inserted {bulkResult.inserted}
+            {bulkResult.failed.length > 0 && (
+              <span style={{ color: '#dc2626' }}> · ❌ {bulkResult.failed.length} failed</span>
+            )}
+          </p>
+          {bulkResult.failed.length > 0 && (
+            <ul className="mt-2 space-y-0.5 text-xs" style={{ color: '#0F1111' }}>
+              {bulkResult.failed.slice(0, 10).map((f, i) => (
+                <li key={i}>
+                  Row {f.row_index + 2} <span className="font-mono">{f.sku || '(no sku)'}</span>: {f.error}
+                </li>
+              ))}
+              {bulkResult.failed.length > 10 && (
+                <li style={{ color: '#565959' }}>… and {bulkResult.failed.length - 10} more</li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+
+    </div>
+
+    <div className="px-5 py-3 border-t flex justify-end gap-2 sticky bottom-0 bg-white"
+      style={{ borderColor: '#e7e7e7', backgroundColor: '#f7f8f8' }}>
+      <button onClick={() => setBulkUpload(null)} disabled={bulkUploading}
+        className="text-sm px-4 py-1.5 rounded-full bg-white"
+        style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
+        {bulkResult ? 'Close' : 'Cancel'}
+      </button>
+      {!bulkResult && (
+        <button onClick={submitBulkUpload} disabled={bulkUploading || validCount === 0}
+          className="text-sm font-bold px-5 py-1.5 rounded-full"
+          style={{
+            backgroundColor: validCount === 0 ? '#d5d9d9' : '#FFD814',
+            color:           '#0F1111',
+            border:         '1px solid #FCD200',
+            opacity:         bulkUploading ? 0.6 : 1,
+          }}>
+          {bulkUploading ? 'Uploading…' : `Upload ${validCount} product${validCount === 1 ? '' : 's'}`}
+        </button>
+      )}
+    </div>
+
+  </div>
+</div>
+  );
+})()}
+
 <header className="sticky top-0 z-40 border-b px-4 py-3"
 style={{ backgroundColor: '#1a2e5a', borderColor: 'rgba(245,197,24,0.2)' }}>
 <div className="flex items-center justify-between mb-3">
@@ -1142,15 +1530,22 @@ View-only — founder or co-founder role required to enable, disable, or edit pr
 </p>
 )}
 {canEdit && (
-<div className="flex items-center justify-between mb-3 px-1">
+<div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
 <p className="text-xs font-bold" style={{ color: '#565959' }}>
 Products under {s.brand_name || s.name}
 </p>
+<div className="flex gap-2">
+<button onClick={() => openBulkUpload(s)}
+className="text-xs font-medium px-3 py-1.5 rounded-full bg-white"
+style={{ color: '#007185', border: '1px solid #d5d9d9' }}>
+📄 Bulk CSV
+</button>
 <button onClick={() => openAddProduct(s)}
 className="text-xs font-bold px-3 py-1.5 rounded-full"
 style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
 + Add Product
 </button>
+</div>
 </div>
 )}
 {productsLoading === s.id && (
