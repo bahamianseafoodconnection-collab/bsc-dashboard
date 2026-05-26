@@ -338,7 +338,7 @@ export default function PendingProductsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
                   <div>
                     <label style={lbl}>Portion size</label>
-                    <input type="number" step="0.001" value={editSize}
+                    <input type="number" step="0.001" inputMode="decimal" value={editSize}
                       onChange={ev => setEdits(s => ({ ...s, [p.id]: { ...s[p.id], portion_size: parseFloat(ev.target.value) } }))}
                       style={inp} />
                   </div>
@@ -384,7 +384,7 @@ export default function PendingProductsPage() {
                       <div style={{ display: 'flex', gap: 4, alignItems: 'baseline' }}>
                         <span style={{ color: '#f5c518', fontSize: 11 }}>$</span>
                         <input
-                          type="number" step="0.01"
+                          type="number" step="0.01" inputMode="decimal"
                           defaultValue={ch.price.toFixed(2)}
                           onChange={ev => setPriceEdits(s => ({ ...s, [ch.pricing_id]: parseFloat(ev.target.value || '0') }))}
                           style={{ ...inp, fontSize: 15, fontWeight: 800, padding: '4px 8px', width: 90 }}

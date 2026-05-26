@@ -872,7 +872,7 @@ Cost ({editing.product.unit_of_measure ?? 'each'})
 </label>
 <div className="relative">
 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
-<input type="number" step="0.01" min="0" value={editForm.cost}
+<input type="number" step="0.01" min="0" inputMode="decimal" value={editForm.cost}
 onChange={(e) => setEditForm((f) => ({ ...f, cost: e.target.value }))}
 className="w-full text-sm pl-7 pr-3 py-2 rounded-md focus:outline-none focus:ring-2"
 style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
@@ -884,7 +884,7 @@ Online sell price
 </label>
 <div className="relative">
 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
-<input type="number" step="0.01" min="0" value={editForm.online_price}
+<input type="number" step="0.01" min="0" inputMode="decimal" value={editForm.online_price}
 onChange={(e) => setEditForm((f) => ({ ...f, online_price: e.target.value }))}
 className="w-full text-sm pl-7 pr-3 py-2 rounded-md focus:outline-none focus:ring-2"
 style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
@@ -1117,7 +1117,7 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
-            <input type="number" step="0.01" min="0" value={addProductForm.cost_per_unit}
+            <input type="number" step="0.01" min="0" inputMode="decimal" value={addProductForm.cost_per_unit}
               onChange={(e) => setAddProductForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
               className="w-full text-sm pl-7 pr-3 py-2 rounded-md"
               style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
@@ -1129,7 +1129,7 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: '#565959' }}>$</span>
-            <input type="number" step="0.01" min="0" value={addProductForm.online_sell_price}
+            <input type="number" step="0.01" min="0" inputMode="decimal" value={addProductForm.online_sell_price}
               onChange={(e) => setAddProductForm((f) => ({ ...f, online_sell_price: e.target.value }))}
               className="w-full text-sm pl-7 pr-3 py-2 rounded-md"
               style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />

@@ -353,7 +353,7 @@ function ProductIntakeInner() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
             <div>
               <label style={lbl}>Cost per unit (BSD) *</label>
-              <input type="number" step="0.01" min="0" value={cost || ''}
+              <input type="number" step="0.01" min="0" inputMode="decimal" value={cost || ''}
                 onChange={e => setCost(parseFloat(e.target.value) || 0)}
                 placeholder="14.50" style={inp} />
             </div>
