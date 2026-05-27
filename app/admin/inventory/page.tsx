@@ -47,6 +47,8 @@ interface ProductRow {
   sell_wholesale:       boolean;
   image_url:            string | null;
   primary_supplier_id:  string | null;
+  stock_count:          number | null;
+  low_stock_threshold:  number | null;
   // Joined / computed
   supplier_name?:       string | null;
   cost_per_unit?:       number | null;
@@ -58,6 +60,11 @@ interface ProductRow {
 
 type ChannelKey = 'nassau' | 'andros' | 'online' | 'wholesale';
 
+const CATEGORY_OPTIONS = [
+  'fresh_seafood', 'frozen_seafood', 'meat', 'frozen_meat',
+  'produce', 'grocery', 'spices', 'dry_goods', 'beverages',
+] as const;
+
 export default function AdminInventoryPage() {
   const [rows, setRows]       = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,11 +73,23 @@ export default function AdminInventoryPage() {
   const [filterStatus, setFilterStatus]     = useState<string>('active');
   const [error, setError]     = useState<string | null>(null);
 
-  // Phase 2 — inline edit state
-  const [editingCostId, setEditingCostId] = useState<string | null>(null);
-  const [editingCostValue, setEditingCostValue] = useState<string>('');
+  // Phase 2 + 3 — inline edit state. `editingCell` = { id, field } so
+  // only ONE cell across the table is in edit mode at a time.
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Phase 3 — bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
   function showToast(ok: boolean, msg: string) {
     setToast({ ok, msg });
     setTimeout(() => setToast(null), 3500);
@@ -90,33 +109,86 @@ export default function AdminInventoryPage() {
     return json as { ok: true; new_prices?: Record<string, number>; updated_fields: string[] };
   }
 
-  async function saveCost(row: ProductRow) {
-    const newCost = Number(editingCostValue);
-    setEditingCostId(null);
-    if (!Number.isFinite(newCost) || newCost <= 0) {
-      showToast(false, 'Cost must be a positive number');
-      return;
+  // Generic cell-save dispatcher — branches on field
+  async function saveCell(row: ProductRow, field: string, rawValue: string) {
+    setEditingCell(null);
+    let parsedValue: unknown = rawValue;
+
+    if (field === 'cost_per_unit' || field === 'stock_count') {
+      const num = Number(rawValue);
+      if (!Number.isFinite(num) || num < 0) {
+        showToast(false, `${field} must be a non-negative number`);
+        return;
+      }
+      if (field === 'cost_per_unit' && num <= 0) {
+        showToast(false, 'Cost must be > 0'); return;
+      }
+      parsedValue = num;
     }
-    if (newCost === row.cost_per_unit) return;  // no-op
+    if (field === 'name') {
+      if (!rawValue.trim()) { showToast(false, 'Name cannot be empty'); return; }
+      parsedValue = rawValue.trim();
+    }
+    // No-op shortcut
+    if (parsedValue === (row as unknown as Record<string, unknown>)[field]) return;
+
     setSavingId(row.id);
     try {
-      const res = await callPatch(row.id, { cost_per_unit: newCost });
-      // Update local row with new cost + recomputed prices from trigger
-      setRows((prev) => prev.map((r) =>
-        r.id === row.id
-          ? {
-              ...r,
-              cost_per_unit:   newCost,
-              nassau_price:    res.new_prices?.nassau_pos       ?? r.nassau_price,
-              andros_price:    res.new_prices?.andros_pos       ?? r.andros_price,
-              online_price:    res.new_prices?.online_market    ?? r.online_price,
-              wholesale_price: res.new_prices?.local_wholesale  ?? r.wholesale_price,
-            }
-          : r,
-      ));
-      showToast(true, `Cost saved → channel prices auto-updated`);
+      const res = await callPatch(row.id, { [field]: parsedValue });
+      setRows((prev) => prev.map((r) => {
+        if (r.id !== row.id) return r;
+        const updated = { ...r, [field]: parsedValue } as ProductRow;
+        // Cost cascade — also update the per-channel prices from the API response
+        if (field === 'cost_per_unit' && res.new_prices) {
+          updated.nassau_price    = res.new_prices.nassau_pos      ?? updated.nassau_price;
+          updated.andros_price    = res.new_prices.andros_pos      ?? updated.andros_price;
+          updated.online_price    = res.new_prices.online_market   ?? updated.online_price;
+          updated.wholesale_price = res.new_prices.local_wholesale ?? updated.wholesale_price;
+        }
+        return updated;
+      }));
+      const niceField = field.replace(/_/g, ' ');
+      showToast(true,
+        field === 'cost_per_unit'
+          ? `Cost saved → channel prices auto-updated`
+          : `${niceField} saved`,
+      );
     } catch (err) {
       showToast(false, `Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  // Bulk action — archive / channel-flip across all selected rows
+  async function bulkApply(patch: Record<string, unknown>, summary: string) {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    setSavingId('__bulk__');
+    try {
+      const { data: { session } } = await supaAuth.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/admin/products/bulk', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ ids, patch }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+
+      // Update local rows
+      setRows((prev) => prev.map((r) =>
+        selectedIds.has(r.id) ? { ...r, ...(patch as Partial<ProductRow>) } : r
+      ));
+      // If status flipped to archived → also drop them from view if filter is "active"
+      if (patch.status === 'archived' && filterStatus === 'active') {
+        setRows((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+      }
+      clearSelection();
+      showToast(true, `${json.updated_count} rows · ${summary}`);
+    } catch (err) {
+      showToast(false, `Bulk failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSavingId(null);
     }
@@ -151,7 +223,7 @@ export default function AdminInventoryPage() {
           .select(`
             id, sku, name, description, category, unit_of_measure, pack_size,
             vat_category, status, sell_nassau, sell_andros, sell_online, sell_wholesale,
-            image_url, primary_supplier_id,
+            image_url, primary_supplier_id, stock_count, low_stock_threshold,
             suppliers:primary_supplier_id ( name )
           `)
           .eq('status', filterStatus)
@@ -272,6 +344,40 @@ export default function AdminInventoryPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-navy bg-navy-50/30 px-2 py-1">
+                  <span className="text-xs font-bold text-navy">
+                    {selectedIds.size} selected
+                  </span>
+                  <button
+                    onClick={() => bulkApply({ sell_online: true }, '→ on /market')}
+                    disabled={savingId === '__bulk__'}
+                    className="rounded bg-emerald-500 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-600 disabled:opacity-50"
+                  >
+                    On /market
+                  </button>
+                  <button
+                    onClick={() => bulkApply({ sell_online: false }, '→ off /market')}
+                    disabled={savingId === '__bulk__'}
+                    className="rounded bg-slate-500 px-2 py-1 text-[11px] font-bold text-white hover:bg-slate-600 disabled:opacity-50"
+                  >
+                    Off /market
+                  </button>
+                  <button
+                    onClick={() => bulkApply({ status: 'archived' }, 'archived')}
+                    disabled={savingId === '__bulk__'}
+                    className="rounded bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Archive
+                  </button>
+                  <button
+                    onClick={clearSelection}
+                    className="rounded border border-slate-300 px-2 py-1 text-[11px] font-bold text-slate-600 hover:border-slate-500"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
               <Link
                 href="/supplier"
                 className="rounded-lg bg-gold px-4 py-2 text-sm font-extrabold text-navy hover:bg-gold-300 transition"
@@ -355,6 +461,17 @@ export default function AdminInventoryPage() {
             <table className="w-full text-xs">
               <thead className="bg-navy text-white sticky top-0">
                 <tr>
+                  <Th align="center">
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedIds(new Set(filtered.map((r) => r.id)));
+                        else clearSelection();
+                      }}
+                      aria-label="Select all visible"
+                    />
+                  </Th>
                   <Th>SKU</Th>
                   <Th>Photo</Th>
                   <Th sticky>Name</Th>
@@ -362,6 +479,7 @@ export default function AdminInventoryPage() {
                   <Th>Category</Th>
                   <Th>UoM</Th>
                   <Th>Size</Th>
+                  <Th align="right">Stock</Th>
                   <Th>VAT</Th>
                   <Th align="right">Cost</Th>
                   <Th align="right">Nassau POS</Th>
@@ -373,8 +491,25 @@ export default function AdminInventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
+                {filtered.map((r) => {
+                  const isCellEditing = (f: string) => editingCell?.id === r.id && editingCell?.field === f;
+                  const startEdit = (f: string, currentVal: string | number | null | undefined) => {
+                    setEditingValue(currentVal != null ? String(currentVal) : '');
+                    setEditingCell({ id: r.id, field: f });
+                  };
+                  const lowStock =
+                    r.stock_count != null && r.stock_count >= 0 &&
+                    (r.stock_count === 0 || (r.low_stock_threshold != null && r.stock_count <= r.low_stock_threshold));
+                  return (
+                  <tr key={r.id} className={`hover:bg-slate-50 ${selectedIds.has(r.id) ? 'bg-navy-50/30' : ''}`}>
+                    <Td align="center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(r.id)}
+                        onChange={() => toggleSelect(r.id)}
+                        aria-label={`Select ${r.sku}`}
+                      />
+                    </Td>
                     <Td><span className="font-mono">{r.sku}</span></Td>
                     <Td>
                       {r.image_url
@@ -382,38 +517,121 @@ export default function AdminInventoryPage() {
                         : <span className="inline-flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-base">📦</span>}
                     </Td>
                     <Td sticky>
-                      <div className="font-semibold text-navy">{r.name}</div>
+                      {isCellEditing('name') ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => saveCell(r, 'name', editingValue)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter')  saveCell(r, 'name', editingValue);
+                            if (e.key === 'Escape') setEditingCell(null);
+                          }}
+                          className="w-48 rounded border border-navy bg-yellow-50 px-1 py-0.5 text-xs font-semibold"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEdit('name', r.name)}
+                          disabled={savingId === r.id}
+                          className="text-left rounded px-1 font-semibold text-navy hover:bg-amber-100 hover:ring-1 hover:ring-amber-300 disabled:opacity-50"
+                          title="Click to edit name"
+                        >
+                          {r.name}
+                        </button>
+                      )}
                       {r.description && <div className="text-[10px] text-slate-500">{r.description}</div>}
                     </Td>
                     <Td>{r.supplier_name ?? <span className="text-red-600">— none —</span>}</Td>
-                    <Td>{r.category}</Td>
+                    <Td>
+                      {isCellEditing('category') ? (
+                        <select
+                          autoFocus
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => saveCell(r, 'category', editingValue)}
+                          className="rounded border border-navy bg-yellow-50 px-1 py-0.5 text-xs font-bold"
+                        >
+                          {CATEGORY_OPTIONS.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEdit('category', r.category)}
+                          disabled={savingId === r.id}
+                          className="rounded px-1 hover:bg-amber-100 hover:ring-1 hover:ring-amber-300 cursor-pointer disabled:opacity-50"
+                          title="Click to change category"
+                        >
+                          {r.category}
+                        </button>
+                      )}
+                    </Td>
                     <Td>{r.unit_of_measure}</Td>
                     <Td>{r.pack_size ?? '—'}</Td>
+                    <Td align="right">
+                      {isCellEditing('stock_count') ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          step="1"
+                          min="0"
+                          inputMode="numeric"
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => saveCell(r, 'stock_count', editingValue)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter')  saveCell(r, 'stock_count', editingValue);
+                            if (e.key === 'Escape') setEditingCell(null);
+                          }}
+                          className="w-16 rounded border border-navy bg-yellow-50 px-1 py-0.5 text-right text-xs font-bold"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEdit('stock_count', r.stock_count)}
+                          disabled={savingId === r.id}
+                          className={`rounded px-1 font-bold hover:bg-amber-100 hover:ring-1 hover:ring-amber-300 disabled:opacity-50 ${
+                            r.stock_count == null ? 'text-slate-400 italic font-normal' :
+                            r.stock_count === 0   ? 'text-red-600' :
+                            lowStock              ? 'text-amber-600' :
+                                                    'text-emerald-700'
+                          }`}
+                          title={
+                            r.stock_count == null ? 'Not tracked. Click to set.' :
+                            r.stock_count === 0   ? 'OUT OF STOCK. Click to update.' :
+                            lowStock              ? 'LOW STOCK. Click to update.' :
+                                                    'Click to update stock count'
+                          }
+                        >
+                          {r.stock_count == null ? '—' : r.stock_count}
+                        </button>
+                      )}
+                    </Td>
                     <Td>{r.vat_category === 'uncooked_food' ? '0%' : r.vat_category === 'cooked_prepared' ? '10%' : '—'}</Td>
                     <Td align="right">
-                      {editingCostId === r.id ? (
+                      {isCellEditing('cost_per_unit') ? (
                         <input
                           autoFocus
                           type="number"
                           step="0.01"
                           min="0"
                           inputMode="decimal"
-                          value={editingCostValue}
-                          onChange={(e) => setEditingCostValue(e.target.value)}
-                          onBlur={() => saveCost(r)}
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => saveCell(r, 'cost_per_unit', editingValue)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveCost(r);
-                            if (e.key === 'Escape') setEditingCostId(null);
+                            if (e.key === 'Enter')  saveCell(r, 'cost_per_unit', editingValue);
+                            if (e.key === 'Escape') setEditingCell(null);
                           }}
                           className="w-20 rounded border border-navy bg-yellow-50 px-1 py-0.5 text-right text-xs font-bold"
                         />
                       ) : (
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingCostValue(r.cost_per_unit != null ? String(r.cost_per_unit) : '');
-                            setEditingCostId(r.id);
-                          }}
+                          onClick={() => startEdit('cost_per_unit', r.cost_per_unit)}
                           disabled={savingId === r.id}
                           className="rounded px-1 hover:bg-amber-100 hover:ring-1 hover:ring-amber-300 cursor-pointer disabled:opacity-50"
                           title="Click to edit cost — channel prices auto-update"
@@ -440,7 +658,8 @@ export default function AdminInventoryPage() {
                       }`}>{r.status}</span>
                     </Td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

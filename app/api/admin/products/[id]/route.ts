@@ -32,6 +32,8 @@ const EDITABLE_FIELDS = new Set([
   'vat_category', 'status',
   'sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale',
   'image_url', 'primary_supplier_id', 'is_bsc_processed',
+  // Phase 3 — stock + featured fields (added in migration 20260527160000)
+  'stock_count', 'low_stock_threshold', 'is_featured', 'featured_until',
 ]);
 
 interface PatchBody {
