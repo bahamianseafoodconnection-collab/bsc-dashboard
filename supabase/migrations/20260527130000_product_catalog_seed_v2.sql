@@ -775,7 +775,7 @@ WITH new_p AS (
     'Immitation Crab Meat',
     'IVP',
     'frozen_seafood'::product_category,
-    'pack',
+    'each',
     '1 lb',
     'uncooked_food',
     NULL,
@@ -795,7 +795,7 @@ ins_cost_19 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         4.2000, 'pack',
+         4.2000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1281,7 +1281,7 @@ WITH new_p AS (
     'Snow Crab',
     NULL,
     'frozen_seafood'::product_category,
-    'box',
+    'each',
     '1.5lb',
     'uncooked_food',
     '/images/products/snow-crab-cluster.jpg',
@@ -1301,7 +1301,7 @@ ins_cost_29 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         26.9500, 'box',
+         26.9500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1381,7 +1381,7 @@ WITH new_p AS (
     'Black mussel',
     '1lb bag',
     'frozen_seafood'::product_category,
-    'pack',
+    'each',
     '1lb',
     'uncooked_food',
     '/images/products/black-mussels.jpg',
@@ -1401,7 +1401,7 @@ ins_cost_31 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         3.0500, 'pack',
+         3.0500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1582,7 +1582,7 @@ WITH new_p AS (
     'Green lip Mussel',
     '2lb Box',
     'frozen_seafood'::product_category,
-    'box',
+    'each',
     'half shell',
     'uncooked_food',
     '/images/products/green-lip-mussels.jpg',
@@ -1602,7 +1602,7 @@ ins_cost_35 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         13.1800, 'box',
+         13.1800, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2589,7 +2589,7 @@ WITH new_p AS (
     'Chicken Breast',
     NULL,
     'frozen_meat'::product_category,
-    'pack',
+    'each',
     '4.4lb',
     'uncooked_food',
     '/images/products/chicken-breast.jpg',
@@ -2609,7 +2609,7 @@ ins_cost_57 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         9.9000, 'pack',
+         9.9000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3490,7 +3490,7 @@ WITH new_p AS (
     'Tenderized Conch',
     'vacuumed pack',
     'frozen_seafood'::product_category,
-    'Bag',
+    'each',
     '10lb',
     'uncooked_food',
     '/images/products/tenderized-conch-pack.jpg',
@@ -3510,7 +3510,7 @@ ins_cost_76 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         60.0000, 'Bag',
+         60.0000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3994,7 +3994,7 @@ WITH new_p AS (
     'Badia  Garlic',
     '16oz',
     'grocery'::product_category,
-    'Each',
+    'each',
     '16oz',
     'uncooked_food',
     NULL,
@@ -4014,7 +4014,7 @@ ins_cost_86 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.8500, 'Each',
+         6.8500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
