@@ -82,6 +82,54 @@ export default function AdminInventoryPage() {
 
   // Phase 3 — bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Phase 3 — photo upload (camera / gallery / file — one input,
+  // OS picks the right sheet on each platform)
+  const [pendingUploadId, setPendingUploadId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId]         = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function openPhotoPicker(productId: string) {
+    setPendingUploadId(productId);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';  // reset so picking the same file fires onChange
+      fileInputRef.current.click();
+    }
+  }
+
+  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !pendingUploadId) { setPendingUploadId(null); return; }
+    const row = rows.find((r) => r.id === pendingUploadId);
+    if (!row) { setPendingUploadId(null); return; }
+    setUploadingId(row.id);
+    setPendingUploadId(null);
+    try {
+      if (file.size > 12 * 1024 * 1024) throw new Error('File over 12 MB');
+      const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
+      const slug = row.sku.toLowerCase();
+      const path = `products/${slug}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, file, {
+          upsert:      true,
+          contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          cacheControl: '3600',
+        });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('site-images').getPublicUrl(path);
+      const newUrl = urlData.publicUrl;
+      await callPatch(row.id, { image_url: newUrl });
+      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, image_url: newUrl } : r));
+      showToast(true, `📸 ${row.sku} photo updated`);
+    } catch (err) {
+      showToast(false, `Photo upload failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -438,6 +486,19 @@ export default function AdminInventoryPage() {
         </div>
       )}
 
+      {/* Hidden file input — triggered by any photo cell click. iOS
+          shows "Take Photo / Photo Library / Choose File" sheet because
+          of accept="image/*" + capture="environment". Desktop shows the
+          system file picker. Single input shared across all rows. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={onFileSelected}
+        className="hidden"
+      />
+
       {/* Phase 2 — save toast (top-right corner, auto-dismiss) */}
       {toast && (
         <div
@@ -512,9 +573,26 @@ export default function AdminInventoryPage() {
                     </Td>
                     <Td><span className="font-mono">{r.sku}</span></Td>
                     <Td>
-                      {r.image_url
-                        ? <img src={r.image_url} alt="" className="h-9 w-9 rounded object-cover" />
-                        : <span className="inline-flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-base">📦</span>}
+                      <button
+                        type="button"
+                        onClick={() => openPhotoPicker(r.id)}
+                        disabled={uploadingId === r.id}
+                        title={r.image_url ? 'Click to replace photo' : 'Click to add photo (camera / gallery / file)'}
+                        className="group relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded bg-slate-100 transition hover:ring-2 hover:ring-amber-300 disabled:opacity-60"
+                      >
+                        {uploadingId === r.id ? (
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-navy" />
+                        ) : r.image_url ? (
+                          <>
+                            <img src={r.image_url} alt="" className="h-9 w-9 object-cover" />
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[9px] font-bold text-white opacity-0 group-hover:opacity-100 transition">
+                              📷 EDIT
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm">📦＋</span>
+                        )}
+                      </button>
                     </Td>
                     <Td sticky>
                       {isCellEditing('name') ? (
