@@ -472,7 +472,7 @@ WITH new_p AS (
     'Snapper Finger',
     '2lb bag',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '1-2oz',
     'uncooked_food',
     '/images/products/snapper-fingers.jpg',
@@ -492,7 +492,7 @@ ins_cost_13 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         17.3000, 'bag',
+         17.3000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -674,7 +674,7 @@ WITH new_p AS (
     'Shrimp',
     '2lb bag',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '16/20',
     'uncooked_food',
     NULL,
@@ -694,7 +694,7 @@ ins_cost_17 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         13.9800, 'bag',
+         13.9800, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -876,7 +876,7 @@ WITH new_p AS (
     'Unbreaded Calamari Rings',
     '10lb bag',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '10lb',
     'uncooked_food',
     NULL,
@@ -896,7 +896,7 @@ ins_cost_21 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         59.5000, 'bag',
+         59.5000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -927,7 +927,7 @@ WITH new_p AS (
     'Unbreaded Calamari Rings',
     '1lb',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '1lb',
     'uncooked_food',
     NULL,
@@ -947,7 +947,7 @@ ins_cost_22 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         5.9500, 'bag',
+         5.9500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -978,7 +978,7 @@ WITH new_p AS (
     '#1 Lobster Meat',
     '1lb',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '1lb',
     'uncooked_food',
     '/images/products/lobster-meat-1.jpg',
@@ -998,7 +998,7 @@ ins_cost_23 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         13.0000, 'bag',
+         13.0000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1079,7 +1079,7 @@ WITH new_p AS (
     '#2 Lobster Meat',
     'IVP',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '1lb',
     'uncooked_food',
     '/images/products/lobster-tail-2.jpg',
@@ -1099,7 +1099,7 @@ ins_cost_25 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.5000, 'bag',
+         6.5000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2238,7 +2238,7 @@ WITH new_p AS (
     'Shrimp',
     '2lb',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '26/30',
     'uncooked_food',
     NULL,
@@ -2258,7 +2258,7 @@ ins_cost_49 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         12.0000, 'bag',
+         12.0000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2639,7 +2639,7 @@ WITH new_p AS (
     'Crack Chicken',
     NULL,
     'frozen_meat'::product_category,
-    'bag',
+    'each',
     '1.5lb',
     'uncooked_food',
     '/images/products/crack-chicken.jpg',
@@ -2659,7 +2659,7 @@ ins_cost_58 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         3.4500, 'bag',
+         3.4500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3340,7 +3340,7 @@ WITH new_p AS (
     'Tenderized Conch',
     'retail vacuum',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '12oz',
     'uncooked_food',
     '/images/products/tenderized-conch-pack.jpg',
@@ -3360,7 +3360,7 @@ ins_cost_73 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         4.5000, 'bag',
+         4.5000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3390,7 +3390,7 @@ WITH new_p AS (
     'Tenderized Conch',
     'retail vacuum',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '24oz',
     'uncooked_food',
     '/images/products/tenderized-conch-pack.jpg',
@@ -3410,7 +3410,7 @@ ins_cost_74 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         9.0000, 'bag',
+         9.0000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3440,7 +3440,7 @@ WITH new_p AS (
     'Tenderized Conch',
     'vacuumed pack',
     'frozen_seafood'::product_category,
-    'bag',
+    'each',
     '5lb',
     'uncooked_food',
     '/images/products/tenderized-conch-pack.jpg',
@@ -3460,7 +3460,7 @@ ins_cost_75 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         30.0000, 'bag',
+         30.0000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
