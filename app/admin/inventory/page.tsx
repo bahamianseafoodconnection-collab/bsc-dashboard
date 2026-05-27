@@ -65,6 +65,11 @@ const CATEGORY_OPTIONS = [
   'produce', 'grocery', 'spices', 'dry_goods', 'beverages',
 ] as const;
 
+const UOM_OPTIONS = ['lb', 'each', 'case'] as const;
+
+type SortField = 'sku' | 'name' | 'supplier_name' | 'cost_per_unit' | 'stock_count' | 'online_price';
+type SortDir   = 'asc' | 'desc';
+
 export default function AdminInventoryPage() {
   const [rows, setRows]       = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +93,119 @@ export default function AdminInventoryPage() {
   const [pendingUploadId, setPendingUploadId] = useState<string | null>(null);
   const [uploadingId, setUploadingId]         = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Phase 4 — all-suppliers list (for inline reassign + Add Row modal)
+  const [allSuppliers, setAllSuppliers] = useState<Array<{ id: string; name: string; code: string | null }>>([]);
+  useEffect(() => {
+    supabase.from('suppliers').select('id, name, code').eq('is_active', true).order('name')
+      .then(({ data }) => setAllSuppliers((data ?? []) as Array<{ id: string; name: string; code: string | null }>));
+  }, []);
+
+  // Phase 4 — sortable columns
+  const [sortField, setSortField] = useState<SortField>('sku');
+  const [sortDir, setSortDir]     = useState<SortDir>('asc');
+  function toggleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  }
+
+  // Phase 4 — in-page Add Row modal
+  const [showAddRow, setShowAddRow] = useState(false);
+  const [addRowForm, setAddRowForm] = useState({
+    supplier_id: '', sku: '', name: '', category: 'frozen_seafood' as string,
+    unit_of_measure: 'each', pack_size: '',
+    cost_per_unit: '', online_sell_price: '',
+    sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
+  });
+  const [addRowSaving, setAddRowSaving] = useState(false);
+
+  function openAddRow() {
+    setAddRowForm({
+      supplier_id: '', sku: '', name: '', category: 'frozen_seafood',
+      unit_of_measure: 'each', pack_size: '',
+      cost_per_unit: '', online_sell_price: '',
+      sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
+    });
+    setShowAddRow(true);
+  }
+
+  async function submitAddRow() {
+    const f = addRowForm;
+    if (!f.supplier_id) { showToast(false, 'Pick a supplier'); return; }
+    if (!f.sku.trim())  { showToast(false, 'SKU required'); return; }
+    if (!f.name.trim()) { showToast(false, 'Name required'); return; }
+    const cost  = f.cost_per_unit     === '' ? null : Number(f.cost_per_unit);
+    const price = f.online_sell_price === '' ? null : Number(f.online_sell_price);
+    if (cost  !== null && (!Number.isFinite(cost)  || cost  < 0)) { showToast(false, 'Cost must be ≥ 0'); return; }
+    if (price !== null && (!Number.isFinite(price) || price < 0)) { showToast(false, 'Online price must be ≥ 0'); return; }
+
+    setAddRowSaving(true);
+    try {
+      const { data: { session } } = await supaAuth.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/supplier/add-product', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          supplier_id:       f.supplier_id,
+          sku:               f.sku.trim(),
+          name:              f.name.trim(),
+          category:          f.category,
+          unit_of_measure:   f.unit_of_measure.trim(),
+          pack_size:         f.pack_size.trim() || undefined,
+          cost_per_unit:     cost,
+          online_sell_price: price,
+          channels: {
+            nassau:    f.sell_nassau,
+            andros:    f.sell_andros,
+            online:    f.sell_online,
+            wholesale: f.sell_wholesale,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // Insert the new row into the grid optimistically
+      const sup = allSuppliers.find((s) => s.id === f.supplier_id);
+      const newRow: ProductRow = {
+        id:                  json.product_id,
+        sku:                 json.sku,
+        name:                f.name.trim(),
+        description:         null,
+        category:            f.category,
+        unit_of_measure:     f.unit_of_measure,
+        pack_size:           f.pack_size || null,
+        vat_category:        'uncooked_food',
+        status:              'active',
+        sell_nassau:         f.sell_nassau,
+        sell_andros:         f.sell_andros,
+        sell_online:         f.sell_online,
+        sell_wholesale:      f.sell_wholesale,
+        image_url:           null,
+        primary_supplier_id: f.supplier_id,
+        stock_count:         null,
+        low_stock_threshold: null,
+        supplier_name:       sup?.name ?? null,
+        cost_per_unit:       cost ?? null,
+        nassau_price:        cost ? +(cost * 1.35).toFixed(2) : null,
+        andros_price:        cost ? +(cost * 1.45).toFixed(2) : null,
+        online_price:        price ?? (cost ? +(cost * 1.30).toFixed(2) : null),
+        wholesale_price:     cost ? +(cost * 1.20).toFixed(2) : null,
+      };
+      setRows((prev) => [newRow, ...prev]);
+      showToast(true, `Added ${json.sku} — ${f.name}`);
+      setShowAddRow(false);
+    } catch (err) {
+      showToast(false, `Add failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAddRowSaving(false);
+    }
+  }
 
   function openPhotoPicker(productId: string) {
     setPendingUploadId(productId);
@@ -192,6 +310,11 @@ export default function AdminInventoryPage() {
           updated.andros_price    = res.new_prices.andros_pos      ?? updated.andros_price;
           updated.online_price    = res.new_prices.online_market   ?? updated.online_price;
           updated.wholesale_price = res.new_prices.local_wholesale ?? updated.wholesale_price;
+        }
+        // Supplier reassign — update the joined supplier_name from the cached list
+        if (field === 'primary_supplier_id') {
+          const sup = allSuppliers.find((s) => s.id === parsedValue);
+          updated.supplier_name = sup?.name ?? null;
         }
         return updated;
       }));
@@ -349,10 +472,10 @@ export default function AdminInventoryPage() {
     return Array.from(set, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
 
-  // Filter rows
+  // Filter + sort rows
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
+    const filteredRows = rows.filter((r) => {
       if (filterSupplier && r.primary_supplier_id !== filterSupplier) return false;
       if (!q) return true;
       return (
@@ -361,7 +484,23 @@ export default function AdminInventoryPage() {
         (r.supplier_name ?? '').toLowerCase().includes(q)
       );
     });
-  }, [rows, search, filterSupplier]);
+    // Sort
+    const sorted = [...filteredRows].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[sortField];
+      const bv = (b as unknown as Record<string, unknown>)[sortField];
+      // Nulls sink to bottom regardless of sort direction
+      if (av == null && bv != null) return 1;
+      if (av != null && bv == null) return -1;
+      if (av == null && bv == null) return 0;
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return sortDir === 'asc' ? av - bv : bv - av;
+      }
+      const as = String(av).toLowerCase();
+      const bs = String(bv).toLowerCase();
+      return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
+    });
+    return sorted;
+  }, [rows, search, filterSupplier, sortField, sortDir]);
 
   // Quick stats summary at the top
   const stats = useMemo(() => {
@@ -426,12 +565,12 @@ export default function AdminInventoryPage() {
                   </button>
                 </div>
               )}
-              <Link
-                href="/supplier"
+              <button
+                onClick={openAddRow}
                 className="rounded-lg bg-gold px-4 py-2 text-sm font-extrabold text-navy hover:bg-gold-300 transition"
               >
                 + Add Row
-              </Link>
+              </button>
             </div>
           </div>
 
@@ -499,6 +638,146 @@ export default function AdminInventoryPage() {
         className="hidden"
       />
 
+      {/* Phase 4 — Add Row modal (in-page, no redirect) */}
+      {showAddRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !addRowSaving && setShowAddRow(false)}
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-200 px-5 py-3">
+              <h2 className="text-base font-extrabold text-navy">+ Add new product</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Inserts a row into <span className="font-mono">products</span> + an opening
+                <span className="font-mono"> product_costs</span> row. Channel flags drive visibility.
+              </p>
+            </div>
+            <div className="space-y-3 p-5">
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Supplier *</label>
+                <select
+                  value={addRowForm.supplier_id}
+                  onChange={(e) => setAddRowForm((f) => ({ ...f, supplier_id: e.target.value }))}
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">— pick supplier —</option>
+                  {allSuppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">SKU *</label>
+                  <input
+                    type="text" value={addRowForm.sku}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, sku: e.target.value }))}
+                    placeholder="B00084"
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Name *</label>
+                  <input
+                    type="text" value={addRowForm.name}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, name: e.target.value }))}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Category *</label>
+                  <select
+                    value={addRowForm.category}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, category: e.target.value }))}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  >
+                    {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">UoM *</label>
+                  <select
+                    value={addRowForm.unit_of_measure}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, unit_of_measure: e.target.value }))}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  >
+                    {UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Pack size</label>
+                  <input
+                    type="text" value={addRowForm.pack_size}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, pack_size: e.target.value }))}
+                    placeholder="2lb bag"
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Cost (opt.)</label>
+                  <input
+                    type="number" step="0.01" min="0" inputMode="decimal"
+                    value={addRowForm.cost_per_unit}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Online price (opt.)</label>
+                  <input
+                    type="number" step="0.01" min="0" inputMode="decimal"
+                    value={addRowForm.online_sell_price}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, online_sell_price: e.target.value }))}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-bold text-slate-600">Show on channels:</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {(['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const).map((k) => {
+                    const label = k.replace('sell_', '');
+                    return (
+                      <label key={k} className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={addRowForm[k]}
+                          onChange={(e) => setAddRowForm((f) => ({ ...f, [k]: e.target.checked }))}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+              <button
+                onClick={() => setShowAddRow(false)}
+                disabled={addRowSaving}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitAddRow}
+                disabled={addRowSaving}
+                className="rounded-lg bg-gold px-5 py-2 text-sm font-extrabold text-navy hover:bg-gold-300 disabled:opacity-60"
+              >
+                {addRowSaving ? 'Adding…' : 'Add product'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Phase 2 — save toast (top-right corner, auto-dismiss) */}
       {toast && (
         <div
@@ -533,19 +812,19 @@ export default function AdminInventoryPage() {
                       aria-label="Select all visible"
                     />
                   </Th>
-                  <Th>SKU</Th>
+                  <ThSort field="sku"            sortField={sortField} sortDir={sortDir} onClick={toggleSort}>SKU</ThSort>
                   <Th>Photo</Th>
-                  <Th sticky>Name</Th>
-                  <Th>Supplier <span className="text-[9px] opacity-60">(internal)</span></Th>
+                  <ThSort field="name"           sortField={sortField} sortDir={sortDir} onClick={toggleSort} sticky>Name</ThSort>
+                  <ThSort field="supplier_name"  sortField={sortField} sortDir={sortDir} onClick={toggleSort}>Supplier <span className="text-[9px] opacity-60">(internal)</span></ThSort>
                   <Th>Category</Th>
                   <Th>UoM</Th>
                   <Th>Size</Th>
-                  <Th align="right">Stock</Th>
+                  <ThSort field="stock_count"    sortField={sortField} sortDir={sortDir} onClick={toggleSort} align="right">Stock</ThSort>
                   <Th>VAT</Th>
-                  <Th align="right">Cost</Th>
+                  <ThSort field="cost_per_unit"  sortField={sortField} sortDir={sortDir} onClick={toggleSort} align="right">Cost</ThSort>
                   <Th align="right">Nassau POS</Th>
                   <Th align="right">Andros POS</Th>
-                  <Th align="right">Online</Th>
+                  <ThSort field="online_price"   sortField={sortField} sortDir={sortDir} onClick={toggleSort} align="right">Online</ThSort>
                   <Th align="right">Wholesale</Th>
                   <Th align="center">Channels</Th>
                   <Th>Status</Th>
@@ -621,7 +900,31 @@ export default function AdminInventoryPage() {
                       )}
                       {r.description && <div className="text-[10px] text-slate-500">{r.description}</div>}
                     </Td>
-                    <Td>{r.supplier_name ?? <span className="text-red-600">— none —</span>}</Td>
+                    <Td>
+                      {isCellEditing('primary_supplier_id') ? (
+                        <select
+                          autoFocus
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => saveCell(r, 'primary_supplier_id', editingValue)}
+                          className="rounded border border-navy bg-yellow-50 px-1 py-0.5 text-xs font-bold"
+                        >
+                          {allSuppliers.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEdit('primary_supplier_id', r.primary_supplier_id)}
+                          disabled={savingId === r.id}
+                          className="rounded px-1 hover:bg-amber-100 hover:ring-1 hover:ring-amber-300 cursor-pointer disabled:opacity-50 text-left"
+                          title="Click to reassign supplier"
+                        >
+                          {r.supplier_name ?? <span className="text-red-600">— none —</span>}
+                        </button>
+                      )}
+                    </Td>
                     <Td>
                       {isCellEditing('category') ? (
                         <select
@@ -757,6 +1060,32 @@ function Th({ children, sticky, align = 'left' }: { children: React.ReactNode; s
       }`}
     >
       {children}
+    </th>
+  );
+}
+function ThSort({
+  field, sortField, sortDir, onClick, children, sticky, align = 'left',
+}: {
+  field:     SortField;
+  sortField: SortField;
+  sortDir:   SortDir;
+  onClick:   (f: SortField) => void;
+  children:  React.ReactNode;
+  sticky?:   boolean;
+  align?:    'left' | 'right' | 'center';
+}) {
+  const active = sortField === field;
+  return (
+    <th
+      className={`px-3 py-2 text-${align} text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:bg-navy-700 ${
+        sticky ? 'sticky left-0 bg-navy z-10' : ''
+      }`}
+      onClick={() => onClick(field)}
+    >
+      {children}
+      <span className="ml-1 inline-block w-3 text-[9px] opacity-80">
+        {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+      </span>
     </th>
   );
 }
