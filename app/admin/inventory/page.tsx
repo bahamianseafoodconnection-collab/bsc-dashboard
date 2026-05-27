@@ -625,15 +625,19 @@ export default function AdminInventoryPage() {
         </div>
       )}
 
-      {/* Hidden file input — triggered by any photo cell click. iOS
-          shows "Take Photo / Photo Library / Choose File" sheet because
-          of accept="image/*" + capture="environment". Desktop shows the
-          system file picker. Single input shared across all rows. */}
+      {/* Hidden file input — triggered by any photo cell click.
+          NO `capture` attribute: forcing capture="environment" jumps
+          straight to the back camera on iOS with no chooser, which
+          blocks staff who want to upload from gallery / Files / Drive.
+          Without capture, iOS shows the full sheet:
+            - Take Photo (camera)
+            - Photo Library (gallery)
+            - Choose File (Files / Drive / cloud)
+          Desktop: native file picker. Either way, full choice. */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={onFileSelected}
         className="hidden"
       />
