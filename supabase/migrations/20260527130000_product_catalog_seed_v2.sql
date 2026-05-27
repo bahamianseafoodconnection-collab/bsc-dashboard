@@ -76,7 +76,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -89,7 +89,7 @@ ins_cost_5 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          4.3030, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -100,9 +100,9 @@ ins_pricing_5 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.8100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.2400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 5.5900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.8100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.2400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 5.5900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -127,7 +127,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -140,7 +140,7 @@ ins_cost_6 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          111.9000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -151,8 +151,8 @@ ins_pricing_6 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 162.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 134.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 162.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 134.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -177,7 +177,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -190,7 +190,7 @@ ins_cost_7 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          111.9000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -201,8 +201,8 @@ ins_pricing_7 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 162.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 134.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 162.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 134.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -227,7 +227,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -240,7 +240,7 @@ ins_cost_8 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          5.6000, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -251,9 +251,9 @@ ins_pricing_8 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.5600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.1200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.5600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.1200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -278,7 +278,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -291,7 +291,7 @@ ins_cost_9 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          5.7500, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -302,9 +302,9 @@ ins_pricing_9 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.7600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.3400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.4800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.7600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.3400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.4800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -329,7 +329,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -342,7 +342,7 @@ ins_cost_10 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          149.5000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -353,8 +353,8 @@ ins_pricing_10 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 216.7800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 179.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 216.7800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 179.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -379,7 +379,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -392,7 +392,7 @@ ins_cost_11 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          5.0500, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -403,9 +403,9 @@ ins_pricing_11 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.8200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.3200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 6.5700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.8200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.3200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 6.5700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -430,7 +430,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -443,7 +443,7 @@ ins_cost_12 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          116.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -454,8 +454,8 @@ ins_pricing_12 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 168.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 139.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 168.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 139.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -480,7 +480,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -493,7 +493,7 @@ ins_cost_13 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          17.3000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -504,9 +504,9 @@ ins_pricing_13 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 23.3600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 25.0900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 22.4900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 23.3600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 25.0900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 22.4900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -531,7 +531,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -544,7 +544,7 @@ ins_cost_14 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          86.5000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -555,8 +555,8 @@ ins_pricing_14 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 125.4300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 103.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 125.4300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 103.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -581,7 +581,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -594,7 +594,7 @@ ins_cost_15 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.4500, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -605,9 +605,9 @@ ins_pricing_15 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.7100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.3500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 8.3900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.7100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.3500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 8.3900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -632,7 +632,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -645,7 +645,7 @@ ins_cost_16 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          147.5000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -656,8 +656,8 @@ ins_pricing_16 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 213.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 177.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 213.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 177.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -682,7 +682,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -695,7 +695,7 @@ ins_cost_17 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          13.9800, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -706,9 +706,9 @@ ins_pricing_17 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 18.8700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 20.2700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 18.1700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 18.8700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 20.2700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 18.1700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -733,7 +733,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -746,7 +746,7 @@ ins_cost_18 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          69.9000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -757,8 +757,8 @@ ins_pricing_18 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 101.3600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 83.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 101.3600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 83.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -783,7 +783,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -796,7 +796,7 @@ ins_cost_19 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          4.2000, 'pack',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -807,9 +807,9 @@ ins_pricing_19 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.6700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.0900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 5.4600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.6700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.0900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 5.4600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -834,7 +834,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -847,7 +847,7 @@ ins_cost_20 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          83.8000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -858,8 +858,8 @@ ins_pricing_20 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 121.5100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 100.5600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 121.5100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 100.5600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -884,7 +884,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -897,7 +897,7 @@ ins_cost_21 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          59.5000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -908,9 +908,9 @@ ins_pricing_21 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 80.3300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 86.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 77.3500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 80.3300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 86.2800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 77.3500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -935,7 +935,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -948,7 +948,7 @@ ins_cost_22 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          5.9500, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -959,9 +959,9 @@ ins_pricing_22 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.0300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.6300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.7400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.0300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.6300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.7400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -986,7 +986,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -999,7 +999,7 @@ ins_cost_23 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          13.0000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1010,9 +1010,9 @@ ins_pricing_23 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.5500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 18.8500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 16.9000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.5500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 18.8500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 16.9000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1037,7 +1037,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1050,7 +1050,7 @@ ins_cost_24 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          125.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1061,8 +1061,8 @@ ins_pricing_24 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 181.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 150.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 181.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 150.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1087,7 +1087,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1100,7 +1100,7 @@ ins_cost_25 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.5000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1111,9 +1111,9 @@ ins_pricing_25 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.7800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.4300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 8.4500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.7800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.4300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 8.4500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1138,7 +1138,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1151,7 +1151,7 @@ ins_cost_26 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          55.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1162,9 +1162,9 @@ ins_pricing_26 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 74.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 79.7500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 71.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 74.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 79.7500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 71.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1189,7 +1189,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1202,7 +1202,7 @@ ins_cost_27 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          5.5000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1213,8 +1213,8 @@ ins_pricing_27 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.9800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 6.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 7.9800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 6.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1239,7 +1239,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1252,7 +1252,7 @@ ins_cost_28 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.2500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1263,8 +1263,8 @@ ins_pricing_28 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.0600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 7.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.0600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 7.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1289,7 +1289,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1302,7 +1302,7 @@ ins_cost_29 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          26.9500, 'box',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1313,8 +1313,8 @@ ins_pricing_29 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 39.0800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 32.3400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 39.0800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 32.3400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1339,7 +1339,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1352,7 +1352,7 @@ ins_cost_30 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          107.7000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1363,8 +1363,8 @@ ins_pricing_30 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 156.1700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 129.2400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 156.1700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 129.2400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1389,7 +1389,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1402,7 +1402,7 @@ ins_cost_31 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          3.0500, 'pack',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1413,9 +1413,9 @@ ins_pricing_31 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 4.1200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 4.4200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 3.9700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 4.1200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 4.4200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 3.9700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1440,7 +1440,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1453,7 +1453,7 @@ ins_cost_32 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          30.5000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1464,8 +1464,8 @@ ins_pricing_32 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 44.2300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 36.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 44.2300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 36.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1490,7 +1490,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1503,7 +1503,7 @@ ins_cost_33 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          206.2500, 'kit',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1514,8 +1514,8 @@ ins_pricing_33 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 299.0600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 247.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 299.0600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 247.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1540,7 +1540,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1553,7 +1553,7 @@ ins_cost_34 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          66.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1564,8 +1564,8 @@ ins_pricing_34 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 95.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 79.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 95.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 79.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1590,7 +1590,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1603,7 +1603,7 @@ ins_cost_35 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          13.1800, 'box',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1614,9 +1614,9 @@ ins_pricing_35 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 19.1100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 17.1300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 19.1100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 17.1300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1641,7 +1641,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1654,7 +1654,7 @@ ins_cost_36 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          158.1600, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1665,8 +1665,8 @@ ins_pricing_36 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 229.3300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 189.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 229.3300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 189.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1691,7 +1691,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1704,7 +1704,7 @@ ins_cost_37 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          4.0380, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1715,9 +1715,9 @@ ins_pricing_37 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.4500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.8600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 5.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.4500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.8600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 5.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1742,7 +1742,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1755,7 +1755,7 @@ ins_cost_38 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          105.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1766,8 +1766,8 @@ ins_pricing_38 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 152.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 126.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 152.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 126.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1792,7 +1792,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1805,7 +1805,7 @@ ins_cost_39 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          39.9000, 'each',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1816,8 +1816,8 @@ ins_pricing_39 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 57.8600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 47.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 57.8600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 47.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1842,7 +1842,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1855,7 +1855,7 @@ ins_cost_40 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          399.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1866,8 +1866,8 @@ ins_pricing_40 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 578.5500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 478.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 578.5500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 478.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1892,7 +1892,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1905,7 +1905,7 @@ ins_cost_41 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          9.6000, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1916,8 +1916,8 @@ ins_pricing_41 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 13.9200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.5200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 13.9200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.5200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1942,7 +1942,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -1955,7 +1955,7 @@ ins_cost_42 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          13.9500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -1966,8 +1966,8 @@ ins_pricing_42 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 20.2300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 16.7400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 20.2300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 16.7400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -1992,7 +1992,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2005,7 +2005,7 @@ ins_cost_43 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          9.9700, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2016,8 +2016,8 @@ ins_pricing_43 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 14.4600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.9600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 14.4600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.9600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2042,7 +2042,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2055,7 +2055,7 @@ ins_cost_44 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          14.5000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2066,8 +2066,8 @@ ins_pricing_44 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 21.0300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 17.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 21.0300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 17.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2092,7 +2092,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2105,7 +2105,7 @@ ins_cost_45 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          55.5000, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2116,8 +2116,8 @@ ins_pricing_45 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 80.4800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 66.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 80.4800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 66.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2142,7 +2142,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2155,7 +2155,7 @@ ins_cost_46 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          9.2500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2166,8 +2166,8 @@ ins_pricing_46 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 13.4100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.1000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 13.4100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.1000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2192,7 +2192,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, false, false, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2219,7 +2219,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, false, false, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2246,7 +2246,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2259,7 +2259,7 @@ ins_cost_49 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          12.0000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2270,9 +2270,9 @@ ins_pricing_49 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 16.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 15.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 16.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 15.6000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2297,7 +2297,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2310,7 +2310,7 @@ ins_cost_50 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          60.0000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2321,8 +2321,8 @@ ins_pricing_50 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 87.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 72.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 87.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 72.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2347,7 +2347,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2360,7 +2360,7 @@ ins_cost_51 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          2.6500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2371,8 +2371,8 @@ ins_pricing_51 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 3.8400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 3.1800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 3.8400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 3.1800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2397,7 +2397,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2410,7 +2410,7 @@ ins_cost_52 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.7500, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2421,8 +2421,8 @@ ins_pricing_52 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 8.1000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 8.1000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2447,7 +2447,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2460,7 +2460,7 @@ ins_cost_53 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          12.0000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2471,8 +2471,8 @@ ins_pricing_53 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 14.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 17.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 14.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2497,7 +2497,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2510,7 +2510,7 @@ ins_cost_54 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          21.5600, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2521,8 +2521,8 @@ ins_pricing_54 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 31.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 25.8700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 31.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 25.8700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2547,7 +2547,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2560,7 +2560,7 @@ ins_cost_55 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          17.2500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2571,8 +2571,8 @@ ins_pricing_55 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 25.0100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 20.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 25.0100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 20.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2597,7 +2597,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2610,7 +2610,7 @@ ins_cost_57 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          9.9000, 'pack',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2621,8 +2621,8 @@ ins_pricing_57 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 14.3600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 14.3600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 11.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2647,7 +2647,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2660,7 +2660,7 @@ ins_cost_58 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          3.4500, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2671,9 +2671,9 @@ ins_pricing_58 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 4.6600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 4.4900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 4.6600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 5.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 4.4900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2698,7 +2698,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2711,7 +2711,7 @@ ins_cost_59 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          59.5500, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2722,8 +2722,8 @@ ins_pricing_59 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 86.3500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 71.4600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 86.3500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 71.4600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2748,7 +2748,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2761,7 +2761,7 @@ ins_cost_60 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          33.9900, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2772,8 +2772,8 @@ ins_pricing_60 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 49.2900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 40.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 49.2900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 40.7900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2798,7 +2798,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2811,7 +2811,7 @@ ins_cost_61 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          1.0500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2822,8 +2822,8 @@ ins_pricing_61 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 1.5200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 1.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 1.5200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 1.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2848,7 +2848,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2861,7 +2861,7 @@ ins_cost_62 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          2.2500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2872,8 +2872,8 @@ ins_pricing_62 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 3.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 2.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 3.2600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 2.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2898,7 +2898,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2911,7 +2911,7 @@ ins_cost_63 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          89.1000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2922,8 +2922,8 @@ ins_pricing_63 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 129.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 106.9200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 129.2000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 106.9200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2948,7 +2948,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -2961,7 +2961,7 @@ ins_cost_64 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          46.8600, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -2972,8 +2972,8 @@ ins_pricing_64 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 67.9500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 56.2300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 67.9500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 56.2300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -2998,7 +2998,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3011,7 +3011,7 @@ ins_cost_65 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          1.4200, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3022,8 +3022,8 @@ ins_pricing_65 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 2.0600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 1.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 2.0600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 1.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3048,7 +3048,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3061,7 +3061,7 @@ ins_cost_66 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          5.7500, 'each',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3072,8 +3072,8 @@ ins_pricing_66 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.3400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 6.9000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.3400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 6.9000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3098,7 +3098,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3111,7 +3111,7 @@ ins_cost_67 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          44.8800, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3122,8 +3122,8 @@ ins_pricing_67 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 65.0800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 53.8600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 65.0800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 53.8600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3148,7 +3148,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3161,7 +3161,7 @@ ins_cost_68 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          1.3500, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3172,8 +3172,8 @@ ins_pricing_68 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 1.9600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 1.6200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 1.9600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 1.6200, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3198,7 +3198,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3211,7 +3211,7 @@ ins_cost_69 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          2.2000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3222,8 +3222,8 @@ ins_pricing_69 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 3.1900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 2.6400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 3.1900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 2.6400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3248,7 +3248,7 @@ WITH new_p AS (
     true,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3261,7 +3261,7 @@ ins_cost_71 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          165.0000, 'kit',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3272,8 +3272,8 @@ ins_pricing_71 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 239.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 198.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 239.2500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 198.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3298,7 +3298,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3311,7 +3311,7 @@ ins_cost_72 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          32.6000, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3322,8 +3322,8 @@ ins_pricing_72 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 47.2700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 37.1600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 47.2700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 37.1600, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3348,7 +3348,7 @@ WITH new_p AS (
     true,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3361,7 +3361,7 @@ ins_cost_73 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          4.5000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3372,8 +3372,8 @@ ins_pricing_73 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.5300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 5.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 6.5300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 5.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3398,7 +3398,7 @@ WITH new_p AS (
     true,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3411,7 +3411,7 @@ ins_cost_74 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          9.0000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3422,8 +3422,8 @@ ins_pricing_74 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 13.0500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 10.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 13.0500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 10.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3448,7 +3448,7 @@ WITH new_p AS (
     true,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3461,7 +3461,7 @@ ins_cost_75 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          30.0000, 'bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3472,8 +3472,8 @@ ins_pricing_75 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 43.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 36.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 43.5000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 36.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3498,7 +3498,7 @@ WITH new_p AS (
     true,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3511,7 +3511,7 @@ ins_cost_76 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          60.0000, 'Bag',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3522,8 +3522,8 @@ ins_pricing_76 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 87.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 72.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 87.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 72.0000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3548,7 +3548,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3561,7 +3561,7 @@ ins_cost_77 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.0000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3572,9 +3572,9 @@ ins_pricing_77 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.1000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.1000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 8.7000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 7.8000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3599,7 +3599,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3612,7 +3612,7 @@ ins_cost_78 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          8.5000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3623,9 +3623,9 @@ ins_pricing_78 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 11.4800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 12.3300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 11.0500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 11.4800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 12.3300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 11.0500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3650,7 +3650,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3663,7 +3663,7 @@ ins_cost_79 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          7.5000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3674,9 +3674,9 @@ ins_pricing_79 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 10.1300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 10.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 9.7500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 10.1300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 10.8800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 9.7500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3701,7 +3701,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, true, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3714,7 +3714,7 @@ ins_cost_80 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          7.7000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3725,9 +3725,9 @@ ins_pricing_80 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 10.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 11.1700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 10.0100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'nassau_pos'::pricing_channel, 'manual_override'::pricing_mode, 10.4000, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 11.1700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'online_market'::pricing_channel, 'manual_override'::pricing_mode, 10.0100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3752,7 +3752,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3765,7 +3765,7 @@ ins_cost_81 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          41.8500, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3776,8 +3776,8 @@ ins_pricing_81 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 60.6800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 47.7100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 60.6800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 47.7100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3802,7 +3802,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3815,7 +3815,7 @@ ins_cost_82 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          131.4800, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3826,8 +3826,8 @@ ins_pricing_82 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 190.6500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 149.8900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 190.6500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 149.8900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3852,7 +3852,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3865,7 +3865,7 @@ ins_cost_83 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          57.5900, 'case',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3876,8 +3876,8 @@ ins_pricing_83 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 83.5100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 65.6500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 83.5100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 65.6500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3902,7 +3902,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3915,7 +3915,7 @@ ins_cost_84 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.5010, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3926,8 +3926,8 @@ ins_pricing_84 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.4300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 7.4100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.4300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 7.4100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -3952,7 +3952,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -3965,7 +3965,7 @@ ins_cost_85 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          21.1300, 'each',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -3976,8 +3976,8 @@ ins_pricing_85 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 30.6400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 24.0900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 30.6400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 24.0900, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -4002,7 +4002,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -4015,7 +4015,7 @@ ins_cost_86 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          6.8500, 'Each',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -4026,8 +4026,8 @@ ins_pricing_86 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.9300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 7.8100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 9.9300, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 7.8100, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -4052,7 +4052,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     false, false, false, false,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -4079,7 +4079,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -4092,7 +4092,7 @@ ins_cost_88 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          22.1250, 'portion',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -4103,8 +4103,8 @@ ins_pricing_88 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 32.0800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 26.5500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 32.0800, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 26.5500, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
@@ -4129,7 +4129,7 @@ WITH new_p AS (
     false,
     'active'::product_status,
     true, true, false, true,
-    NULL, now()
+    NULL::uuid, now()
   )
   ON CONFLICT (sku) DO NOTHING
   RETURNING id, primary_supplier_id, sku
@@ -4142,7 +4142,7 @@ ins_cost_89 AS (
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
          17.7000, 'per pound',
-         0, 0, 0, 0, now(), true, NULL
+         0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
 ),
@@ -4153,8 +4153,8 @@ ins_pricing_89 AS (
     vat_levy_pct, per_transaction_fee, service_fee_pct,
     effective_from, is_current, is_active, recorded_by
   )
-  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 25.6700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
-      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 21.2400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL FROM new_p
+  SELECT id, 'andros_pos'::pricing_channel, 'manual_override'::pricing_mode, 25.6700, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
+      UNION ALL SELECT id, 'local_wholesale'::pricing_channel, 'manual_override'::pricing_mode, 21.2400, 1.0, 1.0, 0, 0, 0, 0, 0, now(), true, true, NULL::uuid FROM new_p
   RETURNING product_id
 )
 SELECT COUNT(*) AS seeded FROM new_p;
