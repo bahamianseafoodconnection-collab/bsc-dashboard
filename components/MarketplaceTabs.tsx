@@ -24,14 +24,18 @@ import { usePathname, useSearchParams } from 'next/navigation';
 type TabKey = 'fishermen' | 'farmers' | 'bills';
 
 interface TabSpec {
-  key:    TabKey;
-  label:  string;
-  sub:    string;
-  icon:   string;
-  href:   string;
-  /** Background gradient (CSS values, not Tailwind — for one-off control). */
-  bgFrom: string;
-  bgTo:   string;
+  key:        TabKey;
+  label:      string;
+  sub:        string;
+  icon:       string;
+  href:       string;
+  /** Hero photo — drop into /public/images/marketplace/. Gradient
+   *  fallback shows until the file lands. */
+  photo:      string;
+  /** Gradient overlay endpoints + fallback background color so card
+   *  always renders cleanly with or without the photo. */
+  bgFrom:     string;
+  bgTo:       string;
 }
 
 const TABS: ReadonlyArray<TabSpec> = [
@@ -41,6 +45,7 @@ const TABS: ReadonlyArray<TabSpec> = [
     sub:    'Fresh catch · ship to your door',
     icon:   '🎣',
     href:   '/market?source=fisherman',
+    photo:  '/images/marketplace/fisherman.jpg',
     bgFrom: '#0b3d5c',
     bgTo:   '#062338',
   },
@@ -50,6 +55,7 @@ const TABS: ReadonlyArray<TabSpec> = [
     sub:    'Locally grown · field to table',
     icon:   '🌱',
     href:   '/market?source=farmer',
+    photo:  '/images/marketplace/farmer.jpg',
     bgFrom: '#1f6644',
     bgTo:   '#0f3a25',
   },
@@ -59,6 +65,7 @@ const TABS: ReadonlyArray<TabSpec> = [
     sub:    'BPL · Water · Cable · Internet',
     icon:   '💡',
     href:   '/utilities',
+    photo:  '/images/marketplace/utility-bills.jpg',
     bgFrom: '#b48a16',
     bgTo:   '#7d5d10',
   },
@@ -93,7 +100,15 @@ export default function MarketplaceTabs() {
                     : 'opacity-95 hover:opacity-100'
                 }`}
                 style={{
-                  background: `linear-gradient(135deg, ${tab.bgFrom} 0%, ${tab.bgTo} 100%)`,
+                  // Hero photo + dark gradient overlay so text stays
+                  // readable. Fallback gradient renders if the photo
+                  // file isn't present yet — page never breaks.
+                  backgroundColor: tab.bgFrom,
+                  backgroundImage:
+                    `linear-gradient(135deg, ${tab.bgFrom}CC 0%, ${tab.bgTo}DD 100%), ` +
+                    `url('${tab.photo}')`,
+                  backgroundSize:     'cover',
+                  backgroundPosition: 'center',
                 }}
               >
                 {/* Decorative orb in background — purely visual */}

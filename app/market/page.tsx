@@ -12,6 +12,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import FlyerBanner from '@/components/FlyerBanner';
 import MarketplaceTabs from '@/components/MarketplaceTabs';
+import MarketHero from '@/components/MarketHero';
+import MarketPromoBanners from '@/components/MarketPromoBanners';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import type { SaleUnit } from '@/lib/pricing';
 
@@ -469,53 +471,20 @@ function MarketPageInner() {
         </div>
       </header>
 
+      {/* ─── Hero — welcome banner with sign-up CTAs + trust bar
+            (founder design 2026-05-27, "header" mockup). Auth-aware:
+            shows browse CTAs when customer is already signed in. */}
+      <MarketHero />
+
       {/* ─── Marketplace tabs — three big cards persistent across all
             market pages + /utilities (founder direction 2026-05-26).
-            Click to swap categories. Active card shows gold ring + label. */}
+            Click to swap categories. Active card shows gold ring + label.
+            Fisherman + Farmer cards now use real photo backdrops. */}
       <MarketplaceTabs />
 
-      {/* ─── Branded hero ─── */}
-      <section
-        className="border-b border-slate-200"
-        style={{
-          background:
-            'radial-gradient(ellipse at top left, rgba(245,197,24,0.08) 0%, transparent 55%), ' +
-            'radial-gradient(ellipse at bottom right, rgba(167,139,250,0.10) 0%, transparent 60%), ' +
-            'linear-gradient(180deg, #ffffff 0%, #fbfaf6 100%)',
-        }}>
-        <div className="mx-auto flex max-w-screen-2xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:gap-8 sm:px-6 sm:py-8">
-          {/* Logo lockup */}
-          <div className="flex shrink-0 items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/bsc-marketplace-logo.png"
-              alt="BSC Market Place"
-              style={{ height: 140, width: 'auto', display: 'block' }}
-              className="sm:h-44"
-            />
-          </div>
-          {/* Tagline */}
-          <div className="flex-1 sm:border-l sm:border-slate-200 sm:pl-8">
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#a16207' }}>
-              Bahamian Seafood Connection · Est. Nassau
-            </p>
-            <h1 className="mt-1 font-display text-2xl font-bold sm:text-3xl" style={{ color: '#1a2e5a' }}>
-              Fresh from the Bahamas, straight to your door.
-            </h1>
-            <p className="mt-2 text-sm text-slate-700 sm:text-base">
-              Wild-caught spiny lobster, conch, snapper &amp; hogfish — plus Nassau&rsquo;s top wholesale brands. Same-day pickup at Fire Trail Road, or delivered island-wide.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="#shop" className="rounded-lg bg-navy px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#0d1834]">
-                Shop the catch →
-              </Link>
-              <Link href="/trace" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-navy transition hover:border-navy">
-                🧾 Trace by lot
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* (Old "Branded hero" section removed 2026-05-27 — superseded
+            by the new MarketHero component above which is auth-aware
+            and ships with the full trust bar.) */}
 
       {/* ─── Flyer banner (Founder AI manages content via create_flyer) ─── */}
       <FlyerBanner />
@@ -679,6 +648,12 @@ function MarketPageInner() {
           {!loading && filtered.length > 0 && <TrustBar />}
         </main>
       </div>
+
+      {/* ─── Promo banners — Shop Seafood + Shop Meats (founder
+            design 2026-05-27, "footer" mockup). Sits below the product
+            grid, above the modals. Both link into /market with a
+            category filter. */}
+      <MarketPromoBanners />
 
       {/* ─── Mobile filter drawer ─── */}
       {showFilters && (
