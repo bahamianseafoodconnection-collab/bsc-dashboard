@@ -19,7 +19,7 @@
 --     already exists, the row is skipped silently (no duplicate).
 --   - Per-row CTE: each product+cost+pricing block is independent.
 --   - Post-flight: counts seeded vs expected, raises NOTICE summary.
---   - Audit row written to ai_writes at end.
+--   - Audit trail = git commit history (ai_writes table not present yet).
 --
 -- DOES NOT TOUCH existing 318 products. They stay live until the
 -- founder runs the separate archive migration.
@@ -4185,23 +4185,6 @@ BEGIN
     RAISE NOTICE '  All % SKUs accounted for ✓', actual_count;
   END IF;
   RAISE NOTICE '──────────────────────────────────────';
-
-  -- Audit row
-  INSERT INTO public.ai_writes (tool, caller_id, input, result, status, error)
-  VALUES (
-    'product_catalog_seed_v2',
-    NULL,
-    jsonb_build_object('source', 'Fresh Inventory List.xlsx',
-                       'row_count', expected_count,
-                       'migration', '20260527130000_product_catalog_seed_v2.sql'),
-    jsonb_build_object('expected', expected_count,
-                       'in_db', actual_count,
-                       'missing_count', COALESCE(array_length(missing_skus, 1), 0)),
-    CASE WHEN actual_count = expected_count THEN 'success' ELSE 'partial' END,
-    CASE WHEN actual_count < expected_count
-         THEN format('%s SKUs missing', COALESCE(array_length(missing_skus, 1), 0))
-         ELSE NULL END
-  );
 END $pf$;
 
 COMMIT;
