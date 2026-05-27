@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import FlyerBanner from '@/components/FlyerBanner';
+import MarketplaceTabs from '@/components/MarketplaceTabs';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import type { SaleUnit } from '@/lib/pricing';
 
@@ -467,6 +468,11 @@ function MarketPageInner() {
           </div>
         </div>
       </header>
+
+      {/* ─── Marketplace tabs — three big cards persistent across all
+            market pages + /utilities (founder direction 2026-05-26).
+            Click to swap categories. Active card shows gold ring + label. */}
+      <MarketplaceTabs />
 
       {/* ─── Branded hero ─── */}
       <section

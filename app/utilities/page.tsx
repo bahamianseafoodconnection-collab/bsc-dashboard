@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
+import MarketplaceTabs from '@/components/MarketplaceTabs';
 
 const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
@@ -86,6 +87,13 @@ export default function UtilitiesPage() {
       `}</style>
 
       <div style={{ minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
+        {/* Marketplace tabs — same three cards as /market, so customers
+            can hop back to Fishermen / Farmers from the bill-pay flow
+            with one tap. Suspense required: MarketplaceTabs uses
+            useSearchParams. */}
+        <Suspense fallback={null}>
+          <MarketplaceTabs />
+        </Suspense>
         <nav style={{ backgroundColor: '#1a2e4a', padding: '0 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
           <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
