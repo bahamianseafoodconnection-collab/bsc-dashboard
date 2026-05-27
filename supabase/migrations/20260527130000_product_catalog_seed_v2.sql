@@ -68,7 +68,7 @@ WITH new_p AS (
     'Salmon',
     'IVP Norwegion',
     'frozen_seafood'::product_category,
-    'portion',
+    'each',
     '6oz',
     'uncooked_food',
     '/images/products/salmon-portion.jpg',
@@ -88,7 +88,7 @@ ins_cost_5 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         4.3030, 'portion',
+         4.3030, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -219,7 +219,7 @@ WITH new_p AS (
     'Salmon',
     'IVP Norwegion',
     'frozen_seafood'::product_category,
-    'portion',
+    'each',
     '8oz',
     'uncooked_food',
     '/images/products/salmon-portion.jpg',
@@ -239,7 +239,7 @@ ins_cost_8 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         5.6000, 'portion',
+         5.6000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -270,7 +270,7 @@ WITH new_p AS (
     'Mahi Mahi',
     'IVP',
     'frozen_seafood'::product_category,
-    'portion',
+    'each',
     '6oz',
     'uncooked_food',
     '/images/products/mahi-mahi.jpg',
@@ -290,7 +290,7 @@ ins_cost_9 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         5.7500, 'portion',
+         5.7500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -371,7 +371,7 @@ WITH new_p AS (
     'Snapper Fillet',
     'IVP',
     'frozen_seafood'::product_category,
-    'portion',
+    'each',
     '6/8oz',
     'uncooked_food',
     '/images/products/snapper-fillet.jpg',
@@ -391,7 +391,7 @@ ins_cost_11 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         5.0500, 'portion',
+         5.0500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -573,7 +573,7 @@ WITH new_p AS (
     'Grouper Fillet',
     'IVP',
     'frozen_seafood'::product_category,
-    'portion',
+    'each',
     '6/8oz',
     'uncooked_food',
     '/images/products/grouper-fillet.jpg',
@@ -593,7 +593,7 @@ ins_cost_15 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.4500, 'portion',
+         6.4500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1181,7 +1181,7 @@ WITH new_p AS (
     'Whole Nassau Grouper',
     'Gutted with skin',
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/nassau-grouper-whole.jpg',
@@ -1201,7 +1201,7 @@ ins_cost_27 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         5.5000, 'per pound',
+         5.5000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1231,7 +1231,7 @@ WITH new_p AS (
     'Whole Nassau Grouper',
     'Gutted, no skin',
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/nassau-grouper-whole.jpg',
@@ -1251,7 +1251,7 @@ ins_cost_28 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.2500, 'per pound',
+         6.2500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1482,7 +1482,7 @@ WITH new_p AS (
     'Lane Snapper 33lb',
     'bulk gutted w/scales',
     'frozen_seafood'::product_category,
-    'kit',
+    'each',
     '3/4-1lb',
     'uncooked_food',
     '/images/products/lane-snapper.jpg',
@@ -1502,7 +1502,7 @@ ins_cost_33 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         206.2500, 'kit',
+         206.2500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1683,7 +1683,7 @@ WITH new_p AS (
     'Tuna Steak',
     'IVP',
     'frozen_seafood'::product_category,
-    'portion',
+    'each',
     '6oz',
     'uncooked_food',
     '/images/products/tuna-steak.jpg',
@@ -1703,7 +1703,7 @@ ins_cost_37 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         4.0380, 'portion',
+         4.0380, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1884,7 +1884,7 @@ WITH new_p AS (
     'Ribeye E/C CAB',
     'IVP',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '9/11oz',
     'uncooked_food',
     '/images/products/cowboy-steak.jpg',
@@ -1904,7 +1904,7 @@ ins_cost_41 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         9.6000, 'portion',
+         9.6000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1934,7 +1934,7 @@ WITH new_p AS (
     'Ribeye E/C CAB',
     'IVP',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '9/11oz',
     'uncooked_food',
     '/images/products/cowboy-steak.jpg',
@@ -1954,7 +1954,7 @@ ins_cost_42 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         13.9500, 'per pound',
+         13.9500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -1984,7 +1984,7 @@ WITH new_p AS (
     'T-Bone',
     'IVP',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '16oz',
     'uncooked_food',
     '/images/products/t-bone-steak.jpg',
@@ -2004,7 +2004,7 @@ ins_cost_43 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         9.9700, 'portion',
+         9.9700, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2034,7 +2034,7 @@ WITH new_p AS (
     'T-Bone',
     'IVP',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '16oz',
     'uncooked_food',
     '/images/products/t-bone-steak.jpg',
@@ -2054,7 +2054,7 @@ ins_cost_44 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         14.5000, 'per pound',
+         14.5000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2084,7 +2084,7 @@ WITH new_p AS (
     'Tenderloin tip steak',
     'IVP',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '5-6lb',
     'uncooked_food',
     '/images/products/tenderloin-steak.jpg',
@@ -2104,7 +2104,7 @@ ins_cost_45 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         55.5000, 'portion',
+         55.5000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2134,7 +2134,7 @@ WITH new_p AS (
     'Tenderloin steak',
     '2 x 5-6lb',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '5-6lb',
     'uncooked_food',
     '/images/products/tenderloin-steak.jpg',
@@ -2154,7 +2154,7 @@ ins_cost_46 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         9.2500, 'per pound',
+         9.2500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2184,7 +2184,7 @@ WITH new_p AS (
     'Tenderloin steak',
     'IVP',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '4oz',
     'uncooked_food',
     '/images/products/tenderloin-steak.jpg',
@@ -2211,7 +2211,7 @@ WITH new_p AS (
     'Tenderloin steak',
     'IVP',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '4oz',
     'uncooked_food',
     '/images/products/tenderloin-steak.jpg',
@@ -2339,7 +2339,7 @@ WITH new_p AS (
     'Swai Fillet',
     NULL,
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     '7/9oz',
     'uncooked_food',
     NULL,
@@ -2359,7 +2359,7 @@ ins_cost_51 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         2.6500, 'per pound',
+         2.6500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2389,7 +2389,7 @@ WITH new_p AS (
     'New York Strip Steak',
     'IVP',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '8oz',
     'uncooked_food',
     '/images/products/new-york-strip-steak.jpg',
@@ -2409,7 +2409,7 @@ ins_cost_52 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.7500, 'portion',
+         6.7500, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2439,7 +2439,7 @@ WITH new_p AS (
     'New York Strip Steak',
     'IVP',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '8oz',
     'uncooked_food',
     '/images/products/new-york-strip-steak.jpg',
@@ -2459,7 +2459,7 @@ ins_cost_53 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         12.0000, 'per pound',
+         12.0000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2489,7 +2489,7 @@ WITH new_p AS (
     'PorterHouse steak',
     'IVP',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '20oz',
     'uncooked_food',
     '/images/products/porterhouse-steak.jpg',
@@ -2509,7 +2509,7 @@ ins_cost_54 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         21.5600, 'portion',
+         21.5600, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2539,7 +2539,7 @@ WITH new_p AS (
     'PorterHouse steak',
     'IVP',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '20oz',
     'uncooked_food',
     '/images/products/porterhouse-steak.jpg',
@@ -2559,7 +2559,7 @@ ins_cost_55 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         17.2500, 'per pound',
+         17.2500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2790,7 +2790,7 @@ WITH new_p AS (
     'Chicken Leg Quarters',
     'retail',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/chicken-leg-quarters.jpg',
@@ -2810,7 +2810,7 @@ ins_cost_61 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         1.0500, 'per pound',
+         1.0500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2840,7 +2840,7 @@ WITH new_p AS (
     'Spareribs',
     'retail',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/pork-spare-ribs.jpg',
@@ -2860,7 +2860,7 @@ ins_cost_62 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         2.2500, 'per pound',
+         2.2500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -2990,7 +2990,7 @@ WITH new_p AS (
     'Chicken Wings',
     'retail',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/chicken-wings.jpg',
@@ -3010,7 +3010,7 @@ ins_cost_65 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         1.4200, 'per pound',
+         1.4200, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3140,7 +3140,7 @@ WITH new_p AS (
     'Pig Feet',
     NULL,
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     NULL,
@@ -3160,7 +3160,7 @@ ins_cost_68 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         1.3500, 'per pound',
+         1.3500, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3190,7 +3190,7 @@ WITH new_p AS (
     'Pork Chop Ends',
     NULL,
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     NULL,
@@ -3210,7 +3210,7 @@ ins_cost_69 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         2.2000, 'per pound',
+         2.2000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3240,7 +3240,7 @@ WITH new_p AS (
     'Conch Kit',
     'bulk',
     'frozen_seafood'::product_category,
-    'kit',
+    'each',
     '30lb',
     'uncooked_food',
     '/images/products/conch-kit.jpg',
@@ -3260,7 +3260,7 @@ ins_cost_71 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         165.0000, 'kit',
+         165.0000, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3540,7 +3540,7 @@ WITH new_p AS (
     'Fresh lane Snappers',
     'frozen at Sea',
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/lane-snapper.jpg',
@@ -3560,7 +3560,7 @@ ins_cost_77 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.0000, 'per pound',
+         6.0000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3591,7 +3591,7 @@ WITH new_p AS (
     'Grouper Steak',
     'frozen at sea',
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/grouper-steak.jpg',
@@ -3611,7 +3611,7 @@ ins_cost_78 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         8.5000, 'per pound',
+         8.5000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3642,7 +3642,7 @@ WITH new_p AS (
     'Mutton Snapper Steak',
     'frozen at Sea',
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     '/images/products/mutton-snapper-steak.jpg',
@@ -3662,7 +3662,7 @@ ins_cost_79 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         7.5000, 'per pound',
+         7.5000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3693,7 +3693,7 @@ WITH new_p AS (
     'Salmon Slab',
     'Fillet',
     'frozen_seafood'::product_category,
-    'per pound',
+    'lb',
     '2-3lb',
     'uncooked_food',
     '/images/products/salmon-slab.jpg',
@@ -3713,7 +3713,7 @@ ins_cost_80 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         7.7000, 'per pound',
+         7.7000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -3894,7 +3894,7 @@ WITH new_p AS (
     'Whole Duck',
     '6 x 6.75lb',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     NULL,
     'uncooked_food',
     NULL,
@@ -3914,7 +3914,7 @@ ins_cost_84 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         6.5010, 'per pound',
+         6.5010, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -4071,7 +4071,7 @@ WITH new_p AS (
     'Cowboy',
     '18-20oz',
     'frozen_meat'::product_category,
-    'portion',
+    'each',
     '18-20oz',
     'uncooked_food',
     '/images/products/cowboy-steak.jpg',
@@ -4091,7 +4091,7 @@ ins_cost_88 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         22.1250, 'portion',
+         22.1250, 'each',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
@@ -4121,7 +4121,7 @@ WITH new_p AS (
     'Cowboy',
     '18-20oz',
     'frozen_meat'::product_category,
-    'per pound',
+    'lb',
     '18-20oz',
     'uncooked_food',
     '/images/products/cowboy-steak.jpg',
@@ -4141,7 +4141,7 @@ ins_cost_89 AS (
     effective_from, is_current, recorded_by
   )
   SELECT id, primary_supplier_id, 'opening_balance'::cost_type,
-         17.7000, 'per pound',
+         17.7000, 'lb',
          0, 0, 0, 0, now(), true, NULL::uuid
   FROM new_p
   RETURNING product_id
