@@ -19,9 +19,10 @@
 // toggles, name) with autosave.
 // Phase 3 (future): bulk select, bulk channel-flip, paste-from-Excel.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
+import { supabase as supaAuth } from '@/lib/supabase';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,6 +65,80 @@ export default function AdminInventoryPage() {
   const [filterSupplier, setFilterSupplier] = useState<string>('');
   const [filterStatus, setFilterStatus]     = useState<string>('active');
   const [error, setError]     = useState<string | null>(null);
+
+  // Phase 2 — inline edit state
+  const [editingCostId, setEditingCostId] = useState<string | null>(null);
+  const [editingCostValue, setEditingCostValue] = useState<string>('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+  function showToast(ok: boolean, msg: string) {
+    setToast({ ok, msg });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  async function callPatch(productId: string, body: Record<string, unknown>) {
+    const { data: { session } } = await supaAuth.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not signed in');
+    const res = await fetch(`/api/admin/products/${productId}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    return json as { ok: true; new_prices?: Record<string, number>; updated_fields: string[] };
+  }
+
+  async function saveCost(row: ProductRow) {
+    const newCost = Number(editingCostValue);
+    setEditingCostId(null);
+    if (!Number.isFinite(newCost) || newCost <= 0) {
+      showToast(false, 'Cost must be a positive number');
+      return;
+    }
+    if (newCost === row.cost_per_unit) return;  // no-op
+    setSavingId(row.id);
+    try {
+      const res = await callPatch(row.id, { cost_per_unit: newCost });
+      // Update local row with new cost + recomputed prices from trigger
+      setRows((prev) => prev.map((r) =>
+        r.id === row.id
+          ? {
+              ...r,
+              cost_per_unit:   newCost,
+              nassau_price:    res.new_prices?.nassau_pos       ?? r.nassau_price,
+              andros_price:    res.new_prices?.andros_pos       ?? r.andros_price,
+              online_price:    res.new_prices?.online_market    ?? r.online_price,
+              wholesale_price: res.new_prices?.local_wholesale  ?? r.wholesale_price,
+            }
+          : r,
+      ));
+      showToast(true, `Cost saved → channel prices auto-updated`);
+    } catch (err) {
+      showToast(false, `Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function toggleChannel(row: ProductRow, channel: ChannelKey) {
+    const key = `sell_${channel === 'nassau' ? 'nassau' : channel === 'andros' ? 'andros' : channel === 'online' ? 'online' : 'wholesale'}` as const;
+    const current = row[key] as boolean;
+    setSavingId(row.id);
+    // Optimistic flip
+    setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, [key]: !current } : r));
+    try {
+      await callPatch(row.id, { [key]: !current });
+      showToast(true, `${row.sku} · ${channel} ${!current ? 'ON' : 'OFF'}`);
+    } catch (err) {
+      // Revert
+      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, [key]: current } : r));
+      showToast(false, `Toggle failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -197,13 +272,12 @@ export default function AdminInventoryPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                disabled
-                title="Inline edit ships in Phase 2 — for now use /supplier Add Product modal"
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-bold text-slate-500 cursor-not-allowed"
+              <Link
+                href="/supplier"
+                className="rounded-lg bg-gold px-4 py-2 text-sm font-extrabold text-navy hover:bg-gold-300 transition"
               >
-                + Add Row (Phase 2)
-              </button>
+                + Add Row
+              </Link>
             </div>
           </div>
 
@@ -258,6 +332,19 @@ export default function AdminInventoryPage() {
         </div>
       )}
 
+      {/* Phase 2 — save toast (top-right corner, auto-dismiss) */}
+      {toast && (
+        <div
+          className={`fixed right-4 top-20 z-50 max-w-sm rounded-xl border-2 px-4 py-3 text-sm font-bold shadow-xl transition ${
+            toast.ok
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+              : 'border-red-300 bg-red-50 text-red-900'
+          }`}
+        >
+          {toast.ok ? '✅ ' : '⚠ '}{toast.msg}
+        </div>
+      )}
+
       <main className="mx-auto max-w-screen-2xl px-3 py-4 sm:px-6">
         {loading ? (
           <p className="py-12 text-center text-sm text-slate-500">Loading inventory…</p>
@@ -303,16 +390,47 @@ export default function AdminInventoryPage() {
                     <Td>{r.unit_of_measure}</Td>
                     <Td>{r.pack_size ?? '—'}</Td>
                     <Td>{r.vat_category === 'uncooked_food' ? '0%' : r.vat_category === 'cooked_prepared' ? '10%' : '—'}</Td>
-                    <Td align="right">{fmtPrice(r.cost_per_unit)}</Td>
+                    <Td align="right">
+                      {editingCostId === r.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          inputMode="decimal"
+                          value={editingCostValue}
+                          onChange={(e) => setEditingCostValue(e.target.value)}
+                          onBlur={() => saveCost(r)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveCost(r);
+                            if (e.key === 'Escape') setEditingCostId(null);
+                          }}
+                          className="w-20 rounded border border-navy bg-yellow-50 px-1 py-0.5 text-right text-xs font-bold"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCostValue(r.cost_per_unit != null ? String(r.cost_per_unit) : '');
+                            setEditingCostId(r.id);
+                          }}
+                          disabled={savingId === r.id}
+                          className="rounded px-1 hover:bg-amber-100 hover:ring-1 hover:ring-amber-300 cursor-pointer disabled:opacity-50"
+                          title="Click to edit cost — channel prices auto-update"
+                        >
+                          {fmtPrice(r.cost_per_unit)}
+                        </button>
+                      )}
+                    </Td>
                     <Td align="right">{fmtPrice(r.nassau_price)}</Td>
                     <Td align="right">{fmtPrice(r.andros_price)}</Td>
                     <Td align="right">{fmtPrice(r.online_price)}</Td>
                     <Td align="right">{fmtPrice(r.wholesale_price)}</Td>
                     <Td align="center">
-                      <ChannelDot on={r.sell_nassau}    label="N" />
-                      <ChannelDot on={r.sell_andros}    label="A" />
-                      <ChannelDot on={r.sell_online}    label="O" />
-                      <ChannelDot on={r.sell_wholesale} label="W" />
+                      <ChannelToggle row={r} channel="nassau"    label="N" onToggle={toggleChannel} saving={savingId === r.id} />
+                      <ChannelToggle row={r} channel="andros"    label="A" onToggle={toggleChannel} saving={savingId === r.id} />
+                      <ChannelToggle row={r} channel="online"    label="O" onToggle={toggleChannel} saving={savingId === r.id} />
+                      <ChannelToggle row={r} channel="wholesale" label="W" onToggle={toggleChannel} saving={savingId === r.id} />
                     </Td>
                     <Td>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
@@ -357,6 +475,7 @@ function Td({ children, sticky, align = 'left' }: { children: React.ReactNode; s
   );
 }
 function ChannelDot({ on, label }: { on: boolean; label: string }) {
+  // Read-only legacy. Kept for any non-editable callers.
   return (
     <span
       title={label === 'N' ? 'Nassau POS' : label === 'A' ? 'Andros POS' : label === 'O' ? 'Online' : 'Wholesale'}
@@ -366,6 +485,40 @@ function ChannelDot({ on, label }: { on: boolean; label: string }) {
     >
       {label}
     </span>
+  );
+}
+
+function ChannelToggle({
+  row, channel, label, onToggle, saving,
+}: {
+  row:      ProductRow;
+  channel:  ChannelKey;
+  label:    string;
+  onToggle: (r: ProductRow, c: ChannelKey) => void;
+  saving:   boolean;
+}) {
+  const on =
+    channel === 'nassau'    ? row.sell_nassau    :
+    channel === 'andros'    ? row.sell_andros    :
+    channel === 'online'    ? row.sell_online    :
+                              row.sell_wholesale;
+  const title =
+    channel === 'nassau'    ? 'Nassau POS' :
+    channel === 'andros'    ? 'Andros POS' :
+    channel === 'online'    ? 'Online'     :
+                              'Wholesale';
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(row, channel)}
+      disabled={saving}
+      title={`${title} — click to ${on ? 'disable' : 'enable'}`}
+      className={`mx-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition hover:scale-110 disabled:opacity-50 ${
+        on ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-200 text-slate-400 hover:bg-slate-300'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 function Pill({ label, value, tone = 'slate' }: { label: string; value: number; tone?: 'slate' | 'green' | 'amber' | 'red' }) {
