@@ -84,6 +84,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Inventory',
     items: [
+      { icon: '📊', label: 'Inventory Spreadsheet (live)', href: '/admin/inventory' },
       { icon: '📦', label: 'Inventory',     href: '/inventory' },
       {
         icon: '🏷️', label: 'Products', children: [
