@@ -17,44 +17,102 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const NAV_GROUPS = [
+// ─── BSC Dashboard nav (founder direction 2026-05-27 — clean up,
+// remove duplicates, sub-categorize so flow is clear) ──────────────
+//   - 6 top-level groups (was 5, with a 6th "Tools" added to absorb
+//     the misplaced Public Market / SQL editor / Founder AI items)
+//   - Items WITH children render as expandable accordions (click parent
+//     row to expand/collapse — does NOT navigate, just toggles)
+//   - Items WITHOUT children render as direct links (same as before)
+//   - Duplicates removed: "New product intake" was in 2 groups,
+//     "Pending products" in 2 groups, "Bill Payments" in 2 groups,
+//     "Public Market" in 2 groups. Each now appears exactly once
+//     under the correct parent.
+//   - Spiny Tails HACCP family (8 items) now nests under "Processor"
+//     so the parent group "Inventory" isn't bloated with them.
+//   - Cashier drawer/trends/price-edits nest under "POS" (where they
+//     belong) instead of being scattered.
+
+type NavItem = {
+  icon:      string;
+  label:     string;
+  href?:     string;          // direct link (no children)
+  children?: NavItem[];       // accordion expand if set
+  badge?:    'suppliers' | 'wholesale_orders';  // dynamic badge key
+};
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Operations',
     items: [
-      { icon: '🏠', label: 'Overview',         href: '/dashboard' },
-      { icon: '🟡', label: 'Nassau POS',        href: '/pos' },
-      { icon: '🟣', label: 'Andros POS',        href: '/pos-andros' },
-      { icon: '📦', label: 'Orders',            href: '/orders' },
-      { icon: '🚚', label: 'Pickup Queue',      href: '/pickup-queue' },
-      { icon: '🫀', label: 'Pulse (live)',      href: '/pulse' },
-      { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders' },
-      { icon: '🏭', label: 'Processor',         href: '/processor' },
+      { icon: '🏠', label: 'Overview', href: '/dashboard' },
+      {
+        icon: '📦', label: 'Orders', children: [
+          { icon: '📦', label: 'All Orders',       href: '/orders' },
+          { icon: '🚚', label: 'Pickup Queue',     href: '/pickup-queue' },
+          { icon: '🫀', label: 'Pulse (live)',     href: '/pulse' },
+          { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders',  badge: 'wholesale_orders' },
+        ],
+      },
+      {
+        icon: '🛒', label: 'POS', children: [
+          { icon: '🟡', label: 'Nassau POS',          href: '/pos' },
+          { icon: '🟣', label: 'Andros POS',          href: '/pos-andros' },
+          { icon: '💵', label: 'Cashier Drawers',     href: '/dashboard/cashiers' },
+          { icon: '📈', label: 'Cashier Trends',      href: '/dashboard/cashiers/trends' },
+          { icon: '💸', label: 'Cashier Price Edits', href: '/dashboard/cashier-price-edits' },
+        ],
+      },
+      {
+        icon: '🏭', label: 'Processor (HACCP)', children: [
+          { icon: '🏭', label: 'Processor Overview', href: '/processor' },
+          { icon: '🦞', label: 'Spiny Tails (HACCP)', href: '/spinytails' },
+          { icon: '📥', label: 'Spiny Tails Intake',  href: '/spinytails/intake' },
+          { icon: '🛥', label: 'Spiny Tails Vessels', href: '/spinytails/vessels' },
+          { icon: '📚', label: 'Spiny Tails SOPs',    href: '/spinytails/steps' },
+          { icon: '📜', label: 'Spiny Tails Docs',    href: '/spinytails/documents' },
+          { icon: '🔐', label: 'ST Inspector Audits', href: '/spinytails/audits' },
+          { icon: '🦞', label: 'Lobster Intake',      href: '/lobster-intake' },
+          { icon: '🏷️', label: 'Lobster Labels',     href: '/lobster-labels' },
+          { icon: '⚖️', label: 'Yield Measurement',  href: '/yield-measure' },
+          { icon: '🧊', label: 'Igloo Integration',   href: '/igloo' },
+        ],
+      },
     ],
   },
   {
-    label: 'Inventory & Supply',
+    label: 'Inventory',
     items: [
-      { icon: '📦', label: 'Inventory',         href: '/inventory' },
-      { icon: '🚢', label: 'Suppliers',         href: '/supplier' },
-      { icon: '🧮', label: 'Landed-cost calc',  href: '/landed-cost' },
+      { icon: '📦', label: 'Inventory',     href: '/inventory' },
+      {
+        icon: '🏷️', label: 'Products', children: [
+          { icon: '🏷️', label: 'All Products',         href: '/products' },
+          { icon: '🖼️', label: 'Product Images',       href: '/admin/images' },
+          { icon: '📷', label: 'New Product Intake',   href: '/founder-ai/products/intake' },
+          { icon: '🧪', label: 'Pending Products (AI)', href: '/founder-ai/products/pending' },
+          { icon: '🔥', label: 'Specials (closed dates)', href: '/dashboard/specials' },
+        ],
+      },
+      { icon: '🚢', label: 'Suppliers',         href: '/supplier', badge: 'suppliers' },
       { icon: '🧾', label: 'Purchase Orders',   href: '/purchase-orders' },
       { icon: '📥', label: 'Buy Next (auto)',    href: '/supplier-purchases' },
+      { icon: '🧮', label: 'Landed-cost calc',  href: '/landed-cost' },
       { icon: '⚖️', label: 'Yield Calculator',  href: '/yield' },
       { icon: '🏷️', label: 'Print Labels',      href: '/labels' },
-      { icon: '🎣', label: 'Captains',           href: '/captains' },
-      { icon: '🦞', label: 'Lobster Intake',     href: '/lobster-intake' },
-      { icon: '🏭', label: 'Spiny Tails (HACCP)', href: '/spinytails' },
-      { icon: '📥', label: 'Spiny Tails intake',  href: '/spinytails/intake' },
-      { icon: '🛥', label: 'Spiny Tails vessels', href: '/spinytails/vessels' },
-      { icon: '📚', label: 'Spiny Tails SOPs',    href: '/spinytails/steps' },
-      { icon: '📜', label: 'Spiny Tails docs',    href: '/spinytails/documents' },
-      { icon: '🔐', label: 'ST Inspector audits', href: '/spinytails/audits' },
-      { icon: '🎣', label: 'Fishermen (logins)', href: '/dashboard/fishermen' },
-      { icon: '💵', label: 'Cashier drawers',    href: '/dashboard/cashiers' },
-      { icon: '📈', label: 'Cashier trends',     href: '/dashboard/cashiers/trends' },
-      { icon: '⚖️', label: 'Yield Measurement',  href: '/yield-measure' },
-      { icon: '🏷️', label: 'Lobster Labels',     href: '/lobster-labels' },
-      { icon: '🧊', label: 'Igloo Integration',  href: '/igloo' },
+    ],
+  },
+  {
+    label: 'People',
+    items: [
+      { icon: '👥', label: 'Customers',         href: '/customers' },
+      { icon: '🪪', label: 'Staff',             href: '/staff' },
+      { icon: '🎣', label: 'Captains',          href: '/captains' },
+      { icon: '🐟', label: 'Fishermen (logins)', href: '/dashboard/fishermen' },
+      { icon: '🏷', label: 'Invite supplier portal user', href: '/dashboard/staff/invite-supplier' },
+      { icon: '🔗', label: 'Partner Links',     href: '/partner-tokens' },
+      { icon: '🎟️', label: 'Promo Codes',       href: '/promos' },
+      { icon: '⭐', label: 'Reviews',            href: '/reviews-admin' },
     ],
   },
   {
@@ -62,45 +120,35 @@ const NAV_GROUPS = [
     items: [
       { icon: '💸', label: 'Expenses',          href: '/expenses' },
       { icon: '📋', label: 'Accounts Payable',  href: '/accounts-payable' },
-      { icon: '🧮', label: 'Pricing rules',     href: '/dashboard/pricing-rules' },
-      { icon: '🧾', label: 'AR Aging (wholesale)', href: '/dashboard/ar-aging' },
-      { icon: '📈', label: 'AR payment behavior',  href: '/dashboard/ar-aging/trends' },
+      {
+        icon: '🧾', label: 'AR Aging', children: [
+          { icon: '🧾', label: 'AR Aging (wholesale)', href: '/dashboard/ar-aging' },
+          { icon: '📈', label: 'AR Payment Behavior',  href: '/dashboard/ar-aging/trends' },
+        ],
+      },
       { icon: '💼', label: 'Payroll',           href: '/payroll' },
-      { icon: '🤝', label: "Bill Casale 5% ledger", href: '/dashboard/bill-payout' },
-      { icon: '👥', label: 'Customers',         href: '/customers' },
-      { icon: '🪪', label: 'Staff',             href: '/staff' },
-      { icon: '🏷', label: 'Invite supplier portal user', href: '/dashboard/staff/invite-supplier' },
-      { icon: '🔗', label: 'Partner Links',     href: '/partner-tokens' },
-      { icon: '🎟️', label: 'Promo Codes',       href: '/promos' },
-      { icon: '⭐', label: 'Reviews',            href: '/reviews-admin' },
-      { icon: '📈', label: 'Reports + CSV',     href: '/reports' },
-      { icon: '🔔', label: 'Notifications',     href: '/notifications' },
+      { icon: '🤝', label: "Bill Casale 5% Ledger", href: '/dashboard/bill-payout' },
+      { icon: '🧮', label: 'Pricing Rules',     href: '/dashboard/pricing-rules' },
     ],
   },
   {
     label: 'Services & Fleet',
     items: [
+      { icon: '⚡', label: 'Bill Payments',     href: '/utilities' },
       { icon: '🚛', label: 'Fleet (internal)',  href: '/fleet' },
       { icon: '🚗', label: 'Vehicles & Parts',  href: '/vehicles' },
-      { icon: '⚡', label: 'Bill Payments',     href: '/utilities' },
-      { icon: '🛒', label: 'Public Market',     href: '/market' },
-      { icon: '🖼️', label: 'Product Images',   href: '/admin/images' },
-      { icon: '🏷️', label: 'Products',         href: '/products' },
-      { icon: '📷', label: 'New product intake',    href: '/founder-ai/products/intake' },
-      { icon: '🧪', label: 'Pending products (AI)', href: '/founder-ai/products/pending' },
-      { icon: '🔥', label: 'Specials (closed dates)', href: '/dashboard/specials' },
     ],
   },
   {
-    label: 'AI & Insights',
+    label: 'Tools & Insights',
     items: [
+      { icon: '🛒', label: 'Public Market',     href: '/market' },
       { icon: '🤖', label: 'Founder AI',        href: '#ai' },
-      { icon: '👥', label: 'Customer pulse (founder)',  href: '/dashboard/customer-pulse' },
-      { icon: '⚡', label: 'SQL editor (founder)',      href: '/dashboard/sql-editor' },
-      { icon: '💸', label: 'Cashier price edits',       href: '/dashboard/cashier-price-edits' },
-      { icon: '📷', label: 'New product intake',     href: '/founder-ai/products/intake' },
-      { icon: '🧪', label: 'Pending products review', href: '/founder-ai/products/pending' },
-      { icon: '🩺', label: 'Operational health',     href: '/dashboard/health' },
+      { icon: '👥', label: 'Customer Pulse',    href: '/dashboard/customer-pulse' },
+      { icon: '🩺', label: 'Operational Health', href: '/dashboard/health' },
+      { icon: '📈', label: 'Reports + CSV',     href: '/reports' },
+      { icon: '🔔', label: 'Notifications',     href: '/notifications' },
+      { icon: '⚡', label: 'SQL Editor (founder)', href: '/dashboard/sql-editor' },
       { icon: '📚', label: 'Dashboard Guide',   href: '/dashboard-guide' },
     ],
   },
@@ -176,6 +224,10 @@ function timeAgo(iso: string) {
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen]         = useState(false);
+  // Track which accordion parents are expanded in the sidebar. Keyed
+  // by group_label::item_label so e.g. "Operations::Orders".
+  const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
+  function toggleNav(key: string) { setNavOpen((p) => ({ ...p, [key]: !p[key] })); }
   const [activeTab, setActiveTab]             = useState('overview');
   const [authChecked, setAuthChecked]         = useState(false);
   const [aiMessages, setAiMessages]           = useState<Message[]>([
@@ -619,14 +671,86 @@ export default function DashboardPage() {
               <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '6px 20px 4px' }}>
                 {group.label}
               </div>
-              {group.items.map((item) => (
-                <Link key={item.label} href={item.href} onClick={() => { setSidebarOpen(false); if (item.href === '#ai') setActiveTab('ai'); }} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: 'rgba(255,255,255,0.75)', fontSize: '14px', fontWeight: 500, textDecoration: 'none' }}>
-                  <span style={{ fontSize: '16px' }}>{item.icon}</span>
-                  {item.label}
-                  {item.label === 'Suppliers' && <span style={{ marginLeft: 'auto', backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>3</span>}
-                  {item.label === 'Wholesale Orders' && pendingWholesale > 0 && <span style={{ marginLeft: 'auto', backgroundColor: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>{pendingWholesale}</span>}
-                </Link>
-              ))}
+              {group.items.map((item) => {
+                const navKey = `${group.label}::${item.label}`;
+                const isExpanded = !!navOpen[navKey];
+                const hasChildren = !!(item.children && item.children.length > 0);
+
+                // Badge rendering (dynamic — keyed by `item.badge`)
+                const badgeNode =
+                  item.badge === 'suppliers'
+                    ? <span style={{ marginLeft: 'auto', backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>3</span>
+                  : item.badge === 'wholesale_orders' && pendingWholesale > 0
+                    ? <span style={{ marginLeft: 'auto', backgroundColor: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>{pendingWholesale}</span>
+                  : null;
+
+                // Parent (accordion) — clickable header that toggles children
+                if (hasChildren) {
+                  return (
+                    <div key={item.label}>
+                      <button
+                        onClick={() => toggleNav(navKey)}
+                        aria-expanded={isExpanded}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                          padding: '10px 20px',
+                          backgroundColor: isExpanded ? 'rgba(255,255,255,0.06)' : 'transparent',
+                          color: 'rgba(255,255,255,0.85)', fontSize: '14px', fontWeight: 600,
+                          border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                        }}
+                      >
+                        <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                        <span style={{ flex: 1 }}>{item.label}</span>
+                        <span style={{
+                          fontSize: '11px',
+                          color: 'rgba(255,255,255,0.4)',
+                          transition: 'transform 0.15s',
+                          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        }}>▸</span>
+                      </button>
+                      {isExpanded && item.children!.map((child) => {
+                        const childBadge =
+                          child.badge === 'suppliers'
+                            ? <span style={{ marginLeft: 'auto', backgroundColor: '#f4c842', color: '#1a2e5a', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>3</span>
+                          : child.badge === 'wholesale_orders' && pendingWholesale > 0
+                            ? <span style={{ marginLeft: 'auto', backgroundColor: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 7px', borderRadius: '20px' }}>{pendingWholesale}</span>
+                          : null;
+                        return (
+                          <Link
+                            key={child.label}
+                            href={child.href ?? '#'}
+                            onClick={() => { setSidebarOpen(false); if (child.href === '#ai') setActiveTab('ai'); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '8px 20px 8px 44px',  // indented to show hierarchy
+                              color: 'rgba(255,255,255,0.65)', fontSize: '13px', fontWeight: 400,
+                              textDecoration: 'none',
+                            }}
+                          >
+                            <span style={{ fontSize: '14px' }}>{child.icon}</span>
+                            <span style={{ flex: 1 }}>{child.label}</span>
+                            {childBadge}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                // Leaf item — direct link (no children)
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href ?? '#'}
+                    onClick={() => { setSidebarOpen(false); if (item.href === '#ai') setActiveTab('ai'); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: 'rgba(255,255,255,0.75)', fontSize: '14px', fontWeight: 500, textDecoration: 'none' }}
+                  >
+                    <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {badgeNode}
+                  </Link>
+                );
+              })}
             </div>
           ))}
         </nav>
