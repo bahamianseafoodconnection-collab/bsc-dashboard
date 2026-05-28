@@ -14,17 +14,11 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
-import { supabase as supaAuth } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import {
   availableActions, actionLabel, customerStage,
   type TransitionAction,
 } from '@/lib/order-status';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
 
 export const dynamic = 'force-dynamic';
 
@@ -94,7 +88,7 @@ export default function DriverPage() {
   async function doTransition(order: OrderCard, action: TransitionAction) {
     setBusyId(order.id);
     try {
-      const { data: { session } } = await supaAuth.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not signed in');
       const body: Record<string, unknown> = { action };

@@ -21,13 +21,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { createBrowserClient } from '@supabase/ssr';
-import { supabase as supaAuth } from '@/lib/supabase';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,7 +143,7 @@ export default function AdminInventoryPage() {
   async function loadMargins() {
     setMarginsLoading(true);
     try {
-      const { data: { session } } = await supaAuth.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not signed in');
       const res = await fetch('/api/admin/channel-margins', {
@@ -188,7 +182,7 @@ export default function AdminInventoryPage() {
 
     setApplyingChannel(channel);
     try {
-      const { data: { session } } = await supaAuth.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not signed in');
       const res = await fetch('/api/admin/channel-margins', {
@@ -230,7 +224,7 @@ export default function AdminInventoryPage() {
 
     setAddRowSaving(true);
     try {
-      const { data: { session } } = await supaAuth.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not signed in');
       const res = await fetch('/api/supplier/add-product', {
@@ -322,7 +316,7 @@ export default function AdminInventoryPage() {
   }
 
   async function callPatch(productId: string, body: Record<string, unknown>) {
-    const { data: { session } } = await supaAuth.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) throw new Error('Not signed in');
     const res = await fetch(`/api/admin/products/${productId}`, {
@@ -397,7 +391,7 @@ export default function AdminInventoryPage() {
     const ids = Array.from(selectedIds);
     setSavingId('__bulk__');
     try {
-      const { data: { session } } = await supaAuth.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Not signed in');
       const res = await fetch('/api/admin/products/bulk', {
