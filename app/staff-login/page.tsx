@@ -67,6 +67,8 @@ export default function StaffLoginPage() {
         window.location.href = '/processor';
       } else if (role === 'supplier') {
         window.location.href = '/supplier';
+      } else if (role === 'driver') {
+        window.location.href = '/driver';
       } else if (dashboardRoles.includes(role)) {
         window.location.href = '/dashboard';
       } else {
@@ -171,6 +173,7 @@ export default function StaffLoginPage() {
                   { role: 'Founder · Manager · Cashier', route: '/dashboard', color: '#f4c842' },
                   { role: 'Processor', route: '/processor', color: '#38bdf8' },
                   { role: 'Supplier', route: '/supplier', color: '#a78bfa' },
+                  { role: 'Driver', route: '/driver', color: '#34d399' },
                 ].map((r) => (
                   <div key={r.role} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{r.role}</span>
