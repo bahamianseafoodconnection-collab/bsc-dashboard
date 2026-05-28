@@ -58,7 +58,13 @@ export default function LoginPage() {
       const { data, error: err } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: name, phone } },
+        options: {
+          data: { full_name: name, phone },
+          // Send the confirmation link back to wherever the customer
+          // actually signed up (bscbahamas.com in prod) instead of falling
+          // back to the Supabase "Site URL" config (which was localhost).
+          emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+        },
       });
       if (err) {
         setError(err.message);
