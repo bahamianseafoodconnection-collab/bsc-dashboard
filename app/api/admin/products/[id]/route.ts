@@ -161,6 +161,31 @@ export async function PATCH(
     updatedFields.push(...Object.keys(updatePayload));
   }
 
+  // ─── Per-channel price overrides (from the Edit modal margin blocks) ──
+  // { channel_prices: { nassau_pos: 19.17, ... } } → retire the current
+  // price row for each channel + insert the new one (immutable history).
+  const VALID_PRICE_CHANNELS = new Set(['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale']);
+  if (body.channel_prices && typeof body.channel_prices === 'object') {
+    for (const [ch, v] of Object.entries(body.channel_prices as Record<string, unknown>)) {
+      const price = Number(v);
+      if (!VALID_PRICE_CHANNELS.has(ch) || !Number.isFinite(price) || price < 0) continue;
+      await admin.from('product_pricing')
+        .update({ is_current: false })
+        .eq('product_id', prod.id).eq('channel', ch).eq('is_current', true);
+      const { error: priceErr } = await admin.from('product_pricing').insert({
+        product_id: prod.id, channel: ch, pricing_mode: 'manual_override',
+        manual_unit_price: Math.round(price * 100) / 100,
+        margin_multiplier: 1.0, vat_multiplier: 1.0, shipping_per_lb: 0,
+        customs_duty_pct: 0, vat_levy_pct: 0, per_transaction_fee: 0, service_fee_pct: 0,
+        effective_from: new Date().toISOString(), is_current: true, is_active: true, recorded_by: user.id,
+      });
+      if (!priceErr) {
+        newPrices = { ...(newPrices ?? {}), [ch]: Math.round(price * 100) / 100 };
+        updatedFields.push(`price_${ch}`);
+      }
+    }
+  }
+
   if (updatedFields.length === 0) {
     return NextResponse.json({ ok: false, error: 'No editable fields in request' }, { status: 400 });
   }

@@ -155,6 +155,10 @@ export default function AdminInventoryPage() {
   const [editProductId, setEditProductId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  // Per-channel margin % in the edit modal (mirrors Add). Base = prefilled
+  // values, so saveEdit only re-prices channels whose margin actually changed.
+  const [editMargins, setEditMargins] = useState<Record<string, string>>({});
+  const [editMarginsBase, setEditMarginsBase] = useState<Record<string, string>>({});
 
   function openEdit(r: ProductRow) {
     setEditProductId(r.id);
@@ -169,6 +173,23 @@ export default function AdminInventoryPage() {
       sell_nassau: !!r.sell_nassau, sell_andros: !!r.sell_andros,
       sell_online: !!r.sell_online, sell_wholesale: !!r.sell_wholesale,
     });
+    // Prefill per-channel margins from the product's ACTUAL current margin
+    // (price ÷ cost − 1), falling back to live global margins, then defaults.
+    const cost = r.cost_per_unit ?? 0;
+    const priceByCh: Record<string, number | null | undefined> = {
+      nassau_pos: r.nassau_price, andros_pos: r.andros_price,
+      online_market: r.online_price, local_wholesale: r.wholesale_price,
+    };
+    const globalByCh = new Map(margins.map((m) => [m.channel, Math.round(m.margin_pct * 1000) / 10]));
+    const seeded = Object.fromEntries(ADD_CHANNELS.map(({ channel }) => {
+      const price = priceByCh[channel];
+      const derived = cost > 0 && price != null ? Math.round((price / cost - 1) * 1000) / 10 : null;
+      const pct = derived != null && derived >= 0 ? derived : (globalByCh.get(channel) ?? DEFAULT_MARGIN_PCT[channel] ?? 0);
+      return [channel, String(pct)];
+    }));
+    setEditMargins(seeded);
+    setEditMarginsBase(seeded);
+    if (margins.length === 0) loadMargins();
   }
 
   async function saveEdit() {
@@ -199,6 +220,26 @@ export default function AdminInventoryPage() {
       patch.cost_per_unit = costNum;
     }
 
+    // Per-channel prices: re-price a channel when its margin was changed OR
+    // the channel was newly enabled (so it goes live). price = cost × margin.
+    // Sent after cost in the PATCH, so it overrides the cost-cascade for
+    // exactly those channels; untouched channels keep their current price.
+    const effectiveCost = costNum ?? orig.cost_per_unit ?? null;
+    const channelPrices: Record<string, number> = {};
+    if (effectiveCost && effectiveCost > 0) {
+      for (const { flag, channel } of ADD_CHANNELS) {
+        if (!editForm[flag]) continue;
+        const marginChanged = (editMargins[channel] ?? '') !== (editMarginsBase[channel] ?? '');
+        const newlyEnabled  = editForm[flag] && !orig[flag];
+        if (!marginChanged && !newlyEnabled) continue;
+        const m = Number(editMargins[channel]);
+        if (Number.isFinite(m) && m >= 0) {
+          channelPrices[channel] = Math.round(effectiveCost * (1 + m / 100) * 100) / 100;
+        }
+      }
+    }
+    if (Object.keys(channelPrices).length > 0) patch.channel_prices = channelPrices;
+
     if (Object.keys(patch).length === 0) { showToast(false, 'No changes'); setEditProductId(null); setEditForm(null); return; }
 
     setEditSaving(true);
@@ -217,20 +258,21 @@ export default function AdminInventoryPage() {
         for (const k of ['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const) {
           if (patch[k] !== undefined) (u[k] as boolean) = patch[k] as boolean;
         }
-        if (costChanged) {
-          u.cost_per_unit = costNum;
-          if (res.new_prices) {
-            u.nassau_price    = res.new_prices.nassau_pos      ?? u.nassau_price;
-            u.andros_price    = res.new_prices.andros_pos      ?? u.andros_price;
-            u.online_price    = res.new_prices.online_market   ?? u.online_price;
-            u.wholesale_price = res.new_prices.local_wholesale ?? u.wholesale_price;
-          }
+        if (costChanged) u.cost_per_unit = costNum;
+        // Apply any recomputed prices (from cost cascade and/or channel_prices).
+        if (res.new_prices) {
+          u.nassau_price    = res.new_prices.nassau_pos      ?? u.nassau_price;
+          u.andros_price    = res.new_prices.andros_pos      ?? u.andros_price;
+          u.online_price    = res.new_prices.online_market   ?? u.online_price;
+          u.wholesale_price = res.new_prices.local_wholesale ?? u.wholesale_price;
         }
         return u;
       }));
       showToast(true, `${orig.sku} updated`);
       setEditProductId(null);
       setEditForm(null);
+      setEditMargins({});
+      setEditMarginsBase({});
     } catch (err) {
       showToast(false, `Save failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -790,6 +832,17 @@ export default function AdminInventoryPage() {
                   <span className="text-xs font-bold text-navy">
                     {selectedIds.size} selected
                   </span>
+                  {selectedIds.size === 1 && (
+                    <button
+                      onClick={() => {
+                        const r = rows.find((x) => x.id === Array.from(selectedIds)[0]);
+                        if (r) openEdit(r);
+                      }}
+                      className="rounded bg-navy px-2 py-1 text-[11px] font-bold text-gold hover:opacity-90"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
                   <button
                     onClick={() => bulkApply({ sell_online: true }, '→ on /market')}
                     disabled={savingId === '__bulk__'}
@@ -1281,6 +1334,43 @@ export default function AdminInventoryPage() {
                       </label>
                     ))}
                   </div>
+                </div>
+
+                {/* Per-channel margin + live selling price (mirrors Add). Edit a
+                    margin to re-price that channel; others keep their price. */}
+                <div>
+                  <p className="mb-1.5 text-xs font-bold text-slate-600">Margin &amp; selling price per channel</p>
+                  {(() => {
+                    const cost = editForm.cost_per_unit === '' ? null : Number(editForm.cost_per_unit);
+                    const enabled = ADD_CHANNELS.filter(({ flag }) => editForm[flag]);
+                    if (enabled.length === 0) return <p className="text-[11px] text-slate-400">Enable a channel above to price it.</p>;
+                    return (
+                      <div className="grid grid-cols-2 gap-2">
+                        {enabled.map(({ channel, label }) => {
+                          const mStr = editMargins[channel] ?? '';
+                          const m = Number(mStr);
+                          const validCost = cost !== null && Number.isFinite(cost) && cost > 0;
+                          const sell = validCost && Number.isFinite(m) && m >= 0 ? cost * (1 + m / 100) : null;
+                          const changed = (editMargins[channel] ?? '') !== (editMarginsBase[channel] ?? '');
+                          return (
+                            <div key={channel} className={`rounded-lg border p-2 ${changed ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
+                              <p className="text-[11px] font-bold text-navy">{label}</p>
+                              <div className="mt-1 flex items-center gap-1">
+                                <input type="text" inputMode="decimal" value={mStr}
+                                  onChange={(e) => setEditMargins((d) => ({ ...d, [channel]: e.target.value.replace(/[^0-9.]/g, '') }))}
+                                  className="w-14 rounded-md border border-slate-300 px-2 py-1 text-right text-sm font-bold text-navy outline-none focus:border-navy" />
+                                <span className="text-xs font-semibold text-slate-500">% margin</span>
+                              </div>
+                              <p className="mt-1 text-sm font-extrabold text-emerald-700">
+                                {sell !== null ? `$${sell.toFixed(2)}` : '—'}
+                                <span className="ml-1 text-[10px] font-semibold text-slate-400">sells at</span>
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold text-slate-600">Status</label>
