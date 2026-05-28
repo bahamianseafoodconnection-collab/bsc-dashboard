@@ -70,7 +70,7 @@ const { id } = useParams() as { id: string };
 const router = useRouter();
 
 const [product, setProduct] = useState<Product | null>(null);
-const [relatedPricing, setRelatedPricing] = useState<{ sku: string; name: string; price: number; id: string }[]>([]);
+const [relatedPricing, setRelatedPricing] = useState<{ sku: string; name: string; price: number; id: string; unit_of_measure?: string | null; pack_size?: string | null }[]>([]);
 const [selectedId, setSelectedId] = useState<string>(id);
 const [price, setPrice] = useState<number>(0);
 const [qty, setQty] = useState(1);
@@ -109,7 +109,7 @@ const baseName = p.name.replace(/\s+\d+\s*(oz|lb|lbs|g|kg).*$/i, '').trim();
 if (baseName.length > 3) {
 const { data: related } = await supabase
 .from('products')
-.select('id, sku, name, category')
+.select('id, sku, name, category, unit_of_measure, pack_size')
 .ilike('name', `${baseName}%`)
 .eq('sell_online', true)
 .eq('status', 'active')
@@ -128,16 +128,18 @@ const { data: rPricing } = await supabase
 const pMap = new Map((rPricing || []).map((rp: any) => [rp.product_id, rp.manual_unit_price]));
 
 setRelatedPricing([
-{ id, sku: p.sku, name: p.name, price: pricing?.manual_unit_price ?? 0 },
+{ id, sku: p.sku, name: p.name, price: pricing?.manual_unit_price ?? 0, unit_of_measure: (p as any).unit_of_measure, pack_size: (p as any).pack_size },
 ...related.map((r: any) => ({
 id: r.id,
 sku: r.sku,
 name: r.name,
 price: pMap.get(r.id) ?? 0,
+unit_of_measure: r.unit_of_measure,
+pack_size: r.pack_size,
 })),
 ]);
 } else {
-setRelatedPricing([{ id, sku: p.sku, name: p.name, price: pricing?.manual_unit_price ?? 0 }]);
+setRelatedPricing([{ id, sku: p.sku, name: p.name, price: pricing?.manual_unit_price ?? 0, unit_of_measure: (p as any).unit_of_measure, pack_size: (p as any).pack_size }]);
 }
 }
 
@@ -281,9 +283,16 @@ mainImage === img ? 'border-navy' : 'border-slate-200'
 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
 {relatedPricing.map(variant => {
 const active = selectedId === variant.id;
-// Extract size from name e.g. "Salmon 6oz Portion" → "6oz"
+// Human size label: size from name (e.g. "4oz"), else pack size, else
+// the unit ("Per lb" / "Each") — never the internal SKU.
 const sizeMatch = variant.name.match(/(\d+\s*(?:oz|lb|lbs|g|kg))/i);
-const sizeLabel = sizeMatch ? sizeMatch[1] : variant.sku;
+const isLb = variant.unit_of_measure === 'lb';
+const sizeLabel = sizeMatch ? sizeMatch[1]
+  : variant.pack_size ? variant.pack_size
+  : isLb ? 'Per pound'
+  : variant.unit_of_measure === 'case' ? 'Per case'
+  : 'Each';
+const unitSuffix = isLb ? '/ lb' : variant.unit_of_measure === 'case' ? '/ case' : 'each';
 return (
 <button key={variant.id}
 onClick={() => { setSelectedId(variant.id); setPrice(variant.price); }}
@@ -295,9 +304,11 @@ active
 <div className={`text-base font-extrabold ${active ? 'text-navy' : 'text-slate-700'}`}>
 {sizeLabel}
 </div>
-<div className="text-[11px] text-slate-400 mb-1">SKU: {variant.sku}</div>
+{isLb && (
+<div className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-amber-700">⚖ per pound</div>
+)}
 <div className={`text-sm font-bold ${active ? 'text-navy' : 'text-slate-600'}`}>
-BSD ${variant.price.toFixed(2)}
+BSD ${variant.price.toFixed(2)} <span className={isLb ? 'text-amber-700' : 'text-slate-400'}>{unitSuffix}</span>
 </div>
 </button>
 );
