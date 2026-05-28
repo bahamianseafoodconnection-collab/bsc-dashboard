@@ -60,10 +60,11 @@ export default function LoginPage() {
         password,
         options: {
           data: { full_name: name, phone },
-          // Send the confirmation link back to wherever the customer
-          // actually signed up (bscbahamas.com in prod) instead of falling
-          // back to the Supabase "Site URL" config (which was localhost).
-          emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          // Confirmation link returns to a branded landing on the real
+          // origin (bscbahamas.com in prod), not the Supabase "Site URL"
+          // fallback (which was localhost). /auth/confirmed welcomes the
+          // customer and routes them into the shop.
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/confirmed` : undefined,
         },
       });
       if (err) {
