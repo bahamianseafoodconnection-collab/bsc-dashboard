@@ -23,6 +23,7 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { customerStage, CUSTOMER_PROGRESS_STEPS } from '@/lib/order-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,7 @@ interface OrderRow {
   admin_notes:        string | null;
   created_at:         string;
   order_type:         string | null;
+  fulfillment_status: string | null;
   wholesale_items:    Array<{
     name:        string;
     qty:         number;
@@ -100,7 +102,7 @@ function OrderDetailInner() {
       // Load order — RLS will scope this to ones the user can see.
       const { data: ord, error: ordErr } = await supabase
         .from('orders')
-        .select('id, customer_name, customer_phone, customer_address, total, subtotal, vat_amount, payment_status, payment_method, payment_ref, delivery_type, admin_notes, created_at, order_type, wholesale_items')
+        .select('id, customer_name, customer_phone, customer_address, total, subtotal, vat_amount, payment_status, payment_method, payment_ref, delivery_type, admin_notes, created_at, order_type, fulfillment_status, wholesale_items')
         .eq('id', orderId)
         .maybeSingle();
 
@@ -178,6 +180,16 @@ function OrderDetailInner() {
           <StatusPill status={order.payment_status} />
         </div>
       </div>
+
+      {/* ─── Delivery progress (online orders only) ─── */}
+      {order.fulfillment_status && order.fulfillment_status !== 'cancelled' && (
+        <DeliveryProgress status={order.fulfillment_status} />
+      )}
+      {order.fulfillment_status === 'cancelled' && (
+        <div className="mb-4 rounded-2xl border-2 border-slate-300 bg-slate-50 p-4 text-sm font-semibold text-slate-600">
+          ✖ This order was cancelled. Contact BSC support if this is unexpected.
+        </div>
+      )}
 
       {/* ─── Items ─── */}
       <div className="mb-4 rounded-2xl bg-white p-5 shadow-card">
@@ -314,5 +326,50 @@ function StatusPill({ status, inline }: { status: string | null; inline?: boolea
     }}>
       {palette.label}
     </span>
+  );
+}
+
+// Customer-facing 5-step delivery tracker. Internal states collapse to
+// customer stages via customerStage(); the bar lights up through the
+// current step. Founder's exact stage message shows under the bar.
+function DeliveryProgress({ status }: { status: string }) {
+  const cust = customerStage(status);
+  const currentStep = cust.step;  // 0..4
+  return (
+    <div className="mb-4 rounded-2xl bg-white p-5 shadow-card">
+      <h2 className="mb-4 text-sm font-extrabold uppercase tracking-wider text-slate-600">Delivery</h2>
+      <div className="flex items-start">
+        {CUSTOMER_PROGRESS_STEPS.map((step, i) => {
+          const done    = i < currentStep;
+          const active  = i === currentStep;
+          const isLast  = i === CUSTOMER_PROGRESS_STEPS.length - 1;
+          return (
+            <div key={step.stage} className="flex flex-1 flex-col items-center">
+              <div className="flex w-full items-center">
+                {/* left connector */}
+                <div className={`h-1 flex-1 ${i === 0 ? 'opacity-0' : done || active ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${
+                  done   ? 'bg-emerald-500 text-white' :
+                  active ? 'bg-navy text-gold ring-4 ring-navy/15' :
+                           'bg-slate-200 text-slate-400'
+                }`}>
+                  {done ? '✓' : i + 1}
+                </div>
+                {/* right connector */}
+                <div className={`h-1 flex-1 ${isLast ? 'opacity-0' : done ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+              </div>
+              <span className={`mt-1.5 text-center text-[10px] font-bold leading-tight ${
+                done || active ? 'text-navy' : 'text-slate-400'
+              }`}>
+                {step.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-4 rounded-lg bg-slate-50 p-3 text-center text-sm font-semibold text-slate-700">
+        {cust.message}
+      </p>
+    </div>
   );
 }

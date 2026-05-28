@@ -135,6 +135,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Services & Fleet',
     items: [
+      { icon: '🚚', label: 'Delivery Queue',    href: '/driver' },
       { icon: '⚡', label: 'Bill Payments',     href: '/utilities' },
       { icon: '🚛', label: 'Fleet (internal)',  href: '/fleet' },
       { icon: '🚗', label: 'Vehicles & Parts',  href: '/vehicles' },

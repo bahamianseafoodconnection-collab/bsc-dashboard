@@ -347,6 +347,9 @@ function CheckoutInner() {
       // verify), or back to 'pending' on decline/retry. The simulator's
       // legacy 'processing' state is no longer used.
       payment_status: payMethod === 'cod' ? 'pending' : 'payment_pending',
+      // Start the delivery lifecycle. Order enters the driver queue at
+      // 'placed'; staff advance it through preparing → … → delivered.
+      fulfillment_status: 'placed',
       wholesale_items: stampedItems,
       wholesale_cost_total: total,
       customer_name: name.trim() || null,
