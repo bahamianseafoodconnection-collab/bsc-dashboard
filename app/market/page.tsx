@@ -801,7 +801,12 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
             <span>({product.review_count})</span>
           </div>
         )}
-        {product.description && <p className="clamp-2 text-xs text-slate-500">{product.description}</p>}
+        {/* Per founder direction 2026-05-27 — description removed
+            from /market cards. The price denomination (per lb /
+            per each / per case) below replaces it. */}
+        <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          Sold per {product.unit}
+        </div>
         <div className="mt-auto flex items-baseline gap-1 pt-1">
           <span className={`text-lg font-extrabold sm:text-xl ${product.is_on_special ? 'text-red-600' : 'text-navy'}`}>BSD ${(product.is_on_special && product.special_price != null ? product.special_price : product.price).toFixed(2)}</span>
           <span className="text-xs text-slate-400">/ {product.unit}</span>
