@@ -67,6 +67,16 @@ const CATEGORY_OPTIONS = [
 
 const UOM_OPTIONS = ['lb', 'each', 'case'] as const;
 
+// Channels shown in the Margins panel (order matters for display).
+const MARGIN_CHANNELS = ['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale', 'us_resale'] as const;
+const CHANNEL_LABELS: Record<string, string> = {
+  nassau_pos:      'Nassau POS',
+  andros_pos:      'Andros POS',
+  online_market:   'Online /market',
+  local_wholesale: 'Local Wholesale',
+  us_resale:       'US Resale',
+};
+
 type SortField = 'sku' | 'name' | 'supplier_name' | 'cost_per_unit' | 'stock_count' | 'online_price';
 type SortDir   = 'asc' | 'desc';
 
@@ -122,6 +132,81 @@ export default function AdminInventoryPage() {
     sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
   });
   const [addRowSaving, setAddRowSaving] = useState(false);
+
+  // Bump to force the grid to reload prices (e.g. after a margin cascade).
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  // ─── Channel margins panel (founder direction 2026-05-28) ────────────
+  // Edit a channel's margin %, then apply → reprices ALL products on that
+  // channel from current cost × (1 + margin), instantly.
+  type MarginRow = { channel: string; margin_pct: number; updated_at?: string | null };
+  const [showMargins, setShowMargins]   = useState(false);
+  const [margins, setMargins]           = useState<MarginRow[]>([]);
+  const [marginDraft, setMarginDraft]   = useState<Record<string, string>>({}); // channel → percent string
+  const [marginsLoading, setMarginsLoading] = useState(false);
+  const [applyingChannel, setApplyingChannel] = useState<string | null>(null);
+
+  async function loadMargins() {
+    setMarginsLoading(true);
+    try {
+      const { data: { session } } = await supaAuth.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/admin/channel-margins', {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      const rows = (json.margins ?? []) as MarginRow[];
+      setMargins(rows);
+      setMarginDraft(Object.fromEntries(rows.map((m) => [m.channel, String(Math.round(m.margin_pct * 1000) / 10)])));
+    } catch (err) {
+      showToast(false, `Load margins failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setMarginsLoading(false);
+    }
+  }
+
+  function toggleMarginsPanel() {
+    const next = !showMargins;
+    setShowMargins(next);
+    if (next && margins.length === 0) loadMargins();
+  }
+
+  async function applyMargin(channel: string) {
+    const pctStr = marginDraft[channel] ?? '';
+    const pct = Number(pctStr);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 500) {
+      showToast(false, 'Margin must be a number between 0 and 500%'); return;
+    }
+    const marginDecimal = Math.round(pct * 100) / 10000; // 35 → 0.35
+    const label = CHANNEL_LABELS[channel] ?? channel;
+    if (!window.confirm(
+      `Apply ${pct}% margin to EVERY active product on ${label}?\n\n` +
+      `This reprices each product to its current cost × ${(1 + marginDecimal).toFixed(2)} and takes effect immediately across the site.`
+    )) return;
+
+    setApplyingChannel(channel);
+    try {
+      const { data: { session } } = await supaAuth.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/admin/channel-margins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ channel, margin_pct: marginDecimal }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      showToast(true, `${label}: ${pct}% applied — ${json.repriced} product${json.repriced === 1 ? '' : 's'} repriced`);
+      setMargins((prev) => prev.map((m) => m.channel === channel ? { ...m, margin_pct: marginDecimal } : m));
+      setRefreshTick((t) => t + 1); // pull fresh prices into the grid
+    } catch (err) {
+      showToast(false, `Apply failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setApplyingChannel(null);
+    }
+  }
 
   function openAddRow() {
     setAddRowForm({
@@ -459,7 +544,7 @@ export default function AdminInventoryPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [filterStatus]);
+  }, [filterStatus, refreshTick]);
 
   // Distinct supplier list for filter dropdown
   const suppliers = useMemo(() => {
@@ -566,6 +651,14 @@ export default function AdminInventoryPage() {
                 </div>
               )}
               <button
+                onClick={toggleMarginsPanel}
+                className={`rounded-lg border-2 px-3 py-2 text-sm font-extrabold transition ${
+                  showMargins ? 'border-navy bg-navy text-gold' : 'border-navy text-navy hover:bg-navy-50/40'
+                }`}
+              >
+                ⚙ Margins
+              </button>
+              <button
                 onClick={openAddRow}
                 className="rounded-lg bg-gold px-4 py-2 text-sm font-extrabold text-navy hover:bg-gold-300 transition"
               >
@@ -573,6 +666,60 @@ export default function AdminInventoryPage() {
               </button>
             </div>
           </div>
+
+          {/* ─── Channel margins panel ─── */}
+          {showMargins && (
+            <div className="mt-3 rounded-xl border-2 border-navy/20 bg-navy-50/30 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-extrabold uppercase tracking-wider text-navy">
+                  Channel margins · price = cost × (1 + margin)
+                </p>
+                <span className="text-[11px] font-semibold text-slate-500">
+                  Applying reprices every active product on that channel instantly
+                </span>
+              </div>
+              {marginsLoading ? (
+                <p className="py-3 text-center text-xs text-slate-500">Loading margins…</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  {MARGIN_CHANNELS.map((ch) => {
+                    const live = margins.find((m) => m.channel === ch);
+                    const livePct = live ? Math.round(live.margin_pct * 1000) / 10 : null;
+                    const draft = marginDraft[ch] ?? '';
+                    const dirty = livePct !== null && Number(draft) !== livePct;
+                    return (
+                      <div key={ch} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                        <p className="text-[11px] font-bold text-navy">{CHANNEL_LABELS[ch]}</p>
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={draft}
+                            onChange={(e) => setMarginDraft((d) => ({ ...d, [ch]: e.target.value.replace(/[^0-9.]/g, '') }))}
+                            className={`w-16 rounded-md border px-2 py-1 text-right text-sm font-bold outline-none focus:border-navy ${
+                              dirty ? 'border-amber-400 text-amber-700' : 'border-slate-300 text-navy'
+                            }`}
+                            aria-label={`${CHANNEL_LABELS[ch]} margin percent`}
+                          />
+                          <span className="text-xs font-semibold text-slate-500">%</span>
+                          <button
+                            onClick={() => applyMargin(ch)}
+                            disabled={applyingChannel === ch || draft === ''}
+                            className="ml-auto rounded-md bg-navy px-2.5 py-1 text-[11px] font-extrabold text-gold transition hover:opacity-90 disabled:opacity-40"
+                          >
+                            {applyingChannel === ch ? '…' : 'Apply'}
+                          </button>
+                        </div>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          {livePct !== null ? `Live: ${livePct}%` : '—'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Stats strip */}
           {!loading && (
