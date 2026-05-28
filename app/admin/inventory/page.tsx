@@ -1373,7 +1373,7 @@ export default function AdminInventoryPage() {
                           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-navy" />
                         ) : r.image_url ? (
                           <>
-                            <img src={r.image_url} alt="" className="h-9 w-9 object-cover" />
+                            <img src={r.image_url} alt="" width={36} height={36} loading="lazy" decoding="async" className="h-9 w-9 object-cover" />
                             <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[9px] font-bold text-white opacity-0 group-hover:opacity-100 transition">
                               📷 EDIT
                             </span>
