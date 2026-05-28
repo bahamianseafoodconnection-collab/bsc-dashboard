@@ -71,6 +71,18 @@ const CHANNEL_LABELS: Record<string, string> = {
   us_resale:       'US Resale',
 };
 
+// Add-Product modal: maps each "Show on channels" checkbox to its
+// pricing_channel enum so the per-channel margin block lines up.
+const ADD_CHANNELS: { flag: 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale'; channel: string; label: string }[] = [
+  { flag: 'sell_nassau',    channel: 'nassau_pos',      label: 'Nassau POS' },
+  { flag: 'sell_andros',    channel: 'andros_pos',      label: 'Andros POS' },
+  { flag: 'sell_online',    channel: 'online_market',   label: 'Online /market' },
+  { flag: 'sell_wholesale', channel: 'local_wholesale', label: 'Local Wholesale' },
+];
+const DEFAULT_MARGIN_PCT: Record<string, number> = {
+  nassau_pos: 35, andros_pos: 45, online_market: 30, local_wholesale: 20,
+};
+
 type SortField = 'sku' | 'name' | 'supplier_name' | 'cost_per_unit' | 'stock_count' | 'online_price';
 type SortDir   = 'asc' | 'desc';
 
@@ -127,6 +139,11 @@ export default function AdminInventoryPage() {
   });
   const [addRowSaving, setAddRowSaving] = useState(false);
 
+  // Add-Product modal: per-channel margin % (channel enum → percent string),
+  // prefilled from the live channel margins. The founder can override per
+  // product; the selling-price preview + the stored price follow this.
+  const [addMargins, setAddMargins] = useState<Record<string, string>>({});
+
   // Add-Product modal photo upload (camera / gallery / file — one input,
   // no `capture` attribute so the OS offers all three on mobile).
   const addPhotoRef = useRef<HTMLInputElement>(null);
@@ -173,7 +190,7 @@ export default function AdminInventoryPage() {
   const [marginsLoading, setMarginsLoading] = useState(false);
   const [applyingChannel, setApplyingChannel] = useState<string | null>(null);
 
-  async function loadMargins() {
+  async function loadMargins(): Promise<MarginRow[]> {
     setMarginsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -187,8 +204,10 @@ export default function AdminInventoryPage() {
       const rows = (json.margins ?? []) as MarginRow[];
       setMargins(rows);
       setMarginDraft(Object.fromEntries(rows.map((m) => [m.channel, String(Math.round(m.margin_pct * 1000) / 10)])));
+      return rows;
     } catch (err) {
       showToast(false, `Load margins failed: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
     } finally {
       setMarginsLoading(false);
     }
@@ -242,6 +261,16 @@ export default function AdminInventoryPage() {
       cost_per_unit: '', online_sell_price: '', image_url: '',
       sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
     });
+    // Seed the per-channel margin inputs from live margins (fallback to
+    // the documented defaults until they load), then refresh from server.
+    const seed = (rows: MarginRow[]) => {
+      const byCh = new Map(rows.map((m) => [m.channel, Math.round(m.margin_pct * 1000) / 10]));
+      setAddMargins(Object.fromEntries(
+        ADD_CHANNELS.map(({ channel }) => [channel, String(byCh.get(channel) ?? DEFAULT_MARGIN_PCT[channel] ?? 0)]),
+      ));
+    };
+    seed(margins);
+    if (margins.length === 0) loadMargins().then(seed);
     setShowAddRow(true);
   }
 
@@ -254,6 +283,19 @@ export default function AdminInventoryPage() {
     const price = f.online_sell_price === '' ? null : Number(f.online_sell_price);
     if (cost  !== null && (!Number.isFinite(cost)  || cost  < 0)) { showToast(false, 'Cost must be ≥ 0'); return; }
     if (price !== null && (!Number.isFinite(price) || price < 0)) { showToast(false, 'Online price must be ≥ 0'); return; }
+
+    // Per-channel selling prices from the founder's margin blocks:
+    // price = cost × (1 + margin%). Only for enabled channels with a cost.
+    const channelPrices: Record<string, number> = {};
+    if (cost !== null) {
+      for (const { flag, channel } of ADD_CHANNELS) {
+        if (!f[flag]) continue;
+        const m = Number(addMargins[channel]);
+        if (Number.isFinite(m) && m >= 0) {
+          channelPrices[channel] = Math.round(cost * (1 + m / 100) * 100) / 100;
+        }
+      }
+    }
 
     setAddRowSaving(true);
     try {
@@ -272,6 +314,7 @@ export default function AdminInventoryPage() {
           pack_size:         f.pack_size.trim() || undefined,
           cost_per_unit:     cost,
           online_sell_price: price,
+          channel_prices:    Object.keys(channelPrices).length > 0 ? channelPrices : undefined,
           image_url:         f.image_url || undefined,
           photo_urls:        f.image_url ? [f.image_url] : undefined,
           channels: {
@@ -809,7 +852,7 @@ export default function AdminInventoryPage() {
             className="hidden"
           />
           <div
-            className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+            className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 border-b border-slate-200 px-5 py-3">
@@ -915,25 +958,16 @@ export default function AdminInventoryPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">Cost (opt.)</label>
-                  <input
-                    type="number" step="0.01" min="0" inputMode="decimal"
-                    value={addRowForm.cost_per_unit}
-                    onChange={(e) => setAddRowForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
-                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">Online price (opt.)</label>
-                  <input
-                    type="number" step="0.01" min="0" inputMode="decimal"
-                    value={addRowForm.online_sell_price}
-                    onChange={(e) => setAddRowForm((f) => ({ ...f, online_sell_price: e.target.value }))}
-                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
-                  />
-                </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Cost (per unit)</label>
+                <input
+                  type="number" step="0.01" min="0" inputMode="decimal"
+                  value={addRowForm.cost_per_unit}
+                  onChange={(e) => setAddRowForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
+                  placeholder="e.g. 14.20"
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+                <p className="mt-0.5 text-[10px] text-slate-400">Selling prices below are calculated from this cost × each channel margin.</p>
               </div>
               <div>
                 <p className="mb-1 text-xs font-bold text-slate-600">Show on channels:</p>
@@ -952,6 +986,53 @@ export default function AdminInventoryPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Per-channel margin + live selling-price preview. One block per
+                  enabled channel; margin is editable, price = cost × (1+margin). */}
+              <div>
+                <p className="mb-1.5 text-xs font-bold text-slate-600">Margin &amp; selling price per channel</p>
+                {(() => {
+                  const cost = addRowForm.cost_per_unit === '' ? null : Number(addRowForm.cost_per_unit);
+                  const enabled = ADD_CHANNELS.filter(({ flag }) => addRowForm[flag]);
+                  if (enabled.length === 0) {
+                    return <p className="text-[11px] text-slate-400">Enable a channel above to set its margin.</p>;
+                  }
+                  return (
+                    <div className="grid grid-cols-2 gap-2">
+                      {enabled.map(({ channel, label }) => {
+                        const mStr = addMargins[channel] ?? '';
+                        const m = Number(mStr);
+                        const validCost = cost !== null && Number.isFinite(cost) && cost > 0;
+                        const validM = Number.isFinite(m) && m >= 0;
+                        const sell = validCost && validM ? cost * (1 + m / 100) : null;
+                        return (
+                          <div key={channel} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                            <p className="text-[11px] font-bold text-navy">{label}</p>
+                            <div className="mt-1 flex items-center gap-1">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={mStr}
+                                onChange={(e) => {
+                                  const v = e.target.value.replace(/[^0-9.]/g, '');
+                                  setAddMargins((d) => ({ ...d, [channel]: v }));
+                                }}
+                                className="w-14 rounded-md border border-slate-300 px-2 py-1 text-right text-sm font-bold text-navy outline-none focus:border-navy"
+                                aria-label={`${label} margin percent`}
+                              />
+                              <span className="text-xs font-semibold text-slate-500">% margin</span>
+                            </div>
+                            <p className="mt-1 text-sm font-extrabold text-emerald-700">
+                              {sell !== null ? `$${sell.toFixed(2)}` : '—'}
+                              <span className="ml-1 text-[10px] font-semibold text-slate-400">sells at</span>
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">

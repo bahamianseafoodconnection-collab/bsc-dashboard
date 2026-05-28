@@ -43,6 +43,7 @@ interface AddProductBody {
   pack_size?:         unknown;
   cost_per_unit?:     unknown;
   online_sell_price?: unknown;
+  channel_prices?:    unknown;
   channels?:          unknown;
   image_url?:         unknown;
   photo_urls?:        unknown;
@@ -89,6 +90,19 @@ export async function POST(req: NextRequest) {
                           ? body.cost_per_unit : null;
   const onlinePrice   = typeof body.online_sell_price === 'number' && Number.isFinite(body.online_sell_price) && body.online_sell_price >= 0
                           ? body.online_sell_price : null;
+
+  // Explicit per-channel selling prices (founder set a margin per channel
+  // in the Add-Product modal). Keys are pricing_channel enum values.
+  // What the founder previewed = exactly what we store. Wins over the
+  // global-margin computation below.
+  const VALID_PRICE_CHANNELS = new Set(['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale']);
+  const channelPricesRaw = (body.channel_prices && typeof body.channel_prices === 'object')
+    ? body.channel_prices as Record<string, unknown> : {};
+  const channelPrices = new Map<string, number>();
+  for (const [ch, v] of Object.entries(channelPricesRaw)) {
+    const n = Number(v);
+    if (VALID_PRICE_CHANNELS.has(ch) && Number.isFinite(n) && n >= 0) channelPrices.set(ch, Math.round(n * 100) / 100);
+  }
 
   const channelsRaw = (body.channels && typeof body.channels === 'object') ? body.channels as Record<string, unknown> : {};
   const sellNassau    = channelsRaw.nassau    === true;
@@ -232,15 +246,25 @@ export async function POST(req: NextRequest) {
 
   if (costPerUnit !== null) {
     for (const channel of enabledChannels) {
-      // Online manual override wins; everything else = cost × (1 + margin).
+      // Priority: explicit per-channel price (founder's margin block) →
+      // online manual override → global channel margin.
       let price: number | null = null;
-      if (channel === 'online_market' && onlinePrice !== null) {
+      if (channelPrices.has(channel)) {
+        price = channelPrices.get(channel)!;
+      } else if (channel === 'online_market' && onlinePrice !== null) {
         price = onlinePrice;
       } else if (marginByChannel.has(channel)) {
         price = Math.round(costPerUnit * (1 + marginByChannel.get(channel)!) * 100) / 100;
       }
       if (price !== null) {
         priceRows.push({ ...basePriceRow, product_id: productId, channel, manual_unit_price: price });
+      }
+    }
+  } else if (channelPrices.size > 0) {
+    // No cost, but founder typed explicit prices → honor them.
+    for (const channel of enabledChannels) {
+      if (channelPrices.has(channel)) {
+        priceRows.push({ ...basePriceRow, product_id: productId, channel, manual_unit_price: channelPrices.get(channel)! });
       }
     }
   } else if (onlinePrice !== null && sellOnline) {
