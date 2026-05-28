@@ -144,6 +144,100 @@ export default function AdminInventoryPage() {
   // product; the selling-price preview + the stored price follow this.
   const [addMargins, setAddMargins] = useState<Record<string, string>>({});
 
+  // ─── Per-row Edit modal ──────────────────────────────────────────────
+  // Full edit of one product (name / category / UoM / pack / cost / stock /
+  // channels / status / photo). Saves changed fields in one PATCH.
+  type EditForm = {
+    name: string; category: string; unit_of_measure: string; pack_size: string;
+    cost_per_unit: string; stock_count: string; status: string;
+    sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
+  };
+  const [editProductId, setEditProductId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
+  function openEdit(r: ProductRow) {
+    setEditProductId(r.id);
+    setEditForm({
+      name: r.name ?? '',
+      category: r.category ?? 'frozen_seafood',
+      unit_of_measure: r.unit_of_measure ?? 'each',
+      pack_size: r.pack_size ?? '',
+      cost_per_unit: r.cost_per_unit != null ? String(r.cost_per_unit) : '',
+      stock_count: r.stock_count != null ? String(r.stock_count) : '',
+      status: r.status ?? 'active',
+      sell_nassau: !!r.sell_nassau, sell_andros: !!r.sell_andros,
+      sell_online: !!r.sell_online, sell_wholesale: !!r.sell_wholesale,
+    });
+  }
+
+  async function saveEdit() {
+    if (!editProductId || !editForm) return;
+    const orig = rows.find((r) => r.id === editProductId);
+    if (!orig) return;
+    if (!editForm.name.trim()) { showToast(false, 'Name required'); return; }
+
+    // Only send fields that actually changed.
+    const patch: Record<string, unknown> = {};
+    if (editForm.name.trim() !== (orig.name ?? ''))                    patch.name = editForm.name.trim();
+    if (editForm.category !== (orig.category ?? ''))                   patch.category = editForm.category;
+    if (editForm.unit_of_measure !== (orig.unit_of_measure ?? ''))     patch.unit_of_measure = editForm.unit_of_measure;
+    if ((editForm.pack_size.trim() || null) !== (orig.pack_size ?? null)) patch.pack_size = editForm.pack_size.trim() || null;
+    if (editForm.status !== (orig.status ?? ''))                       patch.status = editForm.status;
+    for (const k of ['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const) {
+      if (editForm[k] !== !!orig[k]) patch[k] = editForm[k];
+    }
+    const stockNum = editForm.stock_count === '' ? null : Number(editForm.stock_count);
+    if (stockNum !== (orig.stock_count ?? null)) {
+      if (stockNum !== null && (!Number.isFinite(stockNum) || stockNum < 0)) { showToast(false, 'Stock must be ≥ 0'); return; }
+      patch.stock_count = stockNum;
+    }
+    const costNum = editForm.cost_per_unit === '' ? null : Number(editForm.cost_per_unit);
+    const costChanged = costNum !== null && costNum !== (orig.cost_per_unit ?? null);
+    if (costChanged) {
+      if (!Number.isFinite(costNum) || costNum <= 0) { showToast(false, 'Cost must be > 0'); return; }
+      patch.cost_per_unit = costNum;
+    }
+
+    if (Object.keys(patch).length === 0) { showToast(false, 'No changes'); setEditProductId(null); setEditForm(null); return; }
+
+    setEditSaving(true);
+    try {
+      const res = await callPatch(editProductId, patch);
+      // Apply to the grid row
+      setRows((prev) => prev.map((r) => {
+        if (r.id !== editProductId) return r;
+        const u: ProductRow = { ...r };
+        if (patch.name !== undefined)            u.name = patch.name as string;
+        if (patch.category !== undefined)        u.category = patch.category as string;
+        if (patch.unit_of_measure !== undefined) u.unit_of_measure = patch.unit_of_measure as string;
+        if (patch.pack_size !== undefined)       u.pack_size = patch.pack_size as string | null;
+        if (patch.status !== undefined)          u.status = patch.status as string;
+        if (patch.stock_count !== undefined)     u.stock_count = patch.stock_count as number | null;
+        for (const k of ['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const) {
+          if (patch[k] !== undefined) (u[k] as boolean) = patch[k] as boolean;
+        }
+        if (costChanged) {
+          u.cost_per_unit = costNum;
+          if (res.new_prices) {
+            u.nassau_price    = res.new_prices.nassau_pos      ?? u.nassau_price;
+            u.andros_price    = res.new_prices.andros_pos      ?? u.andros_price;
+            u.online_price    = res.new_prices.online_market   ?? u.online_price;
+            u.wholesale_price = res.new_prices.local_wholesale ?? u.wholesale_price;
+          }
+        }
+        return u;
+      }));
+      showToast(true, `${orig.sku} updated`);
+      setEditProductId(null);
+      setEditForm(null);
+    } catch (err) {
+      showToast(false, `Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   // Add-Product modal photo upload (camera / gallery / file — one input,
   // no `capture` attribute so the OS offers all three on mobile).
   const addPhotoRef = useRef<HTMLInputElement>(null);
@@ -1070,6 +1164,117 @@ export default function AdminInventoryPage() {
         </div>
       )}
 
+      {/* Per-row Edit modal — full-screen on mobile, centered dialog on desktop */}
+      {editProductId && editForm && (() => {
+        const editingRow = rows.find((r) => r.id === editProductId);
+        const setF = (patch: Partial<EditForm>) => setEditForm((f) => f ? { ...f, ...patch } : f);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
+            onClick={() => !editSaving && (setEditProductId(null), setEditForm(null))}
+          >
+            <div
+              className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="shrink-0 border-b border-slate-200 px-5 py-3">
+                <h2 className="text-base font-extrabold text-navy">✏️ Edit product</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  <span className="font-mono">{editingRow?.sku}</span> · changes save instantly and cascade to POS, /market & receipts.
+                </p>
+              </div>
+              <div className="flex-1 space-y-3 overflow-y-auto p-5">
+                {/* Photo */}
+                <div className="flex items-center gap-3">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                    {editingRow?.image_url
+                      ? <img src={editingRow.image_url} alt="" className="h-full w-full object-cover" />
+                      : <span className="text-xl text-slate-300">📷</span>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openPhotoPicker(editProductId)}
+                    disabled={uploadingId === editProductId}
+                    className="rounded-lg border-2 border-navy px-3 py-1.5 text-xs font-extrabold text-navy hover:bg-navy-50/40 disabled:opacity-50"
+                  >
+                    {uploadingId === editProductId ? 'Uploading…' : '📷 Change photo'}
+                  </button>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Name *</label>
+                  <input type="text" value={editForm.name}
+                    onChange={(e) => setF({ name: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">Category</label>
+                    <select value={editForm.category} onChange={(e) => setF({ category: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+                      {CATEGORY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">UoM</label>
+                    <select value={editForm.unit_of_measure} onChange={(e) => setF({ unit_of_measure: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+                      {UOM_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">Pack size</label>
+                    <input type="text" value={editForm.pack_size}
+                      onChange={(e) => setF({ pack_size: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">Cost (per unit)</label>
+                    <input type="number" step="0.01" min="0" inputMode="decimal" value={editForm.cost_per_unit}
+                      onChange={(e) => setF({ cost_per_unit: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                    <p className="mt-0.5 text-[10px] text-slate-400">Changing cost re-prices every channel via your margins.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">Quantity in stock</label>
+                    <input type="number" step="1" min="0" inputMode="numeric" value={editForm.stock_count}
+                      onChange={(e) => setF({ stock_count: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-bold text-slate-600">Show on channels:</p>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {(['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const).map((k) => (
+                      <label key={k} className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1">
+                        <input type="checkbox" checked={editForm[k]} onChange={(e) => setF({ [k]: e.target.checked } as Partial<EditForm>)} />
+                        {k.replace('sell_', '')}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Status</label>
+                  <select value={editForm.status} onChange={(e) => setF({ status: e.target.value })}
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+                    {['active', 'archived', 'discontinued', 'draft', 'pending_approval'].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+                <button onClick={() => { setEditProductId(null); setEditForm(null); }} disabled={editSaving}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-white">Cancel</button>
+                <button onClick={saveEdit} disabled={editSaving}
+                  className="rounded-lg bg-gold px-5 py-2 text-sm font-extrabold text-navy hover:bg-gold-300 disabled:opacity-60">
+                  {editSaving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Phase 2 — save toast (top-right corner, auto-dismiss) */}
       {toast && (
         <div
@@ -1120,6 +1325,7 @@ export default function AdminInventoryPage() {
                   <Th align="right">Wholesale</Th>
                   <Th align="center">Channels</Th>
                   <Th>Status</Th>
+                  <Th align="center">Edit</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1329,6 +1535,14 @@ export default function AdminInventoryPage() {
                         r.status === 'archived' ? 'bg-slate-200 text-slate-700'    :
                                                    'bg-amber-100 text-amber-700'
                       }`}>{r.status}</span>
+                    </Td>
+                    <Td align="center">
+                      <button
+                        onClick={() => openEdit(r)}
+                        className="rounded-lg border border-navy/30 px-2.5 py-1 text-[11px] font-bold text-navy hover:bg-navy hover:text-gold transition"
+                      >
+                        ✏️ Edit
+                      </button>
                     </Td>
                   </tr>
                   );
