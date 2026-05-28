@@ -161,28 +161,27 @@ export async function PATCH(
     updatedFields.push(...Object.keys(updatePayload));
   }
 
-  // ─── Per-channel price overrides (from the Edit modal margin blocks) ──
-  // { channel_prices: { nassau_pos: 19.17, ... } } → retire the current
-  // price row for each channel + insert the new one (immutable history).
+  // ─── Per-channel margins (from the Edit modal margin blocks) ──────────
+  // { channel_margins: { nassau_pos: 40, online_market: 30, ... } } as
+  // PERCENT. Each is applied via bsc_set_channel_price, which STORES the
+  // margin (so it sticks through cost receipts) and re-prices from the
+  // current cost — atomic, so this can't half-fail.
   const VALID_PRICE_CHANNELS = new Set(['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale']);
-  if (body.channel_prices && typeof body.channel_prices === 'object') {
-    for (const [ch, v] of Object.entries(body.channel_prices as Record<string, unknown>)) {
-      const price = Number(v);
-      if (!VALID_PRICE_CHANNELS.has(ch) || !Number.isFinite(price) || price < 0) continue;
-      await admin.from('product_pricing')
-        .update({ is_current: false })
-        .eq('product_id', prod.id).eq('channel', ch).eq('is_current', true);
-      const { error: priceErr } = await admin.from('product_pricing').insert({
-        product_id: prod.id, channel: ch, pricing_mode: 'manual_override',
-        manual_unit_price: Math.round(price * 100) / 100,
-        margin_multiplier: 1.0, vat_multiplier: 1.0, shipping_per_lb: 0,
-        customs_duty_pct: 0, vat_levy_pct: 0, per_transaction_fee: 0, service_fee_pct: 0,
-        effective_from: new Date().toISOString(), is_current: true, is_active: true, recorded_by: user.id,
+  if (body.channel_margins && typeof body.channel_margins === 'object') {
+    for (const [ch, v] of Object.entries(body.channel_margins as Record<string, unknown>)) {
+      const pct = Number(v);
+      if (!VALID_PRICE_CHANNELS.has(ch) || !Number.isFinite(pct) || pct < 0) continue;
+      const { data: priced, error: rpcErr } = await admin.rpc('bsc_set_channel_price', {
+        p_product_id: prod.id,
+        p_channel:    ch,
+        p_margin:     Math.round(pct * 100) / 10000,   // 40 → 0.40
+        p_user:       user.id,
       });
-      if (!priceErr) {
-        newPrices = { ...(newPrices ?? {}), [ch]: Math.round(price * 100) / 100 };
-        updatedFields.push(`price_${ch}`);
+      if (rpcErr) {
+        return NextResponse.json({ ok: false, error: `Price update failed (${ch}): ${rpcErr.message}`, updatedFields }, { status: 500 });
       }
+      newPrices = { ...(newPrices ?? {}), [ch]: Number(priced) };
+      updatedFields.push(`price_${ch}`);
     }
   }
 

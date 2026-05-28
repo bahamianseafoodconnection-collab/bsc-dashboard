@@ -220,25 +220,20 @@ export default function AdminInventoryPage() {
       patch.cost_per_unit = costNum;
     }
 
-    // Per-channel prices: re-price a channel when its margin was changed OR
-    // the channel was newly enabled (so it goes live). price = cost × margin.
-    // Sent after cost in the PATCH, so it overrides the cost-cascade for
-    // exactly those channels; untouched channels keep their current price.
-    const effectiveCost = costNum ?? orig.cost_per_unit ?? null;
-    const channelPrices: Record<string, number> = {};
-    if (effectiveCost && effectiveCost > 0) {
-      for (const { flag, channel } of ADD_CHANNELS) {
-        if (!editForm[flag]) continue;
-        const marginChanged = (editMargins[channel] ?? '') !== (editMarginsBase[channel] ?? '');
-        const newlyEnabled  = editForm[flag] && !orig[flag];
-        if (!marginChanged && !newlyEnabled) continue;
-        const m = Number(editMargins[channel]);
-        if (Number.isFinite(m) && m >= 0) {
-          channelPrices[channel] = Math.round(effectiveCost * (1 + m / 100) * 100) / 100;
-        }
-      }
+    // Per-channel margins: send the chosen margin % for any channel whose
+    // margin changed OR that was newly enabled. The server stores the
+    // margin (so it sticks through cost receipts) and prices from the live
+    // cost. Sent as PERCENT (e.g. 40).
+    const channelMargins: Record<string, number> = {};
+    for (const { flag, channel } of ADD_CHANNELS) {
+      if (!editForm[flag]) continue;
+      const marginChanged = (editMargins[channel] ?? '') !== (editMarginsBase[channel] ?? '');
+      const newlyEnabled  = editForm[flag] && !orig[flag];
+      if (!marginChanged && !newlyEnabled) continue;
+      const m = Number(editMargins[channel]);
+      if (Number.isFinite(m) && m >= 0) channelMargins[channel] = m;
     }
-    if (Object.keys(channelPrices).length > 0) patch.channel_prices = channelPrices;
+    if (Object.keys(channelMargins).length > 0) patch.channel_margins = channelMargins;
 
     if (Object.keys(patch).length === 0) { showToast(false, 'No changes'); setEditProductId(null); setEditForm(null); return; }
 

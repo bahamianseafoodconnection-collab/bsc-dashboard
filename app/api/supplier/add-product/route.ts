@@ -258,7 +258,9 @@ export async function POST(req: NextRequest) {
         price = Math.round(costPerUnit * (1 + marginByChannel.get(channel)!) * 100) / 100;
       }
       if (price !== null) {
-        priceRows.push({ ...basePriceRow, product_id: productId, channel, manual_unit_price: price });
+        // Store the margin (price ÷ cost) so it sticks through cost receipts.
+        const mult = costPerUnit > 0 ? Math.round((price / costPerUnit) * 1_000_000) / 1_000_000 : 1.0;
+        priceRows.push({ ...basePriceRow, product_id: productId, channel, manual_unit_price: price, margin_multiplier: mult });
       }
     }
   } else if (channelPrices.size > 0) {
