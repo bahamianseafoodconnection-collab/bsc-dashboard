@@ -749,6 +749,80 @@ const [editing, setEditing] = useState<{ product: SupplierProduct; supplierId: s
 const [editForm, setEditForm] = useState<{ name: string; cost: string; online_price: string }>({ name: '', cost: '', online_price: '' });
 const [editSaving, setEditSaving] = useState(false);
 
+// ─── Phase 3: Record Inventory Receipt (2026-05-27 founder direction) ─
+// Click "📦 Receipt" on a product → modal opens → staff enters qty +
+// new cost per unit → POSTs /api/inventory/receive → DB trigger
+// (recalc_channel_prices_on_purchase from migration 20260527140000)
+// auto-rewrites per-channel prices everywhere. Cost stays live.
+type ReceiveForm = { qty: string; cost: string; notes: string };
+const [receiving, setReceiving] = useState<{ product: SupplierProduct; supplierId: string } | null>(null);
+const [receiveForm, setReceiveForm] = useState<ReceiveForm>({ qty: '', cost: '', notes: '' });
+const [receiveSaving, setReceiveSaving] = useState(false);
+
+function openReceive(p: SupplierProduct, supplierId: string) {
+  if (!canEdit) { showToast('Founder / co-founder only', false); return; }
+  setReceiving({ product: p, supplierId });
+  setReceiveForm({
+    qty: '',
+    cost: p.cost_per_unit !== null ? String(p.cost_per_unit) : '',
+    notes: '',
+  });
+}
+
+async function submitReceive() {
+  if (!receiving) return;
+  const qty  = Number(receiveForm.qty);
+  const cost = Number(receiveForm.cost);
+  if (!Number.isFinite(qty) || qty <= 0)   { showToast('Qty must be > 0', false); return; }
+  if (!Number.isFinite(cost) || cost <= 0) { showToast('Cost must be > 0', false); return; }
+  if (cost > 100000)                       { showToast('Cost looks too large', false); return; }
+
+  setReceiveSaving(true);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not signed in');
+
+    const res = await fetch('/api/inventory/receive', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        product_id:    receiving.product.id,
+        qty_received:  qty,
+        cost_per_unit: cost,
+        notes:         receiveForm.notes.trim() || undefined,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+
+    // Update the product card with the new cost + per-channel prices the trigger wrote
+    const newOnline = (json.prices_now && json.prices_now['online_market']) ?? null;
+    setProductsBySupplier((prev) => ({
+      ...prev,
+      [receiving.supplierId]: (prev[receiving.supplierId] ?? []).map((row) =>
+        row.id === receiving.product.id
+          ? { ...row, cost_per_unit: cost, online_sell_price: newOnline ?? row.online_sell_price }
+          : row,
+      ),
+    }));
+
+    // Build a multi-channel summary message for the toast
+    const chs: string[] = [];
+    if (json.prices_now) {
+      for (const [ch, p] of Object.entries(json.prices_now as Record<string, number>)) {
+        chs.push(`${ch.replace(/_/g, ' ')} $${Number(p).toFixed(2)}`);
+      }
+    }
+    showToast(`✅ Cost ${cost.toFixed(2)} → ${chs.length ? chs.join(' · ') : 'no active channels'}`);
+    setReceiving(null);
+  } catch (err) {
+    showToast('Receipt failed: ' + (err instanceof Error ? err.message : String(err)), false);
+  } finally {
+    setReceiveSaving(false);
+  }
+}
+
 function openEditProduct(p: SupplierProduct, supplierId: string) {
 if (!canEdit) { showToast('Founder / co-founder only', false); return; }
 setEditing({ product: p, supplierId });
