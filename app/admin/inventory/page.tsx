@@ -57,9 +57,16 @@ type ChannelKey = 'nassau' | 'andros' | 'online' | 'wholesale';
 const CATEGORY_OPTIONS = [
   'fresh_seafood', 'frozen_seafood', 'meat', 'frozen_meat',
   'produce', 'grocery', 'spices', 'dry_goods', 'beverages',
+  'household', 'toiletries',
 ] as const;
 
 const UOM_OPTIONS = ['lb', 'each', 'case'] as const;
+
+// VAT toggle on Add/Edit. Maps to products.vat_category; drives VAT %.
+const VAT_OPTIONS = [
+  { value: 'standard_rated', label: 'VAT item (10%)' },
+  { value: 'zero_rated',     label: 'VAT-Free item (0%)' },
+] as const;
 
 // Channels shown in the Margins panel (order matters for display).
 const MARGIN_CHANNELS = ['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale', 'us_resale'] as const;
@@ -134,7 +141,7 @@ export default function AdminInventoryPage() {
   const [addRowForm, setAddRowForm] = useState({
     supplier_id: '', sku: '', name: '', category: 'frozen_seafood' as string,
     unit_of_measure: 'each', pack_size: '',
-    cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '',
+    cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '', vat_category: 'zero_rated',
     sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
   });
   const [addRowSaving, setAddRowSaving] = useState(false);
@@ -149,7 +156,7 @@ export default function AdminInventoryPage() {
   // channels / status / photo). Saves changed fields in one PATCH.
   type EditForm = {
     name: string; category: string; unit_of_measure: string; pack_size: string;
-    cost_per_unit: string; stock_count: string; status: string;
+    cost_per_unit: string; stock_count: string; status: string; vat_category: string;
     sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
   };
   const [editProductId, setEditProductId] = useState<string | null>(null);
@@ -170,6 +177,9 @@ export default function AdminInventoryPage() {
       cost_per_unit: r.cost_per_unit != null ? String(r.cost_per_unit) : '',
       stock_count: r.stock_count != null ? String(r.stock_count) : '',
       status: r.status ?? 'active',
+      // Map legacy food values onto the VAT toggle (0% → VAT-Free, 10% → VAT item).
+      vat_category: (r.vat_category === 'cooked_prepared' || r.vat_category === 'standard_rated')
+        ? 'standard_rated' : 'zero_rated',
       sell_nassau: !!r.sell_nassau, sell_andros: !!r.sell_andros,
       sell_online: !!r.sell_online, sell_wholesale: !!r.sell_wholesale,
     });
@@ -205,6 +215,7 @@ export default function AdminInventoryPage() {
     if (editForm.unit_of_measure !== (orig.unit_of_measure ?? ''))     patch.unit_of_measure = editForm.unit_of_measure;
     if ((editForm.pack_size.trim() || null) !== (orig.pack_size ?? null)) patch.pack_size = editForm.pack_size.trim() || null;
     if (editForm.status !== (orig.status ?? ''))                       patch.status = editForm.status;
+    if (editForm.vat_category !== (orig.vat_category ?? ''))           patch.vat_category = editForm.vat_category;
     for (const k of ['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const) {
       if (editForm[k] !== !!orig[k]) patch[k] = editForm[k];
     }
@@ -249,6 +260,7 @@ export default function AdminInventoryPage() {
         if (patch.unit_of_measure !== undefined) u.unit_of_measure = patch.unit_of_measure as string;
         if (patch.pack_size !== undefined)       u.pack_size = patch.pack_size as string | null;
         if (patch.status !== undefined)          u.status = patch.status as string;
+        if (patch.vat_category !== undefined)    u.vat_category = patch.vat_category as string;
         if (patch.stock_count !== undefined)     u.stock_count = patch.stock_count as number | null;
         for (const k of ['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const) {
           if (patch[k] !== undefined) (u[k] as boolean) = patch[k] as boolean;
@@ -395,7 +407,7 @@ export default function AdminInventoryPage() {
     setAddRowForm({
       supplier_id: '', sku: '', name: '', category: 'frozen_seafood',
       unit_of_measure: 'each', pack_size: '',
-      cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '',
+      cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '', vat_category: 'zero_rated',
       sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
     });
     // Seed the per-channel margin inputs from live margins (fallback to
@@ -464,6 +476,7 @@ export default function AdminInventoryPage() {
           channel_prices:    Object.keys(channelPrices).length > 0 ? channelPrices : undefined,
           image_url:         f.image_url || undefined,
           stock_count:       f.stock_count === '' ? undefined : Number(f.stock_count),
+          vat_category:      f.vat_category,
           channels: {
             nassau:    f.sell_nassau,
             andros:    f.sell_andros,
@@ -1155,6 +1168,16 @@ export default function AdminInventoryPage() {
               </div>
               <p className="-mt-1 text-[10px] text-slate-400">Selling prices below are calculated from cost × each channel margin.</p>
               <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">VAT</label>
+                <select
+                  value={addRowForm.vat_category}
+                  onChange={(e) => setAddRowForm((f) => ({ ...f, vat_category: e.target.value }))}
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  {VAT_OPTIONS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+                </select>
+              </div>
+              <div>
                 <p className="mb-1 text-xs font-bold text-slate-600">Show on channels:</p>
                 <div className="flex flex-wrap gap-2 text-xs">
                   {(['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale'] as const).map((k) => {
@@ -1367,12 +1390,21 @@ export default function AdminInventoryPage() {
                     );
                   })()}
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-slate-600">Status</label>
-                  <select value={editForm.status} onChange={(e) => setF({ status: e.target.value })}
-                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
-                    {['active', 'archived', 'discontinued', 'draft', 'pending_approval'].map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">VAT</label>
+                    <select value={editForm.vat_category} onChange={(e) => setF({ vat_category: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+                      {VAT_OPTIONS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">Status</label>
+                    <select value={editForm.status} onChange={(e) => setF({ status: e.target.value })}
+                      className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+                      {['active', 'archived', 'discontinued', 'draft', 'pending_approval'].map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
@@ -1610,7 +1642,7 @@ export default function AdminInventoryPage() {
                         </button>
                       )}
                     </Td>
-                    <Td>{r.vat_category === 'uncooked_food' ? '0%' : r.vat_category === 'cooked_prepared' ? '10%' : '—'}</Td>
+                    <Td>{(r.vat_category === 'cooked_prepared' || r.vat_category === 'standard_rated') ? '10%' : (r.vat_category === 'uncooked_food' || r.vat_category === 'zero_rated' || r.vat_category === 'service') ? '0%' : '—'}</Td>
                     <Td align="right">
                       {isCellEditing('cost_per_unit') ? (
                         <input

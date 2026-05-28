@@ -47,6 +47,7 @@ interface AddProductBody {
   channels?:          unknown;
   image_url?:         unknown;
   stock_count?:       unknown;
+  vat_category?:      unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -121,6 +122,11 @@ export async function POST(req: NextRequest) {
   const stockCount = typeof body.stock_count === 'number' && Number.isFinite(body.stock_count) && body.stock_count >= 0
                        ? Math.round(body.stock_count) : null;
 
+  // VAT classification (optional). Allowed values match the CHECK constraint.
+  const VAT_CATS = new Set(['uncooked_food', 'cooked_prepared', 'service', 'standard_rated', 'zero_rated']);
+  const vatCategory = typeof body.vat_category === 'string' && VAT_CATS.has(body.vat_category)
+                        ? body.vat_category : null;
+
   if (!supplierId || !sku || !name || !category || !unitOfMeasure) {
     return NextResponse.json(
       { ok: false, error: 'supplier_id + sku + name + category + unit_of_measure are all required.' },
@@ -158,6 +164,7 @@ export async function POST(req: NextRequest) {
   if (packSize)    productRow.pack_size  = packSize;
   if (imageUrl)    productRow.image_url  = imageUrl;
   if (stockCount !== null) productRow.stock_count = stockCount;
+  if (vatCategory) productRow.vat_category = vatCategory;
 
   const { data: inserted, error: insertErr } = await admin
     .from('products')

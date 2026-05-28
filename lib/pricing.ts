@@ -48,7 +48,9 @@ export function vatPctForCategory(category: string | null | undefined): number {
   switch ((category ?? '').toLowerCase()) {
     case 'uncooked_food': return 0;
     case 'service':       return 0;
+    case 'zero_rated':    return 0;   // VAT-Free item
     case 'cooked_prepared': return 10;
+    case 'standard_rated':  return 10; // VAT item (household, toiletries, prepared)
     default: return 10;
   }
 }
