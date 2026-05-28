@@ -352,6 +352,9 @@ function CheckoutInner() {
       fulfillment_status: 'placed',
       wholesale_items: stampedItems,
       wholesale_cost_total: total,
+      // Populate the canonical total so receipts/tracking/admin show a value
+      // (orders.total — NOT total_amount, and there is no user_id column).
+      total: total,
       customer_name: name.trim() || null,
       customer_phone: phone.trim() || null,
       customer_address: address.trim() || null,
@@ -361,7 +364,6 @@ function CheckoutInner() {
         deliveryMethod === 'mailboat' ? `Mailboat to ${island}` : `Nassau · ${island}`,
         note,
       ].filter(Boolean).join(' · ') || null,
-      user_id: session?.user.id || null,
     };
     if (promoApplied && promoDiscount > 0) {
       orderRow.promo_code = promoApplied.code;

@@ -381,11 +381,14 @@ function MarketPageInner() {
       };
     });
     await supabase.from('orders').insert({
+      order_type: 'online_market',
       channel: 'online_market',
       payment_method: 'cod',
       status: 'pending',
+      payment_status: 'pending',
+      fulfillment_status: 'placed',           // enter the delivery lifecycle / driver queue
       items,
-      total_amount: +cartTotal.toFixed(2),
+      total: +cartTotal.toFixed(2),           // orders.total (there is no total_amount column)
       customer_id: session?.user.id || null,
       location: 'online',
     });
