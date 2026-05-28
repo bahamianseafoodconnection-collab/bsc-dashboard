@@ -85,7 +85,7 @@ setLoading(true);
 // Fetch product
 const { data: p } = await supabase
 .from('products')
-.select('id, sku, name, description, category, image_url, sell_online, status')
+.select('id, sku, name, description, category, image_url, sell_online, status, unit_of_measure')
 .eq('id', id)
 .single();
 
@@ -160,7 +160,7 @@ source: 'market',
 sku: product.sku,
 name: product.name,
 price,
-unit: 'each',
+unit: ((product as any).unit_of_measure === 'lb' ? 'lb' : (product as any).unit_of_measure === 'case' ? 'case' : 'each'),
 min_qty: 1,
 image_url: product.image_url,
 in_stock: true,
@@ -309,7 +309,19 @@ BSD ${variant.price.toFixed(2)}
 {/* Price (if no variants) */}
 {relatedPricing.length <= 1 && price > 0 && (
 <div>
-<p className="text-3xl font-extrabold text-navy">BSD ${price.toFixed(2)}</p>
+<p className="text-3xl font-extrabold text-navy">
+BSD ${price.toFixed(2)}
+{(product as any).unit_of_measure === 'lb'
+? <span className="ml-1 text-lg font-extrabold text-amber-700">/ lb</span>
+: (product as any).unit_of_measure === 'case'
+? <span className="ml-1 text-lg font-semibold text-slate-400">/ case</span>
+: null}
+</p>
+{(product as any).unit_of_measure === 'lb' && (
+<p className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-800">
+⚖ Priced per pound — final price by weight
+</p>
+)}
 </div>
 )}
 

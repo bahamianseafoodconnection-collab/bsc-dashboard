@@ -822,12 +822,20 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
         {/* Per founder direction 2026-05-27 — description removed
             from /market cards. The price denomination (per lb /
             per each / per case) below replaces it. */}
-        <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          Sold per {product.unit}
-        </div>
+        {product.unit === 'lb' ? (
+          <div className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-800">
+            ⚖ Priced per pound
+          </div>
+        ) : (
+          <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            Sold per {product.unit}
+          </div>
+        )}
         <div className="mt-auto flex items-baseline gap-1 pt-1">
           <span className={`text-lg font-extrabold sm:text-xl ${product.is_on_special ? 'text-red-600' : 'text-navy'}`}>BSD ${(product.is_on_special && product.special_price != null ? product.special_price : product.price).toFixed(2)}</span>
-          <span className="text-xs text-slate-400">/ {product.unit}</span>
+          <span className={product.unit === 'lb' ? 'text-sm font-extrabold text-amber-700' : 'text-xs text-slate-400'}>
+            {product.unit === 'lb' ? '/ lb' : `/ ${product.unit}`}
+          </span>
           {product.is_on_special && product.special_price != null && (
             <span className="ml-1 text-[11px] font-semibold text-slate-400 line-through">${product.price.toFixed(2)}</span>
           )}
