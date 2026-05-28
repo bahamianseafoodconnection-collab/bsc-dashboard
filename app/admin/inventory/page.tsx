@@ -835,6 +835,16 @@ export default function AdminInventoryPage() {
         onChange={onFileSelected}
         className="hidden"
       />
+      {/* Add-Product modal photo input — kept at top level (NOT inside the
+          modal overlay) so its programmatic .click() doesn't bubble to the
+          overlay's close-on-click handler and dismiss the modal. */}
+      <input
+        ref={addPhotoRef}
+        type="file"
+        accept="image/*"
+        onChange={onAddRowPhoto}
+        className="hidden"
+      />
 
       {/* Phase 4 — Add Row modal. Bottom-sheet on mobile, centered dialog on
           desktop. Flex column with a scrollable body so every field + the
@@ -844,13 +854,6 @@ export default function AdminInventoryPage() {
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
           onClick={() => !addRowSaving && setShowAddRow(false)}
         >
-          <input
-            ref={addPhotoRef}
-            type="file"
-            accept="image/*"
-            onChange={onAddRowPhoto}
-            className="hidden"
-          />
           <div
             className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
