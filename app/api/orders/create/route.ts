@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
 
     const orderPayload: Record<string, unknown> = {
       created_at:       new Date().toISOString(),
-      updated_at:       new Date().toISOString(),
+      // NOTE: orders has no updated_at or customer_email column — do not
+      // write them here (PostgREST rejects unknown columns). The email
+      // variable is still used for the confirmation email below.
       customer_name:    customer_name    || null,
-      customer_email:   customer_email   || null,
       customer_phone:   customer_phone   || null,
       customer_address: customer_address || null,
       items:            items,

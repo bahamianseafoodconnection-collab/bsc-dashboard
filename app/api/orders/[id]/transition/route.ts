@@ -37,7 +37,6 @@ interface OrderRow {
   fulfillment_status:  string | null;
   customer_name:       string | null;
   customer_phone:      string | null;
-  customer_email:      string | null;
   pod_photo_urls:      string[] | null;
   customer_id:         string | null;
 }
@@ -88,7 +87,7 @@ export async function POST(
   // Load current order state
   const { data: order, error: orderErr } = await admin
     .from('orders')
-    .select('id, fulfillment_status, customer_name, customer_phone, customer_email, pod_photo_urls, customer_id')
+    .select('id, fulfillment_status, customer_name, customer_phone, pod_photo_urls, customer_id')
     .eq('id', orderId)
     .maybeSingle<OrderRow>();
   if (orderErr || !order) {
@@ -123,13 +122,11 @@ export async function POST(
   // every internal step — collected + in_transit both show "In Transit"
   // so we don't double-notify). Fire-and-forget; failures don't block.
   try {
-    if (order.customer_name && (order.customer_phone || order.customer_email)) {
-      const channel = order.customer_phone ? 'whatsapp' : 'email';
+    if (order.customer_name && order.customer_phone) {
       const shortId = order.id.slice(0, 8);
       await admin.from('notifications').insert({
-        channel,
+        channel:         'whatsapp',
         recipient_phone: order.customer_phone,
-        recipient_email: channel === 'email' ? order.customer_email : null,
         recipient_name:  order.customer_name,
         template_key:    `order_${cust.stage}`,
         subject:         `Order #${shortId} — ${cust.label}`,

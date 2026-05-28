@@ -377,13 +377,28 @@ function CheckoutInner() {
       orderRow.net_profit         = profit.net_profit;
     }
 
-    const { data } = await supabase
-      .from('orders')
-      .insert(orderRow)
-      .select('id')
-      .single();
-
-    const orderIdInserted = data?.id || '';
+    // Create through the service-role endpoint. A direct client insert
+    // can't read its own id back after the orders RLS lockdown (the
+    // RETURNING select is owner/staff-scoped and checkout's customer_id is
+    // a customers-record, not the buyer's auth uid) — which left the order
+    // id blank and broke card payment ("Order not found"). The endpoint
+    // also forces payment_status server-side.
+    let orderIdInserted = '';
+    try {
+      const placeRes = await fetch('/api/orders/place', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(orderRow),
+      });
+      const placeJson = await placeRes.json();
+      if (!placeRes.ok || !placeJson.ok) throw new Error(placeJson.error || `HTTP ${placeRes.status}`);
+      orderIdInserted = placeJson.order_id || '';
+    } catch (err) {
+      // Returning '' makes the caller (handleProceedToPayment) abort before
+      // the payment step instead of starting card payment with no order.
+      console.error('Order place failed:', err);
+      return '';
+    }
 
     // Record promo redemption (fire-and-forget).
     if (orderIdInserted && promoApplied && promoDiscount > 0) {
@@ -489,6 +504,10 @@ function CheckoutInner() {
   async function handleProceedToPayment() {
     if (!name.trim() || !phone.trim() || !address.trim()) return;
     const id = await createOrder();
+    if (!id) {
+      alert('Sorry — we couldn’t place your order just now. Please try again, or choose Cash on Delivery.');
+      return;  // do NOT advance to the payment step with no order
+    }
     setOrderId(id);
     // Card flow → 'payment' view renders <PnpRedirect> which POSTs to
     // /api/payment/start and auto-submits the returned form to
