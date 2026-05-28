@@ -188,27 +188,68 @@ export async function POST(req: NextRequest) {
     if (costErr) console.warn('add-product cost insert failed (non-fatal):', costErr.message);
   }
 
-  // 4. INSERT product_pricing row for online when both the online channel
-  //    is selected AND a price was provided. Other channels can be priced
-  //    later via cashier-price-edit or the Edit Product modal.
-  if (onlinePrice !== null && sellOnline) {
-    const { error: priceErr } = await admin.from('product_pricing').insert({
-      product_id:          productId,
-      channel:             'online_market',
-      pricing_mode:        'manual_override',
-      manual_unit_price:   onlinePrice,
-      margin_multiplier:   1.0,
-      vat_multiplier:      1.0,
-      shipping_per_lb:     0,
-      customs_duty_pct:    0,
-      vat_levy_pct:        0,
-      per_transaction_fee: 0,
-      service_fee_pct:     0,
-      effective_from:      nowIso,
-      is_current:          true,
-      is_active:           true,
-      recorded_by:         user.id,
-    });
+  // 4. Price the product on EVERY enabled channel from the live channel
+  //    margins (founder direction 2026-05-28: "all margin change to every
+  //    channel"). price = cost × (1 + channel_markups.margin_pct). The
+  //    optional online_sell_price is a manual override for online only;
+  //    if omitted, online is computed from its margin like the rest.
+  //    Falls back to online-only manual price when no cost is given.
+  const channelByFlag: Array<{ on: boolean; channel: string }> = [
+    { on: sellNassau,    channel: 'nassau_pos' },
+    { on: sellAndros,    channel: 'andros_pos' },
+    { on: sellOnline,    channel: 'online_market' },
+    { on: sellWholesale, channel: 'local_wholesale' },
+  ];
+  const enabledChannels = channelByFlag.filter((c) => c.on).map((c) => c.channel);
+
+  // Live margins for the enabled channels
+  const marginByChannel = new Map<string, number>();
+  if (costPerUnit !== null && enabledChannels.length > 0) {
+    const { data: mk } = await admin
+      .from('channel_markups')
+      .select('channel, margin_pct')
+      .in('channel', enabledChannels);
+    for (const m of (mk ?? []) as Array<{ channel: string; margin_pct: number }>) {
+      marginByChannel.set(m.channel, Number(m.margin_pct));
+    }
+  }
+
+  const priceRows: Record<string, unknown>[] = [];
+  const basePriceRow = {
+    pricing_mode:        'manual_override',
+    margin_multiplier:   1.0,
+    vat_multiplier:      1.0,
+    shipping_per_lb:     0,
+    customs_duty_pct:    0,
+    vat_levy_pct:        0,
+    per_transaction_fee: 0,
+    service_fee_pct:     0,
+    effective_from:      nowIso,
+    is_current:          true,
+    is_active:           true,
+    recorded_by:         user.id,
+  };
+
+  if (costPerUnit !== null) {
+    for (const channel of enabledChannels) {
+      // Online manual override wins; everything else = cost × (1 + margin).
+      let price: number | null = null;
+      if (channel === 'online_market' && onlinePrice !== null) {
+        price = onlinePrice;
+      } else if (marginByChannel.has(channel)) {
+        price = Math.round(costPerUnit * (1 + marginByChannel.get(channel)!) * 100) / 100;
+      }
+      if (price !== null) {
+        priceRows.push({ ...basePriceRow, product_id: productId, channel, manual_unit_price: price });
+      }
+    }
+  } else if (onlinePrice !== null && sellOnline) {
+    // No cost to derive margins from → still honor a manual online price.
+    priceRows.push({ ...basePriceRow, product_id: productId, channel: 'online_market', manual_unit_price: onlinePrice });
+  }
+
+  if (priceRows.length > 0) {
+    const { error: priceErr } = await admin.from('product_pricing').insert(priceRows);
     if (priceErr) console.warn('add-product pricing insert failed (non-fatal):', priceErr.message);
   }
 

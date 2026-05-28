@@ -255,36 +255,11 @@ export default function AdminInventoryPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      // Insert the new row into the grid optimistically
-      const sup = allSuppliers.find((s) => s.id === f.supplier_id);
-      const newRow: ProductRow = {
-        id:                  json.product_id,
-        sku:                 json.sku,
-        name:                f.name.trim(),
-        description:         null,
-        category:            f.category,
-        unit_of_measure:     f.unit_of_measure,
-        pack_size:           f.pack_size || null,
-        vat_category:        'uncooked_food',
-        status:              'active',
-        sell_nassau:         f.sell_nassau,
-        sell_andros:         f.sell_andros,
-        sell_online:         f.sell_online,
-        sell_wholesale:      f.sell_wholesale,
-        image_url:           null,
-        primary_supplier_id: f.supplier_id,
-        stock_count:         null,
-        low_stock_threshold: null,
-        supplier_name:       sup?.name ?? null,
-        cost_per_unit:       cost ?? null,
-        nassau_price:        cost ? +(cost * 1.35).toFixed(2) : null,
-        andros_price:        cost ? +(cost * 1.45).toFixed(2) : null,
-        online_price:        price ?? (cost ? +(cost * 1.30).toFixed(2) : null),
-        wholesale_price:     cost ? +(cost * 1.20).toFixed(2) : null,
-      };
-      setRows((prev) => [newRow, ...prev]);
+      // Reload from the server so the auto-computed per-channel prices show
+      // exactly as priced (no hardcoded margin guesses that could drift).
       showToast(true, `Added ${json.sku} — ${f.name}`);
       setShowAddRow(false);
+      setRefreshTick((t) => t + 1);
     } catch (err) {
       showToast(false, `Add failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -611,8 +586,8 @@ export default function AdminInventoryPage() {
                 <h1 className="font-display text-lg font-extrabold text-navy sm:text-xl">📊 Inventory Spreadsheet</h1>
               </div>
               <p className="mt-0.5 text-xs text-slate-500">
-                Live data from <span className="font-mono">products</span> + <span className="font-mono">product_costs</span> + <span className="font-mono">product_pricing</span>.
-                Mirrors your Fresh Inventory List.xlsx columns. Read-only Phase 1 — inline edit ships next.
+                Live inventory across every channel. Tap any cell to edit — changes save instantly and
+                cascade to POS, /market, and receipts.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -802,8 +777,9 @@ export default function AdminInventoryPage() {
             <div className="border-b border-slate-200 px-5 py-3">
               <h2 className="text-base font-extrabold text-navy">+ Add new product</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                Inserts a row into <span className="font-mono">products</span> + an opening
-                <span className="font-mono"> product_costs</span> row. Channel flags drive visibility.
+                Sets up the product + its opening cost, then auto-prices it on every
+                channel you enable below using your channel margins (cost × margin).
+                Online price is an optional manual override.
               </p>
             </div>
             <div className="space-y-3 p-5">
