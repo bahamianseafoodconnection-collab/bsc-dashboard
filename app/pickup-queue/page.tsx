@@ -114,8 +114,12 @@ export default function PickupQueuePage() {
     const { data, error: err } = await supabase
       .from('orders')
       .select(
-        'id, created_at, status, payment_status, payment_method, customer_name, customer_phone, customer_address, delivery_type, admin_notes, total, wholesale_cost_total, wholesale_items, promo_code, promo_discount'
+        'id, created_at, status, payment_status, payment_method, order_type, fulfillment_status, customer_name, customer_phone, customer_address, delivery_type, admin_notes, total, wholesale_cost_total, wholesale_items, promo_code, promo_discount'
       )
+      // ONLY online orders belong in the fulfillment/pickup queue. POS sales
+      // (pos_sale_nassau / pos_sale_andros) are completed at the counter and
+      // must never appear here.
+      .eq('order_type', 'online_market')
       .gte('created_at', cutoff)
       .order('created_at', { ascending: false })
       .limit(300);
