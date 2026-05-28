@@ -134,7 +134,7 @@ export default function AdminInventoryPage() {
   const [addRowForm, setAddRowForm] = useState({
     supplier_id: '', sku: '', name: '', category: 'frozen_seafood' as string,
     unit_of_measure: 'each', pack_size: '',
-    cost_per_unit: '', online_sell_price: '', image_url: '',
+    cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '',
     sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
   });
   const [addRowSaving, setAddRowSaving] = useState(false);
@@ -258,7 +258,7 @@ export default function AdminInventoryPage() {
     setAddRowForm({
       supplier_id: '', sku: '', name: '', category: 'frozen_seafood',
       unit_of_measure: 'each', pack_size: '',
-      cost_per_unit: '', online_sell_price: '', image_url: '',
+      cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '',
       sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
     });
     // Seed the per-channel margin inputs from live margins (fallback to
@@ -316,7 +316,7 @@ export default function AdminInventoryPage() {
           online_sell_price: price,
           channel_prices:    Object.keys(channelPrices).length > 0 ? channelPrices : undefined,
           image_url:         f.image_url || undefined,
-          photo_urls:        f.image_url ? [f.image_url] : undefined,
+          stock_count:       f.stock_count === '' ? undefined : Number(f.stock_count),
           channels: {
             nassau:    f.sell_nassau,
             andros:    f.sell_andros,
@@ -961,17 +961,29 @@ export default function AdminInventoryPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">Cost (per unit)</label>
-                <input
-                  type="number" step="0.01" min="0" inputMode="decimal"
-                  value={addRowForm.cost_per_unit}
-                  onChange={(e) => setAddRowForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
-                  placeholder="e.g. 14.20"
-                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
-                />
-                <p className="mt-0.5 text-[10px] text-slate-400">Selling prices below are calculated from this cost × each channel margin.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Cost (per unit)</label>
+                  <input
+                    type="number" step="0.01" min="0" inputMode="decimal"
+                    value={addRowForm.cost_per_unit}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, cost_per_unit: e.target.value }))}
+                    placeholder="e.g. 14.20"
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Quantity in stock</label>
+                  <input
+                    type="number" step="1" min="0" inputMode="numeric"
+                    value={addRowForm.stock_count}
+                    onChange={(e) => setAddRowForm((f) => ({ ...f, stock_count: e.target.value }))}
+                    placeholder="e.g. 24"
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
               </div>
+              <p className="-mt-1 text-[10px] text-slate-400">Selling prices below are calculated from cost × each channel margin.</p>
               <div>
                 <p className="mb-1 text-xs font-bold text-slate-600">Show on channels:</p>
                 <div className="flex flex-wrap gap-2 text-xs">

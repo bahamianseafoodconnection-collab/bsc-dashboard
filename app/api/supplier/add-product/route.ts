@@ -46,7 +46,7 @@ interface AddProductBody {
   channel_prices?:    unknown;
   channels?:          unknown;
   image_url?:         unknown;
-  photo_urls?:        unknown;
+  stock_count?:       unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -110,15 +110,16 @@ export async function POST(req: NextRequest) {
   const sellOnline    = channelsRaw.online    === true;
   const sellWholesale = channelsRaw.wholesale === true;
 
-  // Photos uploaded client-side to site-images bucket. Primary photo
-  // → products.image_url so /market thumbnails render. Full set →
-  // products.photo_urls (text[]). Both optional — products can be
-  // added without photos when a founder is dumping a price list and
-  // will photo-pass later.
+  // Photo uploaded client-side to site-images bucket → products.image_url
+  // so /market thumbnails render. Optional — products can be added without
+  // a photo when dumping a price list, and photo-passed later.
+  // (products has no photo_urls column, so only image_url is stored.)
   const imageUrl  = typeof body.image_url === 'string' && body.image_url.trim() ? body.image_url.trim() : null;
-  const photoUrls = Array.isArray(body.photo_urls)
-    ? (body.photo_urls as unknown[]).filter((u): u is string => typeof u === 'string' && u.length > 0)
-    : [];
+
+  // Opening quantity in stock (optional). Column added in migration
+  // 20260527160000; the inventory grid reads/writes it.
+  const stockCount = typeof body.stock_count === 'number' && Number.isFinite(body.stock_count) && body.stock_count >= 0
+                       ? Math.round(body.stock_count) : null;
 
   if (!supplierId || !sku || !name || !category || !unitOfMeasure) {
     return NextResponse.json(
@@ -156,7 +157,7 @@ export async function POST(req: NextRequest) {
   };
   if (packSize)    productRow.pack_size  = packSize;
   if (imageUrl)    productRow.image_url  = imageUrl;
-  if (photoUrls.length > 0) productRow.photo_urls = photoUrls;
+  if (stockCount !== null) productRow.stock_count = stockCount;
 
   const { data: inserted, error: insertErr } = await admin
     .from('products')
