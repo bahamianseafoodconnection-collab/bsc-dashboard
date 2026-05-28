@@ -274,6 +274,12 @@ export default function AdminInventoryPage() {
   // Bump to force the grid to reload prices (e.g. after a margin cascade).
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // The product just added — pinned to the top of the grid + highlighted +
+  // exempt from search/supplier filters so it's always visibly confirmed
+  // (a numeric SKU could otherwise sort-bury it among 100+ rows, which
+  // looked like the add "disappearing"). Auto-clears after 45s.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+
   // ─── Channel margins panel (founder direction 2026-05-28) ────────────
   // Edit a channel's margin %, then apply → reprices ALL products on that
   // channel from current cost × (1 + margin), instantly.
@@ -432,12 +438,18 @@ export default function AdminInventoryPage() {
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
       // Reload from the server so the auto-computed per-channel prices show
-      // exactly as priced (no hardcoded margin guesses that could drift).
+      // exactly as priced. Clear filters + pin the new product to the top so
+      // it's always visible (numeric SKUs could otherwise sort-bury it).
       showToast(true, selectedLabels.length > 0
         ? `${json.sku} added — live on ${selectedLabels.join(', ')}`
         : `${json.sku} — ${f.name} added`);
       setShowAddRow(false);
+      setSearch('');
+      setFilterSupplier('');
+      setFilterStatus('active');
+      setJustAddedId(json.product_id as string);
       setRefreshTick((t) => t + 1);
+      setTimeout(() => setJustAddedId((cur) => (cur === json.product_id ? null : cur)), 45_000);
     } catch (err) {
       showToast(false, `Add failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -714,6 +726,7 @@ export default function AdminInventoryPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filteredRows = rows.filter((r) => {
+      if (r.id === justAddedId) return true;  // just-added always shows
       if (filterSupplier && r.primary_supplier_id !== filterSupplier) return false;
       if (!q) return true;
       return (
@@ -724,6 +737,9 @@ export default function AdminInventoryPage() {
     });
     // Sort
     const sorted = [...filteredRows].sort((a, b) => {
+      // Pin the just-added product to the very top.
+      if (a.id === justAddedId && b.id !== justAddedId) return -1;
+      if (b.id === justAddedId && a.id !== justAddedId) return 1;
       const av = (a as unknown as Record<string, unknown>)[sortField];
       const bv = (b as unknown as Record<string, unknown>)[sortField];
       // Nulls sink to bottom regardless of sort direction
@@ -738,7 +754,7 @@ export default function AdminInventoryPage() {
       return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as);
     });
     return sorted;
-  }, [rows, search, filterSupplier, sortField, sortDir]);
+  }, [rows, search, filterSupplier, sortField, sortDir, justAddedId]);
 
   // Quick stats summary at the top
   const stats = useMemo(() => {
@@ -1351,7 +1367,10 @@ export default function AdminInventoryPage() {
                     r.stock_count != null && r.stock_count >= 0 &&
                     (r.stock_count === 0 || (r.low_stock_threshold != null && r.stock_count <= r.low_stock_threshold));
                   return (
-                  <tr key={r.id} className={`hover:bg-slate-50 ${selectedIds.has(r.id) ? 'bg-navy-50/30' : ''}`}>
+                  <tr key={r.id} className={`hover:bg-slate-50 ${
+                    r.id === justAddedId ? 'bg-emerald-50 ring-2 ring-emerald-300' :
+                    selectedIds.has(r.id) ? 'bg-navy-50/30' : ''
+                  }`}>
                     <Td align="center">
                       <input
                         type="checkbox"
@@ -1360,7 +1379,12 @@ export default function AdminInventoryPage() {
                         aria-label={`Select ${r.sku}`}
                       />
                     </Td>
-                    <Td><span className="font-mono">{r.sku}</span></Td>
+                    <Td>
+                      <span className="font-mono">{r.sku}</span>
+                      {r.id === justAddedId && (
+                        <span className="ml-1.5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>
+                      )}
+                    </Td>
                     <Td>
                       <button
                         type="button"
