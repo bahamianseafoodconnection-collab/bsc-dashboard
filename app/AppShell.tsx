@@ -210,6 +210,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     pathname === '/' ||
     NO_NAV_PREFIXES.some(prefix => pathname.startsWith(prefix));
 
+  // Consistent "back to dashboard" control on every admin + founder
+  // screen (and dashboard sub-pages). These routes have no bottom nav,
+  // so this is the reliable way back to the control center. Hidden on
+  // the dashboard home itself.
+  const showBackToDashboard =
+    pathname !== '/dashboard' && (
+      pathname.startsWith('/admin') ||
+      pathname.startsWith('/founder-ai') ||
+      pathname.startsWith('/dashboard/')
+    );
+
   const navItems =
     roleState !== 'loading' &&
     roleState !== 'unauthenticated' &&
@@ -223,6 +234,36 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main style={{ flex: 1, paddingBottom: (hideNav || roleState === 'loading') ? 0 : 'calc(64px + env(safe-area-inset-bottom))' }}>
           {children}
         </main>
+
+        {showBackToDashboard && (
+          <button
+            onClick={() => router.push('/dashboard')}
+            aria-label="Back to dashboard"
+            style={{
+              position: 'fixed',
+              left: 'calc(12px + env(safe-area-inset-left))',
+              bottom: 'calc(16px + env(safe-area-inset-bottom))',
+              zIndex: 60,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '10px 16px',
+              borderRadius: 9999,
+              background: '#1a2e5a',
+              color: '#f5c518',
+              border: '1px solid rgba(245,197,24,0.35)',
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+              WebkitBackdropFilter: 'blur(6px)',
+              backdropFilter: 'blur(6px)',
+            }}
+          >
+            <span style={{ fontSize: 15, lineHeight: 1 }}>←</span>
+            Dashboard
+          </button>
+        )}
 
         {!hideNav && roleState !== 'loading' && (
           <nav style={{
