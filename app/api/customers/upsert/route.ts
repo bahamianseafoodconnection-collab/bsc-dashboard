@@ -105,12 +105,12 @@ export async function POST(req: Request) {
       full_name: name,
       phone,
       email,
-      source,
+      origin_channel: source,   // customers has origin_channel (no 'source' column)
       auth_user_id: authUserId,
       first_seen_at: nowIso,
       last_seen_at: nowIso,
       total_orders: orderTotal != null ? 1 : 0,
-      total_spent_bsd: orderTotal != null ? round2(orderTotal) : 0,
+      total_spent: orderTotal != null ? round2(orderTotal) : 0,   // column is total_spent (no _bsd)
     };
     const { data: inserted, error: insErr } = await admin
       .from('customers')
@@ -167,9 +167,9 @@ export async function POST(req: Request) {
 
   if (orderTotal != null) {
     const prevOrders = Number((existing?.total_orders as number) ?? 0);
-    const prevSpent = Number((existing?.total_spent_bsd as number) ?? 0);
+    const prevSpent = Number((existing?.total_spent as number) ?? 0);
     update.total_orders = prevOrders + 1;
-    update.total_spent_bsd = round2(prevSpent + orderTotal);
+    update.total_spent = round2(prevSpent + orderTotal);
   }
 
   const { error: updErr } = await admin
