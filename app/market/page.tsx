@@ -197,13 +197,15 @@ function MarketPageInner() {
         }
       }
 
-      // Step 2: Fetch active online products. Now also pulling unit_type
-      // so priceCartLine() can decide qty-vs-weight wholesale qualification,
-      // plus the special_* columns so we can override price during an
-      // active "closed date" promotion window.
+      // Step 2: Fetch active online products. unit_of_measure is the
+      // source of truth for lb/each/case (the inventory spreadsheet edits
+      // it; a DB trigger keeps the legacy unit_type column in sync). We
+      // read unit_of_measure here so lb products always price + display as
+      // weight-based even if unit_type ever drifts. Plus the special_*
+      // columns to override price during a "closed date" promo window.
       const { data: mp, error: mpErr } = await supabase
         .from('products')
-        .select('id, sku, name, description, category, image_url, sell_online, status, unit_type, special_price, special_starts_at, special_ends_at, special_label')
+        .select('id, sku, name, description, category, image_url, sell_online, status, unit_of_measure, unit_type, special_price, special_starts_at, special_ends_at, special_label')
         .eq('sell_online', true)
         .eq('status', 'active')
         .in('id', productIds)
@@ -220,6 +222,8 @@ function MarketPageInner() {
         const startMs = p.special_starts_at ? new Date(p.special_starts_at).getTime() : -Infinity;
         const endMs   = p.special_ends_at   ? new Date(p.special_ends_at).getTime()   :  Infinity;
         const onSpecial = p.special_price != null && startMs <= nowMs && nowMs <= endMs;
+        // unit_of_measure is authoritative; fall back to unit_type only if null.
+        const uom = (p.unit_of_measure ?? p.unit_type ?? 'each') as string;
         return {
           id: p.id,
           source: 'market' as const,
@@ -230,8 +234,9 @@ function MarketPageInner() {
           price: regular,
           special_price: onSpecial ? Number(p.special_price) : null,
           wholesale_price: wholesaleMap.get(p.id) ?? null,
-          unit_type: p.unit_type ?? 'each',
-          unit: p.unit_type === 'lb' ? 'lb' : 'each',
+          unit_type: uom,
+          unit: uom === 'lb' ? 'lb' : uom === 'case' ? 'case' : 'each',
+          // lb products are weighed → default to 1 lb and allow decimals.
           min_qty: 1,
           image_url: p.image_url || '',
           in_stock: true,
@@ -338,10 +343,20 @@ function MarketPageInner() {
   }
 
   function updateQty(id: string, source: string, qty: number) {
-    if (qty < 1) {
+    // lb products are weighed → decimals allowed (0.75, 2.45). each/case
+    // step by whole min_qty. Anything at or below 0 removes the line.
+    if (qty <= 0) {
       setCart((prev) => prev.filter((i) => !(i.id === id && i.source === source)));
       return;
     }
+    setCart((prev) =>
+      prev.map((i) => (i.id === id && i.source === source ? { ...i, qty } : i))
+    );
+  }
+
+  // Set an exact (possibly decimal) qty without the "≤0 removes" guard, so
+  // a half-typed lb weight ("0.") doesn't yank the line out of the cart.
+  function setExactQty(id: string, source: string, qty: number) {
     setCart((prev) =>
       prev.map((i) => (i.id === id && i.source === source ? { ...i, qty } : i))
     );
@@ -678,7 +693,7 @@ function MarketPageInner() {
       {/* ─── Cart drawer ─── */}
       {showCart && (
         <CartDrawer cart={cart} cartCount={cartCount} cartTotal={cartTotal} wholesaleLines={wholesaleLines}
-          onClose={() => setShowCart(false)} onUpdateQty={updateQty}
+          onClose={() => setShowCart(false)} onUpdateQty={updateQty} onSetQty={setExactQty}
           onPlaceOrder={placeOrder} placing={placing}
           onCheckout={() => { setShowCart(false); router.push('/checkout'); }} />
       )}
@@ -885,9 +900,10 @@ function TrustBar() {
   );
 }
 
-function CartDrawer({ cart, cartCount, cartTotal, wholesaleLines, onClose, onUpdateQty, onPlaceOrder, placing, onCheckout }: {
+function CartDrawer({ cart, cartCount, cartTotal, wholesaleLines, onClose, onUpdateQty, onSetQty, onPlaceOrder, placing, onCheckout }: {
   cart: CartItem[]; cartCount: number; cartTotal: number; wholesaleLines: number; onClose: () => void;
   onUpdateQty: (id: string, source: string, qty: number) => void;
+  onSetQty: (id: string, source: string, qty: number) => void;
   onPlaceOrder: () => void; placing: boolean; onCheckout: () => void;
 }) {
   return (
@@ -911,7 +927,7 @@ function CartDrawer({ cart, cartCount, cartTotal, wholesaleLines, onClose, onUpd
               <div className="mt-1 text-xs text-slate-500">Browse the market and add some products.</div>
             </div>
           ) : (
-            <CartGroups cart={cart} onUpdateQty={onUpdateQty} />
+            <CartGroups cart={cart} onUpdateQty={onUpdateQty} onSetQty={onSetQty} />
           )}
         </div>
         {cart.length > 0 && (
@@ -941,8 +957,9 @@ function CartDrawer({ cart, cartCount, cartTotal, wholesaleLines, onClose, onUpd
   );
 }
 
-function CartGroups({ cart, onUpdateQty }: {
+function CartGroups({ cart, onUpdateQty, onSetQty }: {
   cart: CartItem[]; onUpdateQty: (id: string, source: string, qty: number) => void;
+  onSetQty: (id: string, source: string, qty: number) => void;
 }) {
   const groups = ['market', ...BRAND_KEYS];
   return (
@@ -980,7 +997,7 @@ function CartGroups({ cart, onUpdateQty }: {
                         style={{ backgroundColor: brand.light, color: brand.color }}>{item.sku}</span>
                     )}
                     <div className="mt-1 text-xs text-slate-500">
-                      BSD ${p.unit_price.toFixed(2)} × {item.qty}{' '}
+                      BSD ${p.unit_price.toFixed(2)}{item.unit === 'lb' ? '/lb' : ''} × {item.qty}{item.unit === 'lb' ? ' lb' : ''}{' '}
                       <span className="font-bold text-navy">= ${lineTotal.toFixed(2)}</span>
                       {p.upgraded_to_wholesale && (
                         <span className="ml-1 text-[10px] line-through text-slate-400">
@@ -994,11 +1011,42 @@ function CartGroups({ cart, onUpdateQty }: {
                       </div>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}>−</QtyButton>
-                    <span className="min-w-6 text-center text-sm font-bold text-navy">{item.qty}</span>
-                    <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}>+</QtyButton>
-                  </div>
+                  {item.unit === 'lb' ? (
+                    // Weighed product → decimal pounds entry (e.g. 2.45, 0.75).
+                    <div className="flex shrink-0 flex-col items-end gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*\.?[0-9]*"
+                          value={String(item.qty)}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/[^0-9.]/g, '');
+                            const n = parseFloat(raw);
+                            onSetQty(item.id, item.source, Number.isFinite(n) ? n : 0);
+                          }}
+                          onBlur={(e) => {
+                            const n = parseFloat(e.target.value);
+                            onUpdateQty(item.id, item.source, Number.isFinite(n) && n > 0 ? n : 0);
+                          }}
+                          className="w-16 rounded-md border border-slate-300 px-2 py-1 text-right text-sm font-bold text-navy focus:border-navy focus:outline-none"
+                          aria-label={`Weight in pounds for ${item.name}`}
+                        />
+                        <span className="text-xs font-semibold text-slate-500">lb</span>
+                      </div>
+                      <button
+                        onClick={() => onUpdateQty(item.id, item.source, 0)}
+                        className="text-[10px] font-semibold text-slate-400 hover:text-red-500">
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty - item.min_qty)}>−</QtyButton>
+                      <span className="min-w-6 text-center text-sm font-bold text-navy">{item.qty}</span>
+                      <QtyButton onClick={() => onUpdateQty(item.id, item.source, item.qty + item.min_qty)}>+</QtyButton>
+                    </div>
+                  )}
                 </div>
               );
             })}

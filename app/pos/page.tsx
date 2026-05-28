@@ -258,7 +258,7 @@ export default function POSPage() {
       // the regular price at POS just like it does on /market.
       const { data: productsRaw, error: prodErr } = await supabase
         .from('products')
-        .select('id, sku, barcode, name, category, is_bsc_processed, unit_type, special_price, special_starts_at, special_ends_at, special_label, product_pricing!inner(manual_unit_price)')
+        .select('id, sku, barcode, name, category, is_bsc_processed, unit_of_measure, unit_type, special_price, special_starts_at, special_ends_at, special_label, product_pricing!inner(manual_unit_price)')
         .eq('sell_nassau', true)
         .eq('status', 'active')
         .eq('product_pricing.channel', 'nassau_pos')
@@ -327,7 +327,10 @@ export default function POSPage() {
           wholesale_price: wholesaleMap.get(p.id) ?? null,
           promo_price:     effectivePromo,
           promo_label:     effectiveLabel,
-          is_per_lb:       p.unit_type === 'lb',
+          // unit_of_measure is the source of truth (a DB trigger keeps
+          // unit_type synced). Read it so lb products always weigh-in with
+          // decimals even if unit_type ever drifts.
+          is_per_lb:       (p.unit_of_measure ?? p.unit_type) === 'lb',
         }
       })
 
