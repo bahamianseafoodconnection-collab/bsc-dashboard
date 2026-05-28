@@ -18,7 +18,7 @@ import { createBrowserClient } from '@supabase/ssr';
 import { supabase as supaAuth } from '@/lib/supabase';
 import {
   availableActions, actionLabel, customerStage,
-  type TransitionAction, type FulfillmentStatus,
+  type TransitionAction,
 } from '@/lib/order-status';
 
 const supabase = createBrowserClient(
@@ -43,8 +43,6 @@ interface OrderCard {
   pod_photo_urls:      string[] | null;
 }
 
-const ACTIVE_STATES: FulfillmentStatus[] = ['placed', 'preparing', 'collected', 'in_transit', 'out_for_delivery'];
-
 export default function DriverPage() {
   const [authState, setAuthState] = useState<'checking' | 'no_session' | 'forbidden' | 'ok'>('checking');
   const [orders, setOrders]   = useState<OrderCard[]>([]);
@@ -63,13 +61,20 @@ export default function DriverPage() {
 
   async function loadOrders() {
     setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('id, fulfillment_status, customer_name, customer_phone, customer_address, delivery_directions, delivery_lat, delivery_lng, total, created_at, wholesale_items, pod_photo_urls')
-      .in('fulfillment_status', ACTIVE_STATES)
-      .order('created_at', { ascending: true });
-    setOrders((data ?? []) as OrderCard[]);
-    setLoading(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/driver/queue', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: 'no-store',
+      });
+      const json = await res.json();
+      setOrders(res.ok && json.ok ? (json.orders as OrderCard[]) : []);
+    } catch {
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -107,7 +112,7 @@ export default function DriverPage() {
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
       showToast(true, `${order.id.slice(0, 8)} → ${json.customer_label}`);
-      // If delivered/cancelled it drops out of ACTIVE_STATES → refetch
+      // If delivered/cancelled it leaves the active queue → refetch
       await loadOrders();
     } catch (err) {
       showToast(false, err instanceof Error ? err.message : String(err));
