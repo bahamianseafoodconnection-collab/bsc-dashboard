@@ -380,18 +380,22 @@ function MarketPageInner() {
         upgraded_to_wholesale: p.upgraded_to_wholesale,
       };
     });
-    await supabase.from('orders').insert({
-      order_type: 'online_market',
-      channel: 'online_market',
-      payment_method: 'cod',
-      status: 'pending',
-      payment_status: 'pending',
-      fulfillment_status: 'placed',           // enter the delivery lifecycle / driver queue
-      items,
-      total: +cartTotal.toFixed(2),           // orders.total (there is no total_amount column)
-      customer_id: session?.user.id || null,
-      location: 'online',
-    });
+    // Create through the service-role endpoint (status/payment_status/
+    // fulfillment_status are forced server-side). Lets us lock direct
+    // client INSERT to staff-only — online orders always go through here.
+    await fetch('/api/orders/place', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        order_type: 'online_market',
+        channel: 'online_market',
+        payment_method: 'cod',
+        items,
+        total: +cartTotal.toFixed(2),
+        customer_id: session?.user.id || null,
+        location: 'online',
+      }),
+    }).catch((err) => console.warn('Market order place failed:', err));
     setPlacing(false);
     setOrderDone(true);
     setCart([]);
