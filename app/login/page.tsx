@@ -23,15 +23,46 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Resend-confirmation state — surfaced when sign-in fails because the
+  // email was never confirmed.
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
+
+  async function handleResendConfirmation() {
+    if (!email.trim()) { setResendMsg('Enter your email above first.'); return; }
+    setResending(true);
+    setResendMsg('');
+    try {
+      const { error: err } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/confirmed` : undefined,
+        },
+      });
+      setResendMsg(err
+        ? `Couldn't resend: ${err.message}`
+        : '✅ Confirmation email sent — check your inbox (and spam).');
+    } catch (err) {
+      setResendMsg(`Couldn't resend: ${err instanceof Error ? err.message : 'try again'}`);
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setNeedsConfirm(false);
+    setResendMsg('');
     try {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password });
       if (err) {
         setError(err.message);
+        // Supabase returns "Email not confirmed" when the link was never used.
+        if (/not confirmed|confirm/i.test(err.message)) setNeedsConfirm(true);
         setLoading(false);
         return;
       }
@@ -202,6 +233,23 @@ export default function LoginPage() {
                 <div className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-semibold text-red-600">
                   <span>⚠️</span>
                   <span>{error}</span>
+                </div>
+              )}
+
+              {/* Resend confirmation — shown when sign-in failed on an
+                  unconfirmed email (or any time, as a recovery affordance). */}
+              {(needsConfirm || resendMsg) && mode === 'signin' && (
+                <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm">
+                  <p className="font-semibold text-amber-800">Didn’t get your confirmation email?</p>
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={resending}
+                    className="mt-2 rounded-lg bg-navy px-3.5 py-2 text-xs font-extrabold text-gold hover:opacity-90 disabled:opacity-50"
+                  >
+                    {resending ? 'Sending…' : '✉️ Resend confirmation email'}
+                  </button>
+                  {resendMsg && <p className="mt-2 text-xs font-semibold text-slate-600">{resendMsg}</p>}
                 </div>
               )}
 
