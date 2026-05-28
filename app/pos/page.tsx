@@ -37,6 +37,7 @@ interface Product {
   promo_price: number | null
   promo_label: string | null
   is_per_lb: boolean
+  unit: string                    // 'lb' | 'each' | 'case' — always shown on the card
 }
 
 interface CartItem {
@@ -85,6 +86,16 @@ function formatRemaining(ms: number): string {
   const h = Math.floor(totalMin / 60)
   const m = totalMin % 60
   return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+// Size/unit denomination shown on every POS product card.
+function unitLabel(unit: string | null | undefined): string {
+  switch (unit) {
+    case 'lb':   return '/lb'
+    case 'case': return '/case'
+    case 'each': return 'each'
+    default:     return unit ? `/${unit}` : 'each'
+  }
 }
 
 interface CashierSession {
@@ -331,6 +342,7 @@ export default function POSPage() {
           // unit_type synced). Read it so lb products always weigh-in with
           // decimals even if unit_type ever drifts.
           is_per_lb:       (p.unit_of_measure ?? p.unit_type) === 'lb',
+          unit:            (p.unit_of_measure ?? p.unit_type ?? 'each') as string,
         }
       })
 
@@ -1060,8 +1072,8 @@ export default function POSPage() {
                   <div className="mt-2 flex items-baseline gap-1.5 flex-wrap">
                     <span className="text-base font-bold" style={{ color: '#f5c518' }}>${displayPrice.toFixed(2)}</span>
                     {hasPromo && <span className="text-xs text-gray-500 line-through">${product.sell_price.toFixed(2)}</span>}
-                    {/* ✅ Shows /lb for weight-based products */}
-                    {product.is_per_lb && <span className="text-xs text-gray-400">/lb</span>}
+                    {/* Size/unit ALWAYS shows so the cashier knows how each item is priced */}
+                    <span className="text-xs text-gray-400">{unitLabel(product.unit)}</span>
                   </div>
                 </button>
               )
@@ -1224,13 +1236,13 @@ export default function POSPage() {
                 <div className="space-y-3">
                   {cart.map((item, i) => {
                     const { pricing, line_subtotal } = lineInfo(item)
-                    const unitLabel = item.product.is_per_lb ? '/lb' : ''
+                    const unitSuffix = item.product.is_per_lb ? '/lb' : ''
                     return (
                       <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-xl p-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{item.product.name}</p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            ${pricing.unit_price.toFixed(2)}{unitLabel}
+                            ${pricing.unit_price.toFixed(2)}{unitSuffix}
                             {item.product.is_per_lb && item.weight_lb
                               ? ` × ${item.weight_lb.toFixed(2)} lbs`
                               : item.quantity > 1 ? ` × ${item.quantity}` : ''}
