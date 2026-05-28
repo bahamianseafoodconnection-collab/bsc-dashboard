@@ -122,10 +122,43 @@ export default function AdminInventoryPage() {
   const [addRowForm, setAddRowForm] = useState({
     supplier_id: '', sku: '', name: '', category: 'frozen_seafood' as string,
     unit_of_measure: 'each', pack_size: '',
-    cost_per_unit: '', online_sell_price: '',
+    cost_per_unit: '', online_sell_price: '', image_url: '',
     sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
   });
   const [addRowSaving, setAddRowSaving] = useState(false);
+
+  // Add-Product modal photo upload (camera / gallery / file — one input,
+  // no `capture` attribute so the OS offers all three on mobile).
+  const addPhotoRef = useRef<HTMLInputElement>(null);
+  const [addPhotoUploading, setAddPhotoUploading] = useState(false);
+
+  async function onAddRowPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAddPhotoUploading(true);
+    try {
+      if (file.size > 12 * 1024 * 1024) throw new Error('File over 12 MB');
+      const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
+      const slug = (addRowForm.sku.trim() || 'new').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const path = `products/${slug}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, file, {
+          upsert:       true,
+          contentType:  file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          cacheControl: '3600',
+        });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('site-images').getPublicUrl(path);
+      setAddRowForm((f) => ({ ...f, image_url: urlData.publicUrl }));
+      showToast(true, '📸 Photo attached');
+    } catch (err) {
+      showToast(false, `Photo upload failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAddPhotoUploading(false);
+    }
+  }
 
   // Bump to force the grid to reload prices (e.g. after a margin cascade).
   const [refreshTick, setRefreshTick] = useState(0);
@@ -206,7 +239,7 @@ export default function AdminInventoryPage() {
     setAddRowForm({
       supplier_id: '', sku: '', name: '', category: 'frozen_seafood',
       unit_of_measure: 'each', pack_size: '',
-      cost_per_unit: '', online_sell_price: '',
+      cost_per_unit: '', online_sell_price: '', image_url: '',
       sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
     });
     setShowAddRow(true);
@@ -239,6 +272,8 @@ export default function AdminInventoryPage() {
           pack_size:         f.pack_size.trim() || undefined,
           cost_per_unit:     cost,
           online_sell_price: price,
+          image_url:         f.image_url || undefined,
+          photo_urls:        f.image_url ? [f.image_url] : undefined,
           channels: {
             nassau:    f.sell_nassau,
             andros:    f.sell_andros,
@@ -758,17 +793,26 @@ export default function AdminInventoryPage() {
         className="hidden"
       />
 
-      {/* Phase 4 — Add Row modal (in-page, no redirect) */}
+      {/* Phase 4 — Add Row modal. Bottom-sheet on mobile, centered dialog on
+          desktop. Flex column with a scrollable body so every field + the
+          action buttons are always reachable on any screen size. */}
       {showAddRow && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
           onClick={() => !addRowSaving && setShowAddRow(false)}
         >
+          <input
+            ref={addPhotoRef}
+            type="file"
+            accept="image/*"
+            onChange={onAddRowPhoto}
+            className="hidden"
+          />
           <div
-            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+            className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b border-slate-200 px-5 py-3">
+            <div className="shrink-0 border-b border-slate-200 px-5 py-3">
               <h2 className="text-base font-extrabold text-navy">+ Add new product</h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 Sets up the product + its opening cost, then auto-prices it on every
@@ -776,7 +820,38 @@ export default function AdminInventoryPage() {
                 Online price is an optional manual override.
               </p>
             </div>
-            <div className="space-y-3 p-5">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
+              {/* Product photo — camera / gallery / file */}
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Product photo</label>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                    {addRowForm.image_url
+                      ? <img src={addRowForm.image_url} alt="" className="h-full w-full object-cover" />
+                      : <span className="text-2xl text-slate-300">📷</span>}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => addPhotoRef.current?.click()}
+                      disabled={addPhotoUploading}
+                      className="rounded-lg border-2 border-navy px-3 py-1.5 text-xs font-extrabold text-navy hover:bg-navy-50/40 disabled:opacity-50"
+                    >
+                      {addPhotoUploading ? 'Uploading…' : addRowForm.image_url ? '↻ Change photo' : '📷 Take / upload photo'}
+                    </button>
+                    {addRowForm.image_url && !addPhotoUploading && (
+                      <button
+                        type="button"
+                        onClick={() => setAddRowForm((f) => ({ ...f, image_url: '' }))}
+                        className="text-left text-[11px] font-semibold text-slate-400 hover:text-red-500"
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <span className="text-[10px] text-slate-400">Camera, gallery, or file · up to 12 MB</span>
+                  </div>
+                </div>
+              </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-slate-600">Supplier *</label>
                 <select
@@ -879,7 +954,7 @@ export default function AdminInventoryPage() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
               <button
                 onClick={() => setShowAddRow(false)}
                 disabled={addRowSaving}
