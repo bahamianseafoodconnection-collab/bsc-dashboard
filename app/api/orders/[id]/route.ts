@@ -36,8 +36,8 @@ const STAFF_ROLES = new Set([
 const PUBLIC_FIELDS =
   'id, order_number, created_at, order_type, status, payment_status, ' +
   'payment_method, payment_ref, subtotal, tax, vat_amount, delivery_fee, ' +
-  'total, delivery_type, delivery_address, customer_address, customer_name, ' +
-  'customer_phone, wholesale_items, items, promo_code, promo_discount, ' +
+  'total, wholesale_cost_total, delivery_type, delivery_address, customer_address, ' +
+  'customer_name, customer_phone, wholesale_items, items, promo_code, promo_discount, ' +
   'admin_notes, fulfillment_status, preparing_at, collected_at, in_transit_at, ' +
   'out_for_delivery_at, delivered_at, pod_photo_urls, delivery_directions';
 

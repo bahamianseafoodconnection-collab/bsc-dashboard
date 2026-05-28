@@ -99,17 +99,19 @@ function OrderDetailInner() {
       if (!session) { setAuthState('no_session'); setLoading(false); return; }
       setAuthState('ok');
 
-      // Load order — RLS will scope this to ones the user can see.
-      const { data: ord, error: ordErr } = await supabase
-        .from('orders')
-        .select('id, customer_name, customer_phone, customer_address, total, subtotal, vat_amount, payment_status, payment_method, payment_ref, delivery_type, admin_notes, created_at, order_type, fulfillment_status, wholesale_items')
-        .eq('id', orderId)
-        .maybeSingle();
-
+      // Load order through the secure server endpoint (orders RLS is
+      // locked to staff + owner; this authorizes staff/owner/guest-by-UUID).
+      const res = await fetch(`/api/orders/${orderId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      });
+      const json = await res.json().catch(() => null);
       if (cancelled) return;
-      if (ordErr) { setError(ordErr.message); setLoading(false); return; }
-      if (!ord)   { setError('Order not found — it may have been removed or you may not have access.'); setLoading(false); return; }
-      setOrder(ord as OrderRow);
+      if (!res.ok || !json?.ok) {
+        setError(json?.error || 'Order not found — it may have been removed or you may not have access.');
+        setLoading(false); return;
+      }
+      setOrder(json.order as OrderRow);
 
       // Load the latest payment_transactions row for this order so we
       // can show card brand + last 4 + auth code on the receipt.

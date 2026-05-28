@@ -55,13 +55,17 @@ export default function ReceiptPage() {
     if (!orderId) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .maybeSingle();
+      // Read through the secure server endpoint (orders RLS is locked to
+      // staff + owner; this authorizes staff/owner/guest-by-UUID).
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/orders/${orderId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: 'no-store',
+      });
+      const json = await res.json().catch(() => null);
       if (cancelled) return;
-      setOrder((data as OrderRow) ?? null);
+      setOrder(res.ok && json?.ok ? (json.order as OrderRow) : null);
       setLoading(false);
     })();
     return () => { cancelled = true; };

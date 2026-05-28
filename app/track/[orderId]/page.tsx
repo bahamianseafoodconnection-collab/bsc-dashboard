@@ -82,7 +82,8 @@ export default function TrackOrderPage() {
   const orderId = params?.orderId;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  // From /api/orders/[id]: 'staff' | 'owner' | 'guest'. Drives cancel access.
+  const [scope, setScope] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -90,19 +91,19 @@ export default function TrackOrderPage() {
     if (!orderId) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const [{ data }, { data: { user } }] = await Promise.all([
-        supabase
-          .from('orders')
-          .select(
-            'id, created_at, updated_at, order_type, status, payment_status, payment_method, total, wholesale_cost_total, delivery_type, customer_name, customer_phone, customer_address, wholesale_items, promo_code, promo_discount, user_id, admin_notes'
-          )
-          .eq('id', orderId)
-          .maybeSingle(),
-        supabase.auth.getUser(),
-      ]);
+      // Read through the secure server endpoint. orders RLS is locked to
+      // staff + owner; guests tracking by the order's UUID get limited
+      // fields. The returned `scope` (staff/owner/guest) gates cancel.
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/orders/${orderId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: 'no-store',
+      });
+      const json = await res.json().catch(() => null);
       if (cancelled) return;
-      setOrder((data as Order) ?? null);
-      setAuthUserId(user?.id ?? null);
+      setOrder(res.ok && json?.ok ? (json.order as Order) : null);
+      setScope(json?.scope ?? null);
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -147,8 +148,7 @@ export default function TrackOrderPage() {
   const ageMs = Date.now() - new Date(order.created_at).getTime();
   const live = order.status || order.payment_status || '';
   const canCancel =
-    !!authUserId &&
-    order.user_id === authUserId &&
+    (scope === 'owner' || scope === 'staff') &&
     CANCELLABLE.has(live) &&
     ageMs < CANCEL_WINDOW_MS;
 
