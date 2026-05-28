@@ -378,6 +378,16 @@ export default function AdminInventoryPage() {
     if (cost  !== null && (!Number.isFinite(cost)  || cost  < 0)) { showToast(false, 'Cost must be ≥ 0'); return; }
     if (price !== null && (!Number.isFinite(price) || price < 0)) { showToast(false, 'Online price must be ≥ 0'); return; }
 
+    // A product can only GO LIVE on a channel if it has a price there.
+    // Selected channels are priced from cost × margin, so a cost is required
+    // whenever any channel is ticked — otherwise it'd be flagged-but-unpriced
+    // (invisible / blank on POS + /market).
+    const selectedLabels = ADD_CHANNELS.filter(({ flag }) => f[flag]).map(({ label }) => label);
+    if (selectedLabels.length > 0 && cost === null) {
+      showToast(false, `Enter a cost so it can go live on ${selectedLabels.join(', ')} (price = cost × margin), or untick the channels.`);
+      return;
+    }
+
     // Per-channel selling prices from the founder's margin blocks:
     // price = cost × (1 + margin%). Only for enabled channels with a cost.
     const channelPrices: Record<string, number> = {};
@@ -423,7 +433,9 @@ export default function AdminInventoryPage() {
       if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
       // Reload from the server so the auto-computed per-channel prices show
       // exactly as priced (no hardcoded margin guesses that could drift).
-      showToast(true, `Added ${json.sku} — ${f.name}`);
+      showToast(true, selectedLabels.length > 0
+        ? `${json.sku} added — live on ${selectedLabels.join(', ')}`
+        : `${json.sku} — ${f.name} added`);
       setShowAddRow(false);
       setRefreshTick((t) => t + 1);
     } catch (err) {
