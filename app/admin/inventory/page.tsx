@@ -806,6 +806,14 @@ export default function AdminInventoryPage() {
     return sorted;
   }, [rows, search, filterSupplier, sortField, sortDir, justAddedId]);
 
+  // Cap how many rows render at once. A full unfiltered catalog (hundreds
+  // of rows × heavy cells + images) OOM-crashes mobile Safari ("a problem
+  // repeatedly occurred"), especially right after Add clears the filters.
+  // Keep the DOM small; the founder narrows with search/filter to see more.
+  const MAX_RENDER = 60;
+  const visibleRows = useMemo(() => filtered.slice(0, MAX_RENDER), [filtered]);
+  const cappedCount = Math.max(0, filtered.length - MAX_RENDER);
+
   // Quick stats summary at the top
   const stats = useMemo(() => {
     const n = filtered.length;
@@ -959,6 +967,11 @@ export default function AdminInventoryPage() {
               <Pill label="No photo" value={stats.noPhoto} tone={stats.noPhoto > 0 ? 'amber' : 'slate'} />
               <Pill label="No cost"  value={stats.noCost}  tone={stats.noCost > 0 ? 'red' : 'slate'} />
               <Pill label="No price" value={stats.noPrice} tone={stats.noPrice > 0 ? 'red' : 'slate'} />
+              {cappedCount > 0 && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+                  Showing first {MAX_RENDER} · {cappedCount} more — search or filter to narrow
+                </span>
+              )}
             </div>
           )}
 
@@ -1446,9 +1459,9 @@ export default function AdminInventoryPage() {
                   <Th align="center">
                     <input
                       type="checkbox"
-                      checked={filtered.length > 0 && filtered.every((r) => selectedIds.has(r.id))}
+                      checked={visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.id))}
                       onChange={(e) => {
-                        if (e.target.checked) setSelectedIds(new Set(filtered.map((r) => r.id)));
+                        if (e.target.checked) setSelectedIds(new Set(visibleRows.map((r) => r.id)));
                         else clearSelection();
                       }}
                       aria-label="Select all visible"
@@ -1474,7 +1487,7 @@ export default function AdminInventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((r) => {
+                {visibleRows.map((r) => {
                   const isCellEditing = (f: string) => editingCell?.id === r.id && editingCell?.field === f;
                   const startEdit = (f: string, currentVal: string | number | null | undefined) => {
                     setEditingValue(currentVal != null ? String(currentVal) : '');
