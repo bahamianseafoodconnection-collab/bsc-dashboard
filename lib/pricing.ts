@@ -103,6 +103,10 @@ export const BSC_PRICING_RULES: Record<PricingChannel, PricingRule> = {
 
 export const WHOLESALE_MIN_LBS = 10;
 export const VAT_PCT = 10;
+// Flat delivery fee added to every online order that has a delivery method
+// (founder: "all delivery cost is $5.00"). Single source of truth — used by
+// /checkout (display + total) and /api/orders/place (server-authoritative total).
+export const ONLINE_DELIVERY_FEE = 5;
 
 export function qualifiesAsWholesale(quantity: number, unit: SaleUnit): boolean {
   if (unit === 'case') return true;

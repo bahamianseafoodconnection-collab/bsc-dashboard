@@ -20,7 +20,7 @@ import {
 } from '@/lib/profit';
 import type { PaymentPayload } from '@/components/CardPaymentModal';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
-import type { SaleUnit } from '@/lib/pricing';
+import { type SaleUnit, ONLINE_DELIVERY_FEE } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -217,7 +217,8 @@ function CheckoutInner() {
     ? Math.min(promoApplied.discount_amount, subtotal)
     : 0;
   // Flat delivery fee on every online order (founder: "all delivery cost is $5.00").
-  const DELIVERY_FEE = 5;
+  // Shared with the server (/api/orders/place re-derives the authoritative total).
+  const DELIVERY_FEE = ONLINE_DELIVERY_FEE;
   const total = Math.max(0, subtotal - promoDiscount) + DELIVERY_FEE;
 
   // Re-validate (or drop) an applied promo whenever the cart changes — the
