@@ -37,6 +37,7 @@ const ALLOWED_ROLES = new Set(['founder', 'co_founder']);
 interface AddProductBody {
   supplier_id?:       unknown;
   sku?:               unknown;
+  barcode?:           unknown;
   name?:              unknown;
   category?:          unknown;
   unit_of_measure?:   unknown;
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
 
   const supplierId    = typeof body.supplier_id === 'string' ? body.supplier_id : '';
   const sku           = typeof body.sku === 'string' ? body.sku.trim() : '';
+  const barcode       = typeof body.barcode === 'string' && body.barcode.trim() ? body.barcode.trim() : null;
   const name          = typeof body.name === 'string' ? body.name.trim() : '';
   const category      = typeof body.category === 'string' ? body.category.trim() : '';
   const unitOfMeasure = typeof body.unit_of_measure === 'string' ? body.unit_of_measure.trim() : '';
@@ -162,6 +164,7 @@ export async function POST(req: NextRequest) {
     created_by:          user.id,
   };
   if (packSize)    productRow.pack_size  = packSize;
+  if (barcode)     productRow.barcode    = barcode;
   if (imageUrl)    productRow.image_url  = imageUrl;
   if (stockCount !== null) productRow.stock_count = stockCount;
   if (vatCategory) productRow.vat_category = vatCategory;

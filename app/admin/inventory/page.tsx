@@ -28,6 +28,7 @@ export const dynamic = 'force-dynamic';
 interface ProductRow {
   id:                   string;
   sku:                  string;
+  barcode:              string | null;
   name:                 string;
   description:          string | null;
   category:             string | null;
@@ -139,7 +140,7 @@ export default function AdminInventoryPage() {
   // Phase 4 — in-page Add Row modal
   const [showAddRow, setShowAddRow] = useState(false);
   const [addRowForm, setAddRowForm] = useState({
-    supplier_id: '', sku: '', name: '', category: 'frozen_seafood' as string,
+    supplier_id: '', sku: '', barcode: '', name: '', category: 'frozen_seafood' as string,
     unit_of_measure: 'each', pack_size: '',
     cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '', vat_category: 'zero_rated',
     sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
@@ -155,7 +156,7 @@ export default function AdminInventoryPage() {
   // Full edit of one product (name / category / UoM / pack / cost / stock /
   // channels / status / photo). Saves changed fields in one PATCH.
   type EditForm = {
-    name: string; category: string; unit_of_measure: string; pack_size: string;
+    name: string; barcode: string; category: string; unit_of_measure: string; pack_size: string;
     cost_per_unit: string; stock_count: string; status: string; vat_category: string;
     sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
   };
@@ -171,6 +172,7 @@ export default function AdminInventoryPage() {
     setEditProductId(r.id);
     setEditForm({
       name: r.name ?? '',
+      barcode: r.barcode ?? '',
       category: r.category ?? 'frozen_seafood',
       unit_of_measure: r.unit_of_measure ?? 'each',
       pack_size: r.pack_size ?? '',
@@ -211,6 +213,7 @@ export default function AdminInventoryPage() {
     // Only send fields that actually changed.
     const patch: Record<string, unknown> = {};
     if (editForm.name.trim() !== (orig.name ?? ''))                    patch.name = editForm.name.trim();
+    if ((editForm.barcode.trim() || null) !== (orig.barcode ?? null))  patch.barcode = editForm.barcode.trim() || null;
     if (editForm.category !== (orig.category ?? ''))                   patch.category = editForm.category;
     if (editForm.unit_of_measure !== (orig.unit_of_measure ?? ''))     patch.unit_of_measure = editForm.unit_of_measure;
     if ((editForm.pack_size.trim() || null) !== (orig.pack_size ?? null)) patch.pack_size = editForm.pack_size.trim() || null;
@@ -256,6 +259,7 @@ export default function AdminInventoryPage() {
         if (r.id !== editProductId) return r;
         const u: ProductRow = { ...r };
         if (patch.name !== undefined)            u.name = patch.name as string;
+        if (patch.barcode !== undefined)         u.barcode = patch.barcode as string | null;
         if (patch.category !== undefined)        u.category = patch.category as string;
         if (patch.unit_of_measure !== undefined) u.unit_of_measure = patch.unit_of_measure as string;
         if (patch.pack_size !== undefined)       u.pack_size = patch.pack_size as string | null;
@@ -405,7 +409,7 @@ export default function AdminInventoryPage() {
 
   function openAddRow() {
     setAddRowForm({
-      supplier_id: '', sku: '', name: '', category: 'frozen_seafood',
+      supplier_id: '', sku: '', barcode: '', name: '', category: 'frozen_seafood',
       unit_of_measure: 'each', pack_size: '',
       cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '', vat_category: 'zero_rated',
       sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
@@ -467,6 +471,7 @@ export default function AdminInventoryPage() {
         body: JSON.stringify({
           supplier_id:       f.supplier_id,
           sku:               f.sku.trim(),
+          barcode:           f.barcode.trim() || undefined,
           name:              f.name.trim(),
           category:          f.category,
           unit_of_measure:   f.unit_of_measure.trim(),
@@ -692,7 +697,7 @@ export default function AdminInventoryPage() {
         const { data: products, error: prodErr } = await supabase
           .from('products')
           .select(`
-            id, sku, name, description, category, unit_of_measure, pack_size,
+            id, sku, barcode, name, description, category, unit_of_measure, pack_size,
             vat_category, status, sell_nassau, sell_andros, sell_online, sell_wholesale,
             image_url, primary_supplier_id, stock_count, low_stock_threshold,
             suppliers:primary_supplier_id ( name )
@@ -1126,6 +1131,19 @@ export default function AdminInventoryPage() {
                   />
                 </div>
               </div>
+              <div>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Barcode (scan or type)</label>
+                <input
+                  type="text" value={addRowForm.barcode}
+                  onChange={(e) => setAddRowForm((f) => ({ ...f, barcode: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                  placeholder="Click here, then scan — or type the UPC/EAN"
+                  autoFocus
+                  inputMode="numeric"
+                  className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-mono"
+                />
+                <p className="mt-0.5 text-[10px] text-slate-400">Focus this box before scanning. Optional — leave blank if the item has no barcode.</p>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="mb-1 block text-xs font-bold text-slate-600">Category *</label>
@@ -1317,6 +1335,15 @@ export default function AdminInventoryPage() {
                   <input type="text" value={editForm.name}
                     onChange={(e) => setF({ name: e.target.value })}
                     className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-slate-600">Barcode (scan or type)</label>
+                  <input type="text" value={editForm.barcode}
+                    onChange={(e) => setF({ barcode: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                    placeholder="Click here, then scan — or type the UPC/EAN"
+                    inputMode="numeric"
+                    className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-mono" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
