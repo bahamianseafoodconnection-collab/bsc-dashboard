@@ -538,17 +538,24 @@ function MarketPageInner() {
       {/* ─── Flyer banner (Founder AI manages content via create_flyer) ─── */}
       <FlyerBanner />
 
-      {/* ─── Shop by category strip ─── */}
+      {/* ─── Deals strip — promotional categories (replaces the dept strip;
+            departments live in the account sidebar menu) ─── */}
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
-          <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-            {/* Departments match BSC categories 1:1 (lib/departments). Show all
-                so every department (incl. new ones) is browsable. */}
-            {DEPARTMENTS.map((c) => (
-              <Link key={c.slug} href={`/category/${c.slug}`}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-navy transition hover:border-navy hover:bg-navy hover:text-gold">
-                <span>{c.emoji}</span>
-                <span>{c.label}</span>
+          <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:gap-3 sm:px-6 [&::-webkit-scrollbar]:hidden">
+            {[
+              { slug: 'today',       label: "Today's Deals" },
+              { slug: 'hot',         label: 'Hot Deals' },
+              { slug: 'weekly',      label: 'Weekly Specials' },
+              { slug: 'close-dated', label: 'Close Dated Products' },
+              { slug: 'bulk',        label: 'Bulk Deals' },
+            ].map((d) => (
+              <Link
+                key={d.slug}
+                href={`/market?deal=${d.slug}`}
+                className="flex h-9 shrink-0 items-center justify-center rounded-md bg-navy px-4 text-xs font-extrabold uppercase tracking-wide text-gold shadow-sm transition hover:bg-navy-700 sm:h-10 sm:px-5 sm:text-sm"
+              >
+                {d.label}
               </Link>
             ))}
           </div>
