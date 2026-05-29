@@ -85,9 +85,14 @@ export async function POST(req: NextRequest) {
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
   // Verify order exists + ownership + pending state.
+  // NOTE: select('*') — NOT an explicit column list. orders has no
+  // customer_email (and currency may be absent); naming a missing column
+  // errors the whole query, which surfaced to customers as the misleading
+  // "Order not found" at card-payment start. '*' is robust to schema drift;
+  // optional fields just read back undefined and are handled below.
   const { data: order, error: orderErr } = await admin
     .from('orders')
-    .select('id, customer_id, total, subtotal, vat_amount, currency, payment_status, customer_email')
+    .select('*')
     .eq('id', orderId)
     .maybeSingle<OrderRow>();
   if (orderErr || !order) {
@@ -135,7 +140,7 @@ export async function POST(req: NextRequest) {
     currency:       order.currency || 'BSD',
     subtotal:       typeof order.subtotal === 'number'   ? order.subtotal.toFixed(2)   : undefined,
     taxAmount:      typeof order.vat_amount === 'number' ? order.vat_amount.toFixed(2) : undefined,
-    customerEmail:  order.customer_email ?? undefined,
+    customerEmail:  order.customer_email ?? user.email ?? undefined,
     successUrl:     `${origin}/api/payment/return/success`,
     badCardUrl:     `${origin}/api/payment/return/declined`,
     problemUrl:     `${origin}/api/payment/return/problem`,
