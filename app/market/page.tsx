@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import FlyerBanner from '@/components/FlyerBanner';
+import AccountDrawer from '@/components/AccountDrawer';
 import MarketplaceTabs from '@/components/MarketplaceTabs';
 import MarketHero from '@/components/MarketHero';
 import MarketPromoBanners from '@/components/MarketPromoBanners';
@@ -155,6 +156,7 @@ function MarketPageInner() {
     } catch { /* quota or private mode — silent ok */ }
   }, [cart]);
   const [showCart, setShowCart] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [orderDone, setOrderDone] = useState(false);
@@ -416,9 +418,21 @@ function MarketPageInner() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
 
+      {/* ─── Account slide-in panel (dims the marketplace behind it) ─── */}
+      <AccountDrawer open={showAccount} onClose={() => setShowAccount(false)} />
+
       {/* ─── Header ─── */}
       <header className="sticky top-0 z-40 bg-navy shadow-md">
         <div className="mx-auto flex h-14 max-w-screen-2xl items-center gap-3 px-3 sm:h-16 sm:gap-4 sm:px-6">
+
+          {/* ── Account / menu drawer trigger ── */}
+          <button
+            onClick={() => setShowAccount(true)}
+            aria-label="Open account menu"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-xl text-white transition hover:bg-white/20 sm:h-11 sm:w-11"
+          >
+            ☰
+          </button>
 
           {/* ── BSC Market Place logo (watercolor brand) ── */}
           <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="BSC Market Place — home">
