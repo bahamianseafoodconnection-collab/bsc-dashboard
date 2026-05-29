@@ -62,7 +62,8 @@ export default function AccountPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data: { user: u } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user ?? null;
       if (cancelled) return;
       setAuthChecked(true);
       if (!u) {
@@ -71,9 +72,8 @@ export default function AccountPage() {
       }
       setUser({ id: u.id, email: u.email ?? null });
 
-      const [{ data: prof }, { count: oCount }, { count: wCount }, addrLoad] = await Promise.all([
+      const [{ data: prof }, { count: wCount }, addrLoad] = await Promise.all([
         supabase.from('profiles').select('full_name, phone, language').eq('id', u.id).maybeSingle(),
-        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('user_id', u.id),
         supabase.from('wishlists').select('id', { count: 'exact', head: true }).eq('auth_user_id', u.id),
         supabase
           .from('customer_addresses')
@@ -86,11 +86,22 @@ export default function AccountPage() {
       setProfileName((prof?.full_name as string) || '');
       setProfilePhone((prof?.phone as string) || '');
       setProfileLang(((prof?.language as Lang | undefined) ?? 'en'));
-      setOrderCount(oCount ?? 0);
       setWishlistCount(wCount ?? 0);
       if (addrLoad.error) setAddressError(addrLoad.error.message);
       setAddresses((addrLoad.data || []) as Address[]);
       setAddressesLoaded(true);
+
+      // Order count via the service-role endpoint — orders has no user_id and
+      // customer_id is split (auth uid vs customers-record id), so the server
+      // resolves both. A direct client count would always read 0.
+      try {
+        const res = await fetch('/api/orders/mine', {
+          headers: { Authorization: `Bearer ${session!.access_token}` },
+        });
+        const json = await res.json();
+        if (!cancelled && res.ok && json?.ok) setOrderCount((json.orders ?? []).length);
+        else if (!cancelled) setOrderCount(0);
+      } catch { if (!cancelled) setOrderCount(0); }
     })();
     return () => { cancelled = true; };
   }, []);

@@ -38,6 +38,12 @@ function OrderConfirmedInner() {
 
   const ref = orderNo || (orderId ? orderId.slice(0, 8).toUpperCase() : '');
 
+  // Payment succeeded → empty the cart. The card flow leaves /checkout for the
+  // RBC page and returns here, so checkout's own cart-clear never runs.
+  useEffect(() => {
+    try { window.localStorage.removeItem('bsc_cart'); } catch { /* ignore */ }
+  }, []);
+
   // Best-effort fetch of the amount + order number (degrades silently).
   useEffect(() => {
     if (!orderId) return;
@@ -102,12 +108,28 @@ function OrderConfirmedInner() {
         </Link>
         {orderId && (
           <Link
-            href={`/receipt/${orderId}`}
-            className="block w-full rounded-xl border border-white/20 px-5 py-3 text-sm font-bold text-white/85 transition hover:bg-white/5"
+            href={`/track/${orderId}`}
+            className="block w-full rounded-xl border border-gold/40 px-5 py-3 text-sm font-bold text-gold transition hover:bg-white/5"
           >
-            🧾 View &amp; print receipt
+            📦 Track my order
           </Link>
         )}
+        <div className="flex gap-3">
+          {orderId && (
+            <Link
+              href={`/receipt/${orderId}`}
+              className="flex-1 rounded-xl border border-white/20 px-4 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/5"
+            >
+              🧾 Receipt
+            </Link>
+          )}
+          <Link
+            href="/my-orders"
+            className="flex-1 rounded-xl border border-white/20 px-4 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/5"
+          >
+            My orders
+          </Link>
+        </div>
       </div>
 
       <p className="mt-6 text-xs text-white/40">

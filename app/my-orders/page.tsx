@@ -2,9 +2,10 @@
 
 // app/my-orders/page.tsx
 //
-// Signed-in customer's order history. Pulls every orders row keyed to
-// their user_id (set at checkout). For guests / not-signed-in, shows
-// the lookup form pointing at /track/[orderId].
+// Signed-in customer's order history. Fetches /api/orders/mine (service-role:
+// orders RLS is owner/staff-locked and orders.customer_id is split between the
+// auth uid and a customers-record id, so the server resolves both). For guests
+// / not-signed-in, shows the lookup form pointing at /track/[orderId].
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -144,16 +145,16 @@ export default function MyOrdersPage() {
       }
       setSignedIn(true);
 
-      const { data } = await supabase
-        .from('orders')
-        .select(
-          'id, created_at, order_type, status, payment_status, payment_method, total, wholesale_cost_total, delivery_type, customer_address, wholesale_items'
-        )
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(100);
+      let list: Order[] = [];
+      try {
+        const res = await fetch('/api/orders/mine', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const json = await res.json();
+        if (res.ok && json?.ok) list = (json.orders ?? []) as Order[];
+      } catch { /* leave empty — UI shows the empty state */ }
       if (cancelled) return;
-      setOrders((data || []) as Order[]);
+      setOrders(list);
       setLoading(false);
     })();
     return () => { cancelled = true; };
