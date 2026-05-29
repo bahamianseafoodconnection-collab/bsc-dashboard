@@ -39,16 +39,16 @@ const TABS: ReadonlyArray<TabSpec> = [
   {
     key:    'fishermen',
     label:  'Direct from Bahamian Local Fishermen',
-    sub:    'Fresh catch · ship to your door',
-    href:   '/market?source=fisherman',
+    sub:    'Captains: sell your catch as Bulk Deals — apply →',
+    href:   '/become-a-supplier?type=fisherman',
     photo:  '/images/marketplace/fisherman.jpg',
     bgColor: '#0b3d5c',
   },
   {
     key:    'farmers',
     label:  'Direct from Bahamian Local Farmers',
-    sub:    'Locally grown · field to table',
-    href:   '/market?source=farmer',
+    sub:    'Farmers: sell your harvest as Bulk Deals — apply →',
+    href:   '/become-a-supplier?type=farmer',
     photo:  '/images/marketplace/farmer.jpg',
     bgColor: '#1f6644',
   },
@@ -67,12 +67,11 @@ const TABS: ReadonlyArray<TabSpec> = [
 export default function MarketplaceTabs() {
   const pathname     = usePathname() ?? '';
   const searchParams = useSearchParams();
-  const source       = (searchParams?.get('source') ?? '').toLowerCase();
 
   function isActive(tab: TabSpec): boolean {
     if (tab.key === 'bills')     return pathname.startsWith('/utilities');
-    if (tab.key === 'fishermen') return pathname.startsWith('/market') && source === 'fisherman';
-    if (tab.key === 'farmers')   return pathname.startsWith('/market') && source === 'farmer';
+    if (tab.key === 'fishermen') return pathname.startsWith('/become-a-supplier') && (searchParams?.get('type') ?? '') === 'fisherman';
+    if (tab.key === 'farmers')   return pathname.startsWith('/become-a-supplier') && (searchParams?.get('type') ?? '') === 'farmer';
     return false;
   }
 
