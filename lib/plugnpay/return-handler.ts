@@ -179,26 +179,19 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
   // Redirect the customer's browser. Different destinations per outcome
   // because the customer experience differs significantly.
   if (isPaid) {
-    return NextResponse.redirect(`${origin}/account/orders/${clientOrderId}?paid=1`);
+    // Branded, visual "Payment confirmed" screen → then on to the marketplace.
+    // (The old /account/orders/[id] target left customers stranded.)
+    return NextResponse.redirect(`${origin}/order-confirmed?order=${clientOrderId}`);
   }
-  if (outcome.bucket === 'fraud') {
-    // Silent treatment — never echo amount, code, or specific reason.
-    return NextResponse.redirect(`${origin}/checkout?problem=cannot_complete`);
+  // Hard decline / must-contact-bank / fraud → the clear "Payment declined"
+  // screen with the safe "contact your bank" copy. Fraud uses the same copy
+  // (silent treatment — never echo amount, code, or specific reason).
+  if (outcome.bucket === 'fraud'
+      || outcome.bucket === 'declined'
+      || outcome.bucket === 'contact'
+      || hint === 'declined') {
+    return NextResponse.redirect(`${origin}/payment-declined?reason=declined`);
   }
-  if (outcome.bucket === 'declined' || outcome.bucket === 'contact' || hint === 'declined') {
-    // Surface the friendly customer message. URL-encoded for safety.
-    const params = new URLSearchParams({
-      declined: '1',
-      code:     responseCode || '',
-      msg:      outcome.customer,
-    });
-    return NextResponse.redirect(`${origin}/checkout?${params.toString()}`);
-  }
-  // Retry / unknown / problem — invite the customer to try again.
-  const params = new URLSearchParams({
-    problem: '1',
-    retry:   '1',
-    msg:     outcome.customer,
-  });
-  return NextResponse.redirect(`${origin}/checkout?${params.toString()}`);
+  // Retry / unknown / gateway problem → "try again in a moment" screen.
+  return NextResponse.redirect(`${origin}/payment-declined?reason=problem`);
 }
