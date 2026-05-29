@@ -540,7 +540,7 @@ function MarketPageInner() {
 
       {/* ─── Deals strip — promotional categories (replaces the dept strip;
             departments live in the account sidebar menu) ─── */}
-      <section className="border-b border-slate-200 bg-slate-50">
+      <section className="bg-slate-50">
         <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:gap-3 sm:px-6 [&::-webkit-scrollbar]:hidden">
             {[
@@ -553,7 +553,7 @@ function MarketPageInner() {
               <Link
                 key={d.slug}
                 href={`/market?deal=${d.slug}`}
-                className="flex h-9 shrink-0 items-center justify-center rounded-md bg-navy px-4 text-xs font-extrabold uppercase tracking-wide text-gold shadow-sm transition hover:bg-navy-700 sm:h-10 sm:px-5 sm:text-sm"
+                className="flex h-9 shrink-0 items-center justify-center rounded-md bg-navy px-4 text-xs font-extrabold text-gold transition hover:bg-navy-700 sm:h-10 sm:px-5 sm:text-sm"
               >
                 {d.label}
               </Link>
