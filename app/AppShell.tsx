@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { supabase } from '@/lib/supabase';
 import { PageErrorBoundary } from './ErrorBoundary';
 import { t, type Lang } from '@/lib/i18n';
 import { isStaffSessionExpired, staffSessionBypassesFor, clearSignIn } from '@/lib/staff-session';
-
-const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const STAFF_ROLES = new Set([
   'founder','co_founder','cashier','manager','basic_admin','control_admin','andros_staff','supplier','receiver'
@@ -123,8 +120,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Lang>('en');
 
   useEffect(() => {
-    const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
-
     async function resolveRoleAndGuard() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -193,7 +188,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (roleState === 'loading' || roleState === 'unauthenticated') return;
     if (staffSessionBypassesFor(roleState)) return;
-    const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON);
     const tick = async () => {
       if (isStaffSessionExpired()) {
         clearSignIn();
