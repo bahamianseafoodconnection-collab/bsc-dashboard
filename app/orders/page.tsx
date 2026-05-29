@@ -57,6 +57,9 @@ type Order = {
   payment_status: string | null;
   payment_method: string | null;
   payment_ref: string | null;
+  // Reconciliation — bank transfer ID matched to the payment + audit.
+  payment_approval: string | null;     // bank transfer / settlement ID
+  payment_received_at: string | null;  // reconciled timestamp
 };
 
 // One finalized card transaction for the selected order — gateway order id +
@@ -127,6 +130,8 @@ function mapOrder(row: Record<string, unknown>): Order {
     payment_status: (row.payment_status as string | null) ?? null,
     payment_method: (row.payment_method as string | null) ?? null,
     payment_ref:    (row.payment_ref as string | null) ?? null,
+    payment_approval:    (row.payment_approval as string | null) ?? null,
+    payment_received_at: (row.payment_received_at as string | null) ?? null,
   };
 }
 
@@ -150,6 +155,11 @@ export default function OrdersPage() {
   const [fetching, setFetching]       = useState(true);
   const [fetchError, setFetchError]   = useState<string | null>(null);
   const [payTx, setPayTx]             = useState<PayTx | null>(null);
+  // Reconciliation (bank transfer ID match)
+  const [bankRef, setBankRef]         = useState('');
+  const [reconBusy, setReconBusy]     = useState(false);
+  const [reconErr, setReconErr]       = useState<string | null>(null);
+  const [filterRecon, setFilterRecon] = useState<'all' | 'awaiting' | 'reconciled'>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -180,6 +190,8 @@ export default function OrdersPage() {
   // row wins — /api/payment/start logs a pending attempt, the PnP return logs
   // the finalized one with the auth code. Staff-readable via RLS.
   useEffect(() => {
+    setBankRef('');
+    setReconErr(null);
     if (!selected) { setPayTx(null); return; }
     let cancelled = false;
     (async () => {
@@ -196,11 +208,40 @@ export default function OrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
+  const isReconciled = (o: Order) => !!(o.payment_approval || o.payment_received_at);
+
+  async function reconcile(order: Order) {
+    const ref = bankRef.trim();
+    if (!ref) { setReconErr('Enter the bank transfer ID first.'); return; }
+    setReconBusy(true);
+    setReconErr(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/orders/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ order_id: order.id, bank_transfer_id: ref }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      const patch = { payment_approval: ref, payment_received_at: j.reconciled_at as string };
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...patch } : o)));
+      if (selected?.id === order.id) setSelected({ ...order, ...patch });
+      setBankRef('');
+    } catch (err) {
+      setReconErr(err instanceof Error ? err.message : 'Could not reconcile');
+    } finally {
+      setReconBusy(false);
+    }
+  }
+
   const filtered = orders.filter((o) => {
     const matchSource = filterSource === 'all' || orderSource(o.order_type) === filterSource;
     const matchStatus = filterStatus === 'All' || o.status === filterStatus;
     const matchType   = filterType   === 'All' || o.type   === filterType;
-    return matchSource && matchStatus && matchType;
+    const matchRecon  = filterRecon === 'all'
+      || (filterRecon === 'reconciled' ? isReconciled(o) : !isReconciled(o));
+    return matchSource && matchStatus && matchType && matchRecon;
   });
   const onlineCount = orders.filter((o) => orderSource(o.order_type) === 'online').length;
   const posCount    = orders.filter((o) => orderSource(o.order_type) === 'pos').length;
@@ -326,6 +367,16 @@ export default function OrdersPage() {
         {['All', 'delivery', 'pickup'].map((t) => (
           <button key={t} onClick={() => setFilterType(t)} style={{ padding: '6px 14px', borderRadius: '20px', border: 'none', backgroundColor: filterType === t ? '#1a2e5a' : '#f0f0f0', color: filterType === t ? '#f4c842' : '#555', fontSize: '12px', fontWeight: filterType === t ? 800 : 500, cursor: 'pointer', textTransform: 'capitalize' }}>
             {t}
+          </button>
+        ))}
+        <div style={{ width: '1px', backgroundColor: '#e5e7eb', margin: '0 4px' }} />
+        {([
+          { key: 'all',        label: 'Payment: All' },
+          { key: 'awaiting',   label: '💰 Awaiting match' },
+          { key: 'reconciled', label: '✓ Reconciled' },
+        ] as const).map((r) => (
+          <button key={r.key} onClick={() => setFilterRecon(r.key)} style={{ padding: '6px 14px', borderRadius: '20px', border: 'none', backgroundColor: filterRecon === r.key ? '#2e7d32' : '#f0f0f0', color: filterRecon === r.key ? '#fff' : '#555', fontSize: '12px', fontWeight: filterRecon === r.key ? 800 : 500, cursor: 'pointer' }}>
+            {r.label}
           </button>
         ))}
       </div>
@@ -456,6 +507,40 @@ export default function OrdersPage() {
                           💵 Collect cash on delivery.
                         </div>
                       )}
+
+                      {/* Bank reconciliation — match the bank's transfer ID to the payment ID above */}
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #e5e7eb' }}>
+                        <div style={{ color: '#999', fontSize: 11, marginBottom: 6 }}>Bank reconciliation</div>
+                        {selected.payment_approval ? (
+                          <div style={{ fontSize: 12, color: '#2e7d32', fontWeight: 800, marginBottom: 8 }}>
+                            ✓ Reconciled — Bank transfer #{selected.payment_approval}
+                            {selected.payment_received_at && (
+                              <span style={{ color: '#999', fontWeight: 500 }}>{' · '}{new Date(selected.payment_received_at).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: '#d97706', fontWeight: 700, marginBottom: 8 }}>💰 Awaiting bank match</div>
+                        )}
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            value={bankRef}
+                            onChange={(e) => setBankRef(e.target.value)}
+                            placeholder="Bank transfer ID"
+                            style={{ flex: 1, minWidth: 0, border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontFamily: 'ui-monospace, monospace' }}
+                          />
+                          <button
+                            onClick={() => reconcile(selected)}
+                            disabled={reconBusy}
+                            style={{ backgroundColor: '#2e7d32', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 800, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', opacity: reconBusy ? 0.6 : 1 }}
+                          >
+                            {reconBusy ? 'Saving…' : selected.payment_approval ? 'Update' : 'Confirm'}
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 10, color: '#999', marginTop: 4 }}>
+                          Match the bank&apos;s transfer ID to the payment ID above — customer name + amount must agree.
+                        </div>
+                        {reconErr && <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 700, marginTop: 6 }}>{reconErr}</div>}
+                      </div>
                     </div>
                   </div>
                 );
