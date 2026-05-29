@@ -17,6 +17,7 @@ import MarketHero from '@/components/MarketHero';
 import MarketPromoBanners from '@/components/MarketPromoBanners';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import type { SaleUnit } from '@/lib/pricing';
+import { DEPARTMENTS } from '@/lib/departments';
 
 // Per-line pricing helper for online cart: auto-upgrades to wholesale
 // at 10+ lbs of one product (or by-case) when a wholesale snapshot exists.
@@ -529,15 +530,9 @@ function MarketPageInner() {
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-            {[
-              { slug: 'seafood',   label: 'Seafood',   emoji: '🦐' },
-              { slug: 'meat',      label: 'Meat',      emoji: '🥩' },
-              { slug: 'produce',   label: 'Produce',   emoji: '🥦' },
-              { slug: 'beverages', label: 'Beverages', emoji: '🥤' },
-              { slug: 'dairy',     label: 'Dairy',     emoji: '🥛' },
-              { slug: 'frozen',    label: 'Frozen',    emoji: '🧊' },
-              { slug: 'dry-goods', label: 'Dry Goods', emoji: '🌾' },
-            ].map((c) => (
+            {/* Departments match BSC categories 1:1 (lib/departments). Only show
+                those with live online products. */}
+            {DEPARTMENTS.filter((d) => products.some((p) => p.category === d.value)).map((c) => (
               <Link key={c.slug} href={`/category/${c.slug}`}
                 className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-navy transition hover:border-navy hover:bg-navy hover:text-gold">
                 <span>{c.emoji}</span>

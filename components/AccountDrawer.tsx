@@ -13,22 +13,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-
-const DEPARTMENTS = [
-  { slug: 'seafood',   label: 'Seafood',   emoji: '🦐' },
-  { slug: 'meat',      label: 'Meat',      emoji: '🥩' },
-  { slug: 'produce',   label: 'Produce',   emoji: '🥦' },
-  { slug: 'beverages', label: 'Beverages', emoji: '🥤' },
-  { slug: 'dairy',     label: 'Dairy',     emoji: '🥛' },
-  { slug: 'frozen',    label: 'Frozen',    emoji: '🧊' },
-  { slug: 'dry-goods', label: 'Dry Goods', emoji: '🌾' },
-];
+import { DEPARTMENTS, type Department } from '@/lib/departments';
 
 export default function AccountDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState<string | null>(null);
+  // Departments to show — only the BSC categories that currently have
+  // online-shoppable products (falls back to the full list if the probe fails).
+  const [depts, setDepts] = useState<Department[]>(DEPARTMENTS);
 
   // Load auth + name whenever the drawer opens.
   useEffect(() => {
@@ -36,13 +30,27 @@ export default function AccountDrawer({ open, onClose }: { open: boolean; onClos
     let cancelled = false;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!cancelled) {
+        if (!user) { setAuthed(false); setName(''); setEmail(null); }
+        else {
+          setAuthed(true);
+          setEmail(user.email ?? null);
+          setName((user.user_metadata?.full_name as string | undefined) || '');
+          const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+          if (!cancelled && prof?.full_name) setName(prof.full_name as string);
+        }
+      }
+
+      // Which BSC categories are live online → which departments to show.
+      const { data: cats } = await supabase
+        .from('products')
+        .select('category')
+        .eq('status', 'active')
+        .eq('sell_online', true);
       if (cancelled) return;
-      if (!user) { setAuthed(false); setName(''); setEmail(null); return; }
-      setAuthed(true);
-      setEmail(user.email ?? null);
-      setName((user.user_metadata?.full_name as string | undefined) || '');
-      const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-      if (!cancelled && prof?.full_name) setName(prof.full_name as string);
+      const present = new Set((cats || []).map((c) => (c as { category: string }).category));
+      const live = DEPARTMENTS.filter((d) => present.has(d.value));
+      if (live.length > 0) setDepts(live);
     })();
     return () => { cancelled = true; };
   }, [open]);
@@ -127,7 +135,7 @@ export default function AccountDrawer({ open, onClose }: { open: boolean; onClos
 
           <Section title="Shop by Department">
             <DrawerLink href="/market" onClose={onClose} emoji="🛒" label="All Products" />
-            {DEPARTMENTS.map((d) => (
+            {depts.map((d) => (
               <DrawerLink key={d.slug} href={`/category/${d.slug}`} onClose={onClose} emoji={d.emoji} label={d.label} />
             ))}
           </Section>
