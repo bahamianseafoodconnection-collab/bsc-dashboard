@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { publicSiteUrl } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export default function LoginPage() {
         type: 'signup',
         email: email.trim(),
         options: {
-          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/confirmed` : undefined,
+          emailRedirectTo: `${publicSiteUrl()}/auth/confirmed`,
         },
       });
       setResendMsg(err
@@ -91,11 +92,11 @@ export default function LoginPage() {
         password,
         options: {
           data: { full_name: name, phone },
-          // Confirmation link returns to a branded landing on the real
-          // origin (bscbahamas.com in prod), not the Supabase "Site URL"
-          // fallback (which was localhost). /auth/confirmed welcomes the
-          // customer and routes them into the shop.
-          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/confirmed` : undefined,
+          // Confirmation link returns to a branded landing on the canonical
+          // domain (must be on Supabase's Redirect URLs allowlist, else
+          // Supabase falls back to the Site URL — which was localhost — and
+          // the link dies). /auth/confirmed welcomes the customer in.
+          emailRedirectTo: `${publicSiteUrl()}/auth/confirmed`,
         },
       });
       if (err) {
