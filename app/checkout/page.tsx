@@ -95,6 +95,17 @@ function CheckoutInner() {
   const [address, setAddress] = useState('');
   const [island, setIsland] = useState('Nassau');
   const [note, setNote] = useState('');
+  // Nassau delivery: GPS pin + house-color/landmark so the driver finds the
+  // house. lat/lng → orders.delivery_lat/lng; house color → delivery_directions.
+  const [houseColor, setHouseColor] = useState('');
+  const [geoLat, setGeoLat] = useState<number | null>(null);
+  const [geoLng, setGeoLng] = useState<number | null>(null);
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'capturing' | 'ok' | 'error'>('idle');
+  const [geoMsg, setGeoMsg] = useState('');
+  // Mailboat shipping: which boat + the date to drop at the dock. Date must
+  // be ≥48h out (enforced via min attr + formValid + the proceed guard).
+  const [mailboatName, setMailboatName] = useState('');
+  const [mailboatDate, setMailboatDate] = useState('');
   const [view, setView] = useState<View>('summary');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [refNo, setRefNo] = useState('');
@@ -208,7 +219,9 @@ function CheckoutInner() {
   const promoDiscount = promoApplied
     ? Math.min(promoApplied.discount_amount, subtotal)
     : 0;
-  const total = Math.max(0, subtotal - promoDiscount);
+  // Flat delivery fee on every online order (founder: "all delivery cost is $5.00").
+  const DELIVERY_FEE = 5;
+  const total = Math.max(0, subtotal - promoDiscount) + DELIVERY_FEE;
 
   // Re-validate (or drop) an applied promo whenever the cart changes — the
   // discount may have crossed a min_subtotal threshold.
@@ -275,6 +288,33 @@ function CheckoutInner() {
     setPromoError(null);
   }
 
+  // Capture the customer's GPS pin for Nassau delivery. Best-effort: if the
+  // browser blocks it, the house-color/landmark field still gets the driver
+  // there, so this never blocks checkout.
+  function captureLocation() {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGeoStatus('error');
+      setGeoMsg('Location not supported on this device — type your landmark below.');
+      return;
+    }
+    setGeoStatus('capturing');
+    setGeoMsg('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLat(Math.round(pos.coords.latitude * 1e6) / 1e6);
+        setGeoLng(Math.round(pos.coords.longitude * 1e6) / 1e6);
+        setGeoStatus('ok');
+      },
+      (err) => {
+        setGeoStatus('error');
+        setGeoMsg(err.code === err.PERMISSION_DENIED
+          ? 'Location permission denied — you can still type your house color/landmark below.'
+          : 'Could not get your location — type your house color/landmark below.');
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
+    );
+  }
+
   const payload: PaymentPayload = {
     amount: subtotal,
     fees: 0,
@@ -339,6 +379,17 @@ function CheckoutInner() {
       };
     });
 
+    // Driver/dock directions, per method. Nassau = house color/landmark
+    // (+ GPS stored separately in delivery_lat/lng); mailboat = boat name +
+    // drop-off date. Stored in orders.delivery_directions.
+    const deliveryDirections =
+      deliveryMethod === 'nassau'
+        ? ([
+            houseColor.trim() ? `House/landmark: ${houseColor.trim()}` : '',
+            geoLat != null && geoLng != null ? `GPS ${geoLat},${geoLng}` : '',
+          ].filter(Boolean).join(' · ') || null)
+        : `Mailboat: ${mailboatName.trim()} · deliver to dock by ${mailboatDate}`;
+
     const orderRow: Record<string, unknown> = {
       order_type: 'online_market',
       payment_method: payMethod,
@@ -354,14 +405,23 @@ function CheckoutInner() {
       wholesale_cost_total: total,
       // Populate the canonical total so receipts/tracking/admin show a value
       // (orders.total — NOT total_amount, and there is no user_id column).
+      // total = items subtotal − promo + $5 flat delivery. subtotal stored
+      // alongside so the $5 delivery line is derivable on receipts/admin.
+      subtotal: subtotal,
       total: total,
       customer_name: name.trim() || null,
       customer_phone: phone.trim() || null,
       customer_address: address.trim() || null,
       customer_id: customerIdLinked,
       delivery_type: deliveryMethod,
+      delivery_directions: deliveryDirections,
+      ...(deliveryMethod === 'nassau' && geoLat != null && geoLng != null
+        ? { delivery_lat: geoLat, delivery_lng: geoLng }
+        : {}),
       admin_notes: [
-        deliveryMethod === 'mailboat' ? `Mailboat to ${island}` : `Nassau · ${island}`,
+        deliveryMethod === 'mailboat'
+          ? `Mailboat "${mailboatName.trim()}" to ${island} · deliver to dock by ${mailboatDate}`
+          : `Nassau · ${island}`,
         note,
       ].filter(Boolean).join(' · ') || null,
     };
@@ -515,7 +575,23 @@ function CheckoutInner() {
     setView(payMethod === 'cod' ? 'done' : 'payment');
   }
 
-  const formValid = name.trim() && phone.trim() && address.trim();
+  // Earliest mailboat drop-off date: the first calendar date whose start is
+  // ≥48h from now (founder rule). String compare on YYYY-MM-DD is chronological.
+  const minMailboatDateStr = (() => {
+    const cutoff = Date.now() + 48 * 60 * 60 * 1000;
+    const d = new Date(cutoff);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() < cutoff) d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
+  const formValid = Boolean(
+    name.trim() && phone.trim() && address.trim() &&
+    (deliveryMethod === 'nassau' ? houseColor.trim() : true) &&
+    (deliveryMethod === 'mailboat'
+      ? (mailboatName.trim() && mailboatDate && mailboatDate >= minMailboatDateStr)
+      : true),
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-900 antialiased">
@@ -660,10 +736,79 @@ function CheckoutInner() {
                     );
                   })}
                 </div>
+                {deliveryMethod === 'nassau' && (
+                  <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                    <p className="text-xs font-extrabold text-navy">📍 Help our driver find you</p>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={captureLocation}
+                        className="w-full rounded-lg border-2 border-navy bg-white px-3 py-2.5 text-xs font-extrabold text-navy transition hover:bg-navy-50/40"
+                      >
+                        {geoStatus === 'capturing'
+                          ? 'Getting your location…'
+                          : geoStatus === 'ok'
+                            ? '✓ Location pinned — tap to update'
+                            : '📍 Pin my delivery location'}
+                      </button>
+                      {geoStatus === 'ok' && geoLat != null && geoLng != null && (
+                        <a
+                          href={`https://maps.google.com/?q=${geoLat},${geoLng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1.5 block text-[11px] font-bold text-emerald-700 underline"
+                        >
+                          View pinned spot on map ({geoLat.toFixed(5)}, {geoLng.toFixed(5)})
+                        </a>
+                      )}
+                      {geoStatus === 'error' && (
+                        <p className="mt-1.5 text-[11px] font-semibold text-amber-700">{geoMsg}</p>
+                      )}
+                    </div>
+                    <Field label="House color / landmark *">
+                      <input
+                        value={houseColor}
+                        onChange={(e) => setHouseColor(e.target.value)}
+                        placeholder="e.g. yellow house, blue roof, next to the pink church"
+                        className={INPUT}
+                      />
+                    </Field>
+                    <p className="text-[11px] text-slate-500">
+                      We&apos;ll call <strong>{phone.trim() || 'your phone'}</strong> to coordinate the drop-off.
+                    </p>
+                  </div>
+                )}
                 {deliveryMethod === 'mailboat' && (
-                  <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    🚤 Mailboat charges + island freight billed separately at packing.
-                  </p>
+                  <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+                    <Field label="Mailboat name *">
+                      <input
+                        value={mailboatName}
+                        onChange={(e) => setMailboatName(e.target.value)}
+                        placeholder="e.g. Lady Gloria, Captain Moxey…"
+                        className={INPUT}
+                      />
+                    </Field>
+                    <Field label="Deliver to mailboat by *">
+                      <input
+                        type="date"
+                        value={mailboatDate}
+                        min={minMailboatDateStr}
+                        onChange={(e) => setMailboatDate(e.target.value)}
+                        className={`${INPUT} appearance-none`}
+                      />
+                    </Field>
+                    {mailboatDate && mailboatDate < minMailboatDateStr && (
+                      <p className="text-[11px] font-bold text-red-600">
+                        We need at least 48 hours — earliest date is {minMailboatDateStr}.
+                      </p>
+                    )}
+                    <p className="text-[11px] text-amber-800">
+                      📅 Earliest drop-off is <strong>{minMailboatDateStr}</strong> — we need 48+ hours to pack and get your order to the dock.
+                    </p>
+                    <p className="text-[11px] text-amber-700">
+                      🚤 Mailboat charges + island freight billed separately at packing.
+                    </p>
+                  </div>
                 )}
               </Card>
 
@@ -831,7 +976,7 @@ function CheckoutInner() {
                 </div>
                 <div className="mb-1 flex justify-between text-xs">
                   <span className="text-slate-500">Delivery</span>
-                  <span className="font-bold text-emerald-600">Calculated at delivery</span>
+                  <span className="font-bold text-navy">BSD ${fmt(DELIVERY_FEE)}</span>
                 </div>
 
                 {/* Promo code */}
