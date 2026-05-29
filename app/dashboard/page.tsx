@@ -120,6 +120,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Money',
     items: [
       { icon: '💵', label: 'Supplier COGS',     href: '/dashboard/cogs' },
+      { icon: '🏦', label: 'Bank Reconciliation', href: '/dashboard/reconciliation' },
       { icon: '💸', label: 'Expenses',          href: '/expenses' },
       { icon: '📋', label: 'Accounts Payable',  href: '/accounts-payable' },
       {
