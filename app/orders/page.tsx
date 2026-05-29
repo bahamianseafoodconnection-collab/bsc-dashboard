@@ -14,6 +14,16 @@ export const dynamic = 'force-dynamic';
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Delivered'];
 const PICKUP_FLOW = ['Pending', 'Confirmed', 'Ready for Pickup', 'Delivered'];
 
+// Classify an order by its sales channel so online orders stay separate from
+// POS register sales and wholesale.
+function orderSource(orderType: string | undefined): 'online' | 'pos' | 'wholesale' | 'other' {
+  const t = (orderType || '').toLowerCase();
+  if (t === 'online_market' || t === 'online') return 'online';
+  if (t.startsWith('pos')) return 'pos';
+  if (t.includes('wholesale')) return 'wholesale';
+  return 'other';
+}
+
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   'Pending':           { bg: '#fef9e7', text: '#d97706' },
   'Confirmed':         { bg: '#e8f4fd', text: '#1a6fb5' },
@@ -42,6 +52,21 @@ type Order = {
   order_type?: string;
   locked_by: string | null;
   locked_at: string | null;
+  // Payment — surfaced so staff can confirm paid + the gateway/bank refs
+  // before advancing the order.
+  payment_status: string | null;
+  payment_method: string | null;
+  payment_ref: string | null;
+};
+
+// One finalized card transaction for the selected order — gateway order id +
+// the bank's authorization (confirmation) code.
+type PayTx = {
+  pt_order_id: string | null;
+  pt_authorization_code: string | null;
+  pi_response_code: string | null;
+  finalized_at: string | null;
+  created_at: string | null;
 };
 
 // Map an `orders` row from Supabase into the shape the UI expects.
@@ -99,6 +124,9 @@ function mapOrder(row: Record<string, unknown>): Order {
     locked_by: (row.locked_by as string | null) ?? null,
     locked_at: (row.locked_at as string | null) ?? null,
     order_type: orderType || undefined,
+    payment_status: (row.payment_status as string | null) ?? null,
+    payment_method: (row.payment_method as string | null) ?? null,
+    payment_ref:    (row.payment_ref as string | null) ?? null,
   };
 }
 
@@ -115,9 +143,13 @@ export default function OrdersPage() {
   const [selected, setSelected]       = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterType, setFilterType]   = useState('All');
+  // Separate online orders from POS sales (founder: keep the online order
+  // queue distinct from register sales). Defaults to Online.
+  const [filterSource, setFilterSource] = useState<'online' | 'pos' | 'wholesale' | 'all'>('online');
   const [loading, setLoading]         = useState(false);
   const [fetching, setFetching]       = useState(true);
   const [fetchError, setFetchError]   = useState<string | null>(null);
+  const [payTx, setPayTx]             = useState<PayTx | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,11 +175,35 @@ export default function OrdersPage() {
     };
   }, []);
 
+  // Pull the latest (finalized) card transaction for the selected order so
+  // staff can see the gateway payment id + bank authorization code. Newest
+  // row wins — /api/payment/start logs a pending attempt, the PnP return logs
+  // the finalized one with the auth code. Staff-readable via RLS.
+  useEffect(() => {
+    if (!selected) { setPayTx(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('payment_transactions')
+        .select('pt_order_id, pt_authorization_code, pi_response_code, finalized_at, created_at')
+        .eq('order_id', selected.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setPayTx((data as PayTx | null) ?? null);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
   const filtered = orders.filter((o) => {
+    const matchSource = filterSource === 'all' || orderSource(o.order_type) === filterSource;
     const matchStatus = filterStatus === 'All' || o.status === filterStatus;
     const matchType   = filterType   === 'All' || o.type   === filterType;
-    return matchStatus && matchType;
+    return matchSource && matchStatus && matchType;
   });
+  const onlineCount = orders.filter((o) => orderSource(o.order_type) === 'online').length;
+  const posCount    = orders.filter((o) => orderSource(o.order_type) === 'pos').length;
 
   async function advanceStatus(order: Order) {
     if (order.locked_by) {
@@ -244,6 +300,21 @@ export default function OrdersPage() {
           </div>
         </div>
       </header>
+
+      {/* Sales-channel separation — online orders vs POS register sales */}
+      <div style={{ backgroundColor: '#1a2e5a', padding: '10px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {([
+          { key: 'online',    label: `🛒 Online Orders (${onlineCount})` },
+          { key: 'pos',       label: `🏪 POS Sales (${posCount})` },
+          { key: 'wholesale', label: '📦 Wholesale' },
+          { key: 'all',       label: 'All' },
+        ] as const).map((s) => (
+          <button key={s.key} onClick={() => setFilterSource(s.key)}
+            style={{ padding: '7px 16px', borderRadius: '20px', border: 'none', backgroundColor: filterSource === s.key ? '#f4c842' : 'rgba(255,255,255,0.1)', color: filterSource === s.key ? '#1a2e5a' : '#fff', fontSize: '12px', fontWeight: filterSource === s.key ? 900 : 600, cursor: 'pointer' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
 
       <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #ebebeb', padding: '12px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         {['All', 'Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Ready for Pickup', 'Delivered', 'Cancelled'].map((s) => (
@@ -343,9 +414,52 @@ export default function OrdersPage() {
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ color: '#999', fontSize: '11px', marginBottom: '4px' }}>Customer</div>
                 <div style={{ color: '#1a2e5a', fontWeight: 800, fontSize: '16px' }}>{selected.customer_name}</div>
+                {selected.customer_phone && <div style={{ color: '#666', fontSize: '13px' }}>{selected.customer_phone}</div>}
                 <div style={{ color: '#666', fontSize: '13px' }}>{selected.type === 'delivery' ? 'Delivery' : 'Pickup'}</div>
                 {selected.address && <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>{selected.address}</div>}
               </div>
+
+              {/* Payment — confirm paid + the gateway/bank reference IDs before
+                  advancing. Card order ids come from payment_transactions. */}
+              {(() => {
+                const ps   = (selected.payment_status || '').toLowerCase();
+                const paid = ps === 'paid';
+                const isCard = selected.payment_method === 'card';
+                const badgeBg = paid ? '#e8f5e9' : ps.includes('pending') ? '#fef9e7' : '#fde8e8';
+                const badgeFg = paid ? '#2e7d32' : ps.includes('pending') ? '#d97706' : '#dc2626';
+                const confirmId = payTx?.pt_order_id || selected.payment_ref || null;
+                return (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ color: '#999', fontSize: '11px', marginBottom: '8px' }}>Payment</div>
+                    <div style={{ border: '1px solid #ebebeb', borderRadius: 10, padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: confirmId || payTx ? 10 : 0 }}>
+                        <span style={{ backgroundColor: badgeBg, color: badgeFg, fontSize: 12, fontWeight: 900, padding: '4px 12px', borderRadius: 20 }}>
+                          {paid ? '✓ PAID' : (selected.payment_status || 'Unpaid')}
+                        </span>
+                        <span style={{ color: '#666', fontSize: 12, fontWeight: 700 }}>
+                          {isCard ? '💳 Card' : selected.payment_method === 'cod' ? '💵 Cash on delivery' : (selected.payment_method || '—')}
+                        </span>
+                      </div>
+                      {confirmId && <PayRow label="Payment confirmation ID" value={confirmId} />}
+                      {payTx?.pt_authorization_code && <PayRow label="Bank authorization (confirmation) ID" value={payTx.pt_authorization_code} />}
+                      {payTx?.pi_response_code && <PayRow label="Gateway response code" value={payTx.pi_response_code} />}
+                      {payTx?.finalized_at && (
+                        <PayRow label="Confirmed at" value={new Date(payTx.finalized_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} />
+                      )}
+                      {isCard && !paid && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: '#dc2626', fontWeight: 700 }}>
+                          ⚠️ Card payment not yet confirmed — do not advance until PAID with a confirmation ID.
+                        </div>
+                      )}
+                      {selected.payment_method === 'cod' && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: '#d97706', fontWeight: 700 }}>
+                          💵 Collect cash on delivery.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ color: '#999', fontSize: '11px', marginBottom: '8px' }}>Status</div>
@@ -429,6 +543,17 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Label / value row for the payment-confirmation block. Value is monospace so
+// the gateway + bank reference IDs are easy to read off / copy.
+function PayRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0' }}>
+      <span style={{ color: '#999', fontSize: 11, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: '#1a2e5a', fontSize: 12, fontWeight: 700, fontFamily: 'ui-monospace, monospace', textAlign: 'right', wordBreak: 'break-all' }}>{value}</span>
     </div>
   );
 }
