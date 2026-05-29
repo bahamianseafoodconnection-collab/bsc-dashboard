@@ -135,12 +135,9 @@ function CheckoutInner() {
       ? { kind: 'problem',
           message: pnpMessage || 'We had a temporary problem reaching your bank. Please try again in a moment.' }
       : null;
-  // Launch posture (β 2026-06-08): online card payments are deferred
-  // until the real RBC integration ships + AVS-gated card-on-file
-  // flow lands. /checkout defaults to (and currently only offers)
-  // cash on delivery. The 'card' branch + CardPaymentModal render
-  // below stay intact so re-enabling is a single options-array edit.
-  const [payMethod, setPayMethod] = useState<'card' | 'cod'>('cod');
+  // Card (RBC / Plug'n Pay Smart Screens v2) is the PRIMARY payment method —
+  // default-selected. Cash on delivery stays as a secondary fallback option.
+  const [payMethod, setPayMethod] = useState<'card' | 'cod'>('card');
   // Where this order is going. 'nassau' = pickup or local delivery in
   // Nassau. 'mailboat' = ship to Family Island via mailboat.
   const [deliveryMethod, setDeliveryMethod] = useState<'nassau' | 'mailboat'>('nassau');
