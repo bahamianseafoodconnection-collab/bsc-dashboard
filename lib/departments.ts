@@ -35,6 +35,8 @@ export const DEPARTMENTS: Department[] = [
     blurb: 'Everyday pantry and kitchen staples for home and business.' },
   { value: 'dry_goods',      slug: 'dry-goods',      label: 'Dry Goods',      emoji: '🌾',
     blurb: 'Rice, flour, sugar, oils — the shelf-stable basics, retail and bulk.' },
+  { value: 'snack',          slug: 'snacks',         label: 'Snacks',         emoji: '🍿',
+    blurb: 'Chips, crackers, sweets and grab-and-go snacks.' },
   { value: 'spices',         slug: 'spices',         label: 'Spices',         emoji: '🧂',
     blurb: 'Seasonings and spices for authentic Bahamian cooking.' },
   { value: 'beverages',      slug: 'beverages',      label: 'Beverages',      emoji: '🥤',

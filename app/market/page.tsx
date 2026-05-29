@@ -50,6 +50,10 @@ const BRANDS: Record<
 };
 const BRAND_KEYS = Object.keys(BRANDS);
 
+// Department display order → clusters the All view by category (seafood near
+// seafood, etc.). Keyed by the raw products.category value.
+const DEPT_ORDER = new Map(DEPARTMENTS.map((d, i) => [d.value, i] as const));
+
 const CATEGORIES = ['All', 'Seafood', 'Meat', 'Produce', 'Dry Goods', 'Beverages', 'Dairy', 'Frozen', 'Other'];
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -78,7 +82,8 @@ interface MarketProduct {
   wholesaler?: string;
   name: string;
   description: string;
-  category: string;
+  category: string;             // display bucket (CATEGORY_MAP) — used by the legacy in-page filter
+  categoryRaw: string;          // exact products.category value — drives departments + All-view grouping
   price: number;                // regular online_market price (NEVER overridden — keeps wholesale-upgrade math sane)
   special_price?: number | null; // active special_price within the window; passed as promo_price to cart pricing so it wins over wholesale upgrade
   wholesale_price?: number | null; // local_wholesale snapshot — drives auto-upgrade at 10+ lbs / by case
@@ -234,6 +239,7 @@ function MarketPageInner() {
           name: p.name,
           description: p.description || '',
           category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
+          categoryRaw: (p.category ?? 'other') as string,
           price: regular,
           special_price: onSpecial ? Number(p.special_price) : null,
           wholesale_price: wholesaleMap.get(p.id) ?? null,
@@ -323,6 +329,12 @@ function MarketPageInner() {
         if (sort === 'price-asc') return a.price - b.price;
         if (sort === 'price-desc') return b.price - a.price;
         if (sort === 'name') return a.name.localeCompare(b.name);
+        // Default ("featured"): cluster by department so the All view keeps
+        // seafood near seafood, toiletries near toiletries, etc. — then
+        // featured first, then name, within each department.
+        const da = DEPT_ORDER.get(a.categoryRaw) ?? 999;
+        const db = DEPT_ORDER.get(b.categoryRaw) ?? 999;
+        if (da !== db) return da - db;
         if (a.featured && !b.featured) return -1;
         if (!a.featured && b.featured) return 1;
         return a.name.localeCompare(b.name);
@@ -530,9 +542,9 @@ function MarketPageInner() {
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-screen-2xl px-3 py-3 sm:px-6">
           <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-            {/* Departments match BSC categories 1:1 (lib/departments). Only show
-                those with live online products. */}
-            {DEPARTMENTS.filter((d) => products.some((p) => p.category === d.value)).map((c) => (
+            {/* Departments match BSC categories 1:1 (lib/departments). Show all
+                so every department (incl. new ones) is browsable. */}
+            {DEPARTMENTS.map((c) => (
               <Link key={c.slug} href={`/category/${c.slug}`}
                 className="flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-navy transition hover:border-navy hover:bg-navy hover:text-gold">
                 <span>{c.emoji}</span>
