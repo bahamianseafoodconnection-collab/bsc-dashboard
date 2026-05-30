@@ -77,7 +77,23 @@ const CHANNEL_LABELS: Record<string, string> = {
   online_market:   'Online /market',
   local_wholesale: 'Local Wholesale',
   us_resale:       'US Resale',
+  today_deals:     "Today's Deals",
+  hot_deals:       'Hot Deals',
+  weekly_specials: 'Weekly Specials',
+  close_dated:     'Close Dated',
+  bulk_deals:      'Bulk Deals',
 };
+
+// Deal channels — added 2026-05-29. Each lists the product on the matching
+// marketplace deal card (/market?deal=<slug>). UX: just an optional margin
+// per channel (no checkbox) — setting a margin = include in deal; empty = not.
+const DEAL_CHANNELS: { channel: string; label: string }[] = [
+  { channel: 'today_deals',     label: "Today's Deals" },
+  { channel: 'hot_deals',       label: 'Hot Deals' },
+  { channel: 'weekly_specials', label: 'Weekly Specials' },
+  { channel: 'close_dated',     label: 'Close Dated' },
+  { channel: 'bulk_deals',      label: 'Bulk Deals' },
+];
 
 // Add-Product modal: maps each "Show on channels" checkbox to its
 // pricing_channel enum so the per-channel margin block lines up.
@@ -151,6 +167,9 @@ export default function AdminInventoryPage() {
   // prefilled from the live channel margins. The founder can override per
   // product; the selling-price preview + the stored price follow this.
   const [addMargins, setAddMargins] = useState<Record<string, string>>({});
+  // Per-product deal channel margins (optional). Setting a value lists the
+  // product under that deal card on the marketplace.
+  const [addDealMargins, setAddDealMargins] = useState<Record<string, string>>({});
 
   // ─── Per-row Edit modal ──────────────────────────────────────────────
   // Full edit of one product (name / category / UoM / pack / cost / stock /
@@ -167,6 +186,10 @@ export default function AdminInventoryPage() {
   // values, so saveEdit only re-prices channels whose margin actually changed.
   const [editMargins, setEditMargins] = useState<Record<string, string>>({});
   const [editMarginsBase, setEditMarginsBase] = useState<Record<string, string>>({});
+  // Per-product deal channel margins on the Edit modal — pre-filled from
+  // existing product_pricing rows for the deal channels on open.
+  const [editDealMargins, setEditDealMargins] = useState<Record<string, string>>({});
+  const [editDealMarginsBase, setEditDealMarginsBase] = useState<Record<string, string>>({});
 
   function openEdit(r: ProductRow) {
     setEditProductId(r.id);
@@ -202,6 +225,29 @@ export default function AdminInventoryPage() {
     setEditMargins(seeded);
     setEditMarginsBase(seeded);
     if (margins.length === 0) loadMargins();
+
+    // Pre-fill deal channel margins from existing product_pricing rows.
+    // Empty (not in product_pricing) = product is not in that deal yet.
+    setEditDealMargins({});
+    setEditDealMarginsBase({});
+    if (cost > 0) {
+      (async () => {
+        const { data: dealRows } = await supabase
+          .from('product_pricing')
+          .select('channel, manual_unit_price')
+          .eq('product_id', r.id)
+          .in('channel', DEAL_CHANNELS.map((d) => d.channel))
+          .eq('is_current', true)
+          .eq('is_active', true);
+        const seededDeals: Record<string, string> = {};
+        for (const row of (dealRows ?? []) as { channel: string; manual_unit_price: number }[]) {
+          const m = Math.round((Number(row.manual_unit_price) / cost - 1) * 1000) / 10;
+          if (Number.isFinite(m)) seededDeals[row.channel] = String(m);
+        }
+        setEditDealMargins(seededDeals);
+        setEditDealMarginsBase(seededDeals);
+      })();
+    }
   }
 
   async function saveEdit() {
@@ -245,6 +291,16 @@ export default function AdminInventoryPage() {
       const newlyEnabled  = editForm[flag] && !orig[flag];
       if (!marginChanged && !newlyEnabled) continue;
       const m = Number(editMargins[channel]);
+      if (Number.isFinite(m) && m >= 0) channelMargins[channel] = m;
+    }
+    // Deal channels — include any whose margin field was set or changed.
+    // Setting a margin lists the product under that deal card on the market.
+    for (const { channel } of DEAL_CHANNELS) {
+      const cur  = editDealMargins[channel] ?? '';
+      const base = editDealMarginsBase[channel] ?? '';
+      if (cur === base) continue;
+      if (cur === '') continue; // no margin entered → leave as-is (don't clear via this UI)
+      const m = Number(cur);
       if (Number.isFinite(m) && m >= 0) channelMargins[channel] = m;
     }
     if (Object.keys(channelMargins).length > 0) patch.channel_margins = channelMargins;
@@ -414,6 +470,8 @@ export default function AdminInventoryPage() {
       cost_per_unit: '', online_sell_price: '', image_url: '', stock_count: '', vat_category: 'zero_rated',
       sell_nassau: true, sell_andros: true, sell_online: true, sell_wholesale: false,
     });
+    // Deal channels default to empty — founder opts in per product.
+    setAddDealMargins({});
     // Seed the per-channel margin inputs from live margins (fallback to
     // the documented defaults until they load), then refresh from server.
     const seed = (rows: MarginRow[]) => {
@@ -454,6 +512,16 @@ export default function AdminInventoryPage() {
       for (const { flag, channel } of ADD_CHANNELS) {
         if (!f[flag]) continue;
         const m = Number(addMargins[channel]);
+        if (Number.isFinite(m) && m >= 0) {
+          channelPrices[channel] = Math.round(cost * (1 + m / 100) * 100) / 100;
+        }
+      }
+      // Deal channels (optional, no checkbox): include any deal where the
+      // founder typed a margin. Empty / 0-or-less = not in that deal.
+      for (const { channel } of DEAL_CHANNELS) {
+        const raw = addDealMargins[channel];
+        if (raw === undefined || raw === '') continue;
+        const m = Number(raw);
         if (Number.isFinite(m) && m >= 0) {
           channelPrices[channel] = Math.round(cost * (1 + m / 100) * 100) / 100;
         }
@@ -1273,6 +1341,51 @@ export default function AdminInventoryPage() {
                   );
                 })()}
               </div>
+
+              {/* Deal channels (optional). Setting a margin lists the product
+                  under the matching deal card on the marketplace. Leaving empty
+                  = not included in that deal. */}
+              <div>
+                <p className="mb-1.5 text-xs font-bold text-slate-600">Promote on deal channels <span className="font-medium text-slate-400">(optional)</span></p>
+                {(() => {
+                  const cost = addRowForm.cost_per_unit === '' ? null : Number(addRowForm.cost_per_unit);
+                  return (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {DEAL_CHANNELS.map(({ channel, label }) => {
+                        const mStr = addDealMargins[channel] ?? '';
+                        const m = Number(mStr);
+                        const validCost = cost !== null && Number.isFinite(cost) && cost > 0;
+                        const validM = mStr !== '' && Number.isFinite(m) && m >= 0;
+                        const sell = validCost && validM ? cost * (1 + m / 100) : null;
+                        return (
+                          <div key={channel} className={`rounded-lg border p-2 ${mStr !== '' ? 'border-gold bg-amber-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                            <p className="text-[11px] font-bold text-navy">{label}</p>
+                            <div className="mt-1 flex items-center gap-1">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={mStr}
+                                onChange={(e) => {
+                                  const v = e.target.value.replace(/[^0-9.]/g, '');
+                                  setAddDealMargins((d) => ({ ...d, [channel]: v }));
+                                }}
+                                placeholder="—"
+                                className="w-14 rounded-md border border-slate-300 px-2 py-1 text-right text-sm font-bold text-navy outline-none focus:border-navy"
+                                aria-label={`${label} margin percent`}
+                              />
+                              <span className="text-xs font-semibold text-slate-500">% margin</span>
+                            </div>
+                            <p className="mt-1 text-sm font-extrabold text-emerald-700">
+                              {sell !== null ? `$${sell.toFixed(2)}` : '—'}
+                              <span className="ml-1 text-[10px] font-semibold text-slate-400">sells at</span>
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
               <button
@@ -1416,6 +1529,43 @@ export default function AdminInventoryPage() {
                               <div className="mt-1 flex items-center gap-1">
                                 <input type="text" inputMode="decimal" value={mStr}
                                   onChange={(e) => setEditMargins((d) => ({ ...d, [channel]: e.target.value.replace(/[^0-9.]/g, '') }))}
+                                  className="w-14 rounded-md border border-slate-300 px-2 py-1 text-right text-sm font-bold text-navy outline-none focus:border-navy" />
+                                <span className="text-xs font-semibold text-slate-500">% margin</span>
+                              </div>
+                              <p className="mt-1 text-sm font-extrabold text-emerald-700">
+                                {sell !== null ? `$${sell.toFixed(2)}` : '—'}
+                                <span className="ml-1 text-[10px] font-semibold text-slate-400">sells at</span>
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Deal channels (optional). Same pattern as Add — setting a
+                    margin lists the product under that deal card on the market. */}
+                <div>
+                  <p className="mb-1.5 text-xs font-bold text-slate-600">Promote on deal channels <span className="font-medium text-slate-400">(optional)</span></p>
+                  {(() => {
+                    const cost = editForm.cost_per_unit === '' ? null : Number(editForm.cost_per_unit);
+                    return (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {DEAL_CHANNELS.map(({ channel, label }) => {
+                          const mStr = editDealMargins[channel] ?? '';
+                          const m = Number(mStr);
+                          const validCost = cost !== null && Number.isFinite(cost) && cost > 0;
+                          const validM = mStr !== '' && Number.isFinite(m) && m >= 0;
+                          const sell = validCost && validM ? cost * (1 + m / 100) : null;
+                          const changed = mStr !== (editDealMarginsBase[channel] ?? '');
+                          return (
+                            <div key={channel} className={`rounded-lg border p-2 ${changed ? 'border-amber-300 bg-amber-50' : mStr !== '' ? 'border-gold bg-amber-50/40' : 'border-slate-200 bg-slate-50'}`}>
+                              <p className="text-[11px] font-bold text-navy">{label}</p>
+                              <div className="mt-1 flex items-center gap-1">
+                                <input type="text" inputMode="decimal" value={mStr}
+                                  onChange={(e) => setEditDealMargins((d) => ({ ...d, [channel]: e.target.value.replace(/[^0-9.]/g, '') }))}
+                                  placeholder="—"
                                   className="w-14 rounded-md border border-slate-300 px-2 py-1 text-right text-sm font-bold text-navy outline-none focus:border-navy" />
                                 <span className="text-xs font-semibold text-slate-500">% margin</span>
                               </div>

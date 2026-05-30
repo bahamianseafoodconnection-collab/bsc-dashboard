@@ -18,6 +18,7 @@ import MarketPromoBanners from '@/components/MarketPromoBanners';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import type { SaleUnit } from '@/lib/pricing';
 import { DEPARTMENTS } from '@/lib/departments';
+import { DEALS, dealBySlug } from '@/lib/deals';
 
 // Per-line pricing helper for online cart: auto-upgrades to wholesale
 // at 10+ lbs of one product (or by-case) when a wholesale snapshot exists.
@@ -129,6 +130,9 @@ function MarketPageInner() {
   const searchParams = useSearchParams();
 
   const [products, setProducts] = useState<MarketProduct[]>([]);
+  // Deal channel prices keyed by channel → (product_id → price). Loaded once
+  // so any deal card filters + re-prices the grid without another round trip.
+  const [dealPrices, setDealPrices] = useState<Record<string, Map<string, number>>>({});
   const [loading, setLoading] = useState(true);
   const [activeCategory, setCategory] = useState('All');
 
@@ -204,6 +208,26 @@ function MarketPageInner() {
           wholesaleMap.set(row.product_id, Number(row.manual_unit_price));
         }
       }
+
+      // Step 1c: Deal channel prices (today_deals, hot_deals, …). One
+      // query fans out into a map per channel so any deal card filters +
+      // re-prices the grid client-side.
+      const dealChannels = DEALS.map((d) => d.channel);
+      const dealMap: Record<string, Map<string, number>> = {};
+      if (productIds.length > 0) {
+        const { data: dRows } = await supabase
+          .from('product_pricing')
+          .select('product_id, channel, manual_unit_price')
+          .in('product_id', productIds)
+          .in('channel', dealChannels)
+          .eq('is_current', true)
+          .eq('is_active', true);
+        for (const row of (dRows ?? []) as { product_id: string; channel: string; manual_unit_price: number }[]) {
+          if (!dealMap[row.channel]) dealMap[row.channel] = new Map();
+          dealMap[row.channel].set(row.product_id, Number(row.manual_unit_price));
+        }
+      }
+      setDealPrices(dealMap);
 
       // Step 2: Fetch active online products. unit_of_measure is the
       // source of truth for lb/each/case (the inventory spreadsheet edits
@@ -308,9 +332,20 @@ function MarketPageInner() {
     })();
   }, []);
 
+  // Active deal — pulled from ?deal=<slug>. When set, the grid shows ONLY
+  // products with a current price on that deal's pricing channel, and the
+  // displayed/cart price is overridden to that deal price (rides through
+  // priceCartLine via special_price → wins over retail/wholesale).
+  const dealSlug   = (searchParams?.get('deal') ?? '').toLowerCase();
+  const activeDeal = dealBySlug(dealSlug) ?? null;
+
   const filtered = useMemo(() => {
+    const dealMap = activeDeal ? dealPrices[activeDeal.channel] ?? null : null;
     return products
       .filter((p) => {
+        if (activeDeal) {
+          if (!dealMap || !dealMap.has(p.id)) return false;
+        }
         const matchCat = activeCategory === 'All' || p.category === activeCategory;
         const matchBrand =
           activeBrand === 'all' ||
@@ -324,6 +359,14 @@ function MarketPageInner() {
           p.category.toLowerCase().includes(q) ||
           (p.wholesaler ? BRANDS[p.wholesaler]?.name.toLowerCase().includes(q) : false);
         return matchCat && matchBrand && matchSearch;
+      })
+      .map((p) => {
+        // In deal mode: override the displayed/cart price with the deal
+        // channel price. Ride it through special_price → priceCartLine treats
+        // it as a promo (wins over retail/wholesale), so the cart honors it.
+        if (!dealMap) return p;
+        const dp = dealMap.get(p.id);
+        return dp != null ? { ...p, special_price: dp, is_on_special: true } : p;
       })
       .sort((a, b) => {
         if (sort === 'price-asc') return a.price - b.price;
@@ -339,7 +382,7 @@ function MarketPageInner() {
         if (!a.featured && b.featured) return 1;
         return a.name.localeCompare(b.name);
       });
-  }, [products, activeCategory, activeBrand, search, sort]);
+  }, [products, dealPrices, activeDeal, activeCategory, activeBrand, search, sort]);
 
   // Cart total reflects wholesale auto-upgrade per line.
   const cartTotal = cart.reduce((s, i) => s + linePricing(i).unit_price * i.qty, 0);
@@ -561,6 +604,20 @@ function MarketPageInner() {
           </div>
         </div>
       </section>
+
+      {/* Deal banner — shown when ?deal=<slug> filters the grid */}
+      {activeDeal && (
+        <div className="bg-gold/15 border-y border-gold/30">
+          <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm sm:px-6">
+            <span className="font-extrabold text-navy">
+              Showing <span className="text-navy/80">{activeDeal.label}</span> · {filtered.length} item{filtered.length === 1 ? '' : 's'}
+            </span>
+            <Link href="/market" className="rounded-md bg-navy px-3 py-1 text-xs font-bold text-gold hover:bg-navy-700">
+              ← Show all products
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto flex max-w-screen-2xl gap-6 px-3 py-5 sm:px-6">
 

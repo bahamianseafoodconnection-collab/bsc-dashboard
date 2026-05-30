@@ -98,7 +98,12 @@ export async function POST(req: NextRequest) {
   // in the Add-Product modal). Keys are pricing_channel enum values.
   // What the founder previewed = exactly what we store. Wins over the
   // global-margin computation below.
-  const VALID_PRICE_CHANNELS = new Set(['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale']);
+  const VALID_PRICE_CHANNELS = new Set([
+    'nassau_pos', 'andros_pos', 'online_market', 'local_wholesale',
+    // Deal channels — set a margin in the Add Product modal to list under
+    // the matching marketplace deal card (/market?deal=<slug>).
+    'today_deals', 'hot_deals', 'weekly_specials', 'close_dated', 'bulk_deals',
+  ]);
   const channelPricesRaw = (body.channel_prices && typeof body.channel_prices === 'object')
     ? body.channel_prices as Record<string, unknown> : {};
   const channelPrices = new Map<string, number>();
