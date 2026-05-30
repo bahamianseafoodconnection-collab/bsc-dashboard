@@ -137,7 +137,6 @@ Access Nassau's top 7 wholesale suppliers through BSC Marketplace. Order in bulk
 {[
 { label: 'Wholesale Cost', desc: 'Local wholesale price (BSD)', color: '#e8f4fd' },
 { label: '+ BSC 12%', desc: 'Service & handling markup', color: '#f0fde8' },
-{ label: '+ 10% VAT', desc: 'Bahamian VAT included', color: '#fde8e8' },
 { label: '= Your Price', desc: 'All-in total in BSD', color: '#fef9e7' },
 ].map((item, i) => (
 <div key={i} style={{ backgroundColor: item.color, borderRadius: 10, padding: '10px 18px', textAlign: 'center', minWidth: 140 }}>

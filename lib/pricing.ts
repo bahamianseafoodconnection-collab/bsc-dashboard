@@ -44,15 +44,14 @@ export interface PricingInput {
  *   service         →  0%  (labour / consulting)
  *   anything else   →  10% (defensive — defaults to "taxable" until classified)
  */
-export function vatPctForCategory(category: string | null | undefined): number {
-  switch ((category ?? '').toLowerCase()) {
-    case 'uncooked_food': return 0;
-    case 'service':       return 0;
-    case 'zero_rated':    return 0;   // VAT-Free item
-    case 'cooked_prepared': return 10;
-    case 'standard_rated':  return 10; // VAT item (household, toiletries, prepared)
-    default: return 10;
-  }
+export function vatPctForCategory(_category: string | null | undefined): number {
+  // VAT IS DISABLED — founder direction 2026-05-30: do not charge VAT on any
+  // product or surface until BSC is approved to collect it. Revert this
+  // function (per the cases below) once approval lands:
+  //   uncooked_food / zero_rated / service → 0
+  //   cooked_prepared / standard_rated      → 10
+  //   default                               → 10
+  return 0;
 }
 
 export interface PricingResult {
@@ -68,41 +67,19 @@ export interface PricingResult {
   marginPctOfRevenue:  number;
 }
 
+// vatPct is 0 across the board — founder direction 2026-05-30: do NOT charge
+// VAT until BSC is approved. Restore the rates here (22/19/35/40/40 with the
+// 10% VAT block) once approval lands.
 export const BSC_PRICING_RULES: Record<PricingChannel, PricingRule> = {
-  wholesale_in_store: {
-    channel:     'wholesale_in_store',
-    markupPct:   22,
-    vatPct:      10,
-    description: 'In-store wholesale: 10+ lbs of one product OR by case, Nassau or Andros POS',
-  },
-  wholesale_online: {
-    channel:     'wholesale_online',
-    markupPct:   19,
-    vatPct:      10,
-    description: 'Online wholesale: 10+ lbs of one product OR by case, online store',
-  },
-  online_retail: {
-    channel:     'online_retail',
-    markupPct:   35,
-    vatPct:      10,
-    description: 'Under 10 lbs, per bag, or per portion (online)',
-  },
-  nassau_pos: {
-    channel:     'nassau_pos',
-    markupPct:   40,
-    vatPct:      10,
-    description: 'Nassau POS retail, unless qualifies as in-store wholesale',
-  },
-  andros_pos: {
-    channel:     'andros_pos',
-    markupPct:   40,
-    vatPct:      10,
-    description: 'Andros POS retail, unless qualifies as in-store wholesale',
-  },
+  wholesale_in_store: { channel: 'wholesale_in_store', markupPct: 22, vatPct: 0, description: 'In-store wholesale: 10+ lbs of one product OR by case, Nassau or Andros POS' },
+  wholesale_online:   { channel: 'wholesale_online',   markupPct: 19, vatPct: 0, description: 'Online wholesale: 10+ lbs of one product OR by case, online store' },
+  online_retail:      { channel: 'online_retail',      markupPct: 35, vatPct: 0, description: 'Under 10 lbs, per bag, or per portion (online)' },
+  nassau_pos:         { channel: 'nassau_pos',         markupPct: 40, vatPct: 0, description: 'Nassau POS retail, unless qualifies as in-store wholesale' },
+  andros_pos:         { channel: 'andros_pos',         markupPct: 40, vatPct: 0, description: 'Andros POS retail, unless qualifies as in-store wholesale' },
 };
 
 export const WHOLESALE_MIN_LBS = 10;
-export const VAT_PCT = 10;
+export const VAT_PCT = 0;  // disabled — see note above. Restore to 10 on approval.
 // Flat delivery fee added to every online order that has a delivery method
 // (founder: "all delivery cost is $5.00"). Single source of truth — used by
 // /checkout (display + total) and /api/orders/place (server-authoritative total).
