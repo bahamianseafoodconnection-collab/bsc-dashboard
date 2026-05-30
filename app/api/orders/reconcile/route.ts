@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       payment_approval:        null,
       payment_received_at:     null,
       payment_received_by:     null,
+      payment_received_method: null,
     }).eq('id', orderId);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, reconciled: false });
@@ -72,14 +73,14 @@ export async function POST(req: NextRequest) {
   const notes  = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
   const nowIso = new Date().toISOString();
 
-  // NOTE: not setting payment_received_method here — orders has a CHECK
-  // constraint on that column (the value list excludes 'bank_transfer'). The
-  // reconciliation audit (who/when + bank ref) lives in payment_approval +
-  // payment_received_at/by, which is enough to track the exchange.
+  // payment_received_method = 'wire' — the orders CHECK constraint allows
+  // cash / card / wire / check / offset. Bank transfers from RBC settlement
+  // are wires, so 'wire' tags the method correctly for the audit trail.
   const update: Record<string, unknown> = {
-    payment_approval:    bankTransferId,
-    payment_received_at: nowIso,
-    payment_received_by: user.id,
+    payment_approval:        bankTransferId,
+    payment_received_at:     nowIso,
+    payment_received_by:     user.id,
+    payment_received_method: 'wire',
   };
   if (notes) update.payment_received_notes = notes;
 
