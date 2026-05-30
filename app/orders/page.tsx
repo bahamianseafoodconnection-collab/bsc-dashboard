@@ -73,6 +73,7 @@ type Order = {
   // Reconciliation — bank transfer ID matched to the payment + audit.
   payment_approval: string | null;     // bank transfer / settlement ID
   payment_received_at: string | null;  // reconciled timestamp
+  payment_received_by: string | null;  // staff uuid that confirmed
 };
 
 // One finalized card transaction for the selected order — gateway order id +
@@ -145,6 +146,7 @@ function mapOrder(row: Record<string, unknown>): Order {
     payment_ref:    (row.payment_ref as string | null) ?? null,
     payment_approval:    (row.payment_approval as string | null) ?? null,
     payment_received_at: (row.payment_received_at as string | null) ?? null,
+    payment_received_by: (row.payment_received_by as string | null) ?? null,
   };
 }
 
@@ -173,6 +175,16 @@ export default function OrdersPage() {
   const [reconBusy, setReconBusy]     = useState(false);
   const [reconErr, setReconErr]       = useState<string | null>(null);
   const [filterRecon, setFilterRecon] = useState<'all' | 'awaiting' | 'reconciled'>('all');
+  // Bank authorization codes per order id (from payment_transactions). Used
+  // for the CSV export so the audit trail (trace + auth) goes out in one row.
+  const [authCodes, setAuthCodes] = useState<Record<string, string>>({});
+
+  // Honor ?status=<bucket> from the URL (Dashboard → Order History deep-link).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const s = new URL(window.location.href).searchParams.get('status');
+    if (s) setFilterStatus(s);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +201,25 @@ export default function OrdersPage() {
         setFetchError(plainError(error));
         setOrders([]);
       } else {
-        setOrders((data || []).map((row) => mapOrder(row as Record<string, unknown>)));
+        const rows = (data || []).map((row) => mapOrder(row as Record<string, unknown>));
+        setOrders(rows);
+        // Bank auth codes for the CSV export — one batch fetch, keep the
+        // latest non-null pt_authorization_code per order id.
+        const ids = rows.map((r) => r.id).filter(Boolean);
+        if (ids.length > 0) {
+          const { data: pt } = await supabase
+            .from('payment_transactions')
+            .select('order_id, pt_authorization_code, created_at')
+            .in('order_id', ids)
+            .order('created_at', { ascending: false });
+          if (!cancelled) {
+            const map: Record<string, string> = {};
+            for (const r of (pt ?? []) as { order_id: string; pt_authorization_code: string | null }[]) {
+              if (r.pt_authorization_code && !map[r.order_id]) map[r.order_id] = r.pt_authorization_code;
+            }
+            setAuthCodes(map);
+          }
+        }
       }
       setFetching(false);
     })();
@@ -262,6 +292,43 @@ export default function OrdersPage() {
     } finally {
       setReconBusy(false);
     }
+  }
+
+  // Audit-friendly CSV of whatever's currently filtered on screen — date,
+  // customer, total, bank trace, auth code, who reconciled, etc.
+  function exportCsv() {
+    const header = ['Date', 'Order ID', 'Customer', 'Phone', 'Type', 'Payment Method', 'Payment Status', 'Total (BSD)', 'Bank Trace ID', 'Bank Auth Code', 'Reconciled At', 'Reconciled By (uuid)', 'Status'];
+    const esc = (v: unknown) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [header.join(',')];
+    for (const o of filtered) {
+      lines.push([
+        new Date(o.created_at).toISOString(),
+        o.id,
+        o.customer_name,
+        o.customer_phone || '',
+        o.type,
+        o.payment_method || '',
+        o.payment_status || '',
+        o.total.toFixed(2),
+        o.payment_approval || '',
+        authCodes[o.id] || '',
+        o.payment_received_at ? new Date(o.payment_received_at).toISOString() : '',
+        o.payment_received_by || '',
+        orderBucket(o),
+      ].map(esc).join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `bsc-orders-${filterStatus.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   const filtered = orders.filter((o) => {
@@ -411,6 +478,16 @@ export default function OrdersPage() {
             {r.label}
           </button>
         ))}
+        <div style={{ marginLeft: 'auto' }}>
+          <button
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            title="Export the filtered orders as CSV (date · customer · total · trace · auth · received-by)"
+            style={{ padding: '6px 14px', borderRadius: '20px', border: 'none', backgroundColor: '#1a2e5a', color: '#f4c842', fontSize: '12px', fontWeight: 800, cursor: filtered.length === 0 ? 'not-allowed' : 'pointer', opacity: filtered.length === 0 ? 0.5 : 1 }}
+          >
+            ↓ Export CSV ({filtered.length})
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
