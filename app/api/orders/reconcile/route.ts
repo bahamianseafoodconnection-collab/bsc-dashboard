@@ -87,5 +87,23 @@ export async function POST(req: NextRequest) {
   const { error } = await admin.from('orders').update(update).eq('id', orderId);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, reconciled: true, reconciled_at: nowIso, bank_transfer_id: bankTransferId });
+  // Auto-advance fulfillment status: confirming the bank trace IS the
+  // confirmation step. A pending order moves to 'Confirmed' so it leaves the
+  // pending area and queues up for packing. Already-advanced orders are left
+  // alone (don't regress packing → confirmed).
+  let statusChangedTo: string | null = null;
+  const { data: cur } = await admin.from('orders').select('status').eq('id', orderId).maybeSingle();
+  const curStatus = ((cur as { status?: string | null } | null)?.status ?? '').toLowerCase();
+  if (curStatus === '' || curStatus === 'pending') {
+    const { error: stErr } = await admin.from('orders').update({ status: 'Confirmed' }).eq('id', orderId);
+    if (!stErr) statusChangedTo = 'Confirmed';
+  }
+
+  return NextResponse.json({
+    ok: true,
+    reconciled: true,
+    reconciled_at: nowIso,
+    bank_transfer_id: bankTransferId,
+    status_changed_to: statusChangedTo,
+  });
 }

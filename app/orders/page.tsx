@@ -14,6 +14,18 @@ export const dynamic = 'force-dynamic';
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Delivered'];
 const PICKUP_FLOW = ['Pending', 'Confirmed', 'Ready for Pickup', 'Delivered'];
 
+// Derive the bucket an order belongs to in the admin view. Unpaid orders
+// (payment_status NOT 'paid') sit in "Awaiting Payment" regardless of
+// fulfillment status — Pending is reserved for paid-but-not-yet-confirmed
+// orders. Cancelled / Delivered always override.
+function orderBucket(o: { status: string; payment_status: string | null }): string {
+  const s  = o.status;
+  if (s === 'Cancelled' || s === 'Delivered') return s;
+  const ps = (o.payment_status || '').toLowerCase();
+  if (ps !== 'paid') return 'Awaiting Payment';
+  return s || 'Pending';
+}
+
 // Classify an order by its sales channel so online orders stay separate from
 // POS register sales and wholesale.
 function orderSource(orderType: string | undefined): 'online' | 'pos' | 'wholesale' | 'other' {
@@ -25,6 +37,7 @@ function orderSource(orderType: string | undefined): 'online' | 'pos' | 'wholesa
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  'Awaiting Payment':  { bg: '#fde8e8', text: '#b91c1c' },
   'Pending':           { bg: '#fef9e7', text: '#d97706' },
   'Confirmed':         { bg: '#e8f4fd', text: '#1a6fb5' },
   'Packing':           { bg: '#f5f0ff', text: '#7c3aed' },
@@ -224,10 +237,26 @@ export default function OrdersPage() {
       });
       const j = await res.json();
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      const patch = { payment_approval: ref, payment_received_at: j.reconciled_at as string };
+      // Apply bank-ref + (if the API auto-advanced) the new fulfillment status.
+      const newStatus = j.status_changed_to as string | null | undefined;
+      const patch: Partial<Order> = {
+        payment_approval:    ref,
+        payment_received_at: j.reconciled_at as string,
+        ...(newStatus ? { status: newStatus } : {}),
+      };
       setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...patch } : o)));
       if (selected?.id === order.id) setSelected({ ...order, ...patch });
       setBankRef('');
+      // Customer-facing status update: WhatsApp / email via the existing
+      // helper so /track + /my-orders show "Confirmed" immediately.
+      if (newStatus) {
+        notifyOrderStatusChange({
+          orderId:       order.id,
+          newStatus,
+          customerName:  order.customer_name,
+          customerPhone: order.customer_phone || null,
+        });
+      }
     } catch (err) {
       setReconErr(err instanceof Error ? err.message : 'Could not reconcile');
     } finally {
@@ -237,7 +266,7 @@ export default function OrdersPage() {
 
   const filtered = orders.filter((o) => {
     const matchSource = filterSource === 'all' || orderSource(o.order_type) === filterSource;
-    const matchStatus = filterStatus === 'All' || o.status === filterStatus;
+    const matchStatus = filterStatus === 'All' || orderBucket(o) === filterStatus;
     const matchType   = filterType   === 'All' || o.type   === filterType;
     const matchRecon  = filterRecon === 'all'
       || (filterRecon === 'reconciled' ? isReconciled(o) : !isReconciled(o));
@@ -335,8 +364,11 @@ export default function OrdersPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            <span style={{ backgroundColor: STATUS_COLORS['Awaiting Payment'].bg, color: STATUS_COLORS['Awaiting Payment'].text, fontSize: '12px', fontWeight: 800, padding: '4px 12px', borderRadius: '20px' }}>
+              {orders.filter((o) => orderBucket(o) === 'Awaiting Payment').length} Awaiting Payment
+            </span>
             <span style={{ backgroundColor: STATUS_COLORS['Pending'].bg, color: STATUS_COLORS['Pending'].text, fontSize: '12px', fontWeight: 800, padding: '4px 12px', borderRadius: '20px' }}>
-              {orders.filter((o) => o.status === 'Pending').length} Pending
+              {orders.filter((o) => orderBucket(o) === 'Pending').length} Pending
             </span>
           </div>
         </div>
@@ -358,7 +390,7 @@ export default function OrdersPage() {
       </div>
 
       <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #ebebeb', padding: '12px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        {['All', 'Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Ready for Pickup', 'Delivered', 'Cancelled'].map((s) => (
+        {['All', 'Awaiting Payment', 'Pending', 'Confirmed', 'Packing', 'Out for Delivery', 'Ready for Pickup', 'Delivered', 'Cancelled'].map((s) => (
           <button key={s} onClick={() => setFilterStatus(s)} style={{ padding: '6px 14px', borderRadius: '20px', border: 'none', backgroundColor: filterStatus === s ? '#1a2e5a' : '#f0f0f0', color: filterStatus === s ? '#fff' : '#555', fontSize: '12px', fontWeight: filterStatus === s ? 800 : 500, cursor: 'pointer' }}>
             {s}
           </button>
@@ -431,7 +463,7 @@ export default function OrdersPage() {
                         }}
                       />
                     </span>
-                    {statusBadge(order.status)}
+                    {statusBadge(orderBucket(order))}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
