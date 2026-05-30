@@ -82,7 +82,7 @@ export default function OrderHistoryPage() {
           .range(from, to);
         if (cancelled) return;
         if (err) { setError(plainError(err)); setRows([]); setTotal(0); return; }
-        const list = (data || []) as HistoryOrder[];
+        const list = ((data ?? []) as unknown) as HistoryOrder[];
         setRows(list);
         setTotal(count || 0);
 
