@@ -25,6 +25,7 @@ type Body = {
   is_active?: boolean;
   hourly_rate?: number | null;
   hours_per_week?: number | null;
+  new_password?: string;
   _secret?: string;
 };
 
