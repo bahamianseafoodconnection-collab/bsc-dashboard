@@ -358,6 +358,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    case 'set_password': {
+      // Direct-set the staff member's password via the admin API (no email
+      // round-trip). Founder/co_founder only — direct password changes are
+      // sensitive. Caller still hands over the new password securely (not
+      // through this UI's logs).
+      if (!caller.isFounder) {
+        return NextResponse.json({ ok: false, error: 'Only the founder can set a password directly' }, { status: 403 });
+      }
+      if (!body.id)       return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
+      const newPassword = typeof body.new_password === 'string' ? body.new_password : '';
+      if (newPassword.length < 6) {
+        return NextResponse.json({ ok: false, error: 'Password must be at least 6 characters' }, { status: 400 });
+      }
+      const { error: pErr } = await admin.auth.admin.updateUserById(String(body.id), { password: newPassword });
+      if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 });
+      // Audit: WHAT changed, never the value.
+      await logChange(admin, body.id, 'set_password', caller.userId, { method: 'admin_direct_set' });
+      return NextResponse.json({ ok: true });
+    }
+
     case 'delete': {
       if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
       // Spec: deactivate without deleting records. Hard-delete is founder-only.

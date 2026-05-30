@@ -166,6 +166,20 @@ export default function StaffAdminPage() {
     setBusyId(null);
     alert(j.ok ? 'Reset email sent.' : `Failed: ${j.error}`);
   }
+  // Direct admin set — for staff who can't get an email (TJ, drivers, etc.).
+  // Founder types a new password, the API sets it via auth.admin.updateUserById.
+  // Founder is responsible for handing the password to the staff member
+  // securely (WhatsApp / in person) — this UI never logs or stores it.
+  async function setPassword(s: Staff) {
+    const who = s.full_name || s.name || s.email || s.id;
+    const pw = window.prompt(`Set a new password for ${who} (≥ 6 characters).\n\nThe staff member can sign in with it immediately. Hand it over securely.`);
+    if (pw == null) return;
+    if (pw.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    setBusyId(s.id);
+    const j = await authedFetch('set_password', { id: s.id, new_password: pw });
+    setBusyId(null);
+    alert(j.ok ? `Password set for ${who}. Share it securely.` : `Failed: ${j.error}`);
+  }
   async function destroy(s: Staff) {
     if (!confirm(`Delete ${s.full_name || s.name || s.email} permanently? This cannot be undone.`)) return;
     setBusyId(s.id);
@@ -388,6 +402,7 @@ export default function StaffAdminPage() {
               </button>
               <button onClick={() => regenerate(s)} disabled={busyId === s.id} style={miniBtn('#f5c518')}>Regenerate link</button>
               <button onClick={() => resetPassword(s)} disabled={busyId === s.id} style={miniBtn('#a78bfa')}>Reset password</button>
+              <button onClick={() => setPassword(s)} disabled={busyId === s.id} style={miniBtn('#0891b2')} title="Type a new password — applied instantly (no email)">Set password</button>
               <button onClick={() => destroy(s)} disabled={busyId === s.id} style={miniBtn('#f87171')}>Delete</button>
             </div>
           </div>
