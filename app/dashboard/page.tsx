@@ -157,6 +157,12 @@ const NAV_GROUPS: NavGroup[] = [
       { icon: '📚', label: 'Dashboard Guide',   href: '/dashboard-guide' },
     ],
   },
+  {
+    label: 'Account',
+    items: [
+      { icon: '🔐', label: 'Change My Password', href: '/dashboard/password' },
+    ],
+  },
 ];
 
 // Revenue streams. The first four map to orders.order_type values and
