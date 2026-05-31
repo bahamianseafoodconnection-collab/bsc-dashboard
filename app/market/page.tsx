@@ -490,6 +490,21 @@ function MarketPageInner() {
             ☰
           </button>
 
+          {/* ── Back to landing — uses browser back when there is history,
+                otherwise falls back to the homepage so visitors who land
+                directly on /market still have an obvious exit. ── */}
+          <button
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+              else router.push('/');
+            }}
+            aria-label="Back"
+            className="flex h-10 shrink-0 items-center gap-1 rounded-lg bg-white/10 px-2.5 text-sm font-bold text-white transition hover:bg-white/20 sm:h-11 sm:px-3"
+          >
+            <span aria-hidden className="text-lg leading-none">‹</span>
+            <span className="hidden sm:inline">Back</span>
+          </button>
+
           {/* ── BSC Market Place logo (watercolor brand) ── */}
           <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="BSC Market Place — home">
             <div className="flex items-center justify-center rounded-xl bg-white shadow-sm shrink-0" style={{ height: 48, padding: 4 }}>
