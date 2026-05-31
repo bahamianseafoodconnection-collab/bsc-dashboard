@@ -155,16 +155,15 @@ export default function ReportsPage() {
       const rev = Number(o.total ?? o.wholesale_cost_total ?? 0);
       const cost = Number(o.wholesale_cost_total ?? 0);
       const margin = CHANNEL_MARGIN[o.order_type] ?? 0;
-      const grossExclVat = rev / 1.10;
-      const profit = grossExclVat * margin;
-      const vat = rev - grossExclVat;
+      // VAT disabled — no reverse-extraction. Revenue and profit are the
+      // full amount. Restore the /1.10 split if VAT approval lands.
+      const profit = rev * margin;
       return {
         id: o.id,
         date: (o.created_at || '').slice(0, 10),
         channel: CHANNEL_LABEL[o.order_type] || o.order_type,
         revenue: rev,
         cost_basis: cost,
-        vat_collected: vat,
         bsc_profit: profit,
       };
     });
@@ -356,11 +355,11 @@ export default function ReportsPage() {
             <Empty />
           ) : (
             <Table
-              cols={['Date', 'Channel', 'Revenue', 'Cost', 'VAT', 'BSC profit']}
+              cols={['Date', 'Channel', 'Revenue', 'Cost', 'BSC profit']}
               rows={cogsRows.map((r) => [
                 r.date, r.channel,
                 fmt$(r.revenue), fmt$(r.cost_basis),
-                fmt$(r.vat_collected), fmt$(r.bsc_profit),
+                fmt$(r.bsc_profit),
               ])}
             />
           )}
