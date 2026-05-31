@@ -52,6 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
           { icon: '📦', label: 'All Orders',       href: '/orders' },
           { icon: '📜', label: 'Order History',    href: '/dashboard/order-history' },
           { icon: '🚚', label: 'Pickup Queue',     href: '/pickup-queue' },
+          { icon: '👥', label: 'Customers',         href: '/dashboard/customers' },
           { icon: '🫀', label: 'Pulse (live)',     href: '/pulse' },
           { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders',  badge: 'wholesale_orders' },
         ],

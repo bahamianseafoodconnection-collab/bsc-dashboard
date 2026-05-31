@@ -43,6 +43,7 @@ export default function AccountPage() {
   // Order count for quick stats
   const [orderCount, setOrderCount] = useState<number | null>(null);
   const [wishlistCount, setWishlistCount] = useState<number | null>(null);
+  const [pointsBalance, setPointsBalance] = useState<number | null>(null);
 
   // Addresses
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -102,6 +103,14 @@ export default function AccountPage() {
         if (!cancelled && res.ok && json?.ok) setOrderCount((json.orders ?? []).length);
         else if (!cancelled) setOrderCount(0);
       } catch { if (!cancelled) setOrderCount(0); }
+
+      // Loyalty points — read from the customer record linked to this auth user.
+      const { data: pts } = await supabase
+        .from('customers')
+        .select('points_balance')
+        .eq('auth_user_id', u.id)
+        .maybeSingle();
+      if (!cancelled) setPointsBalance((pts as { points_balance?: number } | null)?.points_balance ?? 0);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -284,6 +293,25 @@ export default function AccountPage() {
         <QuickLink href="/wishlist" label="Wishlist" value={wishlistCount ?? 0} icon="♡" />
         <QuickLink href="/market" label="Browse market" value="→" icon="🛒" />
       </div>
+
+      {/* Rewards — 4 points per $1 of BSC profit on every delivered order */}
+      <section className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-card sm:p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-emerald-100">BSC Rewards</div>
+            <div className="mt-1 font-display text-3xl font-black">
+              {(pointsBalance ?? 0).toLocaleString()} <span className="text-base font-semibold text-emerald-100">points</span>
+            </div>
+            <div className="mt-1 text-sm text-emerald-50">
+              Worth ${((pointsBalance ?? 0) / 4).toFixed(2)} off a future order
+            </div>
+          </div>
+          <div className="text-4xl">★</div>
+        </div>
+        <div className="mt-3 text-[11px] text-emerald-100/90">
+          Earn 4 points for every $1 of BSC profit on delivered orders.
+        </div>
+      </section>
 
       {/* Profile */}
       <section className="mb-6 rounded-2xl bg-white p-5 shadow-card sm:p-6">

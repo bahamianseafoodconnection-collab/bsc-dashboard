@@ -1,0 +1,299 @@
+'use client';
+
+// /dashboard/customers — admin view of every customer (excluding the
+// Walk-In Anonymous singleton). Side panel edits credit terms / credit limit /
+// is_credit_customer toggle, displays the points balance + lifetime + redeemed,
+// and lets founder/co_founder make a manual points adjustment (audited).
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
+
+const TERMS = ['COD', 'NET_7', 'NET_14', 'NET_30', 'NET_60', 'NET_90'];
+
+type Customer = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  is_credit_customer: boolean | null;
+  credit_terms: string | null;
+  credit_limit: number | null;
+  current_balance: number | null;
+  points_balance: number | null;
+  points_lifetime: number | null;
+  points_redeemed: number | null;
+  total_orders: number | null;
+  total_spent: number | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+type PointsLogRow = {
+  id: string;
+  delta: number;
+  reason: string;
+  profit_basis: number | null;
+  note: string | null;
+  order_id: string | null;
+  created_at: string;
+  created_by: string | null;
+};
+
+async function call(action: string, body: Record<string, unknown> = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/customers/admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+    body: JSON.stringify({ action, ...body }),
+  });
+  return res.json();
+}
+
+export default function CustomersAdminPage() {
+  const [rows, setRows]             = useState<Customer[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [search, setSearch]         = useState('');
+  const [selected, setSelected]     = useState<Customer | null>(null);
+  const [log, setLog]               = useState<PointsLogRow[]>([]);
+  const [savingCredit, setSavingCredit] = useState(false);
+  const [adjustBusy, setAdjustBusy] = useState(false);
+
+  // Edit-state for the side panel.
+  const [eCredit, setECredit]   = useState<boolean>(false);
+  const [eTerms, setETerms]     = useState<string>('COD');
+  const [eLimit, setELimit]     = useState<string>('0');
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    const j = await call('list', { search });
+    if (!j.ok) { setError(j.error || 'Failed to load'); setRows([]); }
+    else        setRows((j.customers || []) as Customer[]);
+    setLoading(false);
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  // Debounce search.
+  useEffect(() => {
+    const t = setTimeout(() => { load(); }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [search]);
+
+  async function openCustomer(c: Customer) {
+    setSelected(c);
+    setECredit(!!c.is_credit_customer);
+    setETerms(c.credit_terms || 'COD');
+    setELimit(c.credit_limit != null ? String(c.credit_limit) : '0');
+    setLog([]);
+    const j = await call('points_history', { id: c.id });
+    if (j.ok) setLog((j.log || []) as PointsLogRow[]);
+  }
+
+  async function saveCredit() {
+    if (!selected) return;
+    setSavingCredit(true);
+    const j = await call('update_credit', {
+      id: selected.id,
+      is_credit_customer: eCredit,
+      credit_terms: eTerms,
+      credit_limit: Number(eLimit) || 0,
+    });
+    setSavingCredit(false);
+    if (!j.ok) { alert(`Save failed: ${j.error}`); return; }
+    const patch = {
+      is_credit_customer: j.customer.is_credit_customer,
+      credit_terms:       j.customer.credit_terms,
+      credit_limit:       j.customer.credit_limit,
+    };
+    setRows((prev) => prev.map((r) => (r.id === selected.id ? { ...r, ...patch } : r)));
+    setSelected({ ...selected, ...patch });
+  }
+
+  async function adjustPoints() {
+    if (!selected) return;
+    const deltaStr = window.prompt(`Adjust points for ${selected.full_name || 'this customer'}.\n\nEnter a positive number to award, negative to deduct.`);
+    if (deltaStr == null) return;
+    const delta = parseInt(deltaStr, 10);
+    if (!Number.isInteger(delta) || delta === 0) { alert('Enter a non-zero whole number.'); return; }
+    const note = window.prompt('Reason (audit trail):') || 'adjusted';
+    setAdjustBusy(true);
+    const j = await call('adjust_points', { id: selected.id, delta, reason: 'adjusted', note });
+    setAdjustBusy(false);
+    if (!j.ok) { alert(`Adjust failed: ${j.error}`); return; }
+    const newBal = j.points_balance as number;
+    setRows((prev) => prev.map((r) => (r.id === selected.id ? { ...r, points_balance: newBal } : r)));
+    setSelected({ ...selected, points_balance: newBal });
+    // Refresh history.
+    const hh = await call('points_history', { id: selected.id });
+    if (hh.ok) setLog((hh.log || []) as PointsLogRow[]);
+  }
+
+  const fmtBSD = (n: number | null | undefined) => `BSD $${(Number(n ?? 0)).toFixed(2)}`;
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
+      <header className="sticky top-0 z-30 bg-navy shadow-md">
+        <div className="mx-auto flex h-14 max-w-screen-xl items-center gap-3 px-4 sm:h-16">
+          <Link href="/dashboard" className="rounded-lg bg-gold/15 px-3 py-1.5 text-xs font-bold text-gold hover:bg-gold/25">← BSC Control</Link>
+          <div>
+            <div className="text-sm font-black text-white">👥 Customers</div>
+            <div className="text-[10px] text-white/50">Credit terms · points · history</div>
+          </div>
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name / phone / email"
+            className="ml-auto w-56 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-gold sm:w-72" />
+        </div>
+      </header>
+
+      <main className="mx-auto flex max-w-screen-xl gap-4 px-4 py-6">
+        {/* List */}
+        <div className="min-w-0 flex-1 overflow-x-auto rounded-2xl bg-white shadow-card ring-1 ring-slate-100">
+          <table className="w-full min-w-[820px] text-left text-xs">
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Customer</th>
+                <th className="px-3 py-2">Phone</th>
+                <th className="px-3 py-2">Credit</th>
+                <th className="px-3 py-2 text-right">Balance</th>
+                <th className="px-3 py-2 text-right">Points</th>
+                <th className="px-3 py-2 text-right">Spent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (<tr><td colSpan={6} className="p-8 text-center text-sm text-slate-400">Loading…</td></tr>)}
+              {error && (<tr><td colSpan={6} className="p-4 text-sm font-bold text-red-700">⚠ {error}</td></tr>)}
+              {!loading && rows.length === 0 && (<tr><td colSpan={6} className="p-8 text-center text-sm text-slate-400">No customers match.</td></tr>)}
+              {rows.map((c) => (
+                <tr key={c.id} onClick={() => openCustomer(c)}
+                  className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50/60 ${selected?.id === c.id ? 'bg-slate-100' : ''}`}>
+                  <td className="px-3 py-2">
+                    <div className="font-bold text-navy">{c.full_name || '—'}</div>
+                    {c.email && <div className="text-[10px] text-slate-500">{c.email}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">{c.phone || '—'}</td>
+                  <td className="px-3 py-2">
+                    {c.is_credit_customer
+                      ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{c.credit_terms || 'CREDIT'}</span>
+                      : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">COD</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-700">{fmtBSD(c.current_balance)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="font-extrabold text-navy">{c.points_balance ?? 0}</span>
+                    <span className="ml-1 text-[10px] text-slate-400">= ${((c.points_balance ?? 0) / 4).toFixed(2)}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-700">{fmtBSD(c.total_spent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Side panel */}
+        {selected && (
+          <aside className="w-80 shrink-0 rounded-2xl bg-white p-4 shadow-card ring-1 ring-slate-100">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="font-display text-lg font-black text-navy">{selected.full_name || '—'}</div>
+                <div className="text-[11px] text-slate-500">{selected.email || selected.phone || ''}</div>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+
+            {/* Credit terms */}
+            <section className="mb-4 rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Credit</div>
+              <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <input type="checkbox" checked={eCredit} onChange={(e) => setECredit(e.target.checked)} />
+                Approved for credit
+              </label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Terms</label>
+                  <select value={eTerms} onChange={(e) => setETerms(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                    {TERMS.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Limit (BSD)</label>
+                  <input type="text" inputMode="decimal" value={eLimit}
+                    onChange={(e) => setELimit(e.target.value.replace(/[^0-9.]/g, ''))}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-right text-sm font-bold" />
+                </div>
+              </div>
+              <button onClick={saveCredit} disabled={savingCredit}
+                className="mt-3 w-full rounded-lg bg-navy px-3 py-2 text-xs font-extrabold text-gold hover:bg-navy-700 disabled:opacity-60">
+                {savingCredit ? 'Saving…' : 'Save credit settings'}
+              </button>
+              {selected.current_balance != null && Number(selected.current_balance) !== 0 && (
+                <div className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800">
+                  Current balance: {fmtBSD(selected.current_balance)}
+                </div>
+              )}
+            </section>
+
+            {/* Points */}
+            <section className="mb-4 rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Points · 4 pts = $1</div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Stat label="Balance"  value={selected.points_balance  ?? 0} accent />
+                <Stat label="Lifetime" value={selected.points_lifetime ?? 0} />
+                <Stat label="Redeemed" value={selected.points_redeemed ?? 0} />
+              </div>
+              <div className="mt-2 text-[11px] text-slate-500">
+                Value: <strong className="text-navy">${((selected.points_balance ?? 0) / 4).toFixed(2)}</strong> in rewards
+              </div>
+              <button onClick={adjustPoints} disabled={adjustBusy}
+                className="mt-3 w-full rounded-lg border border-navy px-3 py-2 text-xs font-extrabold text-navy hover:bg-navy hover:text-gold disabled:opacity-60">
+                {adjustBusy ? 'Adjusting…' : '± Manual adjust'}
+              </button>
+            </section>
+
+            {/* Recent history */}
+            <section className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Recent points activity</div>
+              {log.length === 0 ? (
+                <div className="text-[11px] text-slate-400">No activity yet — earned when an order ships as Delivered.</div>
+              ) : (
+                <ul className="space-y-1.5 text-[11px]">
+                  {log.map((e) => (
+                    <li key={e.id} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-700">
+                          <span className={e.delta > 0 ? 'text-emerald-700' : 'text-red-700'}>
+                            {e.delta > 0 ? '+' : ''}{e.delta} pts
+                          </span>{' '}
+                          <span className="font-medium text-slate-500">· {e.reason}</span>
+                        </div>
+                        {e.note && <div className="truncate italic text-slate-400">{e.note}</div>}
+                        {e.profit_basis != null && (
+                          <div className="text-slate-400">on ${Number(e.profit_basis).toFixed(2)} profit</div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-slate-400">{fmtDate(e.created_at)}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
+  return (
+    <div className={`rounded-md border ${accent ? 'border-gold/40 bg-amber-50' : 'border-slate-200 bg-slate-50'} px-2 py-1.5`}>
+      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`text-lg font-extrabold ${accent ? 'text-navy' : 'text-slate-700'}`}>{value}</div>
+    </div>
+  );
+}
