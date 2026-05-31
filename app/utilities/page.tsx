@@ -97,6 +97,14 @@ export default function UtilitiesPage() {
         <nav style={{ backgroundColor: '#1a2e4a', padding: '0 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
           <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={() => router.push('/market')}
+                aria-label="Back to Market"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.10)', border: 'none', color: '#fff', fontWeight: 700, fontSize: 12, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}
+              >
+                <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>‹</span>
+                Back
+              </button>
               <img src="/brand/bsc-marketplace-logo.png" alt="BSC Marketplace" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'contain', background: '#fff', padding: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.18)', cursor: 'pointer' }} onClick={() => router.push('/')} />
               <div>
                 <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 14, letterSpacing: 1 }}>BSC Pay</div>
