@@ -84,6 +84,13 @@ const CHANNEL_LABELS: Record<string, string> = {
   bulk_deals:      'Bulk Deals',
 };
 
+// localStorage key for the Add-Product modal draft. Saves on every keystroke
+// while the modal is open; restored on next openAddRow if the page reloads
+// (service-worker auto-update after a deploy, network hiccup, tab unload).
+// Cleared on save or explicit Cancel — so a draft survives accidents, not
+// intentional discards.
+const INV_ADD_DRAFT_KEY = 'bsc_inv_add_draft_v1';
+
 // Deal channels — added 2026-05-29. Each lists the product on the matching
 // marketplace deal card (/market?deal=<slug>). UX: just an optional margin
 // per channel (no checkbox) — setting a margin = include in deal; empty = not.
@@ -170,6 +177,19 @@ export default function AdminInventoryPage() {
   // Per-product deal channel margins (optional). Setting a value lists the
   // product under that deal card on the marketplace.
   const [addDealMargins, setAddDealMargins] = useState<Record<string, string>>({});
+
+  // Live-save the Add-Product form to localStorage so a stray page reload
+  // (service-worker auto-update, network hiccup) doesn't wipe a long entry.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!showAddRow) return;
+    try {
+      window.localStorage.setItem(
+        INV_ADD_DRAFT_KEY,
+        JSON.stringify({ form: addRowForm, margins: addMargins, deals: addDealMargins }),
+      );
+    } catch { /* quota / private mode — silently skip */ }
+  }, [showAddRow, addRowForm, addMargins, addDealMargins]);
 
   // ─── Per-row Edit modal ──────────────────────────────────────────────
   // Full edit of one product (name / category / UoM / pack / cost / stock /
@@ -472,6 +492,18 @@ export default function AdminInventoryPage() {
     });
     // Deal channels default to empty — founder opts in per product.
     setAddDealMargins({});
+    // Restore an unsaved draft if the modal was previously closed unexpectedly
+    // (service-worker auto-refresh after a deploy, network hiccup, tab unload).
+    // Saves the founder from retyping a long product entry.
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(INV_ADD_DRAFT_KEY) : null;
+      if (raw) {
+        const d = JSON.parse(raw) as { form?: unknown; margins?: unknown; deals?: unknown };
+        if (d.form && typeof d.form === 'object')        setAddRowForm((cur) => ({ ...cur, ...(d.form as object) }));
+        if (d.margins && typeof d.margins === 'object')  setAddMargins(d.margins as Record<string, string>);
+        if (d.deals && typeof d.deals === 'object')      setAddDealMargins(d.deals as Record<string, string>);
+      }
+    } catch { /* ignore corrupt draft */ }
     // Seed the per-channel margin inputs from live margins (fallback to
     // the documented defaults until they load), then refresh from server.
     const seed = (rows: MarginRow[]) => {
@@ -567,6 +599,8 @@ export default function AdminInventoryPage() {
         ? `${json.sku} added — live on ${selectedLabels.join(', ')}`
         : `${json.sku} — ${f.name} added`);
       setShowAddRow(false);
+      // Saved — clear the unsaved-draft snapshot.
+      try { window.localStorage.removeItem(INV_ADD_DRAFT_KEY); } catch { /* ignore */ }
       setSearch('');
       setFilterSupplier('');
       setFilterStatus('active');
@@ -1389,7 +1423,11 @@ export default function AdminInventoryPage() {
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
               <button
-                onClick={() => setShowAddRow(false)}
+                onClick={() => {
+                  setShowAddRow(false);
+                  // Intentional discard → drop the autosaved draft too.
+                  try { window.localStorage.removeItem(INV_ADD_DRAFT_KEY); } catch { /* ignore */ }
+                }}
                 disabled={addRowSaving}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-white"
               >
