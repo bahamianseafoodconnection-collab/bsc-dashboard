@@ -58,7 +58,7 @@ type ChannelKey = 'nassau' | 'andros' | 'online' | 'wholesale';
 const CATEGORY_OPTIONS = [
   'fresh_seafood', 'frozen_seafood', 'meat', 'frozen_meat',
   'produce', 'grocery', 'spices', 'dry_goods', 'beverages',
-  'household', 'toiletries',
+  'snack', 'household', 'toiletries',
 ] as const;
 
 const UOM_OPTIONS = ['lb', 'each', 'case'] as const;
