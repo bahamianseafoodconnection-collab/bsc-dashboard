@@ -97,7 +97,7 @@ export default function UtilitiesPage() {
         <nav style={{ backgroundColor: '#1a2e4a', padding: '0 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
           <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 60 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <img src={`${BASE}/logo.jpg`} alt="BSC" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid #f5a623', cursor: 'pointer' }} onClick={() => router.push('/')} />
+              <img src="/brand/bsc-marketplace-logo.png" alt="BSC Marketplace" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'contain', background: '#fff', padding: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.18)', cursor: 'pointer' }} onClick={() => router.push('/')} />
               <div>
                 <div style={{ color: '#f5a623', fontWeight: 900, fontSize: 14, letterSpacing: 1 }}>BSC Pay</div>
                 <div style={{ color: '#94a3b8', fontSize: 10 }}>Bill Payment Service</div>

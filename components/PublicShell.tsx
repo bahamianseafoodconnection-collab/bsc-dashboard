@@ -28,9 +28,9 @@ export default function PublicShell({
         <div className="mx-auto flex h-14 max-w-screen-xl items-center gap-3 px-3 sm:h-16 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2">
             <img
-              src={`${STORAGE_BASE}/logo.jpg`}
-              alt="BSC"
-              className="h-9 w-9 rounded-full border-2 border-gold object-cover"
+              src="/brand/bsc-marketplace-logo.png"
+              alt="BSC Marketplace"
+              className="h-10 w-10 rounded-lg bg-white p-1 object-contain shadow ring-1 ring-gold/40"
             />
             <div className="hidden text-white sm:block">
               <div className="text-sm font-extrabold tracking-wide text-gold">BSC Marketplace</div>

@@ -8,6 +8,11 @@
   .font-display {
     font-family: "Playfair Display", Georgia, serif;
   }
+  /* Tailwind preflight is disabled on this project, so anchor tags would
+     fall back to the browser default (underlined blue links). Reset them
+     so links inherit color + no underline; opt-in to underline with the
+     `underline` utility on a case-by-case basis. */
+  a { color: inherit; text-decoration: none; }
 }
 
 /* Custom utility: line-clamp helpers, kept here because we disabled preflight

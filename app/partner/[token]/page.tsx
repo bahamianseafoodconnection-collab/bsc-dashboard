@@ -222,9 +222,9 @@ function Shell({ children, partnerName }: { children: React.ReactNode; partnerNa
       <header className="bg-navy">
         <div className="mx-auto flex h-14 max-w-screen-md items-center gap-3 px-4 sm:h-16 sm:px-6">
           <img
-            src={`${STORAGE_BASE}/logo.jpg`}
-            alt="BSC"
-            className="h-9 w-9 rounded-full border-2 border-gold object-cover"
+            src="/brand/bsc-marketplace-logo.png"
+            alt="BSC Marketplace"
+            className="h-10 w-10 rounded-lg bg-white p-1 object-contain shadow ring-1 ring-gold/40"
           />
           <div className="text-white">
             <div className="text-sm font-extrabold tracking-wide text-gold">
