@@ -109,29 +109,29 @@ export default function AccountDrawer({ open, onClose }: { open: boolean; onClos
           )}
 
           <Section title="Your account">
-            <DrawerLink href="/my-orders" onClose={onClose} emoji="📦" label="My Orders" />
-            <DrawerLink href="/my-orders" onClose={onClose} emoji="🕘" label="Order History" />
-            <DrawerLink href="/account"   onClose={onClose} emoji="👤" label="Account Information" />
-            <DrawerLink href="/account"   onClose={onClose} emoji="📍" label="Profile & Addresses" />
-            <DrawerLink href="/wishlist"  onClose={onClose} emoji="♡"  label="Wishlist" />
+            <DrawerLink href="/my-orders" onClose={onClose} label="My Orders" />
+            <DrawerLink href="/my-orders" onClose={onClose} label="Order History" />
+            <DrawerLink href="/account"   onClose={onClose} label="Account Information" />
+            <DrawerLink href="/account"   onClose={onClose} label="Profile & Addresses" />
+            <DrawerLink href="/wishlist"  onClose={onClose} label="Wishlist" />
           </Section>
 
           <Section title="Shop by Department">
-            <DrawerLink href="/market" onClose={onClose} emoji="🛒" label="All Products" />
+            <DrawerLink href="/market" onClose={onClose} label="All Products" />
             {DEPARTMENTS.map((d) => (
-              <DrawerLink key={d.slug} href={`/category/${d.slug}`} onClose={onClose} emoji={d.emoji} label={d.label} />
+              <DrawerLink key={d.slug} href={`/category/${d.slug}`} onClose={onClose} label={d.label} />
             ))}
           </Section>
         </div>
 
-        {/* Footer — sign out */}
+        {/* Footer — sign out (gold for visibility against navy) */}
         {authed && (
-          <div className="border-t border-white/10 px-3 py-3">
+          <div className="border-t border-white/10 bg-navy-700 px-4 py-4">
             <button
               onClick={signOut}
-              className="block w-full rounded-xl border border-white/20 px-4 py-3 text-sm font-bold text-white/85 transition hover:bg-white/5"
+              className="block w-full rounded-xl bg-gold px-4 py-4 text-base font-black uppercase tracking-wider text-navy shadow-lg ring-1 ring-gold/60 transition hover:bg-gold-300 active:translate-y-px"
             >
-              Sign out
+              Sign Out
             </button>
           </div>
         )}
@@ -142,24 +142,24 @@ export default function AccountDrawer({ open, onClose }: { open: boolean; onClos
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-4">
-      <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">{title}</div>
+    <div className="mb-5">
+      <div className="px-4 pb-2 text-[11px] font-black uppercase tracking-[0.22em] text-gold/80">{title}</div>
       <div className="space-y-0.5">{children}</div>
     </div>
   );
 }
 
 function DrawerLink({
-  href, label, emoji, onClose,
-}: { href: string; label: string; emoji: string; onClose: () => void }) {
+  href, label, onClose,
+}: { href: string; label: string; onClose: () => void }) {
   return (
     <Link
       href={href}
       onClick={onClose}
-      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-white/85 transition hover:bg-white/10 hover:text-gold"
+      className="group relative block rounded-lg px-4 py-3 text-[15px] font-extrabold text-white no-underline transition hover:bg-white/10 hover:text-gold [text-decoration:none]"
     >
-      <span className="w-5 shrink-0 text-center text-base">{emoji}</span>
-      <span>{label}</span>
+      <span className="absolute inset-y-2 left-1 w-1 rounded-full bg-gold opacity-0 transition group-hover:opacity-100" />
+      {label}
     </Link>
   );
 }
