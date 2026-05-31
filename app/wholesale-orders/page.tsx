@@ -340,7 +340,7 @@ export default function WholesaleOrdersPage() {
                       <div style={{ backgroundColor: '#e8f5e9', borderRadius: 10, padding: '12px', textAlign: 'center' }}>
                         <div style={{ color: '#666', fontSize: 10, marginBottom: 4 }}>💰 BSC Keeps</div>
                         <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: 18 }}>{fmtBSD(bscProfit)}</div>
-                        <div style={{ color: '#999', fontSize: 10, marginTop: 2 }}>12% markup + VAT</div>
+                        <div style={{ color: '#999', fontSize: 10, marginTop: 2 }}>12% markup</div>
                       </div>
                       <div style={{ backgroundColor: '#1a2e5a', borderRadius: 10, padding: '12px', textAlign: 'center' }}>
                         <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10, marginBottom: 4 }}>🧾 Customer Paid</div>

@@ -226,9 +226,7 @@ function OrderDetailInner() {
         {order.subtotal != null && (
           <Row label="Subtotal" value={`$${fmt(order.subtotal)}`} />
         )}
-        {order.vat_amount != null && order.vat_amount > 0 && (
-          <Row label="VAT" value={`$${fmt(order.vat_amount)}`} />
-        )}
+        {/* VAT line REMOVED — disabled until BSC is approved to charge VAT. */}
         <div className="mt-2 border-t border-slate-200 pt-2">
           <Row label="Total" value={`BSD $${fmt(order.total)}`} emphasis />
         </div>

@@ -104,11 +104,7 @@ function renderEmailHtml(p: {
               <td style="padding:8px 10px;font-size:12px;color:#475569;">Subtotal</td>
               <td style="padding:8px 10px;text-align:right;font-size:12px;color:#1a2e5a;font-weight:700;">${dollars(p.subtotal)}</td>
             </tr>
-            ${p.vat > 0 ? `
-            <tr style="background:#f8fafc;">
-              <td style="padding:8px 10px;font-size:12px;color:#475569;">VAT</td>
-              <td style="padding:8px 10px;text-align:right;font-size:12px;color:#1a2e5a;font-weight:700;">${dollars(p.vat)}</td>
-            </tr>` : ''}
+            <!-- VAT line REMOVED — disabled until approved. -->
             <tr style="background:#0F1111;color:#f5c518;">
               <td style="padding:10px;font-size:14px;font-weight:800;">Total</td>
               <td style="padding:10px;text-align:right;font-size:16px;font-weight:900;">${dollars(p.total)}</td>
@@ -154,7 +150,7 @@ function renderSmsText(p: {
     lines.push(`• ${it.name}${qty} ${dollars(it.unit_price * it.qty)}`);
   }
   if (p.items.length > 8) lines.push(`+ ${p.items.length - 8} more items`);
-  if (p.vat > 0) lines.push(`Sub ${dollars(p.subtotal)} · VAT ${dollars(p.vat)}`);
+  // VAT line REMOVED — disabled until approved.
   lines.push(`Total: ${dollars(p.total)}`);
   if (p.paymentMethod) {
     lines.push(`Paid: ${humanPayment(p.paymentMethod)}${p.cardRef ? ` · ref ${p.cardRef}` : ''}`);

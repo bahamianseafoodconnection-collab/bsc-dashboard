@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
   }
   lines.push('');
   lines.push(`Subtotal: ${dollars(subtotal)}`);
-  if (vat > 0) lines.push(`VAT: ${dollars(vat)}`);
+  // VAT line REMOVED — disabled until BSC is approved to charge VAT.
   lines.push(`*Total: ${dollars(total)}*`);
   lines.push('');
   if (orderId) {

@@ -1292,8 +1292,8 @@ export default function POSPage() {
               )}
             </div>
             <div className="px-5 pb-6 pt-3 border-t border-gray-800 shrink-0">
-              <div className="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm text-gray-400 mb-3"><span>VAT (0% — food items)</span><span>$0.00</span></div>
+              <div className="flex justify-between text-sm text-gray-400 mb-3"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              {/* VAT line REMOVED — disabled until BSC is approved to charge VAT. */}
               <div className="flex justify-between font-bold text-xl mb-4"><span>Total</span><span style={{ color: '#f5c518' }}>${total.toFixed(2)}</span></div>
               <button onClick={() => setShowCheckout(true)} disabled={cart.length === 0}
                 className="w-full py-4 rounded-2xl font-bold text-base disabled:opacity-40"

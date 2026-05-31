@@ -76,12 +76,10 @@ export default function ReceiptPage() {
 
   const items = parseOrderItems(order.wholesale_items);
   const total = Number(order.total ?? order.wholesale_cost_total ?? 0);
-  // Andros (Ceta's Variety Store) is NOT VAT-registered. /pos-andros does
-  // not collect VAT; the displayed price IS the total. Do not synthesize a
-  // fake VAT line by reverse-extracting from total.
-  const isAndros = order.order_type === 'pos_sale_andros';
-  const subtotal = isAndros ? total : total / 1.10;
-  const vat      = isAndros ? 0     : total - subtotal;
+  // VAT is DISABLED until BSC is approved to charge it (founder direction
+  // 2026-05-30). Do NOT compute, label, or display VAT on any receipt or
+  // invoice. The order subtotal equals the order total.
+  const subtotal = total;
   const invoiceNo = `INV-${order.id.slice(0, 8).toUpperCase()}`;
 
   return (
@@ -195,18 +193,12 @@ export default function ReceiptPage() {
           )}
         </div>
 
-        {/* Totals */}
+        {/* Totals — VAT disabled until approved (no VAT line). */}
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '2px solid #1a2e5a' }}>
           <div style={totalsRowStyle}>
-            <span style={{ color: '#475569', fontSize: 14, fontWeight: 600 }}>{isAndros ? 'Subtotal' : 'Subtotal (excl VAT)'}</span>
+            <span style={{ color: '#475569', fontSize: 14, fontWeight: 600 }}>Subtotal</span>
             <span style={{ fontSize: 15, fontWeight: 600 }}>${subtotal.toFixed(2)}</span>
           </div>
-          {!isAndros && (
-            <div style={totalsRowStyle}>
-              <span style={{ color: '#475569', fontSize: 14, fontWeight: 600 }}>VAT 10%</span>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>${vat.toFixed(2)}</span>
-            </div>
-          )}
           <div style={{ ...totalsRowStyle, marginTop: 10, fontWeight: 900, fontSize: 22, color: '#1a2e5a' }}>
             <span>TOTAL</span>
             <span>BSD ${total.toFixed(2)}</span>

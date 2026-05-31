@@ -1104,7 +1104,7 @@ export default function AndrosPOSPage() {
                 marginTop: 4,
               }}
             >
-              <span>Live profit (excl VAT)</span>
+              <span>Live profit</span>
               <span style={{ fontWeight: 900 }}>${realProfit.toFixed(2)}</span>
             </div>
           )}
@@ -1228,7 +1228,7 @@ export default function AndrosPOSPage() {
                 marginTop: 4,
               }}
             >
-              <span>BSC profit (excl VAT)</span>
+              <span>BSC profit</span>
               <span style={{ fontWeight: 900 }}>${lastSale.profit.toFixed(2)}</span>
             </div>
             <button
