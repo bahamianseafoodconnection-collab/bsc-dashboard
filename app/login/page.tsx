@@ -3,7 +3,7 @@
 // /login — customer sign-in / register. Tailwind redesign.
 // Two tabs: Sign In and Register. All auth logic preserved.
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -25,7 +25,19 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
+// Next 15 forces any component that calls useSearchParams() to live under
+// a Suspense boundary during prerender — otherwise the build bails out.
+// The boundary is intentionally invisible (the inner form will render
+// almost immediately on the client).
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
   const params = useSearchParams();
   const nextParam = safeNext(params?.get('next') ?? null);
   const modeParam = (params?.get('mode') === 'signup' || params?.get('mode') === 'register') ? 'register' : null;
