@@ -294,7 +294,9 @@ export default function AccountPage() {
         <QuickLink href="/market" label="Browse market" value="→" icon="🛒" />
       </div>
 
-      {/* Rewards — 4 points per $1 of BSC profit on every delivered order */}
+      {/* Rewards — 4 points per $1 of BSC profit on every delivered order.
+          Redemption at checkout is queued; show points + accrued value but
+          clearly mark the redemption flow as not-yet-live. */}
       <section className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-card sm:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -303,13 +305,13 @@ export default function AccountPage() {
               {(pointsBalance ?? 0).toLocaleString()} <span className="text-base font-semibold text-emerald-100">points</span>
             </div>
             <div className="mt-1 text-sm text-emerald-50">
-              Worth ${((pointsBalance ?? 0) / 4).toFixed(2)} off a future order
+              ≈ ${((pointsBalance ?? 0) / 4).toFixed(2)} accrued · redemption launching soon
             </div>
           </div>
           <div className="text-4xl">★</div>
         </div>
         <div className="mt-3 text-[11px] text-emerald-100/90">
-          Earn 4 points for every $1 of BSC profit on delivered orders.
+          Keep buying — you earn 4 points for every $1 of BSC profit on delivered orders.
         </div>
       </section>
 

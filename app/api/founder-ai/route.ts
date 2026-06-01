@@ -425,6 +425,30 @@ export async function POST(req: NextRequest) {
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
     const callerId = extractUserIdFromJWT(token);
 
+    // CHAT ACCESS GATE — Founder AI is a privileged channel. Reject anyone
+    // who is not founder / co_founder / control_admin. Service-role client
+    // bypasses RLS so this gate is the only line of defence at the route
+    // layer (middleware allow-lists /founder-ai for many roles by mistake).
+    if (!callerId) {
+      return NextResponse.json({
+        error: 'Authentication required',
+        reply: 'Please sign in to use Founder AI.',
+      }, { status: 401 });
+    }
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', callerId)
+      .maybeSingle();
+    const callerRole = (callerProfile as { role?: string } | null)?.role ?? null;
+    const FOUNDER_AI_ROLES = new Set(['founder', 'co_founder', 'control_admin']);
+    if (!callerRole || !FOUNDER_AI_ROLES.has(callerRole)) {
+      return NextResponse.json({
+        error: 'Founder AI is restricted to founder, co-founder, and control admin roles.',
+        reply: 'Sorry — Founder AI is only available to Dedrick and a small set of trusted administrators.',
+      }, { status: 403 });
+    }
+
     // Build the latest user turn. If images were uploaded, use the
     // array-content form (text + image blocks). Otherwise stay on the
     // simpler string form for compatibility with cached history.

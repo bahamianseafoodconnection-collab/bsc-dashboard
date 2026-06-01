@@ -25,14 +25,18 @@ function isStaffCustomerRoute(pathname: string): boolean {
 
 const NO_NAV_PREFIXES = [
   // Auth & legal
-  '/login','/staff-login','/reset-password','/legal',
+  '/login','/staff-login','/reset-password','/legal','/change-password',
+  '/auth',
   // Staff-only pages (have their own nav)
   '/supplier','/purchase-orders','/pos-andros','/pos','/dashboard',
   '/jaquel','/report','/yield','/inventory','/staff','/cash',
-  '/customers/dashboard',
+  '/customers/dashboard','/spinytails',
   // Public-facing pages — clean layout, no bottom bar
   '/market','/product','/category','/checkout','/my-orders',
   '/account','/wishlist','/contact','/admin','/founder-ai',
+  // Post-checkout flows (success / decline / track / utilities)
+  '/order-confirmed','/payment-declined','/track','/utilities',
+  '/receipt','/become-a-supplier',
 ];
 
 const CUSTOMER_NAV = [

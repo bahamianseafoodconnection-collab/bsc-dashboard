@@ -3,8 +3,9 @@
 // /login — customer sign-in / register. Tailwind redesign.
 // Two tabs: Sign In and Register. All auth logic preserved.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { publicSiteUrl } from '@/lib/site-url';
 
@@ -16,8 +17,23 @@ const LOGO = `${STORAGE_BASE}/A0EF44D5-D0F6-4D15-9826-4FED851A2719.png`;
 
 type Mode = 'signin' | 'register';
 
+// Only allow same-origin relative paths as redirect targets — never echo a
+// full URL from the query string (open-redirect protection).
+function safeNext(raw: string | null): string {
+  if (!raw) return '/market';
+  if (!raw.startsWith('/') || raw.startsWith('//')) return '/market';
+  return raw;
+}
+
 export default function LoginPage() {
-  const [mode, setMode] = useState<Mode>('signin');
+  const params = useSearchParams();
+  const nextParam = safeNext(params?.get('next') ?? null);
+  const modeParam = (params?.get('mode') === 'signup' || params?.get('mode') === 'register') ? 'register' : null;
+
+  const [mode, setMode] = useState<Mode>(modeParam ?? 'signin');
+  // Honor `?mode=signup` even if the URL changes after mount (e.g. tab swap
+  // via Link). useEffect catches the param on initial paint without flicker.
+  useEffect(() => { if (modeParam) setMode(modeParam); }, [modeParam]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -68,9 +84,10 @@ export default function LoginPage() {
         return;
       }
       await new Promise((r) => setTimeout(r, 400));
-      // Role-based landing — fishermen go straight to /lobster-intake.
+      // Role-based landing — fishermen go straight to /lobster-intake;
+      // everyone else honours the `?next=` param (or /market by default).
       const { data: { user } } = await supabase.auth.getUser();
-      let dest = '/market';
+      let dest = nextParam;
       if (user) {
         const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
         if (prof?.role === 'fisherman') dest = '/lobster-intake';
@@ -143,7 +160,7 @@ export default function LoginPage() {
         }).catch((err) => console.warn('Customer seed failed:', err));
       }
       await new Promise((r) => setTimeout(r, 400));
-      window.location.href = '/market';
+      window.location.href = nextParam;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setLoading(false);

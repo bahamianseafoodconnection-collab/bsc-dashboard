@@ -490,7 +490,7 @@ export default function YieldPage() {
             </div>
 
             <div style={{ textAlign: 'center', color: '#999', fontSize: '9px', borderTop: '1px solid #ebebeb', paddingTop: '8px' }}>
-              bscbahamas.com · 💬 WhatsApp: +1 (242) 558-4495 · 📞 Landline: +1 (242) 361-3474 · Firetrial Road, Nassau 🇧🇸
+              bscbahamas.com · 💬 WhatsApp: +1 (242) 361-3474 · 📞 Call: +1 (242) 558-4495 · Firetrial Road, Nassau 🇧🇸
             </div>
 
             <button onClick={printLabel} style={{ width: '100%', marginTop: '12px', backgroundColor: '#1a2e5a', color: '#f4c842', border: 'none', borderRadius: '12px', padding: '13px', fontWeight: 900, fontSize: '14px', cursor: 'pointer' }}>

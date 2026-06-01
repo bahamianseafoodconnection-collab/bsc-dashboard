@@ -170,6 +170,7 @@ function MarketPageInner() {
   const [showFilters, setShowFilters] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [orderDone, setOrderDone] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -441,23 +442,39 @@ function MarketPageInner() {
     // Create through the service-role endpoint (status/payment_status/
     // fulfillment_status are forced server-side). Lets us lock direct
     // client INSERT to staff-only — online orders always go through here.
-    await fetch('/api/orders/place', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        order_type: 'online_market',
-        channel: 'online_market',
-        payment_method: 'cod',
-        items,
-        total: +cartTotal.toFixed(2),
-        customer_id: session?.user.id || null,
-        location: 'online',
-      }),
-    }).catch((err) => console.warn('Market order place failed:', err));
-    setPlacing(false);
-    setOrderDone(true);
-    setCart([]);
-    setShowCart(false);
+    setOrderError(null);
+    try {
+      const res = await fetch('/api/orders/place', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_type: 'online_market',
+          channel: 'online_market',
+          payment_method: 'cod',
+          items,
+          total: +cartTotal.toFixed(2),
+          customer_id: session?.user.id || null,
+          location: 'online',
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || (json && json.ok === false)) {
+        const msg = (json && (json.error || json.message)) || `Order failed (HTTP ${res.status}). Please try again or contact support.`;
+        setOrderError(String(msg));
+        setPlacing(false);
+        return;
+      }
+      // Success path — clear cart and show confirmation. Only flips on a
+      // confirmed 2xx so customers don't see "Order placed" on a silent
+      // failure.
+      setPlacing(false);
+      setOrderDone(true);
+      setCart([]);
+      setShowCart(false);
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : 'Network error placing order. Please try again.');
+      setPlacing(false);
+    }
   }
 
   const brandCounts = useMemo(() => {
@@ -666,6 +683,16 @@ function MarketPageInner() {
                 <div className="text-xs text-emerald-700">BSC will confirm your order and arrange delivery.</div>
               </div>
               <button onClick={() => setOrderDone(false)} className="text-emerald-900 hover:text-emerald-700" aria-label="Dismiss">×</button>
+            </div>
+          )}
+          {orderError && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
+              <span className="text-xl">⚠️</span>
+              <div className="flex-1">
+                <div className="font-bold">Order could not be placed</div>
+                <div className="mt-0.5 text-xs text-red-700">{orderError} If this keeps happening, WhatsApp +1 (242) 361-3474.</div>
+              </div>
+              <button onClick={() => setOrderError(null)} className="text-red-900 hover:text-red-700" aria-label="Dismiss">×</button>
             </div>
           )}
 
@@ -983,7 +1010,7 @@ function TrustBar() {
     { icon: '🇧🇸', title: 'Bahamian-owned',  sub: 'Family-run from Nassau' },
     { icon: '🚚', title: 'Fast delivery',     sub: 'Nassau & Andros, same-day' },
     { icon: '❄️', title: 'Cold-chain fresh',  sub: 'Spiny Tail processing' },
-    { icon: '💬', title: 'WhatsApp support',  sub: '+1 (242) 558-4495' },
+    { icon: '💬', title: 'WhatsApp support',  sub: '+1 (242) 361-3474' },
   ];
   return (
     <div className="mt-10 grid grid-cols-2 gap-3 rounded-2xl bg-white p-5 shadow-card sm:grid-cols-4">

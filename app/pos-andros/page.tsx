@@ -122,6 +122,12 @@ function getSupabase() {
   return createBrowserClient(url, key);
 }
 
+// computePrice — never returns 0 silently. VAT is currently disabled
+// project-wide (vat_multiplier should be 1) but historical or partially
+// migrated rows may have a NULL multiplier — treat NULL as 1 rather than
+// short-circuiting to 0, which would let the cashier ring up a free sale.
+// Returns NaN for truly un-priceable rows so the caller can block the
+// add-to-cart instead of swallowing the bug.
 function computePrice(r: CatalogRow): number {
   if (r.pricing_mode === 'manual_override' && r.manual_unit_price != null) {
     return Number(r.manual_unit_price);
@@ -129,13 +135,13 @@ function computePrice(r: CatalogRow): number {
   if (
     r.pricing_mode === 'formula' &&
     r.cost_per_unit != null &&
-    r.margin_multiplier != null &&
-    r.vat_multiplier != null
+    r.margin_multiplier != null
   ) {
-    return Number(r.cost_per_unit) * Number(r.margin_multiplier) * Number(r.vat_multiplier);
+    const vat = r.vat_multiplier != null ? Number(r.vat_multiplier) : 1;
+    return Number(r.cost_per_unit) * Number(r.margin_multiplier) * vat;
   }
   if (r.manual_unit_price != null) return Number(r.manual_unit_price);
-  return 0;
+  return Number.NaN;
 }
 
 function genRef() {
@@ -324,7 +330,9 @@ export default function AndrosPOSPage() {
         const regular_price = computePrice(r);
         const special = specialMap.get(r.id);
         const unit_price = special != null ? special : regular_price;
-        if (unit_price <= 0) {
+        // Reject NaN (un-priceable rows) AND non-positive prices — never
+        // surface a $0 line at POS where the cashier might ring it through.
+        if (!Number.isFinite(unit_price) || unit_price <= 0) {
           unsellable++;
           return;
         }

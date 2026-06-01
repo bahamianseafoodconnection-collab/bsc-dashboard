@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyResponseHash, queryTransaction, parseUrlEncodedResponse } from './index';
 import { rbcOutcome } from './rbc-codes';
+import { CHANNEL_MARGIN, VAT_RATE, recordSaleFinancials } from '@/lib/finance';
 
 export type ReturnHint = 'success' | 'declined' | 'problem';
 
@@ -167,6 +168,32 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
       payment_method: 'card',
       payment_ref:    pnpOrderId || null,
     }).eq('id', clientOrderId);
+
+    // Record the sale's financial split now that payment is confirmed.
+    // Deferred from /checkout (where it ran pre-PnP and would log phantom
+    // revenue for any customer who abandoned at the card form). Cost basis
+    // is back-computed from the online_market sacred pricing; VAT is
+    // currently disabled (VAT_RATE=0) so cost = total / (1 + margin).
+    try {
+      const { data: orderRow } = await admin
+        .from('orders')
+        .select('total')
+        .eq('id', clientOrderId)
+        .maybeSingle();
+      const total = Number((orderRow as { total?: number } | null)?.total ?? 0);
+      if (total > 0) {
+        const onlineToCost =
+          1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
+        await recordSaleFinancials({
+          saleAmount: total,
+          costBasis:  total * onlineToCost,
+          channel:    'online_market',
+          orderId:    clientOrderId,
+        });
+      }
+    } catch (err) {
+      console.warn('Financials log failed on payment confirm:', err);
+    }
   } else {
     // Revert to 'pending' so the customer can retry from /checkout.
     // We deliberately do NOT set 'declined' as the order status —

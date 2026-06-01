@@ -475,20 +475,23 @@ function CheckoutInner() {
       }).catch((err) => console.warn('Promo redemption log failed:', err));
     }
 
-    // Persist a channel-correct financial split. We don't carry per-item cost
-    // through to checkout, so we back-compute the cost basis from the cart
-    // total assuming online_market sacred pricing. VAT is currently disabled
-    // (founder directive — see lib/finance.ts VAT_RATE), so cost = total /
-    // (1 + margin). Fire-and-forget so a missing financials table can't
-    // block the order.
-    const onlineToCost =
-      1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
-    recordSaleFinancials({
-      saleAmount: total,
-      costBasis: total * onlineToCost,
-      channel: 'online_market',
-      orderId: orderIdInserted || null,
-    }).catch((err) => console.warn('Financials log failed:', err));
+    // Persist a channel-correct financial split — but ONLY for COD here.
+    // Card orders defer this write to /api/payment/return success branch
+    // so customers who abandon at the Plug'n Pay form don't leave a phantom
+    // financial record behind. (The pending order row still exists with
+    // payment_status='payment_pending' — the financials line is what gets
+    // deferred.) VAT is currently disabled (founder directive — see
+    // lib/finance.ts VAT_RATE), so cost = total / (1 + margin).
+    if (payMethod === 'cod') {
+      const onlineToCost =
+        1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
+      recordSaleFinancials({
+        saleAmount: total,
+        costBasis: total * onlineToCost,
+        channel: 'online_market',
+        orderId: orderIdInserted || null,
+      }).catch((err) => console.warn('Financials log failed:', err));
+    }
 
     // Decrement inventory for source='market' items (BSC stock). Wholesale
     // items come from local_wholesale_products and aren't in our inventory.
