@@ -1,6 +1,6 @@
 # BSC Master System Checklist
 
-**Last compiled:** 2026-05-20 by Claude Code (from atlas + master context).
+**Last compiled:** 2026-05-31 by Claude Code (post pre-launch ship sprint — see audit history at bottom).
 **Purpose:** Single source of truth for what's built, what's pending, what's broken, and what the founder needs to do. Successor handoff document.
 
 **Live deploy:** [bscbahamas.com](https://bscbahamas.com) · **Repo:** [bsc-dashboard](https://github.com/bahamianseafoodconnection-collab/bsc-dashboard) · **DB:** Supabase project `qgcaxkyuhwmpvpbooaqw`
@@ -43,7 +43,7 @@
 - [x] ✅ Promo prices win over wholesale upgrade
 - [x] ✅ `/dashboard/pricing-rules` admin UI + audit
 - [x] ✅ Tue Shrimp + Wed Salmon promos live
-- [x] ✅ VAT rule — `vat_category` column on products (`uncooked_food` 0% default, `cooked_prepared` 10%, `service` 0%). `calculatePrice()` takes `vatPct` override. `vatPctForCategory()` helper. Patched: photo intake, pricing-rules preview, explode_product (inherits parent's category), add_product tool, Daily Briefing prompt, Founder AI system prompt. **Existing product_pricing snapshots NOT auto-recomputed** — founder runs the price refresh helper SQL when ready.
+- [x] ✅ VAT rule — DISABLED across the board (VAT_RATE=0 in lib/finance.ts; founder directive 2026-05-30 pending Bahamas approval). UI strings scrubbed from 28 files; infrastructure (`vat_category`, `vat_amount`, `vat_pct`) kept for one-line re-enable when approval lands. Footer trust badge → "Bahamas-Owned". `/reports`, `/dashboard/snapshot`, `/checkout` cost-basis math zeroed.
 - [ ] ❌ Thursday Conch promo (planned)
 - [ ] ❌ US resale pricing model (no Bahamas duty, no mailboat)
 
@@ -78,7 +78,7 @@
 - [x] ✅ Trace QR sticker sheets (Avery 5163)
 - [x] ✅ Trace QR on customer receipts
 - [x] ✅ `/trace` public landing
-- [ ] ❌ Vessel registration upload UI (per `project_vessel_registration` memory)
+- [x] ✅ Vessel registration upload UI — PDF/image + year + explicit expiration date (Task #83, shipped 2026-05-31)
 - [ ] ❌ Calibration entry UI (data lives in table, no entry form)
 
 ## 5. Customers
@@ -261,3 +261,4 @@
 |---|---|---|
 | 2026-05-20 | Claude Code (Opus 4.7) | Initial compilation from master context + atlas + memory |
 | 2026-05-20 | Claude Code (Opus 4.7) | VAT fix shipped — vat_category column + per-product VAT mapping. Migration `20260520260000_products_vat_category.sql`. |
+| 2026-05-31 | Claude Code (Opus 4.7) | Pre-launch ship sprint — 20 tasks shipped (#73, #75, #76, #83, #85, #87, #93–#105) + Suspense fix on /login. Highlights: VAT eradicated across 28 files (compliance), unified cart contract (lib/cart.ts), /product rewrite with lb decimals + View Cart CTA, /founder-ai server-side role gate, Andros POS zero-price guard, Nassau POS card-ref normalize/dedupe/last-sale hint, /utilities BSC Pay swapped from PCI-risky simulator to early-access waitlist (writes to early_access_signups), /supplier-portal self-serve Pause/Resume, vessel registration upload now captures explicit expiration date, dangerous default grants (TRUNCATE/TRIGGER/REFERENCES) revoked sitewide, profiles.role TEXT → user_role enum (22 values, 15 RLS policies dropped & recreated atomically), 'operations' role added for TJ (scoped: processing/inventory/picking; NO customers/pricing/founder-chat), customer credit + 4-points-per-$1 rewards system, AppShell NO_NAV_PREFIXES expanded, public/sw.js shadow deleted, deferred financials write until card payment confirmed. All BLOCKERS cleared; remaining open tasks (#67, #71, #81, #86) are external-blocker / wait. |
