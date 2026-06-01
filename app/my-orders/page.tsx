@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { parseOrderItems } from '@/lib/order-items';
+import { addToCart as addToCartHelper } from '@/lib/cart';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,34 +104,70 @@ export default function MyOrdersPage() {
     }
   }
 
-  function reorder(items: LineItem[]) {
+  async function reorder(items: LineItem[]) {
     if (typeof window === 'undefined' || items.length === 0) return;
-    try {
-      const stored = window.localStorage.getItem('bsc_cart');
-      const current: LineItem[] = stored ? JSON.parse(stored) : [];
-      for (const it of items) {
-        if (!it.id || !it.name || typeof it.price !== 'number') continue;
-        const qty = it.qty || 1;
-        const source = (it.source as 'market' | 'wholesale' | 'us') || 'market';
-        const idx = current.findIndex((c) => c.id === it.id && c.source === source);
-        if (idx >= 0) {
-          current[idx].qty = Number(current[idx].qty ?? current[idx].quantity ?? 1) + qty;
-        } else {
-          current.push({
-            id: it.id,
-            source,
-            sku: it.sku,
-            name: it.name,
-            price: it.price,
-            qty,
-            unit: it.unit || 'each',
-            image_url: it.image_url,
-          });
+    // The order's line snapshot doesn't carry wholesale_price or unit_type
+    // — they're not stored on the order row. Re-fetch the current pricing
+    // snapshot for each product so checkout's per-line wholesale upgrade
+    // and special-price math work the same as a fresh add-to-cart.
+    const productIds = Array.from(new Set(items.map((i) => i.id).filter(Boolean) as string[]));
+    const priceMap = new Map<string, { retail: number; wholesale: number | null; special: number | null }>();
+    const uomMap   = new Map<string, string | null>();
+    if (productIds.length > 0) {
+      const [{ data: pricingRows }, { data: productRows }] = await Promise.all([
+        supabase
+          .from('product_pricing')
+          .select('product_id, channel, manual_unit_price')
+          .in('product_id', productIds)
+          .in('channel', ['online_market', 'local_wholesale'])
+          .eq('is_current', true),
+        supabase
+          .from('products')
+          .select('id, unit_of_measure, special_price, special_starts_at, special_ends_at')
+          .in('id', productIds),
+      ]);
+      ((pricingRows as { product_id: string; channel: string; manual_unit_price: number }[]) || []).forEach((row) => {
+        const cur = priceMap.get(row.product_id) || { retail: 0, wholesale: null, special: null };
+        if (row.channel === 'online_market')   cur.retail    = Number(row.manual_unit_price);
+        if (row.channel === 'local_wholesale') cur.wholesale = Number(row.manual_unit_price);
+        priceMap.set(row.product_id, cur);
+      });
+      const now = Date.now();
+      ((productRows as { id: string; unit_of_measure: string | null; special_price: number | null; special_starts_at: string | null; special_ends_at: string | null }[]) || []).forEach((row) => {
+        uomMap.set(row.id, row.unit_of_measure);
+        const sp = row.special_price;
+        const startsOk = !row.special_starts_at || Date.parse(row.special_starts_at) <= now;
+        const endsOk   = !row.special_ends_at   || Date.parse(row.special_ends_at)   >= now;
+        if (sp != null && sp > 0 && startsOk && endsOk) {
+          const cur = priceMap.get(row.id) || { retail: 0, wholesale: null, special: null };
+          cur.special = Number(sp);
+          priceMap.set(row.id, cur);
         }
-      }
-      window.localStorage.setItem('bsc_cart', JSON.stringify(current));
-      router.push('/checkout');
-    } catch { /* ignore */ }
+      });
+    }
+
+    for (const it of items) {
+      if (!it.id || !it.name) continue;
+      const qty = it.qty || 1;
+      const source = (it.source as 'market' | 'wholesale' | 'us') || 'market';
+      const snap = priceMap.get(it.id) || { retail: 0, wholesale: null, special: null };
+      const uom  = uomMap.get(it.id) ?? null;
+      const unitType: 'lb' | 'case' | 'each' = uom === 'lb' ? 'lb' : uom === 'case' ? 'case' : 'each';
+      addToCartHelper({
+        id: it.id,
+        source,
+        sku: it.sku ?? null,
+        name: it.name,
+        image_url: it.image_url ?? null,
+        price: snap.retail > 0 ? snap.retail : (typeof it.price === 'number' ? it.price : 0),
+        wholesale_price: snap.wholesale,
+        special_price: snap.special,
+        unit_type: unitType,
+        qty,
+        unit: it.unit || unitType,
+      });
+    }
+    router.push('/checkout');
   }
 
   useEffect(() => {

@@ -1,27 +1,33 @@
 'use client';
 
 // /wishlist — saved-products page for signed-in customers.
-// Reads from public.wishlists (RLS limits the rows to the current user)
-// and joins to public.products to render image / name / price + actions.
+//
+// Pricing source: public.products has a stale `price` column we deliberately
+// don't trust. The live online_market price + wholesale snapshot + active
+// special come from product_pricing + products.special_price. Add-to-cart
+// goes through lib/cart so checkout's per-line wholesale auto-upgrade has
+// the full pricing shape.
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { addToCart as addToCartHelper, type CartUnitType } from '@/lib/cart';
 
 export const dynamic = 'force-dynamic';
-
-const STORAGE_BASE =
-  'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
 
 type Product = {
   id: string;
   name: string;
-  price: number;
-  unit: string | null;
+  unit_of_measure: string | null;
   category: string | null;
   image_url: string | null;
-  in_stock: boolean;
+  sku: string | null;
+  description: string | null;
+  // Live pricing — populated in a second round-trip from product_pricing.
+  retail_price: number;
+  wholesale_price: number | null;
+  special_price: number | null;
 };
 
 type WishlistRow = {
@@ -29,16 +35,6 @@ type WishlistRow = {
   created_at: string;
   product_id: string;
   product: Product | null;
-};
-
-type CartItem = {
-  id: string;
-  source: 'market';
-  name: string;
-  price: number;
-  qty: number;
-  unit: string;
-  image_url?: string;
 };
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -72,26 +68,77 @@ export default function WishlistPage() {
         return;
       }
       setSignedIn(true);
+      // Wishlist rows + the product catalog data we display.
       const { data } = await supabase
         .from('wishlists')
         .select(
           `id, created_at, product_id,
-           product:products ( id, name, price, unit, category, image_url, in_stock )`
+           product:products ( id, name, unit_of_measure, category, image_url, sku, description, special_price, special_starts_at, special_ends_at )`,
         )
         .eq('auth_user_id', user.id)
         .order('created_at', { ascending: false });
       if (cancelled) return;
-      const normalized = ((data || []) as unknown as Array<{
+      const raw = ((data || []) as unknown as Array<{
         id: string;
         created_at: string;
         product_id: string;
-        product: Product | Product[] | null;
-      }>).map((r) => ({
-        id: r.id,
-        created_at: r.created_at,
-        product_id: r.product_id,
-        product: Array.isArray(r.product) ? r.product[0] ?? null : r.product,
-      }));
+        product: (Omit<Product, 'retail_price' | 'wholesale_price'> & { special_starts_at?: string | null; special_ends_at?: string | null }) | Array<Omit<Product, 'retail_price' | 'wholesale_price'> & { special_starts_at?: string | null; special_ends_at?: string | null }> | null;
+      }>);
+
+      const productIds: string[] = [];
+      const intermediate = raw.map((r) => {
+        const p = Array.isArray(r.product) ? r.product[0] ?? null : r.product;
+        if (p?.id) productIds.push(p.id);
+        return { ...r, product: p };
+      });
+
+      // Fetch the live online_market + local_wholesale prices in one round
+      // trip — products.price is stale and would render every wishlist
+      // item as $0.00.
+      const priceMap = new Map<string, { retail: number; wholesale: number | null }>();
+      if (productIds.length > 0) {
+        const { data: pricingRows } = await supabase
+          .from('product_pricing')
+          .select('product_id, channel, manual_unit_price')
+          .in('product_id', productIds)
+          .in('channel', ['online_market', 'local_wholesale'])
+          .eq('is_current', true);
+        ((pricingRows as { product_id: string; channel: string; manual_unit_price: number }[]) || []).forEach((row) => {
+          const cur = priceMap.get(row.product_id) || { retail: 0, wholesale: null };
+          if (row.channel === 'online_market')   cur.retail    = Number(row.manual_unit_price);
+          if (row.channel === 'local_wholesale') cur.wholesale = Number(row.manual_unit_price);
+          priceMap.set(row.product_id, cur);
+        });
+      }
+
+      const now = Date.now();
+      const normalized: WishlistRow[] = intermediate.map((r) => {
+        if (!r.product) return { id: r.id, created_at: r.created_at, product_id: r.product_id, product: null };
+        const snap = priceMap.get(r.product.id) || { retail: 0, wholesale: null };
+        // Only honour an active special — the column may carry a stale
+        // value outside the start/end window.
+        const sp = r.product.special_price;
+        const startsOk = !r.product.special_starts_at || Date.parse(r.product.special_starts_at) <= now;
+        const endsOk   = !r.product.special_ends_at   || Date.parse(r.product.special_ends_at)   >= now;
+        const special = (sp != null && sp > 0 && startsOk && endsOk) ? Number(sp) : null;
+        return {
+          id: r.id,
+          created_at: r.created_at,
+          product_id: r.product_id,
+          product: {
+            id: r.product.id,
+            name: r.product.name,
+            unit_of_measure: r.product.unit_of_measure,
+            category: r.product.category,
+            image_url: r.product.image_url,
+            sku: r.product.sku,
+            description: r.product.description,
+            retail_price: snap.retail,
+            wholesale_price: snap.wholesale,
+            special_price: special,
+          },
+        };
+      });
       setRows(normalized);
       setLoading(false);
     })();
@@ -106,27 +153,23 @@ export default function WishlistPage() {
   }
 
   function addToCart(p: Product) {
-    if (typeof window === 'undefined') return;
-    try {
-      const stored = window.localStorage.getItem('bsc_cart');
-      const current: CartItem[] = stored ? JSON.parse(stored) : [];
-      const idx = current.findIndex((i) => i.id === p.id && i.source === 'market');
-      if (idx >= 0) {
-        current[idx].qty += 1;
-      } else {
-        current.push({
-          id: p.id,
-          source: 'market',
-          name: p.name,
-          price: p.price,
-          qty: 1,
-          unit: p.unit || 'each',
-          image_url: p.image_url || undefined,
-        });
-      }
-      window.localStorage.setItem('bsc_cart', JSON.stringify(current));
-      router.push('/checkout');
-    } catch { /* storage failure — ignore */ }
+    const unitType: CartUnitType = p.unit_of_measure === 'lb' ? 'lb' : p.unit_of_measure === 'case' ? 'case' : 'each';
+    addToCartHelper({
+      id: p.id,
+      source: 'market',
+      sku: p.sku,
+      name: p.name,
+      image_url: p.image_url,
+      price: p.retail_price,
+      wholesale_price: p.wholesale_price,
+      special_price: p.special_price,
+      unit_type: unitType,
+      qty: 1,
+      unit: unitType,
+      category: p.category,
+      description: p.description,
+    });
+    router.push('/checkout');
   }
 
   if (!authChecked || loading) {
@@ -234,9 +277,9 @@ export default function WishlistPage() {
                       {CATEGORY_EMOJI[p.category || ''] || '📦'}
                     </div>
                   )}
-                  {!p.in_stock && (
+                  {p.retail_price <= 0 && (
                     <div className="absolute inset-x-2 top-2 rounded-md bg-red-600 px-2 py-1 text-center text-[10px] font-extrabold text-white shadow">
-                      Out of stock
+                      Unavailable
                     </div>
                   )}
                 </div>
@@ -249,18 +292,23 @@ export default function WishlistPage() {
                   {p.name}
                 </Link>
                 <div className="mt-1 text-base font-extrabold text-navy">
-                  BSD ${p.price.toFixed(2)}
+                  BSD ${(p.special_price ?? p.retail_price).toFixed(2)}
                   <span className="ml-1 text-[11px] font-medium text-slate-500">
-                    / {p.unit || 'each'}
+                    / {p.unit_of_measure || 'each'}
                   </span>
+                  {p.special_price != null && p.retail_price > p.special_price && (
+                    <span className="ml-2 align-middle text-[11px] text-slate-400 line-through">
+                      ${p.retail_price.toFixed(2)}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-col gap-1.5">
                   <button
                     onClick={() => addToCart(p)}
-                    disabled={!p.in_stock}
+                    disabled={p.retail_price <= 0}
                     className="rounded-lg bg-navy px-3 py-2 text-xs font-black text-gold transition hover:bg-navy-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {p.in_stock ? 'Add to cart' : 'Unavailable'}
+                    {p.retail_price > 0 ? 'Add to cart' : 'Unavailable'}
                   </button>
                   <button
                     onClick={() => removeFromWishlist(r.id)}
