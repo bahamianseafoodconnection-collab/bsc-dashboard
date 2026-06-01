@@ -63,7 +63,9 @@ export default function StaffLoginPage() {
 
       const dashboardRoles = ['control_admin', 'founder', 'co_founder', 'manager', 'cashier', 'right_hand', 'supervisor'];
 
-      if (role === 'processor') {
+      if (role === 'processor' || role === 'operations') {
+        // operations (TJ-style fulfillment) shares the processor landing
+        // page until a dedicated /operations dashboard ships.
         window.location.href = '/processor';
       } else if (role === 'supplier') {
         window.location.href = '/supplier';

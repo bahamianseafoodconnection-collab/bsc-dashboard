@@ -39,6 +39,14 @@ const ROLE_ROUTES: Record<string, string[]> = {
   right_hand:    ['/ashley', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
   strategist:    ['/ashley', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
   processor:     ['/processor'],
+  // 'operations' = TJ-style fulfillment role. Spiny Tail processing,
+  // inventory movement, freezer, delivery picking, label printing.
+  // Explicitly NO customers / pricing / costs / founder-chat / reports
+  // (per memory project_operations_role_spec — keeps PII + money in
+  // founder/admin hands while letting ops run the warehouse).
+  operations:    ['/processor', '/spinytails', '/inventory', '/pickup-queue',
+                  '/labels', '/lobster-labels', '/yield', '/yield-measure',
+                  '/lobster-intake', '/igloo', '/orders'],
   supplier:      ['/supplier-portal'],
   partner_us:    ['/supplier-portal'],
 };
@@ -120,6 +128,7 @@ export async function middleware(request: NextRequest) {
       cashier:      '/pos',
       andros_staff: '/pos-andros',
       processor:    '/processor',
+      operations:   '/processor',
       supplier:     '/supplier-portal',
       partner_us:   '/supplier-portal',
     };

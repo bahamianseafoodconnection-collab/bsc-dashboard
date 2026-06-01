@@ -20,6 +20,7 @@ export const KNOWN_ROLES = [
   'cashier',
   'andros_staff',
   'processor',
+  'operations',
   'supplier',
   'fisherman',
   'captain',
@@ -79,6 +80,7 @@ export function dashboardUrlForRole(role: KnownRole | null | undefined): string 
     case 'cashier':           return '/pos';
     case 'andros_staff':      return '/pos-andros';
     case 'processor':         return '/processor';
+    case 'operations':        return '/processor';
     case 'supplier':          return '/supplier';
     case 'fisherman':         return '/fisherman';
     case 'captain':           return '/captain';

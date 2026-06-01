@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-21T15:25:31.996Z",
+  "generated_at": "2026-06-01T03:48:33.172Z",
   "stats": {
-    "pages": 138,
-    "api_routes": 56,
-    "tables": 40,
-    "migrations": 44,
+    "pages": 152,
+    "api_routes": 78,
+    "tables": 44,
+    "migrations": 69,
     "business_rules": 13
   },
   "pages": [
@@ -13,6 +13,12 @@
       "file": "app/account/page.tsx",
       "category": "customer",
       "purpose": "/account — customer hub. Profile, saved addresses, quick links. Tailwind, brand tokens, mobile-first."
+    },
+    {
+      "url": "/account/orders/[id]",
+      "file": "app/account/orders/[id]/page.tsx",
+      "category": "customer",
+      "purpose": "/account/orders/[id] Customer-facing order detail page. Lands here after a successful card payment (PnP → /api/payment/return/success → redirect here with ?paid=1) or from /account → \"your orders\" list. Shows: - Order s…"
     },
     {
       "url": "/accounts-payable",
@@ -27,10 +33,34 @@
       "purpose": "(no top-of-file purpose comment)"
     },
     {
+      "url": "/admin/inventory",
+      "file": "app/admin/inventory/page.tsx",
+      "category": "other",
+      "purpose": "/admin/inventory Live inventory spreadsheet — founder direction 2026-05-27: \"the very same excel spreadsheet information display needs to be saved and used for updating, adding products to various channel needs to be im…"
+    },
+    {
+      "url": "/admin/payment-health",
+      "file": "app/admin/payment-health/page.tsx",
+      "category": "other",
+      "purpose": "/admin/payment-health Founder-facing UI wrapper around /api/payment/health. The underlying route requires Bearer-token auth, so a plain browser visit gets \"Sign in required\". This page reads the signed-in session, attac…"
+    },
+    {
       "url": "/ashley",
       "file": "app/ashley/page.tsx",
       "category": "other",
       "purpose": "File: app/ashley/page.tsx"
+    },
+    {
+      "url": "/auth/confirmed",
+      "file": "app/auth/confirmed/page.tsx",
+      "category": "other",
+      "purpose": "/auth/confirmed Branded landing for the email-confirmation link. Supabase's confirm link (with Site URL = https://bscbahamas.com) verifies the token then redirects here with the session in the URL. The shared browser cl…"
+    },
+    {
+      "url": "/become-a-supplier",
+      "file": "app/become-a-supplier/page.tsx",
+      "category": "other",
+      "purpose": "/become-a-supplier?type=fisherman|farmer Recruitment landing for local fishermen + farmers. The marketplace's fisherman/farmer cards link here so visitors who tap them get a clear pitch + a signup form. Applications POS…"
     },
     {
       "url": "/bill",
@@ -66,7 +96,7 @@
       "url": "/category/[slug]",
       "file": "app/category/[slug]/page.tsx",
       "category": "other",
-      "purpose": "SEO landing page per product category. Server-rendered so each category gets its own title/description/OG image. Lists products in the category with images, prices, and a CTA back to /market for full add-to-cart interac…"
+      "purpose": "SEO + customer department landing page. One page per BSC category. Departments map 1:1 to products.category via lib/departments.ts, so the slug resolves to the EXACT category value (e.g. /category/frozen-seafood → categ…"
     },
     {
       "url": "/change-password",
@@ -159,10 +189,22 @@
       "purpose": "/dashboard/cashiers/trends — per-cashier monthly aggregates. Reads cash_drawer_session_totals over a date range, groups by cashier, computes: # closed sessions, total sales, cash sales, card sales, account sales, total…"
     },
     {
+      "url": "/dashboard/cogs",
+      "file": "app/dashboard/cogs/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/cogs Supplier Cost-of-Goods report — \"exactly what and who I'm paying on every sale and every day.\" Reads the supplier_cogs view (server-side truth captured per sale line: product → supplier → cost). Group by…"
+    },
+    {
       "url": "/dashboard/customer-pulse",
       "file": "app/dashboard/customer-pulse/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/customer-pulse Dedrick's personal \"who came back today\" view. Per the founder-only-loop principle, this page is restricted to control_admin / founder / co_founder — NOT the wider admin set used by other dashb…"
+    },
+    {
+      "url": "/dashboard/customers",
+      "file": "app/dashboard/customers/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/customers — admin view of every customer (excluding the Walk-In Anonymous singleton). Side panel edits credit terms / credit limit / is_credit_customer toggle, displays the points balance + lifetime + redeeme…"
     },
     {
       "url": "/dashboard/daily-briefing",
@@ -187,6 +229,18 @@
       "file": "app/dashboard/listings/pending/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/listings/pending — admin queue for vendor listings. Shows all 3 traceability phases (with GPS map links) before approval. \"Approve & generate batch\" flips status='live', generates a batch number via the SQL f…"
+    },
+    {
+      "url": "/dashboard/order-history",
+      "file": "app/dashboard/order-history/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/order-history Dedicated archive view for completed orders. Date-range filtered (default last 30 days), searchable by customer name OR bank trace ID, paginated, and exportable as CSV (per page). Every audit fi…"
+    },
+    {
+      "url": "/dashboard/password",
+      "file": "app/dashboard/password/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/password Self-service password change for any signed-in staff. Reachable from the dashboard nav. Requires the CURRENT password too — verifies it by attempting a sign-in, then calls supabase.auth.updateUser({p…"
     },
     {
       "url": "/dashboard/payouts",
@@ -225,6 +279,12 @@
       "purpose": "/dashboard/quality-control — Spiny Tail inspection queue. Visible to processor / receiver / control_admin / founder / co_founder / manager. Inspector can pass/reject; reject bumps vendor.quality_rejections_count."
     },
     {
+      "url": "/dashboard/reconciliation",
+      "file": "app/dashboard/reconciliation/page.tsx",
+      "category": "dashboard",
+      "purpose": "/dashboard/reconciliation Bank reconciliation importer. Staff paste (or upload) the bank's daily transfer list — transfer ID, amount, [date] per line — and the page auto-matches each row to a paid, not-yet-reconciled on…"
+    },
+    {
       "url": "/dashboard/specials",
       "file": "app/dashboard/specials/page.tsx",
       "category": "dashboard",
@@ -253,6 +313,12 @@
       "file": "app/dashboard/vendors/pending/page.tsx",
       "category": "dashboard",
       "purpose": "/dashboard/vendors/pending — admin queue for new vendor signups. Founder / co_founder / control_admin / manager only."
+    },
+    {
+      "url": "/driver",
+      "file": "app/driver/page.tsx",
+      "category": "other",
+      "purpose": "/driver Mobile-first driver / fulfillment dashboard. Per founder's 8-stage online order delivery spec. Staff (founder / co_founder / manager / driver) see all active online orders that still need a fulfillment action, a…"
     },
     {
       "url": "/expenses",
@@ -399,6 +465,12 @@
       "purpose": "(no top-of-file purpose comment)"
     },
     {
+      "url": "/local-wholesale/[wholesaler]",
+      "file": "app/local-wholesale/[wholesaler]/page.tsx",
+      "category": "other",
+      "purpose": "(no top-of-file purpose comment)"
+    },
+    {
       "url": "/login",
       "file": "app/login/page.tsx",
       "category": "other",
@@ -438,7 +510,7 @@
       "url": "/my-orders",
       "file": "app/my-orders/page.tsx",
       "category": "other",
-      "purpose": "Signed-in customer's order history. Pulls every orders row keyed to their user_id (set at checkout). For guests / not-signed-in, shows the lookup form pointing at /track/[orderId]."
+      "purpose": "Signed-in customer's order history. Fetches /api/orders/mine (service-role: orders RLS is owner/staff-locked and orders.customer_id is split between the auth uid and a customers-record id, so the server resolves both).…"
     },
     {
       "url": "/notifications",
@@ -451,6 +523,12 @@
       "file": "app/onboarding/page.tsx",
       "category": "other",
       "purpose": "(no top-of-file purpose comment)"
+    },
+    {
+      "url": "/order-confirmed",
+      "file": "app/order-confirmed/page.tsx",
+      "category": "other",
+      "purpose": "/order-confirmed?order=<id> Branded \"Payment confirmed\" screen shown after a successful RBC / Plug'n Pay card payment. The PnP success return-handler redirects the customer's browser here (it used to dump them on /accou…"
     },
     {
       "url": "/order-fulfillment",
@@ -468,7 +546,7 @@
       "url": "/page.tsx",
       "file": "app/page.tsx",
       "category": "other",
-      "purpose": "(no top-of-file purpose comment)"
+      "purpose": "bscbahamas.com landing Per founder direction 2026-05-26: the marketplace IS the home page. Customers landing on bscbahamas.com should see the marketplace directly — not a separate hero landing. /market owns the storefro…"
     },
     {
       "url": "/partner",
@@ -487,6 +565,12 @@
       "file": "app/partner/[token]/page.tsx",
       "category": "other",
       "purpose": "Public Partner Portal — token-scoped, no login required. Mobile-first because partners open this from WhatsApp links. Per-partner view of: - Outstanding balance (the headline number) - Payment terms BSC commits to (Net-…"
+    },
+    {
+      "url": "/payment-declined",
+      "file": "app/payment-declined/page.tsx",
+      "category": "other",
+      "purpose": "/payment-declined?reason=declined|problem Branded, clear \"payment did not go through\" screen — the decline-side mirror of /order-confirmed. The RBC / Plug'n Pay return-handler redirects here on a declined / problem / fr…"
     },
     {
       "url": "/payroll",
@@ -552,7 +636,7 @@
       "url": "/product/[id]",
       "file": "app/product/[id]/page.tsx",
       "category": "other",
-      "purpose": "(no top-of-file purpose comment)"
+      "purpose": "/product/[id] — customer product detail page. Fetches the product, its online_market retail price, the local_wholesale snapshot (drives the per-line wholesale auto-upgrade at checkout), and any active special_price. Add…"
     },
     {
       "url": "/products",
@@ -780,7 +864,7 @@
       "url": "/utilities",
       "file": "app/utilities/page.tsx",
       "category": "other",
-      "purpose": "(no top-of-file purpose comment)"
+      "purpose": "/utilities — BSC Pay (bill payment). Card-collection is intentionally NOT wired in this build. The previous implementation rendered card fields directly in our DOM via CardPaymentModal (a development simulator) which is…"
     },
     {
       "url": "/vehicles",
@@ -822,7 +906,7 @@
       "url": "/wishlist",
       "file": "app/wishlist/page.tsx",
       "category": "other",
-      "purpose": "/wishlist — saved-products page for signed-in customers. Reads from public.wishlists (RLS limits the rows to the current user) and joins to public.products to render image / name / price + actions."
+      "purpose": "/wishlist — saved-products page for signed-in customers. Pricing source: public.products has a stale `price` column we deliberately don't trust. The live online_market price + wholesale snapshot + active special come fr…"
     },
     {
       "url": "/yield",
@@ -839,12 +923,37 @@
   ],
   "api_routes": [
     {
+      "url": "/api/admin/channel-margins",
+      "file": "app/api/admin/channel-margins/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/admin/channel-margins Backs the \"Margins\" panel in /admin/inventory (founder direction 2026-05-28: \"allow margin change to all products across all channels\"). GET → list every channel's current margin_pct + when/wh…"
+    },
+    {
       "url": "/api/admin/fishermen/invite",
       "file": "app/api/admin/fishermen/invite/route.ts",
       "methods": [
         "POST"
       ],
       "purpose": "POST /api/admin/fishermen/invite One-click fisherman onboarding for BSC staff. Performs the three linked actions that previously had to be done manually in Supabase: 1) Create auth user with temp password (admin API) 2)…"
+    },
+    {
+      "url": "/api/admin/products/[id]",
+      "file": "app/api/admin/products/[id]/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "purpose": "/api/admin/products/[id] Generic PATCH endpoint backing the /admin/inventory spreadsheet's inline edits. Per founder direction 2026-05-27 (\"the very same excel spreadsheet... needs to be implemented in my dashboard for…"
+    },
+    {
+      "url": "/api/admin/products/bulk",
+      "file": "app/api/admin/products/bulk/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/admin/products/bulk Bulk update endpoint for the /admin/inventory spreadsheet's multi-select actions. Takes an array of product_ids + the same patch body shape as /api/admin/products/[id]. Applies the patch to ever…"
     },
     {
       "url": "/api/admin/suppliers/invite",
@@ -913,6 +1022,14 @@
       "purpose": "Public contact form sink. Writes the inbound message into the notifications queue addressed to BSC's mailbox so it shows up on /notifications alongside outbound messages — single inbox. Until SendGrid is wired the row l…"
     },
     {
+      "url": "/api/cron/auto-close-shifts",
+      "file": "app/api/cron/auto-close-shifts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "Phase 2c: belt-and-suspenders for the Phase 2a 10h shift cap. /pos already blocks new sales past 10h on the cashier client side (Item 7 alert), but if the cashier just walks away without closing their drawer, the open s…"
+    },
+    {
       "url": "/api/cron/daily-briefing",
       "file": "app/api/cron/daily-briefing/route.ts",
       "methods": [
@@ -938,6 +1055,14 @@
       "purpose": "/api/cron/vendor-weekly-statements Monday 8am AST (12 UTC). For each vendor with orders in the previous Mon–Sun window, send a per-vendor email statement with: every order in the window, total revenue, total commission,…"
     },
     {
+      "url": "/api/customers/admin",
+      "file": "app/api/customers/admin/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/customers/admin Action-based staff admin for the customers table. Mirrors /api/staff/admin. Three actions: - 'list' : page of customers (with credit + points fields) - 'update_credit' : edit is_credit_customer…"
+    },
+    {
       "url": "/api/customers/upsert",
       "file": "app/api/customers/upsert/route.ts",
       "methods": [
@@ -952,6 +1077,14 @@
         "POST"
       ],
       "purpose": "POST /api/dashboard/daily-briefing/test-send Manual trigger for the Daily Briefing pipeline. Lets the founder fire a sample email TONIGHT to verify Resend delivery + email rendering before the bank-data aggregator is wi…"
+    },
+    {
+      "url": "/api/driver/queue",
+      "file": "app/api/driver/queue/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "/api/driver/queue Service-role read of the active delivery queue for the /driver dashboard. Routed through the server (not the browser client) so the queue does NOT depend on `driver` being inside is_staff(), and so a d…"
     },
     {
       "url": "/api/email/order-status",
@@ -1010,6 +1143,14 @@
         "POST"
       ],
       "purpose": "BSC Inventory Update API — 5 actions update_cost, update_price, update_status, update_channels, update_image All writes are audited (recorded_by, recorded_at)."
+    },
+    {
+      "url": "/api/inventory/receive",
+      "file": "app/api/inventory/receive/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/inventory/receive Staff-facing endpoint for recording a new inventory receipt (BSC just purchased N units of a product from a supplier at a new per-unit cost). Per founder direction 2026-05-27: \"do this strong unbr…"
     },
     {
       "url": "/api/invoice-save",
@@ -1072,9 +1213,26 @@
       "url": "/api/notifications/send",
       "file": "app/api/notifications/send/route.ts",
       "methods": [
+        "GET",
         "POST"
       ],
-      "purpose": "Process queued notifications. Until provider creds are wired, this runs in STUB mode — it marks rows as 'stub_sent' so we can verify the flow end-to-end and see what would-have-been-sent on /notifications. When you add…"
+      "purpose": "Process queued notifications. Real-sends when provider creds are set in env; otherwise falls back to marking rows 'stub_sent' so we can verify the flow end-to-end and see what would-have-been-sent on /notifications. Pro…"
+    },
+    {
+      "url": "/api/orders/[id]",
+      "file": "app/api/orders/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "GET /api/orders/[id] Secure server-side read of a single order, used by the customer- and guest-facing order pages (tracking, account order detail, receipt). Why this exists: orders RLS is locked to staff + the owning c…"
+    },
+    {
+      "url": "/api/orders/[id]/transition",
+      "file": "app/api/orders/[id]/transition/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/orders/[id]/transition Single endpoint that advances an order through the fulfillment lifecycle. Every stage move (preparing / collected / in_transit / out_for_delivery / delivered / cancel) goes through here so th…"
     },
     {
       "url": "/api/orders/cancel",
@@ -1093,6 +1251,38 @@
       "purpose": "(no top-of-file purpose comment)"
     },
     {
+      "url": "/api/orders/mine",
+      "file": "app/api/orders/mine/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "GET /api/orders/mine Signed-in customer's order history. Two reasons this must be a service-role endpoint rather than a direct client query: 1. orders RLS is owner/staff-locked (the 2026-05-28 lockdown). 2. orders.custo…"
+    },
+    {
+      "url": "/api/orders/place",
+      "file": "app/api/orders/place/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/orders/place Service-role order creation for the online checkout flow. Needed because the orders RLS lockdown (20260528120000) scopes the SELECT policy to owner/staff — so a client `insert(order).select('id')`…"
+    },
+    {
+      "url": "/api/orders/reconcile",
+      "file": "app/api/orders/reconcile/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/orders/reconcile Records the bank's transfer/settlement ID against an order's payment and marks it reconciled (who + when), so staff can track each payment against the bank \"exchange\". Reuses existing orders c…"
+    },
+    {
+      "url": "/api/orders/unreconciled",
+      "file": "app/api/orders/unreconciled/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "GET /api/orders/unreconciled Reconciliation candidates: paid online orders not yet matched to a bank transfer (payment_approval IS NULL). Used by the reconciliation importer to auto-match the bank's daily transfer list…"
+    },
+    {
       "url": "/api/partner-portal/admin",
       "file": "app/api/partner-portal/admin/route.ts",
       "methods": [
@@ -1109,20 +1299,55 @@
       "purpose": "Returns scoped partner data for a /partner/[token] page. The token IS the auth - no login needed. Service role bypasses RLS so we can scope the response strictly to that partner's records. Body: { token: string } Respon…"
     },
     {
-      "url": "/api/payment/charge",
-      "file": "app/api/payment/charge/route.ts",
+      "url": "/api/payment/health",
+      "file": "app/api/payment/health/route.ts",
       "methods": [
-        "POST"
+        "GET"
       ],
-      "purpose": "============================================================ BSC MARKETPLACE — RBC PLUG & PAY PAYMENT ROUTE File: app/api/payment/charge/route.ts ============================================================ STATUS: SKEL…"
+      "purpose": "/api/payment/health Founder-facing diagnostic for the Plug'n Pay (RBC) integration. Reports whether the PNP_* env vars are present in this deployment + (optionally, when ?ping=1) actually exercises the gateway with a kn…"
     },
     {
-      "url": "/api/payment/webhook",
-      "file": "app/api/payment/webhook/route.ts",
+      "url": "/api/payment/return/declined",
+      "file": "app/api/payment/return/declined/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/payment/return/declined Plug'n Pay redirects here on bad-card responses (pb_bad_card_url). The order stays in 'pending' so the customer can retry; the payment_transactions row captures the decline reason for ops +…"
+    },
+    {
+      "url": "/api/payment/return/problem",
+      "file": "app/api/payment/return/problem/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/payment/return/problem Plug'n Pay redirects here on gateway-level errors (pb_problem_url) — no response from RBC, processor timeout, malformed request, etc. These are transient by nature, so handlePnpReturn surface…"
+    },
+    {
+      "url": "/api/payment/return/success",
+      "file": "app/api/payment/return/success/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "purpose": "/api/payment/return/success Plug'n Pay redirects the customer's browser here when their hosted payment page reports an approved transaction. The actual outcome is re-verified in handlePnpReturn — we never trust the URL…"
+    },
+    {
+      "url": "/api/payment/start",
+      "file": "app/api/payment/start/route.ts",
       "methods": [
         "POST"
       ],
-      "purpose": "============================================================ BSC MARKETPLACE — RBC PLUG & PAY WEBHOOK HANDLER File: app/api/payment/webhook/route.ts Webhook URL: https://bscbahamas.com/api/payment/webhook Send this URL…"
+      "purpose": "/api/payment/start Entry point for the online card payment flow. Called by /checkout AFTER the customer has confirmed their cart and chosen \"Pay with Card\". This route: 1. Authenticates the customer (bearer token). 2. V…"
+    },
+    {
+      "url": "/api/pos/customer-search",
+      "file": "app/api/pos/customer-search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "purpose": "/api/pos/customer-search Name-based fuzzy customer search for the POS register. As cashier types 2+ chars, returns top 10 ILIKE matches on customers.full_name with enough fields to autofill the checkout customer block (…"
     },
     {
       "url": "/api/pos/receipt",
@@ -1131,6 +1356,14 @@
         "POST"
       ],
       "purpose": "/api/pos/receipt Auto-send the POS receipt at checkout completion. Channel decision is server-side based on what the customer gave us: 1. Customer has email on file → branded HTML email via Resend 2. No email but has ph…"
+    },
+    {
+      "url": "/api/pos/record-customer-purchase",
+      "file": "app/api/pos/record-customer-purchase/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/pos/record-customer-purchase Bumps a returning customer's total_orders + total_spent + last_seen_at after a POS sale lands. Service-role so RLS on `customers` doesn't block cashier writes (Bill / Roselins / andros_…"
     },
     {
       "url": "/api/pos/save-customer",
@@ -1263,6 +1496,38 @@
       "purpose": "Lets a signed-in supplier advance the status on a purchase_orders row THAT BELONGS TO THEM. Auth flow: 1. Resolve auth.uid() → users.role (must be supplier or partner_us) 2. Resolve user → suppliers.portal_user_id 3. Ve…"
     },
     {
+      "url": "/api/supplier-portal/toggle-product",
+      "file": "app/api/supplier-portal/toggle-product/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/supplier-portal/toggle-product Lets a supplier pause or resume their own product listing without going through the founder dashboard. Common case: fisherman runs out of conch mid-day and needs to stop new orders be…"
+    },
+    {
+      "url": "/api/supplier/add-product",
+      "file": "app/api/supplier/add-product/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/supplier/add-product Add a new product under a specific supplier from the /supplier dashboard's Add Product modal (Phase 1B, 2026-05-26). Auth: founder + co_founder only. Same gate that /supplier client-side enforc…"
+    },
+    {
+      "url": "/api/supplier/bulk-add-products",
+      "file": "app/api/supplier/bulk-add-products/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "/api/supplier/bulk-add-products Bulk add products under a single supplier from the /supplier dashboard's CSV upload modal (Phase 2, 2026-05-26). Sister endpoint to /api/supplier/add-product — same auth + validation rule…"
+    },
+    {
+      "url": "/api/suppliers/apply",
+      "file": "app/api/suppliers/apply/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "purpose": "POST /api/suppliers/apply Public fisherman / farmer signup. Creates a PENDING suppliers row (supplier_type='bsc_direct', is_active=false) and emails the founder the full application via Resend so they can follow up + on…"
+    },
+    {
       "url": "/api/unsubscribe",
       "file": "app/api/unsubscribe/route.ts",
       "methods": [
@@ -1364,6 +1629,17 @@
       "first_seen_migration": "supabase/migrations/20260515150000_add_log_tables.sql"
     },
     {
+      "name": "channel_markups",
+      "columns": [
+        "channel",
+        "margin_pct",
+        "notes",
+        "updated_at",
+        "updated_by"
+      ],
+      "first_seen_migration": "supabase/migrations/20260527140000_cost_live_auto_update.sql"
+    },
+    {
       "name": "daily_briefings",
       "columns": [
         "id",
@@ -1376,6 +1652,15 @@
         "created_at"
       ],
       "first_seen_migration": "supabase/migrations/20260517190000_daily_briefings.sql"
+    },
+    {
+      "name": "financial_config",
+      "columns": [
+        "key",
+        "value",
+        "updated_at"
+      ],
+      "first_seen_migration": "supabase/migrations/20260528210000_order_cogs_and_profit.sql"
     },
     {
       "name": "flyers",
@@ -1396,6 +1681,24 @@
       "first_seen_migration": "supabase/migrations/20260516190000_flyers.sql"
     },
     {
+      "name": "order_cogs_lines",
+      "columns": [
+        "id",
+        "order_id",
+        "product_id",
+        "supplier_id",
+        "supplier_name",
+        "product_name",
+        "channel",
+        "sold_at",
+        "qty",
+        "unit_cost",
+        "unit_price",
+        "line_cogs"
+      ],
+      "first_seen_migration": "supabase/migrations/20260528210000_order_cogs_and_profit.sql"
+    },
+    {
       "name": "order_lot_consumption",
       "columns": [
         "id",
@@ -1408,6 +1711,24 @@
         "recorded_by"
       ],
       "first_seen_migration": "supabase/migrations/20260520220000_order_lot_consumption.sql"
+    },
+    {
+      "name": "payment_transactions",
+      "columns": [
+        "id",
+        "order_id",
+        "customer_id",
+        "attempted_at",
+        "finalized_at",
+        "pt_gateway_account",
+        "pt_transaction_amount",
+        "pt_currency",
+        "pt_client_orderid",
+        "pi_response_status",
+        "pi_response_code",
+        "pi_error_message"
+      ],
+      "first_seen_migration": "supabase/migrations/20260526190000_payment_transactions.sql"
     },
     {
       "name": "pricing_config",
@@ -1931,7 +2252,7 @@
     },
     {
       "rule": "5-channel pricing markups",
-      "detail": "wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40%. VAT is currently DISABLED (0% across all categories) until BSC is approved to charge it; products.vat_category remains as infrastructure for the day it re-enables: 0% uncooked_food (default — covers raw seafood/produce/grocery), 0% cooked_prepared (juice/kitchen — taxable when VAT re-enabled), 0% service."
+      "detail": "wholesale_in_store 22% · wholesale_online 19% · online_retail 35% · nassau_pos 40% · andros_pos 40%. VAT comes from products.vat_category: 0% uncooked_food (default — covers raw seafood/produce/grocery), 10% cooked_prepared (juice/kitchen), 0% service."
     },
     {
       "rule": "Wholesale auto-upgrade",

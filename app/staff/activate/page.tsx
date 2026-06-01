@@ -68,7 +68,7 @@ function ActivateInner() {
   }, [token]);
 
   function routeForRole(role: string | null) {
-    if (role === 'processor') return '/processor';
+    if (role === 'processor' || role === 'operations') return '/processor';
     if (role === 'supplier') return '/supplier';
     return '/dashboard';
   }
