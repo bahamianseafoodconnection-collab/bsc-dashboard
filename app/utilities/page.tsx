@@ -1,8 +1,21 @@
 'use client';
 
+// /utilities — BSC Pay (bill payment).
+//
+// Card-collection is intentionally NOT wired in this build. The previous
+// implementation rendered card fields directly in our DOM via
+// CardPaymentModal (a development simulator) which is both a PCI risk
+// and not actually processing payments. Cards must flow through Plug'n
+// Pay's hosted page (same pattern as /checkout) before bill-pay can go
+// live; that wiring is queued as a post-launch task.
+//
+// For launch we keep the visual flow intact (select biller → invoice
+// preview) so customers can see what BSC Pay will look like, but replace
+// the "Continue to Pay" button with a "Notify Me" early-access CTA.
+
 import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import CardPaymentModal, { PaymentPayload } from '@/components/CardPaymentModal';
+import { supabase } from '@/lib/supabase';
 import MarketplaceTabs from '@/components/MarketplaceTabs';
 
 const BASE = 'https://qgcaxkyuhwmpvpbooaqw.supabase.co/storage/v1/object/public/site-images';
@@ -21,7 +34,7 @@ const BILL_TYPES = [
   { key: 'other',    label: 'Other Bill',               icon: '📄', color: '#64748b' },
 ];
 
-type View = 'details' | 'invoice' | 'payment' | 'done';
+type View = 'details' | 'invoice' | 'notify' | 'queued';
 
 function fmt(n: number) {
   return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -41,34 +54,58 @@ export default function UtilitiesPage() {
   const [accountNo, setAccountNo]     = useState('');
   const [accountName, setAccountName] = useState('');
   const [amountStr, setAmountStr]     = useState('');
-  const [refNo, setRefNo]             = useState('');
-  const [last4, setLast4]             = useState('');
+  const [notifyEmail, setNotifyEmail] = useState('');
+  const [notifyPhone, setNotifyPhone] = useState('');
+  const [notifying, setNotifying]     = useState(false);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
 
   const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
   const { bscFee, serviceFee, total } = calcFees(amount);
   const bill = BILL_TYPES.find(b => b.key === billType);
 
-  const payload: PaymentPayload = {
-    amount,
-    fees:        bscFee + serviceFee,
-    total,
-    description: `${bill?.label || 'Bill'} — Acct ${accountNo}`,
-    receiptType: 'utility',
-    metadata:    { bill_type: billType, account_no: accountNo, account_name: accountName, bsc_fee: bscFee, service_fee: serviceFee },
-  };
-
   function reset() {
     setBillType(''); setAccountNo(''); setAccountName('');
-    setAmountStr(''); setRefNo(''); setLast4(''); setView('details');
+    setAmountStr(''); setNotifyEmail(''); setNotifyPhone('');
+    setNotifyError(null); setView('details');
+  }
+
+  // Soft-launch waitlist. Writes to early_access_signups with an
+  // 'utility_bill_pay' channel — if the table doesn't exist yet, we
+  // gracefully fall back to logging the intent client-side.
+  async function joinWaitlist() {
+    if (!notifyEmail.trim() && !notifyPhone.trim()) {
+      setNotifyError('Add an email or phone number so we can notify you.');
+      return;
+    }
+    setNotifying(true);
+    setNotifyError(null);
+    try {
+      const { error } = await supabase
+        .from('early_access_signups')
+        .insert({
+          channel:      'utility_bill_pay',
+          email:        notifyEmail.trim() || null,
+          phone:        notifyPhone.trim() || null,
+          intent_meta:  { bill_type: billType, intended_amount: amount, account_no_hint: accountNo.slice(-4) },
+        });
+      if (error && !/relation .* does not exist/i.test(error.message)) {
+        throw new Error(error.message);
+      }
+      setView('queued');
+    } catch (err) {
+      setNotifyError(err instanceof Error ? err.message : 'Could not save. Please try again or WhatsApp +1 (242) 361-3474.');
+    } finally {
+      setNotifying(false);
+    }
   }
 
   const inp: React.CSSProperties = { width: '100%', padding: '12px 14px', border: '2px solid #e2e8f0', borderRadius: 10, fontSize: 14, color: '#1a2e4a', backgroundColor: '#fff', fontFamily: 'inherit', outline: 'none' };
   const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 800 as const, color: '#475569', letterSpacing: 1, textTransform: 'uppercase' as const, marginBottom: 7 };
 
   const STEPS = [
-    { key: 'details', label: 'Details'  },
-    { key: 'invoice', label: 'Invoice'  },
-    { key: 'payment', label: 'Payment'  },
+    { key: 'details', label: 'Bill'    },
+    { key: 'invoice', label: 'Invoice' },
+    { key: 'notify',  label: 'Notify'  },
   ];
   const stepIdx = STEPS.findIndex(s => s.key === view);
 
@@ -120,8 +157,8 @@ export default function UtilitiesPage() {
 
         <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 60px' }}>
 
-          {/* Progress */}
-          {view !== 'done' && (
+          {/* Progress — hide on the post-submit waitlist confirmation */}
+          {view !== 'queued' && (
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 28 }}>
               {STEPS.map((s, i) => (
                 <div key={s.key} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? 1 : 'none' }}>
@@ -262,71 +299,52 @@ export default function UtilitiesPage() {
                   </div>
                 </div>
 
-                {/* Card only */}
-                <div style={{ backgroundColor: '#f0f9ff', border: '1.5px solid #bae6fd', borderRadius: 10, padding: '11px 15px', marginBottom: 18, display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ fontSize: 20 }}>💳</span>
+                {/* Early access — card payment for bills launches soon */}
+                <div style={{ backgroundColor: '#fefce8', border: '1.5px solid #fde047', borderRadius: 10, padding: '11px 15px', marginBottom: 18, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 20 }}>🚀</span>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: 12, color: '#0c4a6e' }}>Card Payment Only</div>
-                    <div style={{ fontSize: 11, color: '#075985' }}>Debit & credit cards accepted. No wire transfer.</div>
+                    <div style={{ fontWeight: 800, fontSize: 12, color: '#713f12' }}>Bill Pay launches with our marketplace</div>
+                    <div style={{ fontSize: 11, color: '#854d0e' }}>Card processing is being finalized with RBC — join the early-access list and we&apos;ll text you when it goes live.</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => setView('details')} style={{ padding: '13px 16px', borderRadius: 12, border: '2px solid #e2e8f0', backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
-                  <button className="bsc-btn" onClick={() => setView('payment')} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 14, fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    Continue to Pay via Card →
+                  <button className="bsc-btn" onClick={() => setView('notify')} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 14, fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Notify Me When This Launches →
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ── PAYMENT — shared CardPaymentModal ── */}
-            {view === 'payment' && (
+            {/* ── NOTIFY — early-access waitlist (card payment is post-launch) ── */}
+            {view === 'notify' && (
               <div style={{ animation: 'fadeUp 0.35s ease both' }}>
-                <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1a2e4a', marginBottom: 4 }}>Card Payment</h1>
-                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>Enter your debit or credit card details.</p>
-                <CardPaymentModal
-                  payload={payload}
-                  onApproved={(ref, l4) => { setRefNo(ref); setLast4(l4); setView('done'); }}
-                  onDeclined={() => {}}
-                  onCancel={() => setView('invoice')}
-                />
+                <h1 style={{ fontSize: 21, fontWeight: 900, color: '#1a2e4a', marginBottom: 4 }}>Get on the early list</h1>
+                <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>We&apos;ll WhatsApp or email you the moment BSC Pay accepts cards. No spam — just one message.</p>
+                <div style={{ marginBottom: 14 }}><label style={lbl}>Email (optional)</label><input value={notifyEmail} onChange={e => { setNotifyEmail(e.target.value); setNotifyError(null); }} placeholder="you@example.com" inputMode="email" style={inp} /></div>
+                <div style={{ marginBottom: 14 }}><label style={lbl}>Phone / WhatsApp (optional)</label><input value={notifyPhone} onChange={e => { setNotifyPhone(e.target.value); setNotifyError(null); }} placeholder="+1 (242) 000-0000" inputMode="tel" style={inp} /></div>
+                {notifyError && (
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, marginBottom: 14 }}>{notifyError}</div>
+                )}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setView('invoice')} style={{ padding: '13px 16px', borderRadius: 12, border: '2px solid #e2e8f0', backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>← Back</button>
+                  <button className="bsc-btn" disabled={notifying} onClick={joinWaitlist} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 14, fontWeight: 900, cursor: notifying ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: notifying ? 0.7 : 1 }}>
+                    {notifying ? 'Saving…' : 'Notify Me'}
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* ── DONE ── */}
-            {view === 'done' && (
+            {/* ── QUEUED — confirmation after joining waitlist ── */}
+            {view === 'queued' && (
               <div style={{ textAlign: 'center', animation: 'fadeUp 0.4s ease both' }}>
-                <div style={{ width: 88, height: 88, borderRadius: '50%', backgroundColor: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42, margin: '0 auto 16px' }}>✅</div>
-                <div style={{ fontWeight: 900, fontSize: 22, color: '#065f46', marginBottom: 6 }}>Payment Successful!</div>
-                <div style={{ fontSize: 13, color: '#047857', marginBottom: 24 }}>Your {bill?.label} payment of <strong>BSD ${fmt(amount)}</strong> has been processed.</div>
-
-                <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px', textAlign: 'left', marginBottom: 22 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 14 }}>Official Receipt</div>
-                  {[
-                    { label: 'Reference No.',    value: refNo, mono: true },
-                    { label: 'Bill Type',        value: `${bill?.icon} ${bill?.label}` },
-                    { label: 'Account No.',      value: accountNo },
-                    { label: 'Amount Paid',      value: `BSD $${fmt(amount)}` },
-                    { label: `BSC Fee (${BSC_RATE_PCT}%)`, value: `BSD $${fmt(bscFee)}` },
-                    { label: 'Service Fee',      value: `BSD $${fmt(serviceFee)}` },
-                    { label: 'Total Charged',    value: `BSD $${fmt(total)}`, bold: true },
-                    { label: 'Card',             value: `•••• •••• •••• ${last4}` },
-                    { label: 'Date',             value: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) },
-                  ].map(row => (
-                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9' }}>
-                      <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{row.label}</span>
-                      <span style={{ fontSize: 12, color: '#1a2e4a', fontWeight: (row as any).bold ? 900 : 700, fontFamily: (row as any).mono ? 'monospace' : 'inherit' }}>{row.value}</span>
-                    </div>
-                  ))}
-                  <div style={{ marginTop: 12, backgroundColor: '#d1fae5', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#065f46', fontWeight: 700, textAlign: 'center' }}>
-                    ✅ Approved by RBC · Saved to your history & BSC dashboard
-                  </div>
-                </div>
-
+                <div style={{ width: 88, height: 88, borderRadius: '50%', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 42, margin: '0 auto 16px' }}>📬</div>
+                <div style={{ fontWeight: 900, fontSize: 22, color: '#1e3a8a', marginBottom: 6 }}>You&apos;re on the list</div>
+                <div style={{ fontSize: 13, color: '#1d4ed8', marginBottom: 24 }}>We&apos;ll reach out the moment BSC Pay opens for card payments. In the meantime you can still WhatsApp <strong>+1 (242) 361-3474</strong> to pay a bill manually.</div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={reset} style={{ flex: 1, padding: '13px', borderRadius: 12, border: '2px solid #e2e8f0', backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Pay Another Bill</button>
-                  <button className="bsc-btn" onClick={() => router.push('/')} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 13, fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit' }}>Back to Home</button>
+                  <button onClick={reset} style={{ flex: 1, padding: '13px', borderRadius: 12, border: '2px solid #e2e8f0', backgroundColor: '#fff', color: '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Queue Another Bill</button>
+                  <button className="bsc-btn" onClick={() => router.push('/market')} style={{ flex: 1, padding: '13px', borderRadius: 12, border: 'none', backgroundColor: '#1a2e4a', color: '#f5a623', fontSize: 13, fontWeight: 900, cursor: 'pointer', fontFamily: 'inherit' }}>Back to Marketplace</button>
                 </div>
               </div>
             )}
@@ -334,8 +352,8 @@ export default function UtilitiesPage() {
 
           {view === 'details' && (
             <div style={{ textAlign: 'center', marginTop: 18, fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
-              {BSC_RATE_PCT}% fee + BSD ${fmt(SERVICE_FEE)} service fee per transaction.<br />
-              Subscribe for $60/yr to waive all fees.
+              When BSC Pay launches: {BSC_RATE_PCT}% fee + BSD ${fmt(SERVICE_FEE)} service fee per transaction.<br />
+              Today we&apos;re collecting interest — you won&apos;t be charged.
             </div>
           )}
         </div>
