@@ -413,7 +413,7 @@ style={primaryBtn(saving)}
 onClick={() => setPricingMode('formula')}
 style={{ padding: 10, borderRadius: 8, border: '2px solid', borderColor: pricingMode === 'formula' ? '#1a2e5a' : '#e5e7eb', backgroundColor: pricingMode === 'formula' ? '#1a2e5a' : '#fff', color: pricingMode === 'formula' ? '#f4c842' : '#666', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
 >
-Formula (cost × margin × VAT)
+Formula (cost × margin)
 </button>
 <button
 onClick={() => setPricingMode('manual_override')}
@@ -430,7 +430,7 @@ Manual price
 <input type="number" step="0.01" value={margin} onChange={(e) => setMargin(e.target.value)} style={input} />
 </div>
 <div>
-<label style={lbl}>VAT multiplier</label>
+<label style={lbl}>Tax multiplier</label>
 <input type="number" step="0.01" value={vat} onChange={(e) => setVat(e.target.value)} style={input} />
 </div>
 </div>

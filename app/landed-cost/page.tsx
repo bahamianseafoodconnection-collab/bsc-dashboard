@@ -320,7 +320,7 @@ export default function LandedCostPage() {
               );
             })}
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 8, fontStyle: 'italic' }}>
-              Sacred-rule pricing applies cost × (1 + margin) × (1 + 10% VAT). Override per-SKU on premium products that command above-sacred market prices.
+              Sacred-rule pricing applies cost × (1 + margin). Override per-SKU on premium products that command above-sacred market prices.
             </div>
           </div>
         </>

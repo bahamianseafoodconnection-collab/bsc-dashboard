@@ -197,7 +197,7 @@ Shop →
 <h3 style={{ color: '#f4c842', fontWeight: 900, fontSize: 20, textAlign: 'center', margin: '0 0 32px' }}>How Local Wholesale Works</h3>
 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24 }}>
 {[
-{ step: '1', icon: '🛒', title: 'Browse & Order', desc: 'Pick bulk items from any local wholesaler. All prices include BSC markup and VAT.' },
+{ step: '1', icon: '🛒', title: 'Browse & Order', desc: 'Pick bulk items from any local wholesaler. All prices include BSC markup and applicable taxes.' },
 { step: '2', icon: '📋', title: 'BSC Gets Your List', desc: 'Your order goes directly to BSC who coordinates with the wholesaler.' },
 { step: '3', icon: '🏭', title: 'Picked Up Locally', desc: 'BSC picks up your order from the Nassau warehouse.' },
 { step: '4', icon: '🚚', title: 'Delivered to You', desc: 'BSC delivers to your home or business in Nassau or Andros.' },

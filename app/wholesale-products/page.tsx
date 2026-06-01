@@ -34,7 +34,7 @@ const CATEGORIES = [
 const UNITS = ['lb', 'kg', 'each', 'case', 'box', 'bag', 'dozen', 'gallon', 'litre', 'pack'];
 
 const BSC_MARKUP = 12;
-const VAT = 10;
+const VAT = 0;
 
 interface Product {
   id: string;
@@ -458,7 +458,7 @@ export default function WholesaleProductsPage() {
               {/* Pricing */}
               <div style={{ backgroundColor: '#f8fafc', borderRadius: 10, padding: '16px' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>Pricing</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: 4 }}>WHOLESALE COST (BSD) *</label>
                     <input
@@ -477,18 +477,9 @@ export default function WholesaleProductsPage() {
                       style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 14, outline: 'none' }}
                     />
                   </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: 4 }}>VAT (%)</label>
-                    <input
-                      type="number" step="0.1" min="0"
-                      value={form.vat_pct}
-                      onChange={e => handleChange('vat_pct', parseFloat(e.target.value) || 0)}
-                      style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 14, outline: 'none' }}
-                    />
-                  </div>
                 </div>
                 <div style={{ backgroundColor: activeW.color, borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>Final Customer Price (incl. markup + VAT)</span>
+                  <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>Final Customer Price (incl. markup)</span>
                   <span style={{ color: '#f5a623', fontWeight: 900, fontSize: 20 }}>
                     BSD ${calcFinal(form.wholesale_cost_bsd, form.bsc_markup_pct, form.vat_pct).toFixed(2)}
                   </span>

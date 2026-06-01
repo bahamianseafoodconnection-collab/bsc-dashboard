@@ -74,10 +74,6 @@ return (
 <span style={{ color: '#666' }}>BSC Service (12%)</span>
 <span style={{ color: '#1a2e5a', fontWeight: 600 }}>+${markup.toFixed(2)}</span>
 </div>
-<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-<span style={{ color: '#666' }}>VAT (10%)</span>
-<span style={{ color: '#1a2e5a', fontWeight: 600 }}>+${vat.toFixed(2)}</span>
-</div>
 <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}>
 <span style={{ color: '#1a2e5a', fontWeight: 800 }}>Total (BSD)</span>
 <span style={{ color: '#1a2e5a', fontWeight: 900 }}>BSD ${total.toFixed(2)}</span>
@@ -206,7 +202,7 @@ style={{ backgroundColor: '#f4c842', color: '#1a2e5a', border: 'none', borderRad
 <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 8 }}>
 <span style={{ fontSize: 16 }}>💡</span>
 <span style={{ color: '#713f12', fontSize: 13, fontWeight: 600 }}>
-All prices include US cost + shipping ($0.60/lb) + customs duty + BSC 12% service + 10% VAT. Click any product to see the full breakdown.
+All prices include US cost + shipping ($0.60/lb) + customs duty + BSC 12% service. Click any product to see the full breakdown.
 </span>
 </div>
 </div>

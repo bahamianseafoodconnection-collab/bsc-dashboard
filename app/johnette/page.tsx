@@ -122,9 +122,9 @@ style={{ flex: 1, padding: '9px', borderRadius: 20, border: 'none', cursor: 'poi
 <div style={card}>
 <p style={{ margin: '0 0 12px', color: '#60a5fa', fontWeight: 'bold', fontSize: 14 }}>🚗 My Responsibilities</p>
 {[
-{ icon: '🚗', task: 'List cars for sale — enter cost, system adds $650 BSC markup + 10% VAT' },
-{ icon: '🔑', task: 'List cars for rent — enter daily rate, system adds $10/day BSC markup + 10% VAT' },
-{ icon: '🔧', task: 'Upload auto parts — enter cost, system adds 10% markup + 10% VAT' },
+{ icon: '🚗', task: 'List cars for sale — enter cost, system adds $650 BSC markup' },
+{ icon: '🔑', task: 'List cars for rent — enter daily rate, system adds $10/day BSC markup' },
+{ icon: '🔧', task: 'Upload auto parts — enter cost, system adds 10% markup' },
 { icon: '📸', task: 'Add photos to every listing before publishing' },
 { icon: '💬', task: 'Handle all WhatsApp and customer inquiries for vehicles' },
 { icon: '💰', task: '$650 BSC profit per car sold · $10/day per rental · 10% on every part' },

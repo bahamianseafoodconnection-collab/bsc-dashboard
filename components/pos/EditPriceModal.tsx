@@ -28,9 +28,9 @@ interface Props {
 }
 
 const VAT_CATEGORIES = [
-  { value: 'uncooked_food',   label: 'Uncooked food (0% VAT)' },
-  { value: 'cooked_prepared', label: 'Cooked / prepared (10% VAT)' },
-  { value: 'service',         label: 'Service (0% VAT)' },
+  { value: 'uncooked_food',   label: 'Uncooked food' },
+  { value: 'cooked_prepared', label: 'Cooked / prepared' },
+  { value: 'service',         label: 'Service' },
 ];
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -143,7 +143,7 @@ export default function EditPriceModal({ product, channelSet = 'nassau_pos', onC
           style={{ ...inp, fontSize: 24, fontWeight: 900, color: '#f5c518', height: 56 }}
         />
 
-        <label style={lbl}>VAT category</label>
+        <label style={lbl}>Tax category</label>
         <select value={vatCategory} onChange={e => setVatCategory(e.target.value)} style={inp}>
           {VAT_CATEGORIES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
         </select>
@@ -162,7 +162,7 @@ export default function EditPriceModal({ product, channelSet = 'nassau_pos', onC
               Live preview · Dedrick reviews in 4-5 days
             </div>
             <div style={{ fontSize: 12, color: '#cbd5e1', marginBottom: 6 }}>
-              Back-derived cost: <strong style={{ color: '#fff' }}>${preview.cost.toFixed(2)}</strong> · VAT {preview.vatPct}%
+              Back-derived cost: <strong style={{ color: '#fff' }}>${preview.cost.toFixed(2)}</strong> · Tax 0%
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 6 }}>
               {preview.channels.map(c => (

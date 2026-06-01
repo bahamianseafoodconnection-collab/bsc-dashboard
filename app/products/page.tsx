@@ -28,13 +28,13 @@ const CHANNELS = [
 
 // Per-channel sell-price math.
 //   Nassau / Andros / Wholesale: sell = cost / (1 - margin)
-//   Online Market:               sell = cost / (1 - margin) * 1.10 (10% VAT on top)
+//   Online Market:               sell = cost / (1 - margin)
 // Reverse (cost from a typed sell price) is the inverse.
 function chSellFromCost(channel: string, cost: number): number {
   switch (channel) {
     case 'nassau_pos':      return cost / 0.62;
     case 'andros_pos':      return cost / 0.57;
-    case 'online_market':   return cost / 0.75 * 1.10;
+    case 'online_market':   return cost / 0.75;
     case 'local_wholesale': return cost / 0.85;
     default:                return cost;
   }
@@ -43,7 +43,7 @@ function chCostFromSell(channel: string, sell: number): number {
   switch (channel) {
     case 'nassau_pos':      return sell * 0.62;
     case 'andros_pos':      return sell * 0.57;
-    case 'online_market':   return sell / 1.10 * 0.75;
+    case 'online_market':   return sell * 0.75;
     case 'local_wholesale': return sell * 0.85;
     default:                return sell;
   }
@@ -923,7 +923,7 @@ export default function ProductsPage() {
             <h2 className="font-bold text-white">Pricing</h2>
             <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
               Type either the cost OR any channel price — the rest auto-calculate from BSC margins
-              (Nassau 38% · Andros 43% · Online 25% + 10% VAT · Wholesale 15%).
+              (Nassau 38% · Andros 43% · Online 25% · Wholesale 15%).
             </p>
             <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#1a2e5a' }}>
               <label className="text-xs font-bold mb-2 block" style={{ color: '#f5c518' }}>
@@ -1231,7 +1231,7 @@ export default function ProductsPage() {
               </div>
 
               {/* BSC 5-Channel Pricing Preview — live calculation from cost using
-                  the new pricing_rules (22/19/35/40/40 + 10% VAT). Read-only here;
+                  the new pricing_rules (22/19/35/40/40). Read-only here;
                   the editable per-channel prices above are the manual snapshot the
                   POS reads at sale time. Use this to spot-check that admin prices
                   are in sync with BSC margins. */}
@@ -1434,7 +1434,7 @@ function BscPricingPreview({ cost, unit, productId }: { cost: number; unit: stri
           BSC 5-channel pricing preview
         </h3>
         <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
-          Enter a Cost Per Unit above to see what the new BSC pricing structure (22/19/35/40/40 + 10% VAT) would charge across all five channels.
+          Enter a Cost Per Unit above to see what the new BSC pricing structure (22/19/35/40/40) would charge across all five channels.
         </p>
       </div>
     );
@@ -1491,7 +1491,7 @@ function BscPricingPreview({ cost, unit, productId }: { cost: number; unit: stri
         <strong style={{ color: '#a78bfa' }}>wholesale_in_store ({BSC_PRICING_RULES.wholesale_in_store.markupPct}%)</strong>{' '}
         for POS lines or{' '}
         <strong style={{ color: '#a78bfa' }}>wholesale_online ({BSC_PRICING_RULES.wholesale_online.markupPct}%)</strong>{' '}
-        for online lines. VAT 10% is included in unit price.
+        for online lines.
       </p>
     </div>
   );

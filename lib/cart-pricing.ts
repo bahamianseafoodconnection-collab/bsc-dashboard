@@ -9,7 +9,7 @@
 // line by checking whether the quantity qualifies as wholesale; if it
 // does, we swap to the wholesale-channel snapshot.
 //
-// The new BSC pricing structure (22/19/35/40/40 + 10% VAT) lives in
+// The new BSC pricing structure (22/19/35/40/40) lives in
 // lib/pricing.ts and Supabase pricing_rules. That math is the source of
 // truth when ADMIN re-prices products. /pos itself just picks between
 // the two stored snapshots based on qualification.

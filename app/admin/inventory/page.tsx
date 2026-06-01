@@ -63,10 +63,10 @@ const CATEGORY_OPTIONS = [
 
 const UOM_OPTIONS = ['lb', 'each', 'case'] as const;
 
-// VAT toggle on Add/Edit. Maps to products.vat_category; drives VAT %.
+// Tax class toggle on Add/Edit. Maps to products.vat_category.
 const VAT_OPTIONS = [
-  { value: 'standard_rated', label: 'VAT item (10%)' },
-  { value: 'zero_rated',     label: 'VAT-Free item (0%)' },
+  { value: 'standard_rated', label: 'Standard tax class' },
+  { value: 'zero_rated',     label: 'Zero-rated tax class' },
 ] as const;
 
 // Channels shown in the Margins panel (order matters for display).
@@ -222,7 +222,7 @@ export default function AdminInventoryPage() {
       cost_per_unit: r.cost_per_unit != null ? String(r.cost_per_unit) : '',
       stock_count: r.stock_count != null ? String(r.stock_count) : '',
       status: r.status ?? 'active',
-      // Map legacy food values onto the VAT toggle (0% → VAT-Free, 10% → VAT item).
+      // Map legacy food values onto the tax class toggle.
       vat_category: (r.vat_category === 'cooked_prepared' || r.vat_category === 'standard_rated')
         ? 'standard_rated' : 'zero_rated',
       sell_nassau: !!r.sell_nassau, sell_andros: !!r.sell_andros,
@@ -1301,7 +1301,7 @@ export default function AdminInventoryPage() {
               </div>
               <p className="-mt-1 text-[10px] text-slate-400">Selling prices below are calculated from cost × each channel margin.</p>
               <div>
-                <label className="mb-1 block text-xs font-bold text-slate-600">VAT</label>
+                <label className="mb-1 block text-xs font-bold text-slate-600">Tax class</label>
                 <select
                   value={addRowForm.vat_category}
                   onChange={(e) => setAddRowForm((f) => ({ ...f, vat_category: e.target.value }))}
@@ -1620,7 +1620,7 @@ export default function AdminInventoryPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="mb-1 block text-xs font-bold text-slate-600">VAT</label>
+                    <label className="mb-1 block text-xs font-bold text-slate-600">Tax class</label>
                     <select value={editForm.vat_category} onChange={(e) => setF({ vat_category: e.target.value })}
                       className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
                       {VAT_OPTIONS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
@@ -1690,7 +1690,7 @@ export default function AdminInventoryPage() {
                   <Th>UoM</Th>
                   <Th>Size</Th>
                   <ThSort field="stock_count"    sortField={sortField} sortDir={sortDir} onClick={toggleSort} align="right">Stock</ThSort>
-                  <Th>VAT</Th>
+                  <Th>Tax class</Th>
                   <ThSort field="cost_per_unit"  sortField={sortField} sortDir={sortDir} onClick={toggleSort} align="right">Cost</ThSort>
                   <Th align="right">Nassau POS</Th>
                   <Th align="right">Andros POS</Th>

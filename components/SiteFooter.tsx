@@ -129,7 +129,7 @@ export default function SiteFooter() {
             Family · Nassau, Bahamas
           </span>
           <div className="flex gap-2">
-            {['RBC Secured', 'VAT Registered', 'COD Available'].map((b) => (
+            {['RBC Secured', 'Bahamas-Owned', 'COD Available'].map((b) => (
               <span
                 key={b}
                 className="rounded border border-gold/20 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-gold/50"

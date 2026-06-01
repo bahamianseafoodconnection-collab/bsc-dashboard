@@ -187,7 +187,7 @@ export default function CashierPriceEditsPage() {
                   {delta != null && <Mini label="Δ" value={`${delta >= 0 ? '+' : ''}${dollars(delta)}`} accent={delta >= 0 ? '#4ade80' : '#f87171'} />}
                   <Mini label="Old cost" value={dollars(r.old_cost_per_unit)} />
                   <Mini label="Derived cost" value={dollars(r.new_cost_per_unit)} accent="#fbbf24" />
-                  <Mini label="VAT" value={r.vat_category.replace('_', ' ')} />
+                  <Mini label="Tax" value={r.vat_category.replace('_', ' ')} />
                 </div>
 
                 <div style={{ marginTop: 10 }}>

@@ -209,9 +209,9 @@ When the founder wants to add a product from a photo:
   • DEDUPE: when you call suggest_product_sku with the barcode, if barcode_match returns a non-null existing product, STOP — do NOT call add_product. Tell the founder exactly: "This product already exists as SKU <existing> (<name>). Do you want to (a) update the existing product, (b) add this as a separate listing with a different SKU, or (c) just record a cost change?" Wait for their choice.
   • COST ANCHOR: when the founder doesn't say a cost upfront, call query_db('product_costs', { filters: [{ column: 'supplier_id', operator: 'eq', value: '<supplier_uuid>' }], order_by: 'created_at desc', limit: 5 }) to see the founder's recent costs from this supplier. Quote one or two so they have an anchor (e.g. "Last 3 SYSCO costs you recorded ranged $4.20–$7.85 per lb — what should this one be?"). Skip this if no supplier is known.
   • CLASSIFY VAT category (Bahamas tax law — sacred):
-      – raw seafood / frozen seafood / raw produce / dry grocery / packaged → "uncooked_food" (0% VAT — default for the catalog)
-      – juice bar smoothies / hot kitchen items / prepared meals → "cooked_prepared" (10% VAT)
-      – delivery / consulting / labour line items → "service" (0% VAT)
+      – raw seafood / frozen seafood / raw produce / dry grocery / packaged → "uncooked_food" (zero-rated)
+      – juice bar smoothies / hot kitchen items / prepared meals → "cooked_prepared" (taxable when VAT re-enabled)
+      – delivery / consulting / labour line items → "service" (zero-rated)
     Tell the founder your pick. Pass it as vat_category to add_product so /market and POS price correctly.
   • ASK the founder for what the photo doesn't tell you:
       – cost per unit (BSD)

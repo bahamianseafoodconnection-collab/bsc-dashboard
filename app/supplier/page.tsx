@@ -966,10 +966,10 @@ style={{ border: '1px solid #d5d9d9', color: '#0F1111' }} />
 </div>
 </div>
 <p className="text-[11px]" style={{ color: '#565959' }}>
-Suggested at 25% margin + 10% VAT:{' '}
+Suggested at 25% margin:{' '}
 <span className="font-bold">
 {editForm.cost && !Number.isNaN(Number(editForm.cost))
-? '$' + (Number(editForm.cost) / 0.75 * 1.10).toFixed(2)
+? '$' + (Number(editForm.cost) / 0.75).toFixed(2)
 : '—'}
 </span>
 </p>
@@ -1213,9 +1213,9 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
 
       {addProductForm.cost_per_unit && !Number.isNaN(Number(addProductForm.cost_per_unit)) && (
         <p className="text-[11px]" style={{ color: '#565959' }}>
-          Online suggested @ 25% margin + 10% VAT:{' '}
+          Online suggested @ 25% margin:{' '}
           <span className="font-bold">
-            ${(Number(addProductForm.cost_per_unit) / 0.75 * 1.10).toFixed(2)}
+            ${(Number(addProductForm.cost_per_unit) / 0.75).toFixed(2)}
           </span>
         </p>
       )}

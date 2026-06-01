@@ -218,7 +218,7 @@ export default function WholesalerPage() {
               {[
                 { icon: '🏷️', label: `SKU prefix: ${config.prefix}` },
                 { icon: '📦', label: `${products.length} products available` },
-                { icon: '💰', label: '12% markup + 10% VAT' },
+                { icon: '💰', label: '12% markup' },
                 { icon: '🚚', label: 'BSC delivers to you' },
               ].map(item => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 14px' }}>

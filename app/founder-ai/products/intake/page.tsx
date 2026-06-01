@@ -9,7 +9,7 @@
 //
 // Pricing is auto-computed via lib/pricing.ts calculatePrice() for the
 // three retail channels (nassau_pos 40%, andros_pos 40%, online_market
-// 35%) — all +10% VAT — and stored as manual_override product_pricing
+// 35%) — and stored as manual_override product_pricing
 // rows so the approval step can edit each before publishing.
 //
 // Storage: site-images bucket, path products/<sku>-<timestamp>.<ext>.
@@ -47,9 +47,9 @@ const UNIT_SUGGESTIONS = [
 ] as const;
 
 const VAT_CATEGORIES: Array<{ value: string; label: string; vat: number; hint: string }> = [
-  { value: 'uncooked_food',   label: 'Uncooked food (0% VAT)',     vat: 0,  hint: 'Raw seafood, frozen seafood, raw produce, grocery — DEFAULT' },
-  { value: 'cooked_prepared', label: 'Cooked / prepared (10% VAT)', vat: 10, hint: 'Juice bar smoothies, kitchen-prepped meals, hot food' },
-  { value: 'service',         label: 'Service (0% VAT)',           vat: 0,  hint: 'Labour / consulting / delivery — rare for product catalog' },
+  { value: 'uncooked_food',   label: 'Uncooked food',     vat: 0,  hint: 'Raw seafood, frozen seafood, raw produce, grocery — DEFAULT' },
+  { value: 'cooked_prepared', label: 'Cooked / prepared', vat: 10, hint: 'Juice bar smoothies, kitchen-prepped meals, hot food' },
+  { value: 'service',         label: 'Service',           vat: 0,  hint: 'Labour / consulting / delivery — rare for product catalog' },
 ];
 
 // Channels we'll create pricing rows for. DB uses 'online_market'
@@ -392,7 +392,7 @@ function ProductIntakeInner() {
             </div>
           </div>
 
-          <label style={lbl}>VAT category (Bahamas tax law)</label>
+          <label style={lbl}>Tax category (Bahamas tax law)</label>
           <select value={vatCategory} onChange={e => setVatCategory(e.target.value)} style={inp}>
             {VAT_CATEGORIES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
           </select>
@@ -416,7 +416,7 @@ function ProductIntakeInner() {
                 <div key={p.db} style={priceCell}>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>{p.label}</div>
                   <div style={{ fontSize: 18, fontWeight: 900, color: '#f5c518' }}>${p.price.toFixed(2)}</div>
-                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{p.markup}% markup + {p.vat}% VAT</div>
+                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{p.markup}% markup</div>
                 </div>
               ))}
             </div>

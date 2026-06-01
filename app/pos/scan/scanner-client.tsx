@@ -1458,7 +1458,7 @@ function ProductEdit({
               />
             </div>
             <div>
-              <label style={lbl}>VAT</label>
+              <label style={lbl}>Tax</label>
               <input
                 type="text"
                 inputMode="decimal"
@@ -2232,7 +2232,7 @@ function ProductOnboard({
                         />
                       </div>
                       <div>
-                        <label style={lbl}>VAT</label>
+                        <label style={lbl}>Tax</label>
                         <input
                           type="text"
                           inputMode="decimal"

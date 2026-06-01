@@ -65,7 +65,7 @@ const FAQ: Array<{ q: string; a: React.ReactNode }> = [
   },
   {
     q: 'Are prices in BSD?',
-    a: 'Yes. All prices are quoted in Bahamian Dollars (BSD), at par with USD. VAT is included where applicable.',
+    a: 'Yes. All prices are quoted in Bahamian Dollars (BSD), at par with USD. Prices include all applicable taxes.',
   },
 ];
 

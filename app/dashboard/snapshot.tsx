@@ -127,9 +127,10 @@ export default function DashboardSnapshot() {
           ot === 'pos_sale_andros' ? CHANNEL_MARGIN.pos_sale_andros :
           ot === 'online_market'   ? CHANNEL_MARGIN.online_market :
           ot === 'wholesale'       ? CHANNEL_MARGIN.wholesale : 0;
-        // BSC profit excl VAT for sale channels (back out the 10% VAT)
-        const grossExclVat = rev / 1.10;
-        const profit = grossExclVat * margin;
+        // VAT is currently disabled (founder directive). Profit is now a
+        // straight margin slice of revenue. When VAT is later re-enabled,
+        // back-out the rate from finance.VAT_RATE here.
+        const profit = rev * margin;
         const acc = slicesAcc[ot] || { revenue: 0, profit: 0 };
         acc.revenue += rev;
         acc.profit += profit;

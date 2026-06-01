@@ -39,7 +39,11 @@ export const CHANNEL_MARGIN: Record<PricingChannel, number> = {
   bill_casale:     0.05,
 };
 
-export const VAT_RATE = 0.10;
+// VAT is disabled across the board (founder directive 2026-05-30) until BSC
+// is approved to charge it. Keep the constant + plumbing so we can re-enable
+// in one place when approval lands. Setting to 0 makes every sellPrice /
+// recordSaleFinancials computation behave as a pure cost+margin equation.
+export const VAT_RATE = 0;
 
 // Bill Payments and Bill Casale are special — no VAT applied.
 function hasVat(channel: PricingChannel): boolean {

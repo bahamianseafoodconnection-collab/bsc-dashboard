@@ -361,16 +361,16 @@ export default function PendingProductsPage() {
                 </div>
 
                 {/* VAT category — confirm before approving. Default
-                    is uncooked_food (0% VAT); flip to cooked_prepared
+                    is uncooked_food; flip to cooked_prepared
                     only when the product is juice-bar / kitchen-prepped. */}
                 <label style={lbl}>VAT category (Bahamas law)</label>
                 <select
                   value={(edits[p.id]?.vat_category as string | undefined) ?? p.vat_category}
                   onChange={ev => setEdits(s => ({ ...s, [p.id]: { ...s[p.id], vat_category: ev.target.value as Pending['vat_category'] } }))}
                   style={inp}>
-                  <option value="uncooked_food">Uncooked food — 0% VAT (raw seafood, frozen, produce, grocery)</option>
-                  <option value="cooked_prepared">Cooked / prepared — 10% VAT (juice bar, kitchen)</option>
-                  <option value="service">Service — 0% VAT</option>
+                  <option value="uncooked_food">Uncooked food (raw seafood, frozen, produce, grocery)</option>
+                  <option value="cooked_prepared">Cooked / prepared (juice bar, kitchen)</option>
+                  <option value="service">Service</option>
                 </select>
 
                 <div style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>

@@ -165,7 +165,7 @@ export default function PricingRulesPage() {
                       <div style={{ fontSize: 22, fontWeight: 900, color: m.color }}>{Number(r.markup_pct).toFixed(2)}%</div>
                     </div>
                     <div>
-                      <div style={lab}>VAT</div>
+                      <div style={lab}>Tax</div>
                       <div style={{ fontSize: 17, fontWeight: 800, color: '#cbd5e1' }}>{Number(r.vat_pct).toFixed(2)}%</div>
                     </div>
                   </div>
@@ -211,11 +211,11 @@ export default function PricingRulesPage() {
                 <input type="number" inputMode="decimal" step="0.01" min="0.01" value={previewQty}
                   onChange={e => setPreviewQty(Math.max(0.01, Number(e.target.value) || 0))} style={inp} />
               </Field>
-              <Field label="VAT class">
+              <Field label="Tax class">
                 <select value={previewVatCategory} onChange={e => setPreviewVatCategory(e.target.value)} style={inp}>
-                  <option value="uncooked_food">Uncooked food (0%)</option>
-                  <option value="cooked_prepared">Cooked / prepared (10%)</option>
-                  <option value="service">Service (0%)</option>
+                  <option value="uncooked_food">Uncooked food</option>
+                  <option value="cooked_prepared">Cooked / prepared</option>
+                  <option value="service">Service</option>
                 </select>
               </Field>
               <Field label="Unit">
@@ -250,7 +250,7 @@ export default function PricingRulesPage() {
                           <span>Subtotal</span><span style={{ color: '#fff', fontWeight: 700 }}>${result.subtotal.toFixed(2)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#cbd5e1' }}>
-                          <span>VAT {result.vatPct}%</span><span style={{ color: '#fff', fontWeight: 700 }}>${result.vatAmount.toFixed(2)}</span>
+                          <span>Tax 0%</span><span style={{ color: '#fff', fontWeight: 700 }}>${result.vatAmount.toFixed(2)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingTop: 4, borderTop: '1px dashed rgba(255,255,255,0.1)', fontSize: 13, color: meta.color, fontWeight: 900 }}>
                           <span>Final</span><span>${result.finalPrice.toFixed(2)}</span>
@@ -289,7 +289,7 @@ export default function PricingRulesPage() {
                     <th style={th}>Channel</th>
                     <th style={th}>Op</th>
                     <th style={{ ...th, textAlign: 'right' }}>Markup</th>
-                    <th style={{ ...th, textAlign: 'right' }}>VAT</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Tax</th>
                     <th style={th}>By</th>
                   </tr>
                 </thead>
@@ -346,7 +346,7 @@ function RuleModal({ rule, onClose, onSaved }: { rule: PricingRule; onClose: () 
     const m = parseFloat(markup);
     const v = parseFloat(vat);
     if (!Number.isFinite(m) || m < 0 || m > 1000) { setErr('Markup must be 0-1000%'); return; }
-    if (!Number.isFinite(v) || v < 0 || v > 100)  { setErr('VAT must be 0-100%'); return; }
+    if (!Number.isFinite(v) || v < 0 || v > 100)  { setErr('Tax must be 0-100%'); return; }
     setBusy(true); setErr(null);
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from('pricing_rules').update({
@@ -358,14 +358,14 @@ function RuleModal({ rule, onClose, onSaved }: { rule: PricingRule; onClose: () 
     }).eq('channel', rule.channel);
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    await onSaved(`✓ ${rule.channel.replace(/_/g, ' ')} updated to ${m}% markup / ${v}% VAT`);
+    await onSaved(`✓ ${rule.channel.replace(/_/g, ' ')} updated to ${m}% markup / ${v}% tax`);
   }
 
   return (
     <Modal title={`Edit ${rule.channel.replace(/_/g, ' ')}`} onClose={onClose}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <Field label="Markup %"><input type="number" inputMode="decimal" step="0.01" min="0" max="1000" value={markup} onChange={e => setMarkup(e.target.value)} style={inp} autoFocus /></Field>
-        <Field label="VAT %"><input type="number" inputMode="decimal" step="0.01" min="0" max="100" value={vat} onChange={e => setVat(e.target.value)} style={inp} /></Field>
+        <Field label="Tax %"><input type="number" inputMode="decimal" step="0.01" min="0" max="100" value={vat} onChange={e => setVat(e.target.value)} style={inp} /></Field>
       </div>
       <Field label="Description">
         <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3} style={{ ...inp, fontFamily: 'inherit', resize: 'vertical' }} />

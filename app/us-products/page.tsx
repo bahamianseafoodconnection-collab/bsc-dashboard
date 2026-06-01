@@ -347,7 +347,7 @@ fontWeight: activeStore === store.key ? 800 : 500, fontSize: 14,
 <div>US: ${form.original_cost_usd.toFixed(2)}</div>
 <div>Ship: ${(form.weight_lbs * form.shipping_per_lb).toFixed(2)}</div>
 <div>Duty: {(form.customs_duty_pct * 100).toFixed(0)}%</div>
-<div>BSC: 12% · VAT: 10%</div>
+<div>BSC: 12%</div>
 </div>
 </div>
 

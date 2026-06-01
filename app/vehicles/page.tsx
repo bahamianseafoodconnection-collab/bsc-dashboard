@@ -9,7 +9,7 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const VAT       = 0.10;
+const VAT       = 0;
 const CAR_MARKUP = 650;
 const RENT_MARKUP = 10;
 const PART_MARKUP = 0.10;
@@ -135,7 +135,7 @@ export default function VehiclesPage() {
             </Link>
             <div>
               <div style={{ color: '#fff', fontWeight: 900, fontSize: '15px' }}>Vehicles & Auto Parts</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>$650 markup + 10% VAT · Parts 10% + VAT</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>$650 markup · Parts 10%</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -176,9 +176,6 @@ export default function VehiclesPage() {
                       <span style={{ position: 'absolute', top: '10px', left: '10px', backgroundColor: v.type === 'sale' ? '#1a2e5a' : '#0891b2', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>
                         {v.type === 'sale' ? 'FOR SALE' : 'FOR RENT'}
                       </span>
-                      <span style={{ position: 'absolute', top: '10px', right: '10px', backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>
-                        VAT INCL.
-                      </span>
                     </div>
                     <div style={{ padding: '14px' }}>
                       <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '16px' }}>{v.year} {v.make} {v.model}</div>
@@ -188,7 +185,6 @@ export default function VehiclesPage() {
                           <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px' }}>
                             ${v.customer_price.toLocaleString()}{v.type === 'rent' ? '/day' : ''}
                           </div>
-                          <div style={{ color: '#999', fontSize: '11px' }}>VAT included</div>
                         </div>
                         <a
                           href={`https://wa.me/12424777506?text=I'm interested in the ${v.year} ${v.make} ${v.model} — Ref: ${v.id}`}
@@ -220,7 +216,6 @@ export default function VehiclesPage() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div>
                         <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>${p.customer_price.toFixed(2)}</div>
-                        <div style={{ backgroundColor: '#e8f5e9', color: '#2e7d32', fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', display: 'inline-block', marginTop: '2px' }}>VAT INCL.</div>
                       </div>
                       <a
                         href={`https://wa.me/12424777506?text=I need a ${p.name} — Ref: ${p.id}`}
@@ -289,10 +284,6 @@ export default function VehiclesPage() {
                     <span style={{ color: '#666', fontSize: '13px' }}>BSC Markup</span>
                     <span style={{ color: '#1a2e5a', fontWeight: 700 }}>{vType === 'sale' ? `+$${CAR_MARKUP}` : `+$${RENT_MARKUP}/day`}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ color: '#666', fontSize: '13px' }}>10% VAT</span>
-                    <span style={{ color: '#1a2e5a', fontWeight: 700 }}>included</span>
-                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
                     <span style={{ color: '#1a2e5a', fontSize: '14px', fontWeight: 800 }}>Customer Price</span>
                     <span style={{ color: '#1a2e5a', fontSize: '18px', fontWeight: 900 }}>
@@ -340,10 +331,6 @@ export default function VehiclesPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span style={{ color: '#666', fontSize: '13px' }}>BSC Markup (10%)</span>
                     <span style={{ color: '#1a2e5a', fontWeight: 700 }}>+${(partCost * PART_MARKUP).toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ color: '#666', fontSize: '13px' }}>10% VAT</span>
-                    <span style={{ color: '#1a2e5a', fontWeight: 700 }}>included</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
                     <span style={{ color: '#1a2e5a', fontSize: '14px', fontWeight: 800 }}>Customer Price</span>

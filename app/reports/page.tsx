@@ -110,7 +110,7 @@ export default function ReportsPage() {
       map.set(day, acc);
     }
     return Array.from(map.entries())
-      .map(([day, v]) => ({ day, ...v, profit: v.revenue / 1.10 - v.cost }))
+      .map(([day, v]) => ({ day, ...v, profit: v.revenue - v.cost }))
       .sort((a, b) => b.day.localeCompare(a.day));
   }, [orders]);
 

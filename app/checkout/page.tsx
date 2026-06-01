@@ -477,10 +477,10 @@ function CheckoutInner() {
 
     // Persist a channel-correct financial split. We don't carry per-item cost
     // through to checkout, so we back-compute the cost basis from the cart
-    // total assuming online_market sacred pricing. Mathematically exact when
-    // the items follow the rule (cost × 1.25 × 1.10), an approximation when
-    // wholesale items (different margin) sneak in. Fire-and-forget so a
-    // missing financials table can't block the order.
+    // total assuming online_market sacred pricing. VAT is currently disabled
+    // (founder directive — see lib/finance.ts VAT_RATE), so cost = total /
+    // (1 + margin). Fire-and-forget so a missing financials table can't
+    // block the order.
     const onlineToCost =
       1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
     recordSaleFinancials({
