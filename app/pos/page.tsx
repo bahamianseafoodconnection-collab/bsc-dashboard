@@ -159,7 +159,7 @@ export default function POSPage() {
   // Receipt-channel feedback shown after every completed sale so the
   // cashier (and Dedrick at /dashboard/cashiers) can see whether the
   // email/SMS receipt actually went out.
-  const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'print'; to?: string; orderId?: string; error?: string } | null>(null)
+  const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'whatsapp' | 'print'; to?: string; orderId?: string; error?: string } | null>(null)
   // Item 7: separate toast for inventory-write failures (fire-and-forget
   // path that historically failed silently). 30s visibility so cashier
   // sees the order ID to email Dedrick before it auto-clears.
@@ -173,6 +173,11 @@ export default function POSPage() {
   const [customerName, setCustomerName]         = useState('')
   const [customerEmail, setCustomerEmail]       = useState('')
   const [emailConsent, setEmailConsent]         = useState(false)
+  // How the cashier wants the receipt delivered for THIS sale. Defaults
+  // to WhatsApp because that's the Bahamian customer norm; cashier can
+  // switch per sale. 'print' suppresses sending and shows the in-browser
+  // printable receipt.
+  const [receiptChannel, setReceiptChannel]     = useState<'whatsapp' | 'email' | 'print'>('whatsapp')
   const [foundCustomer, setFoundCustomer]       = useState<Customer | null>(null)
   // Explicit "Save customer" action — captures the customer record
   // ahead of (or independent from) a sale so history-tracking holds.
@@ -846,7 +851,10 @@ export default function POSPage() {
       // Auto-send receipt: email if on file, SMS if not, print fallback.
       // Result is visible to the cashier via lastReceipt state so failures
       // don't get hidden by the fire-and-forget pattern.
-      let receiptChannel: 'email' | 'sms' | 'print' = 'print'
+      // What the receipt API actually delivered via (may differ from the
+      // cashier's preference if e.g. WhatsApp failed and SMS fallback hit,
+      // or the customer had no email and we routed to print).
+      let deliveredChannel: 'email' | 'sms' | 'whatsapp' | 'print' = 'print'
       let receiptTo: string | undefined
       let receiptError: string | undefined
       if (orderId) {
@@ -875,6 +883,10 @@ export default function POSPage() {
                 payment_method: paymentMethod,
                 card_ref:       paymentMethod === 'card' ? normalizeCardRef(cardRef) : null,
                 terminal_type:  paymentMethod === 'card' ? terminal              : null,
+                // Cashier's chosen channel for this sale — server falls back
+                // (WhatsApp → SMS → email → print) if the preferred channel
+                // can't be honored (e.g. WhatsApp picked but no phone).
+                prefer_channel: receiptChannel,
                 items: items.map((i: any) => ({
                   name:       i.name,
                   qty:        i.quantity ?? i.qty ?? 1,
@@ -883,12 +895,15 @@ export default function POSPage() {
               }),
             })
             const j = await res.json().catch(() => ({}))
-            if (j?.ok && (j.channel === 'email' || j.channel === 'sms')) {
-              receiptChannel = j.channel
-              receiptTo      = j.to
+            if (j?.ok && (j.channel === 'email' || j.channel === 'sms' || j.channel === 'whatsapp')) {
+              deliveredChannel = j.channel
+              receiptTo        = j.to
             } else if (!j?.ok) {
               receiptError = j?.error ?? `HTTP ${res.status}`
             }
+          } else if (receiptChannel === 'print') {
+            // Cashier explicitly chose print — skip the API call entirely.
+            deliveredChannel = 'print'
           } else if (!validEmail && !phoneClean) {
             // No customer info — print receipt is the right answer.
           }
@@ -898,13 +913,14 @@ export default function POSPage() {
         }
       }
 
-      // If no email + no phone (or both failed), open the print receipt.
-      if (orderId && receiptChannel === 'print') {
+      // If no email + no phone (or both failed), or cashier chose print,
+      // open the in-browser printable receipt.
+      if (orderId && deliveredChannel === 'print') {
         window.open(`/receipt/${orderId}`, '_blank')
       }
 
       // Surface the result so Claff/TJ see it for ~10 seconds.
-      setLastReceipt({ channel: receiptChannel, to: receiptTo, orderId, error: receiptError })
+      setLastReceipt({ channel: deliveredChannel, to: receiptTo, orderId, error: receiptError })
       setTimeout(() => setLastReceipt(null), 10000)
 
       // Persist the last-card-sale hint so the next ring can spot a typo
@@ -1080,14 +1096,15 @@ export default function POSPage() {
       {lastReceipt && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 rounded-xl px-5 py-3 text-xs font-bold shadow-xl max-w-md text-center"
           style={{
-            backgroundColor: lastReceipt.error ? '#7f1d1d' : lastReceipt.channel === 'email' ? '#16a34a' : lastReceipt.channel === 'sms' ? '#0369a1' : '#525252',
+            backgroundColor: lastReceipt.error ? '#7f1d1d' : lastReceipt.channel === 'whatsapp' ? '#15803d' : lastReceipt.channel === 'email' ? '#16a34a' : lastReceipt.channel === 'sms' ? '#0369a1' : '#525252',
             color: 'white',
           }}>
           {lastReceipt.error
             ? `⚠ Receipt FAILED: ${lastReceipt.error}${lastReceipt.orderId ? ` — open /receipt/${lastReceipt.orderId.slice(0, 8)} manually` : ''}`
+            : lastReceipt.channel === 'whatsapp' ? `💬 WhatsApp receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : lastReceipt.channel === 'email' ? `📧 Email receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : lastReceipt.channel === 'sms'   ? `📱 SMS receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
-            : `🖨 Print receipt opened (no customer email or phone on file)`}
+            : `🖨 Print receipt opened`}
           <button onClick={() => setLastReceipt(null)} className="ml-3 opacity-70 hover:opacity-100" aria-label="Dismiss">×</button>
         </div>
       )}
@@ -1450,6 +1467,37 @@ export default function POSPage() {
                   </label>
                 </div>
               )}
+
+              {/* Receipt channel picker. Defaults to WhatsApp (Bahamian
+                  norm) — cashier can switch per sale. WhatsApp auto-
+                  falls-back to SMS if WhatsApp delivery fails. Print
+                  skips messaging and just shows the printable view. */}
+              <div className="mt-4">
+                <label className="block text-xs text-gray-400 mb-2 uppercase tracking-wide">Receipt via</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { key: 'whatsapp', label: '💬 WhatsApp', sub: 'auto-SMS fallback' },
+                    { key: 'email',    label: '✉️ Email',    sub: 'inbox' },
+                    { key: 'print',    label: '🖨 Print',    sub: 'in browser' },
+                  ] as const).map((opt) => {
+                    const active = receiptChannel === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setReceiptChannel(opt.key)}
+                        className="rounded-xl py-2 text-xs font-bold transition"
+                        style={active
+                          ? { backgroundColor: '#f5c518', color: '#060d1f', border: '1px solid #f5c518' }
+                          : { backgroundColor: '#1f2937', color: '#9ca3af', border: '1px solid #374151' }}
+                      >
+                        <div>{opt.label}</div>
+                        <div className="mt-0.5 text-[9px] font-medium opacity-75">{opt.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {customerStatus === 'idle' && !customerLookingUp && (
                 <p className="text-xs text-gray-500">Optional — enter phone to look up or create customer</p>

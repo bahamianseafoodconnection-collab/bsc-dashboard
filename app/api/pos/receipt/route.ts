@@ -29,7 +29,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email';
-import { sendSMS } from '@/lib/twilio';
+import { sendSMS, sendWhatsAppOrSMS } from '@/lib/twilio';
 import { toE164 } from '@/lib/phone';
 
 export const runtime = 'nodejs';
@@ -75,6 +75,7 @@ interface ReceiptInput {
   payment_method?: unknown;  // 'cash' | 'card' | 'wire' | 'account'
   card_ref?:       unknown;  // RBC terminal reference (card sales only)
   terminal_type?:  unknown;  // 'rbc_plug_and_play' | 'rbc_physical_terminal'
+  prefer_channel?: unknown;  // 'whatsapp' | 'email' | 'sms' | 'print' — cashier's pick
 }
 
 function renderEmailHtml(p: {
@@ -193,6 +194,14 @@ export async function POST(req: NextRequest) {
   const paymentMethod = typeof body.payment_method === 'string' ? body.payment_method : null;
   const cardRef       = typeof body.card_ref === 'string'       ? body.card_ref.trim() : null;
   const terminalType  = typeof body.terminal_type === 'string'  ? body.terminal_type   : null;
+  // Cashier's pick for THIS sale. 'auto' (or missing) → legacy email>sms>print.
+  // 'whatsapp' → WhatsApp first, SMS fallback, then email, then print.
+  // 'email' → email only, falls back to phone channels if missing.
+  // 'print' → skip messaging entirely.
+  const preferRaw = typeof body.prefer_channel === 'string' ? body.prefer_channel.toLowerCase() : 'auto';
+  const preferChannel: 'whatsapp' | 'email' | 'sms' | 'print' | 'auto' =
+    preferRaw === 'whatsapp' || preferRaw === 'email' || preferRaw === 'sms' || preferRaw === 'print'
+      ? preferRaw : 'auto';
   const itemsRaw     = Array.isArray(body.items) ? body.items : [];
   const items: ReceiptItem[] = itemsRaw.filter((i): i is ReceiptItem =>
     !!i && typeof i === 'object'
@@ -222,30 +231,84 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Decision: email > sms > print.
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
   const e164 = toE164(phone);
 
-  if (validEmail) {
+  // Cashier explicitly chose print → skip messaging entirely.
+  if (preferChannel === 'print') {
+    return NextResponse.json({ ok: true, channel: 'print', note: 'Cashier chose print.' });
+  }
+
+  // Helper closures so each branch can fall through cleanly. Phone is
+  // passed in as a guaranteed non-null string so TypeScript can narrow
+  // through the call site (closures don't preserve outer if-narrowing).
+  const sendWhatsAppFirst = async (toPhone: string) => {
+    const r = await sendWhatsAppOrSMS({ to: toPhone, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
+    if (r.ok) {
+      const actual = (r as { channel?: string }).channel === 'sms' ? 'sms' : 'whatsapp';
+      return NextResponse.json({ ok: true, channel: actual, id: r.sid, to: toPhone });
+    }
+    return null;
+  };
+  const sendSmsOnly = async (toPhone: string) => {
+    const r = await sendSMS({ to: toPhone, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
+    if (r.ok) return NextResponse.json({ ok: true, channel: 'sms', id: r.sid, to: toPhone });
+    return null;
+  };
+  const sendEmailOnly = async () => {
     const html = renderEmailHtml({ customerName, channelLabel, items, subtotal, vat, total, orderId, cashierName, paymentMethod, cardRef, terminalType });
     const subject = `BSC receipt · ${channelLabel} · ${dollars(total)} · ${new Date().toLocaleDateString()}`;
     const r = await sendEmail({ to: validEmail, subject, html });
-    if (r.error) {
-      // Email failed — try SMS fallback if we have a phone.
-      if (e164) {
-        const smsR = await sendSMS({ to: e164, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
-        if (smsR.ok) return NextResponse.json({ ok: true, channel: 'sms', id: smsR.sid, note: `Email failed (${r.error}), SMS sent.` });
-        return NextResponse.json({ ok: false, channel: 'print', error: `Email and SMS both failed: ${r.error} / ${smsR.error}` }, { status: 502 });
-      }
-      return NextResponse.json({ ok: false, channel: 'print', error: `Email failed: ${r.error}` }, { status: 502 });
+    if (!r.error) return NextResponse.json({ ok: true, channel: 'email', id: r.id, to: validEmail });
+    return null;
+  };
+
+  // ── Preferred-channel routing ──
+  if (preferChannel === 'whatsapp' && e164) {
+    const w = await sendWhatsAppFirst(e164);
+    if (w) return w;
+    // WhatsApp+SMS both failed; try email if we have one.
+    if (validEmail) {
+      const m = await sendEmailOnly();
+      if (m) return m;
     }
-    return NextResponse.json({ ok: true, channel: 'email', id: r.id, to: validEmail });
+    return NextResponse.json({ ok: false, channel: 'print', error: 'WhatsApp / SMS / email all failed.' }, { status: 502 });
   }
 
+  if (preferChannel === 'sms' && e164) {
+    const s = await sendSmsOnly(e164);
+    if (s) return s;
+    if (validEmail) {
+      const m = await sendEmailOnly();
+      if (m) return m;
+    }
+    return NextResponse.json({ ok: false, channel: 'print', error: 'SMS / email both failed.' }, { status: 502 });
+  }
+
+  if (preferChannel === 'email' && validEmail) {
+    const m = await sendEmailOnly();
+    if (m) return m;
+    if (e164) {
+      const w = await sendWhatsAppFirst(e164);
+      if (w) return w;
+    }
+    return NextResponse.json({ ok: false, channel: 'print', error: 'Email / WhatsApp / SMS all failed.' }, { status: 502 });
+  }
+
+  // ── Auto fallback (legacy default): email > sms > print ──
+  if (validEmail) {
+    const m = await sendEmailOnly();
+    if (m) return m;
+    if (e164) {
+      const s = await sendSmsOnly(e164);
+      if (s) return s;
+    }
+    return NextResponse.json({ ok: false, channel: 'print', error: 'Email and SMS both failed.' }, { status: 502 });
+  }
   if (e164) {
-    const r = await sendSMS({ to: e164, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
-    if (!r.ok) return NextResponse.json({ ok: false, channel: 'print', error: `SMS failed: ${r.error}` }, { status: 502 });
-    return NextResponse.json({ ok: true, channel: 'sms', id: r.sid, to: e164 });
+    const s = await sendSmsOnly(e164);
+    if (s) return s;
+    return NextResponse.json({ ok: false, channel: 'print', error: 'SMS failed.' }, { status: 502 });
   }
 
   // No contact on file → print receipt.
