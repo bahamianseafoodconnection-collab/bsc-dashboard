@@ -65,6 +65,11 @@ type Product = {
   wholesale_price: number | null;
   unit_cost: number | null;
   status: string | null;
+  // Channel flags drive the disable/enable pill. "Active" = any flag true.
+  sell_nassau?: boolean;
+  sell_andros?: boolean;
+  sell_online?: boolean;
+  sell_wholesale?: boolean;
 };
 
 type Props = {
@@ -81,9 +86,14 @@ export default function SupplierPortalClient({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // Live products from public.products — these are the rows the customer
+  // sees on /market. Supplier can pause/resume each one (Task #87 Phase 2).
+  const [liveCatalog, setLiveCatalog] = useState<Product[]>([]);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toggleMsg, setToggleMsg] = useState<string | null>(null);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [errors, setErrors] = useState<{ invoices?: string; payments?: string; products?: string; pos?: string }>({});
+  const [errors, setErrors] = useState<{ invoices?: string; payments?: string; products?: string; pos?: string; catalog?: string }>({});
   const [busyPoId, setBusyPoId] = useState<string | null>(null);
   const [poError, setPoError] = useState<string | null>(null);
 
@@ -99,7 +109,7 @@ export default function SupplierPortalClient({
     setLoading(true);
     setErrors({});
     setPoError(null);
-    const [invRes, payRes, prodRes, poRes] = await Promise.all([
+    const [invRes, payRes, prodRes, poRes, catRes] = await Promise.all([
       supabase
         .from('purchase_invoices')
         .select('id, invoice_ref, total_amount, balance_owed, status, created_at, due_date, summary')
@@ -126,14 +136,70 @@ export default function SupplierPortalClient({
         .ilike('supplier_name', supplierName.trim())
         .order('created_at', { ascending: false })
         .limit(100),
+      // Live catalog rows owned by this supplier — drives the pause/resume
+      // controls below. Reads sell_* flags so we can show channel pills.
+      supabase
+        .from('products')
+        .select('id, sku, name, unit_of_measure, sell_nassau, sell_andros, sell_online, sell_wholesale, status')
+        .eq('primary_supplier_id', supplierId)
+        .order('name', { ascending: true })
+        .limit(500),
     ]);
     const errs: typeof errors = {};
     if (invRes.error) errs.invoices = invRes.error.message; else setInvoices((invRes.data || []) as Invoice[]);
     if (payRes.error) errs.payments = payRes.error.message; else setPayments((payRes.data || []) as Payment[]);
     if (prodRes.error) errs.products = prodRes.error.message; else setProducts((prodRes.data || []) as Product[]);
     if (poRes.error)   errs.pos = poRes.error.message;       else setPos((poRes.data || []) as PurchaseOrder[]);
+    if (catRes.error)  errs.catalog = catRes.error.message;  else {
+      type LiveRow = { id: string; sku: string | null; name: string; unit_of_measure: string | null; sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean; status: string | null };
+      setLiveCatalog(((catRes.data || []) as LiveRow[]).map((r): Product => ({
+        id: r.id, name: r.name, case_cost: null, weight_lbs: null, retail_price: null,
+        wholesale_price: null, unit_cost: null, status: r.status,
+        sell_nassau: r.sell_nassau, sell_andros: r.sell_andros,
+        sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
+      })));
+    }
     setErrors(errs);
     setLoading(false);
+  }
+
+  // Pause / resume a live product via the supplier-self-serve endpoint.
+  // Disable clears all four sell_* flags; enable flips sell_online back on
+  // (the channel suppliers participate in via /market).
+  async function toggleLiveProduct(p: Product) {
+    const isActive = !!(p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale);
+    setTogglingId(p.id);
+    setToggleMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      const res = await fetch('/api/supplier-portal/toggle-product', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ product_id: p.id, enable: !isActive }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setToggleMsg(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      // Optimistic merge of the returned flag set so the row updates
+      // without a full refetch.
+      setLiveCatalog((prev) => prev.map((row) => row.id === p.id ? {
+        ...row,
+        sell_nassau:    json.product.sell_nassau,
+        sell_andros:    json.product.sell_andros,
+        sell_online:    json.product.sell_online,
+        sell_wholesale: json.product.sell_wholesale,
+      } : row));
+      setToggleMsg(isActive ? `${p.name} paused — buyers can’t see it.` : `${p.name} is live again.`);
+      setTimeout(() => setToggleMsg(null), 4000);
+    } catch (err) {
+      setToggleMsg(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setTogglingId(null);
+    }
   }
 
   async function advancePoStatus(po: PurchaseOrder, next: string) {
@@ -702,6 +768,63 @@ export default function SupplierPortalClient({
                 </span>
               </div>
             ))
+          )}
+        </Section>
+
+        {/* Live catalog — supplier pauses / resumes their /market listings here */}
+        <Section title="Live in marketplace" right={
+          <span style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: 1 }}>
+            {liveCatalog.filter((p) => !!(p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale)).length} active
+          </span>
+        }>
+          {errors.catalog && (
+            <p style={{ color: RED, fontSize: 12, margin: '4px 0' }}>⚠️ {errors.catalog}</p>
+          )}
+          {toggleMsg && (
+            <div style={{ background: 'rgba(74,222,128,0.10)', border: `1px solid ${GREEN}55`, color: GREEN, borderRadius: 8, padding: '8px 10px', fontSize: 12, margin: '4px 0 10px' }}>
+              {toggleMsg}
+            </div>
+          )}
+          {liveCatalog.length === 0 ? (
+            <p style={{ color: TEXT_DIM, fontSize: 13, margin: 0 }}>
+              No live products under your name yet. Submissions show up here once Dedrick approves them.
+            </p>
+          ) : (
+            liveCatalog.map((p) => {
+              const active   = !!(p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale);
+              const chans: string[] = [];
+              if (p.sell_nassau)    chans.push('Nassau');
+              if (p.sell_andros)    chans.push('Andros');
+              if (p.sell_online)    chans.push('Online');
+              if (p.sell_wholesale) chans.push('Wholesale');
+              const label = active ? (chans.length === 4 ? 'Active · All channels' : `Active · ${chans.join(' + ')}`) : 'Paused';
+              const busy  = togglingId === p.id;
+              return (
+                <div key={p.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                  background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`,
+                  borderRadius: 10, padding: '10px 12px', marginTop: 8, flexWrap: 'wrap',
+                }}>
+                  <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{p.name}</div>
+                    <div style={{ fontSize: 11, color: TEXT_DIM, marginTop: 2 }}>{label}</div>
+                  </div>
+                  <button
+                    onClick={() => toggleLiveProduct(p)}
+                    disabled={busy}
+                    style={{
+                      padding: '8px 14px', borderRadius: 999, border: 'none',
+                      background: busy ? '#4b5563' : active ? RED : GOLD_BRIGHT,
+                      color: active ? '#fff' : NAVY,
+                      fontWeight: 800, fontSize: 12, cursor: busy ? 'wait' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {busy ? '…' : active ? 'Pause' : 'Resume'}
+                  </button>
+                </div>
+              );
+            })
           )}
         </Section>
       </div>
