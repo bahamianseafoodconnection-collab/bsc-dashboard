@@ -98,6 +98,20 @@ function unitLabel(unit: string | null | undefined): string {
   }
 }
 
+// RBC terminal slip references are alphanumeric, typically 3-10 chars on the
+// Plug & Play slip and up to 12 on the physical terminal. We normalize to
+// uppercase + trimmed + collapsed-whitespace + only [A-Z0-9-] so cashier
+// typos like " 4521 " and "4521" both reconcile against the same RBC line.
+function normalizeCardRef(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9-]/g, '')
+}
+// Accept 3-24 chars after normalization. Too short → likely a typo; too
+// long → not a real RBC ref and risks matching nothing during reconciliation.
+function isValidCardRef(raw: string): boolean {
+  const norm = normalizeCardRef(raw)
+  return norm.length >= 3 && norm.length <= 24
+}
+
 interface CashierSession {
   id: string
   cashier_user_id: string
@@ -131,6 +145,14 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [terminal, setTerminal]         = useState('rbc_plug_and_play')
   const [cardRef, setCardRef]           = useState('')
+  // Last card sale this shift — surfaced to the cashier when entering a new
+  // card_ref so they can spot a typo'd duplicate before it lands in the
+  // orders table (and double-matches an RBC settlement line at reconciliation).
+  const [lastCardSale, setLastCardSale] = useState<{ card_ref: string; terminal_type: string | null; created_at: string } | null>(null)
+  // Soft duplicate-warning gate: when set, the cashier must press Complete
+  // Sale a second time within 8s to actually ring it through. Clears on any
+  // edit to the cardRef field.
+  const [dupConfirmAt, setDupConfirmAt] = useState<number | null>(null)
   const [cashTendered, setCashTendered] = useState('')
   const [wireRef, setWireRef]           = useState('')
   const [orderSuccess, setOrderSuccess] = useState(false)
@@ -603,10 +625,46 @@ export default function POSPage() {
     // Card sales require a reference from the RBC terminal slip for
     // RBC daily reconciliation (Items 6 receipt display + Task #77 RBC
     // ingest cron post-launch). Applies to ALL roles — founder included.
-    if (paymentMethod === 'card' && !cardRef.trim()) {
-      alert('Card reference required. Type the reference number from the RBC terminal slip, then Complete Sale.')
-      setSubmitting(false)
-      return
+    if (paymentMethod === 'card') {
+      if (!cardRef.trim()) {
+        alert('Card reference required. Type the reference number from the RBC terminal slip, then Complete Sale.')
+        setSubmitting(false)
+        return
+      }
+      if (!isValidCardRef(cardRef)) {
+        alert('Card reference looks malformed. Use the alphanumeric reference shown on the RBC terminal slip (3–24 characters).')
+        setSubmitting(false)
+        return
+      }
+      const normRef = normalizeCardRef(cardRef)
+      // Dedupe check — same normalized ref + terminal within the last 12h
+      // is almost certainly a re-ring or a typo. Soft-warn: cashier must
+      // tap Complete Sale a second time within 8s to actually ring it
+      // through. Prevents accidental double-billing during reconciliation.
+      try {
+        const sinceIso = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+        const { data: dups } = await supabase
+          .from('orders')
+          .select('id, created_at, terminal_type, card_ref')
+          .eq('card_ref', normRef)
+          .eq('order_type', 'pos_sale_nassau')
+          .gte('created_at', sinceIso)
+          .limit(1)
+        const conflict = (dups && dups.length > 0) ? dups[0] : null
+        const now = Date.now()
+        const armed = dupConfirmAt != null && (now - dupConfirmAt) < 8000
+        if (conflict && !armed) {
+          setDupConfirmAt(now)
+          alert(`Heads up — card reference ${normRef} was already used at ${new Date(conflict.created_at).toLocaleTimeString()}. If this is a NEW sale (RBC issued a fresh ref) tap Complete Sale again within 8 seconds to ring it through. Otherwise change the ref to match the slip in your hand.`)
+          setSubmitting(false)
+          return
+        }
+      } catch (err) {
+        // Don't block sale on a dedupe-lookup failure (Supabase blip etc).
+        // Just log and move on; reconciliation can still catch a real
+        // double via the RBC ingest cron.
+        console.warn('Card-ref dedupe check failed (non-fatal):', err)
+      }
     }
 
     // Item 7: Track INSERT success outside the try so the outer catch can
@@ -728,7 +786,7 @@ export default function POSPage() {
         payment_method: paymentMethod,
         payment_status: paymentStatus,
         terminal_type:  paymentMethod === 'card' ? terminal : null,
-        card_ref:       paymentMethod === 'card' ? cardRef.trim() : null,  // NEW — structured column added by migration 20260525000000
+        card_ref:       paymentMethod === 'card' ? normalizeCardRef(cardRef) : null,  // NEW — structured column added by migration 20260525000000
         admin_notes: adminNotes, status: 'completed',                       // back-compat: keeps writing the buried "Card ref: XXX" string for any legacy reader
         customer_id:    customerId,
         customer_name:  nameClean || null,
@@ -815,8 +873,8 @@ export default function POSPage() {
                 // page render these so customers + RBC reconciliation can
                 // match each sale to its terminal slip.
                 payment_method: paymentMethod,
-                card_ref:       paymentMethod === 'card' ? cardRef.trim() : null,
-                terminal_type:  paymentMethod === 'card' ? terminal      : null,
+                card_ref:       paymentMethod === 'card' ? normalizeCardRef(cardRef) : null,
+                terminal_type:  paymentMethod === 'card' ? terminal              : null,
                 items: items.map((i: any) => ({
                   name:       i.name,
                   qty:        i.quantity ?? i.qty ?? 1,
@@ -849,6 +907,17 @@ export default function POSPage() {
       setLastReceipt({ channel: receiptChannel, to: receiptTo, orderId, error: receiptError })
       setTimeout(() => setLastReceipt(null), 10000)
 
+      // Persist the last-card-sale hint so the next ring can spot a typo
+      // duplicate before submit. Only set when this sale was a card —
+      // cash/wire/account don't need the reminder.
+      if (paymentMethod === 'card' && savedOrderId) {
+        setLastCardSale({
+          card_ref: normalizeCardRef(cardRef),
+          terminal_type: terminal,
+          created_at: new Date().toISOString(),
+        })
+      }
+      setDupConfirmAt(null)
       setOrderSuccess(true)
       setCart([])
       resetCheckout()
@@ -1433,8 +1502,45 @@ export default function POSPage() {
                   {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
                 <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # <span className="text-yellow-400">(required)</span></label>
-                <input type="text" placeholder="e.g. 4521" value={cardRef} onChange={e => setCardRef(e.target.value)}
-                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+                <input type="text" placeholder="e.g. 4521" value={cardRef}
+                  onChange={e => {
+                    setCardRef(e.target.value)
+                    // Editing the ref clears any armed dup-warning so the
+                    // 8-second confirmation window doesn't carry over.
+                    if (dupConfirmAt) setDupConfirmAt(null)
+                  }}
+                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-2 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400 uppercase font-mono tracking-wide" />
+                {/* Normalization preview — cashier sees exactly what we'll
+                    save so a stray space or lowercase character doesn't
+                    silently mismatch the RBC slip. */}
+                {cardRef.trim() && cardRef !== normalizeCardRef(cardRef) && (
+                  <p className="mb-3 text-[11px] text-amber-300">
+                    Will save as <span className="font-mono font-bold">{normalizeCardRef(cardRef)}</span>
+                  </p>
+                )}
+                {cardRef.trim() && !isValidCardRef(cardRef) && (
+                  <p className="mb-3 text-[11px] text-red-300">
+                    Reference must be 3–24 alphanumeric characters.
+                  </p>
+                )}
+                {/* Last card sale this shift — fast typo check before
+                    submit. Only shown when a previous card sale exists. */}
+                {lastCardSale && (
+                  <div className="mb-4 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-[11px] text-gray-300">
+                    <span className="text-gray-500 uppercase tracking-wider">Last card sale this shift:</span>{' '}
+                    <span className="font-mono font-bold text-yellow-300">{lastCardSale.card_ref}</span>
+                    {' · '}
+                    <span className="text-gray-400">{new Date(lastCardSale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                )}
+                {/* Dup-armed indicator — the cashier already saw the
+                    "already used" alert; one more tap of Complete Sale
+                    rings it through. */}
+                {dupConfirmAt && (Date.now() - dupConfirmAt) < 8000 && (
+                  <div className="mb-4 rounded-lg border border-amber-500 bg-amber-950 px-3 py-2 text-[12px] font-bold text-amber-200">
+                    ⚠️ Tap <strong>Complete Sale</strong> again to confirm this is a NEW sale (not a re-ring).
+                  </div>
+                )}
               </>
             )}
 
