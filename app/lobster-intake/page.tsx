@@ -131,6 +131,14 @@ export default function LobsterIntakePage() {
   // Yearly boat registration upload (per-supplier)
   const [regUploading, setRegUploading] = useState(false);
   const [regBusy, setRegBusy] = useState(false);
+  // Staging state for the two-step upload: pick file → enter year +
+  // expiration → confirm. Lets us capture the licence dates from the
+  // operator instead of guessing the calendar year + leaving expires
+  // null.
+  const [pendingRegFile, setPendingRegFile] = useState<File | null>(null);
+  const [pendingRegYear, setPendingRegYear] = useState<string>(String(new Date().getFullYear()));
+  const [pendingRegExpiresOn, setPendingRegExpiresOn] = useState<string>('');
+  const [pendingRegError, setPendingRegError] = useState<string | null>(null);
 
   const selectedSupplier = useMemo(
     () => suppliers.find((s) => s.id === supplierId) || null,
@@ -151,8 +159,17 @@ export default function LobsterIntakePage() {
   const currentYear = new Date().getFullYear();
   const regYear     = selectedSupplier?.vessel_registration_year ?? null;
   const regOnFile   = !!selectedSupplier?.vessel_registration_doc_url;
-  const regCurrent  = regOnFile && regYear === currentYear;
-  const regExpired  = regOnFile && regYear !== null && regYear < currentYear;
+  // Authoritative "is current" check: when an expiration date is stored
+  // (Bahamian boat licenses have explicit annual expiry that may not
+  // align with the calendar year), trust it; otherwise fall back to
+  // the cheaper year-match heuristic.
+  const regExpiresOn = selectedSupplier?.vessel_registration_expires_on ?? null;
+  const regExpired   = (() => {
+    if (!regOnFile) return false;
+    if (regExpiresOn) return Date.parse(regExpiresOn) < Date.now();
+    return regYear !== null && regYear < currentYear;
+  })();
+  const regCurrent   = regOnFile && !regExpired;
 
   // Update sourceType automatically when productType changes
   useEffect(() => {
@@ -193,28 +210,65 @@ export default function LobsterIntakePage() {
     if (fishermanUserId && list[0]) setSupplierId(list[0].id);
   }
 
-  async function uploadYearlyRegistration(file: File) {
+  // Step 1: a file is picked. Stage it; the operator confirms year +
+  // expiration before we touch Storage. Cleared on cancel or successful
+  // upload.
+  function stageRegistrationFile(file: File) {
     if (!selectedSupplier) { alert('Pick a supplier first.'); return; }
+    setPendingRegFile(file);
+    setPendingRegError(null);
+    // Seed defaults from the supplier record where useful.
+    setPendingRegYear(String(selectedSupplier.vessel_registration_year ?? new Date().getFullYear()));
+    setPendingRegExpiresOn(selectedSupplier.vessel_registration_expires_on ?? '');
+  }
+
+  function cancelPendingRegistration() {
+    setPendingRegFile(null);
+    setPendingRegError(null);
+  }
+
+  // Step 2: confirm upload + persist year/expiration alongside the file.
+  async function confirmRegistrationUpload() {
+    if (!selectedSupplier || !pendingRegFile) return;
+    const yearNum = Number(pendingRegYear);
+    if (!Number.isInteger(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      setPendingRegError('Year must be a four-digit number.');
+      return;
+    }
+    if (!pendingRegExpiresOn) {
+      setPendingRegError('Expiration date is required — boat licences have an explicit expiry.');
+      return;
+    }
+    if (Date.parse(pendingRegExpiresOn) < Date.now() - 24 * 60 * 60 * 1000) {
+      setPendingRegError('Expiration is in the past. Either upload the renewal or correct the date.');
+      return;
+    }
     setRegUploading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const ext  = file.name.split('.').pop() ?? 'jpg';
-    const path = `suppliers/${selectedSupplier.id}/registration-${currentYear}-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage.from('vendor-listings').upload(path, file, { contentType: file.type, upsert: true });
-    if (upErr) { alert(`Upload failed: ${upErr.message}`); setRegUploading(false); return; }
-    const { data: pub } = supabase.storage.from('vendor-listings').getPublicUrl(path);
-    const { error: updErr } = await supabase.from('suppliers').update({
-      vessel_registration_doc_url:     pub.publicUrl,
-      vessel_registration_year:        currentYear,
-      vessel_registration_uploaded_at: new Date().toISOString(),
-      vessel_registration_uploaded_by: user?.id ?? null,
-      // also fold in any edits the operator made to vessel info while here
-      vessel_captain_name:        captainName.trim() || selectedSupplier.vessel_captain_name,
-      vessel_name:                vesselName.trim()  || selectedSupplier.vessel_name,
-      vessel_registration_number: vesselReg.trim()   || selectedSupplier.vessel_registration_number,
-    }).eq('id', selectedSupplier.id);
-    setRegUploading(false);
-    if (updErr) { alert(`Save failed: ${plainError(updErr)}`); return; }
-    await loadSuppliers(fishermanUid);
+    setPendingRegError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const ext  = pendingRegFile.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `suppliers/${selectedSupplier.id}/registration-${yearNum}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('vendor-listings').upload(path, pendingRegFile, { contentType: pendingRegFile.type, upsert: true });
+      if (upErr) { setPendingRegError(`Upload failed: ${upErr.message}`); return; }
+      const { data: pub } = supabase.storage.from('vendor-listings').getPublicUrl(path);
+      const { error: updErr } = await supabase.from('suppliers').update({
+        vessel_registration_doc_url:     pub.publicUrl,
+        vessel_registration_year:        yearNum,
+        vessel_registration_expires_on:  pendingRegExpiresOn,
+        vessel_registration_uploaded_at: new Date().toISOString(),
+        vessel_registration_uploaded_by: user?.id ?? null,
+        // also fold in any edits the operator made to vessel info while here
+        vessel_captain_name:        captainName.trim() || selectedSupplier.vessel_captain_name,
+        vessel_name:                vesselName.trim()  || selectedSupplier.vessel_name,
+        vessel_registration_number: vesselReg.trim()   || selectedSupplier.vessel_registration_number,
+      }).eq('id', selectedSupplier.id);
+      if (updErr) { setPendingRegError(`Save failed: ${plainError(updErr)}`); return; }
+      setPendingRegFile(null);
+      await loadSuppliers(fishermanUid);
+    } finally {
+      setRegUploading(false);
+    }
   }
 
   async function saveVesselToSupplier() {
@@ -463,8 +517,15 @@ export default function LobsterIntakePage() {
                   📜 Yearly boat registration · {selectedSupplier.name}
                 </div>
                 <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 4 }}>
-                  {regCurrent && <>✓ {currentYear} registration on file · uploaded {selectedSupplier.vessel_registration_uploaded_at ? new Date(selectedSupplier.vessel_registration_uploaded_at).toLocaleDateString() : '—'}</>}
-                  {regExpired && <>⚠ Latest doc is for {regYear}. Upload {currentYear} renewal.</>}
+                  {regCurrent && (
+                    <>
+                      ✓ Registration on file{regExpiresOn ? <> · expires {new Date(regExpiresOn).toLocaleDateString()}</> : null}
+                      {selectedSupplier.vessel_registration_uploaded_at ? <> · uploaded {new Date(selectedSupplier.vessel_registration_uploaded_at).toLocaleDateString()}</> : null}
+                    </>
+                  )}
+                  {regExpired && (
+                    <>⚠ Latest doc {regExpiresOn ? <>expired {new Date(regExpiresOn).toLocaleDateString()}</> : <>is for {regYear}</>}. Upload {currentYear} renewal.</>
+                  )}
                   {!regOnFile && <>⚠ No boat registration on file. Upload the {currentYear} government renewal.</>}
                 </div>
               </div>
@@ -484,10 +545,49 @@ export default function LobsterIntakePage() {
                 }}>
                   {regUploading ? '⏳ Uploading…' : regCurrent ? `🔁 Replace ${currentYear}` : `📤 Upload ${currentYear} renewal`}
                   <input type="file" accept="image/*,application/pdf" disabled={regUploading} style={{ display: 'none' }}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadYearlyRegistration(f); e.currentTarget.value = ''; }} />
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) stageRegistrationFile(f); e.currentTarget.value = ''; }} />
                 </label>
               </div>
             </div>
+            {/* Two-step confirmation: once a file is picked we collect the
+                year + expiration date before pushing to Storage. Required
+                so the badge above can drive on the real licence expiry
+                rather than a "current calendar year" heuristic. */}
+            {pendingRegFile && (
+              <div style={{ background: '#0a1628', border: '1px solid #f5c518', borderRadius: 8, padding: 10, marginTop: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#f5c518', marginBottom: 8 }}>
+                  Confirm registration: <span style={{ fontWeight: 400 }}>{pendingRegFile.name}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <Field label="Issue year">
+                    <input type="number" inputMode="numeric" min={2000} max={2100}
+                      value={pendingRegYear}
+                      onChange={(e) => setPendingRegYear(e.target.value)}
+                      style={inputStyle} />
+                  </Field>
+                  <Field label="Expires on">
+                    <input type="date" value={pendingRegExpiresOn}
+                      onChange={(e) => setPendingRegExpiresOn(e.target.value)}
+                      style={inputStyle} />
+                  </Field>
+                </div>
+                {pendingRegError && (
+                  <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '6px 8px', color: '#f87171', fontSize: 11, marginBottom: 8 }}>
+                    ⚠️ {pendingRegError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={cancelPendingRegistration} disabled={regUploading}
+                    style={{ background: 'transparent', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: regUploading ? 'not-allowed' : 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button type="button" onClick={confirmRegistrationUpload} disabled={regUploading}
+                    style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 11, fontWeight: 800, cursor: regUploading ? 'not-allowed' : 'pointer' }}>
+                    {regUploading ? '⏳ Uploading…' : 'Save registration'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
