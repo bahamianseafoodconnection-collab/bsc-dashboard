@@ -10,6 +10,14 @@ export default function StaffLoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Self-recovery for the "stuck open shift" failure mode: cashier
+  // browser logs out mid-shift (network blip, tab closed), the
+  // cash_drawer_sessions row stays status='open', and the next sign-in
+  // shows the cashier as still in a shift they can't access.
+  // The button here closes any open shift attached to the typed email
+  // BEFORE attempting fresh sign-in, so they don't need SQL or an admin.
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryMsg, setRecoveryMsg] = useState<string | null>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -79,6 +87,55 @@ export default function StaffLoginPage() {
     } catch {
       setError('Something went wrong. Please try again.');
       setLoading(false);
+    }
+  }
+
+  // Stuck open shift? Sign in (so we have a bearer token), call the
+  // self-close API for THIS user, sign back out so the cashier can
+  // log in cleanly with a fresh state. Requires email + password to
+  // prove identity — never closes a shift without auth.
+  async function recoverStuckShift() {
+    setRecoveryMsg(null);
+    if (!email.trim() || !password) {
+      setRecoveryMsg('Enter your email + password first.');
+      return;
+    }
+    setRecovering(true);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+      if (signInError) {
+        setRecoveryMsg('Invalid email or password — same credentials you use to sign in.');
+        setRecovering(false);
+        return;
+      }
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        setRecoveryMsg('Sign-in succeeded but no token — try again.');
+        setRecovering(false);
+        return;
+      }
+      const res = await fetch('/api/cashiers/force-close-mine', {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      // Sign out so the next attempt is fresh — no half-mounted session.
+      await supabase.auth.signOut();
+      clearSignIn();
+      if (!res.ok || !json.ok) {
+        setRecoveryMsg(`Recovery failed: ${json.error || `HTTP ${res.status}`}`);
+      } else {
+        setRecoveryMsg(json.message || 'Stuck shift cleared. Sign in below now.');
+      }
+    } catch {
+      setRecoveryMsg('Recovery failed — network error. Try again or call Dedrick.');
+    } finally {
+      setRecovering(false);
     }
   }
 
@@ -161,11 +218,29 @@ export default function StaffLoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  style={{ width: '100%', backgroundColor: loading ? '#4b5563' : '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: 900, fontSize: '15px', cursor: loading ? 'not-allowed' : 'pointer', marginBottom: '16px' }}
+                  style={{ width: '100%', backgroundColor: loading ? '#4b5563' : '#f4c842', color: '#1a2e5a', border: 'none', borderRadius: '12px', padding: '14px', fontWeight: 900, fontSize: '15px', cursor: loading ? 'not-allowed' : 'pointer', marginBottom: '10px' }}
                 >
                   {loading ? 'Signing in...' : 'Sign In to BSC Control'}
                 </button>
               </form>
+
+              {/* Self-recovery — if a cashier's previous shift got stuck
+                  open (browser crash, network blip), they can close it
+                  themselves with their own credentials. No SQL, no admin
+                  call. Writes self_force_close to admin_notes for audit. */}
+              <button
+                type="button"
+                onClick={recoverStuckShift}
+                disabled={recovering || loading}
+                style={{ width: '100%', backgroundColor: 'transparent', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '10px', fontWeight: 700, fontSize: '12px', cursor: (recovering || loading) ? 'not-allowed' : 'pointer', marginBottom: '14px' }}
+              >
+                {recovering ? 'Clearing stuck shift…' : '🔧 Stuck open shift? Close it now'}
+              </button>
+              {recoveryMsg && (
+                <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', backgroundColor: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', color: '#86efac', fontSize: '12px', fontWeight: 600 }}>
+                  {recoveryMsg}
+                </div>
+              )}
 
               <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '14px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
