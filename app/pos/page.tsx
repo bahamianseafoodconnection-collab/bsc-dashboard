@@ -921,7 +921,10 @@ export default function POSPage() {
 
       // Surface the result so Claff/TJ see it for ~10 seconds.
       setLastReceipt({ channel: deliveredChannel, to: receiptTo, orderId, error: receiptError })
-      setTimeout(() => setLastReceipt(null), 10000)
+      // Keep the toast up longer when there's an error so the cashier
+      // (and Dedrick) can actually read the failure reason. Success
+      // toasts can disappear in 10s as before.
+      setTimeout(() => setLastReceipt(null), receiptError ? 30000 : 10000)
 
       // Persist the last-card-sale hint so the next ring can spot a typo
       // duplicate before submit. Only set when this sale was a card —

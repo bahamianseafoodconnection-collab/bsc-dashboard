@@ -239,20 +239,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, channel: 'print', note: 'Cashier chose print.' });
   }
 
-  // Helper closures so each branch can fall through cleanly. Phone is
-  // passed in as a guaranteed non-null string so TypeScript can narrow
-  // through the call site (closures don't preserve outer if-narrowing).
+  // Collect the SPECIFIC error from each attempted channel so the
+  // cashier (and the server logs) see the real failure reason instead
+  // of a generic "all failed" message. Each helper returns either a
+  // successful NextResponse or null + writes to `attemptErrors`.
+  const attemptErrors: string[] = [];
+
   const sendWhatsAppFirst = async (toPhone: string) => {
     const r = await sendWhatsAppOrSMS({ to: toPhone, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
     if (r.ok) {
       const actual = (r as { channel?: string }).channel === 'sms' ? 'sms' : 'whatsapp';
       return NextResponse.json({ ok: true, channel: actual, id: r.sid, to: toPhone });
     }
+    attemptErrors.push(`WhatsApp+SMS to ${toPhone}: ${r.error ?? 'unknown'}`);
     return null;
   };
   const sendSmsOnly = async (toPhone: string) => {
     const r = await sendSMS({ to: toPhone, body: renderSmsText({ customerName, channelLabel, items, subtotal, vat, total, orderId, paymentMethod, cardRef }) });
     if (r.ok) return NextResponse.json({ ok: true, channel: 'sms', id: r.sid, to: toPhone });
+    attemptErrors.push(`SMS to ${toPhone}: ${r.error ?? 'unknown'}`);
     return null;
   };
   const sendEmailOnly = async () => {
@@ -260,19 +265,31 @@ export async function POST(req: NextRequest) {
     const subject = `BSC receipt · ${channelLabel} · ${dollars(total)} · ${new Date().toLocaleDateString()}`;
     const r = await sendEmail({ to: validEmail, subject, html });
     if (!r.error) return NextResponse.json({ ok: true, channel: 'email', id: r.id, to: validEmail });
+    attemptErrors.push(`Email to ${validEmail}: ${r.error}`);
     return null;
   };
+
+  // Bail-early: cashier picked a channel that needs contact info we
+  // don't have. Return print without trying anything (it's not a
+  // failure — it's a missing-data condition; the cashier can re-enter
+  // customer details or just print).
+  if ((preferChannel === 'whatsapp' || preferChannel === 'sms') && !e164) {
+    return NextResponse.json({ ok: true, channel: 'print', note: 'No phone on file — opening print receipt.' });
+  }
+  if (preferChannel === 'email' && !validEmail) {
+    return NextResponse.json({ ok: true, channel: 'print', note: 'No email on file — opening print receipt.' });
+  }
 
   // ── Preferred-channel routing ──
   if (preferChannel === 'whatsapp' && e164) {
     const w = await sendWhatsAppFirst(e164);
     if (w) return w;
-    // WhatsApp+SMS both failed; try email if we have one.
     if (validEmail) {
       const m = await sendEmailOnly();
       if (m) return m;
     }
-    return NextResponse.json({ ok: false, channel: 'print', error: 'WhatsApp / SMS / email all failed.' }, { status: 502 });
+    console.warn('[pos/receipt] all channels failed:', attemptErrors);
+    return NextResponse.json({ ok: false, channel: 'print', error: attemptErrors.join(' | ') }, { status: 502 });
   }
 
   if (preferChannel === 'sms' && e164) {
@@ -282,7 +299,8 @@ export async function POST(req: NextRequest) {
       const m = await sendEmailOnly();
       if (m) return m;
     }
-    return NextResponse.json({ ok: false, channel: 'print', error: 'SMS / email both failed.' }, { status: 502 });
+    console.warn('[pos/receipt] all channels failed:', attemptErrors);
+    return NextResponse.json({ ok: false, channel: 'print', error: attemptErrors.join(' | ') }, { status: 502 });
   }
 
   if (preferChannel === 'email' && validEmail) {
@@ -292,7 +310,8 @@ export async function POST(req: NextRequest) {
       const w = await sendWhatsAppFirst(e164);
       if (w) return w;
     }
-    return NextResponse.json({ ok: false, channel: 'print', error: 'Email / WhatsApp / SMS all failed.' }, { status: 502 });
+    console.warn('[pos/receipt] all channels failed:', attemptErrors);
+    return NextResponse.json({ ok: false, channel: 'print', error: attemptErrors.join(' | ') }, { status: 502 });
   }
 
   // ── Auto fallback (legacy default): email > sms > print ──
@@ -303,12 +322,14 @@ export async function POST(req: NextRequest) {
       const s = await sendSmsOnly(e164);
       if (s) return s;
     }
-    return NextResponse.json({ ok: false, channel: 'print', error: 'Email and SMS both failed.' }, { status: 502 });
+    console.warn('[pos/receipt] all channels failed:', attemptErrors);
+    return NextResponse.json({ ok: false, channel: 'print', error: attemptErrors.join(' | ') }, { status: 502 });
   }
   if (e164) {
     const s = await sendSmsOnly(e164);
     if (s) return s;
-    return NextResponse.json({ ok: false, channel: 'print', error: 'SMS failed.' }, { status: 502 });
+    console.warn('[pos/receipt] all channels failed:', attemptErrors);
+    return NextResponse.json({ ok: false, channel: 'print', error: attemptErrors.join(' | ') }, { status: 502 });
   }
 
   // No contact on file → print receipt.
