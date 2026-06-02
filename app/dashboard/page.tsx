@@ -273,6 +273,18 @@ export default function DashboardPage() {
   }>>([]);
   const [supplierTodayProducts, setSupplierTodayProducts] = useState<Record<string, string[]>>({});
   const [supplierReorder, setSupplierReorder] = useState<Record<string, Array<{ name: string; stock: number; uom: string | null }>>>({});
+  // Per-supplier · per-product detail for today (from supplier_products_today view).
+  // Drives the "buy back what sold" panel with real numbers per row.
+  const [supplierProductsToday, setSupplierProductsToday] = useState<Record<string, Array<{
+    product_name:        string;
+    sku:                 string | null;
+    units_sold_today:    number;
+    current_stock:       number;
+    cost_per_unit:       number | null;
+    cogs_owed_today:     number;
+    unit_of_measure:     string | null;
+    suggested_reorder:   number;
+  }>>>({});
   const [recentBatches, setRecentBatches] = useState<{
     species: string | null;
     yield_pct: number | null;
@@ -584,7 +596,7 @@ export default function DashboardPage() {
       // returns YYYY-MM-DD in the local zone. Simpler than tz math.
       const todayStr = nowBs.toLocaleDateString('en-CA', { timeZone: 'America/Nassau' });
 
-      const [sumRes, perSaleRes, reorderRes] = await Promise.all([
+      const [sumRes, perSaleRes, reorderRes, productsTodayRes] = await Promise.all([
         supabase
           .from('supplier_payables_summary')
           .select('supplier_id, supplier_name, cogs_owed_today_bsd, cogs_owed_7d_bsd')
@@ -599,6 +611,10 @@ export default function DashboardPage() {
           .select('supplier_id, product_name, stock_on_hand, unit_of_measure, stock_status')
           .in('stock_status', ['out', 'low'])
           .order('stock_on_hand', { ascending: true }),
+        supabase
+          .from('supplier_products_today')
+          .select('supplier_id, product_name, sku, units_sold_today, current_stock, cost_per_unit, cogs_owed_today, unit_of_measure, suggested_reorder_qty')
+          .order('units_sold_today', { ascending: false }),
       ]);
 
       const summary = (sumRes.data ?? []) as Array<{ supplier_id: string | null; supplier_name: string; cogs_owed_today_bsd: number; cogs_owed_7d_bsd: number }>;
@@ -623,6 +639,34 @@ export default function DashboardPage() {
         if (reorderMap[key].length < 4) reorderMap[key].push({ name: row.product_name, stock: row.stock_on_hand, uom: row.unit_of_measure });
       });
       setSupplierReorder(reorderMap);
+
+      // Per-supplier per-product detail for today — drives the
+      // "buy back what sold" panel with real numbers row by row.
+      const productsTodayMap: Record<string, Array<{
+        product_name: string; sku: string | null; units_sold_today: number;
+        current_stock: number; cost_per_unit: number | null; cogs_owed_today: number;
+        unit_of_measure: string | null; suggested_reorder: number;
+      }>> = {};
+      ((productsTodayRes.data ?? []) as Array<{
+        supplier_id: string | null; product_name: string; sku: string | null;
+        units_sold_today: number; current_stock: number;
+        cost_per_unit: number | null; cogs_owed_today: number;
+        unit_of_measure: string | null; suggested_reorder_qty: number;
+      }>).forEach((row) => {
+        const key = row.supplier_id || 'none';
+        if (!productsTodayMap[key]) productsTodayMap[key] = [];
+        productsTodayMap[key].push({
+          product_name:       row.product_name,
+          sku:                row.sku,
+          units_sold_today:   Number(row.units_sold_today),
+          current_stock:      Number(row.current_stock),
+          cost_per_unit:      row.cost_per_unit !== null ? Number(row.cost_per_unit) : null,
+          cogs_owed_today:    Number(row.cogs_owed_today),
+          unit_of_measure:    row.unit_of_measure,
+          suggested_reorder:  Number(row.suggested_reorder_qty),
+        });
+      });
+      setSupplierProductsToday(productsTodayMap);
     } catch (err) {
       console.warn('Live supplier activity load failed:', err);
     }
@@ -989,38 +1033,60 @@ export default function DashboardPage() {
                       </table>
                     </div>
 
-                    {/* RIGHT — per-supplier "buy these back" columns */}
+                    {/* RIGHT — per-supplier "buy back what sold" cards
+                        with REAL product rows (units sold today, current
+                        stock, cost, COGS owed, suggested reorder qty). */}
                     <div>
-                      <div style={{ fontSize: 10, color: '#92400e', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800, marginBottom: 8 }}>🛒 Buy these back</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                      <div style={{ fontSize: 10, color: '#92400e', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800, marginBottom: 8 }}>
+                        🛒 Buy back what sold today
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
                         {supplierTodayRollup
-                          .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0 || Number(r.cogs_owed_7d_bsd || 0) > 0)
+                          .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0)
                           .map((r) => {
                             const key = r.supplier_id || 'none';
-                            const buy = supplierReorder[key] ?? [];
-                            const sold = supplierTodayProducts[key] ?? [];
+                            const rows = supplierProductsToday[key] ?? [];
+                            const totalOwed = rows.reduce((s, x) => s + Number(x.cogs_owed_today || 0), 0);
                             return (
-                              <div key={key} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 10 }}>
-                                <div style={{ fontWeight: 800, fontSize: 12, color: '#1a2e5a', textTransform: 'uppercase', letterSpacing: 0.5, paddingBottom: 6, borderBottom: '1px solid #fde68a', marginBottom: 6 }}>
-                                  {r.supplier_name}
+                              <div key={key} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 12 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 8, borderBottom: '1px solid #fde68a', marginBottom: 8 }}>
+                                  <div style={{ fontWeight: 800, fontSize: 12, color: '#1a2e5a', textTransform: 'uppercase', letterSpacing: 0.5 }}>{r.supplier_name}</div>
+                                  <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: 13, color: '#dc2626' }}>{fmtBSD(totalOwed)}</div>
                                 </div>
-                                {buy.length === 0 && (
-                                  <div style={{ fontSize: 10, color: '#a8a29e', fontStyle: 'italic' }}>stock ok — nothing flagged</div>
-                                )}
-                                {buy.length > 0 && (
-                                  <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
-                                    {buy.map((b) => (
-                                      <li key={b.name}>
-                                        <span style={{ fontWeight: 700 }}>{b.name}</span>
-                                        <span style={{ color: '#b45309', fontSize: 10 }}> · {Number(b.stock).toFixed(b.uom === 'lb' ? 1 : 0)}{b.uom ? ` ${b.uom}` : ''} left</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )}
-                                {sold.length > 0 && (
-                                  <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #fde68a', fontSize: 10, color: '#64748b' }}>
-                                    <span style={{ fontWeight: 700, color: '#475569' }}>Sold today:</span> {sold.slice(0, 2).join(' · ')}{sold.length > 2 ? ` +${sold.length - 2}` : ''}
-                                  </div>
+                                {rows.length === 0 && <div style={{ fontSize: 10, color: '#a8a29e', fontStyle: 'italic' }}>No products credited yet.</div>}
+                                {rows.length > 0 && (
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                                    <thead>
+                                      <tr style={{ color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                        <th style={{ textAlign: 'left',  padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Product</th>
+                                        <th style={{ textAlign: 'right', padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Sold</th>
+                                        <th style={{ textAlign: 'right', padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Stock</th>
+                                        <th style={{ textAlign: 'right', padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Owed</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {rows.map((p) => (
+                                        <tr key={p.product_name} style={{ borderTop: '1px solid rgba(253,230,138,0.5)' }}>
+                                          <td style={{ padding: '5px 4px', color: '#1a2e5a', fontWeight: 600 }}>
+                                            <div>{p.product_name}</div>
+                                            <div style={{ fontSize: 9, color: '#94a3b8' }}>
+                                              reorder <strong style={{ color: '#92400e' }}>{Number(p.suggested_reorder).toFixed(p.unit_of_measure === 'lb' ? 1 : 0)}{p.unit_of_measure ? ` ${p.unit_of_measure}` : ''}</strong>
+                                              {p.cost_per_unit != null && <span style={{ color: '#94a3b8' }}> @ ${p.cost_per_unit.toFixed(2)}</span>}
+                                            </div>
+                                          </td>
+                                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: '#1a2e5a', fontWeight: 700 }}>
+                                            {Number(p.units_sold_today).toFixed(p.unit_of_measure === 'lb' ? 1 : 0)}
+                                          </td>
+                                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: p.current_stock <= 0 ? '#dc2626' : p.current_stock <= 10 ? '#ea580c' : '#64748b' }}>
+                                            {Number(p.current_stock).toFixed(p.unit_of_measure === 'lb' ? 1 : 0)}
+                                          </td>
+                                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626', fontWeight: 700 }}>
+                                            ${Number(p.cogs_owed_today).toFixed(2)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
                                 )}
                               </div>
                             );
