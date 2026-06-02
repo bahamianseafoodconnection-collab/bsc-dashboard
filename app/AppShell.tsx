@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { PageErrorBoundary } from './ErrorBoundary';
 import { t, type Lang } from '@/lib/i18n';
-import { isStaffSessionExpired, staffSessionBypassesFor, clearSignIn } from '@/lib/staff-session';
+import { clearSignIn } from '@/lib/staff-session';
 
 const STAFF_ROLES = new Set([
   'founder','co_founder','cashier','manager','basic_admin','control_admin','andros_staff','supplier','receiver'
@@ -155,21 +155,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Staff session cap. Founder + co_founder + cashier + andros_staff
-        // bypass entirely (no auto-signout — Dedrick's directive 2026-06-02
-        // "keep them signed in until they sign out"). For bypassed roles,
-        // also wipe any leftover localStorage timestamp so the cap can
-        // never accidentally fire against them later. Other roles still
-        // get a force-signout when their signin timestamp is past the cap.
-        if (staffSessionBypassesFor(role)) {
-          clearSignIn();
-        } else if (isStaffSessionExpired()) {
-          clearSignIn();
-          await supabase.auth.signOut();
-          const nextParam = pathname && pathname !== '/staff-login' ? `?next=${encodeURIComponent(pathname)}` : '';
-          router.replace(`/staff-login${nextParam}`);
-          return;
-        }
+        // No client-side session cap. Founder directive 2026-06-02 after
+        // repeated cashier signouts mid-shift: AppShell never signs anyone
+        // out automatically — Supabase auth refresh tokens own session
+        // lifecycle, the user owns the explicit Sign Out tap, that's it.
+        // We still wipe the legacy localStorage key on every guard pass so
+        // any stale timestamp from older code can never resurface as a cap.
+        clearSignIn();
 
         if (!STAFF_ROLES.has(role)) {
           const blocked =
@@ -185,26 +177,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     resolveRoleAndGuard();
   }, [pathname]);
 
-  // Periodic 60s check — enforces the 10h staff session cap even when
-  // the user stays on a single page (the pathname-change useEffect
-  // above only runs on navigation). Founder + co_founder bypass.
-  // No-ops cleanly when role is still loading, unauthenticated, or
-  // when there's no recorded signin (customer login flow / pre-deploy
-  // sessions). See lib/staff-session.ts for the cap logic.
-  useEffect(() => {
-    if (roleState === 'loading' || roleState === 'unauthenticated') return;
-    if (staffSessionBypassesFor(roleState)) return;
-    const tick = async () => {
-      if (isStaffSessionExpired()) {
-        clearSignIn();
-        await supabase.auth.signOut();
-        const nextParam = pathname && pathname !== '/staff-login' ? `?next=${encodeURIComponent(pathname)}` : '';
-        router.replace(`/staff-login${nextParam}`);
-      }
-    };
-    const t = setInterval(tick, 60_000);
-    return () => clearInterval(t);
-  }, [roleState, pathname, router]);
+  // (Removed 2026-06-02) The 60s periodic auto-signout tick is gone.
+  // Every staff signout from now on is either a manual Sign Out tap or
+  // Supabase's own refresh-token failure. No timer in this client can
+  // ever knock a cashier off their register mid-shift again.
 
   const hideNav =
     pathname === '/' ||
