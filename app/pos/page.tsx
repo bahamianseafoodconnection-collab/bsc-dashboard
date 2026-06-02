@@ -929,6 +929,10 @@ export default function POSPage() {
       let deliveredChannel: 'email' | 'sms' | 'whatsapp' | 'print' = 'print'
       let receiptTo: string | undefined
       let receiptError: string | undefined
+      // Hoisted so the setLastReceipt({...waUrl}) call at the end of
+      // the handler can reach it (the WhatsApp click-to-chat URL is
+      // assigned inside the inner try block below).
+      let pendingWaUrl: string | undefined
       if (orderId) {
         try {
           // ── WhatsApp click-to-chat (Tier 1) ──
@@ -940,7 +944,6 @@ export default function POSPage() {
           // chain (order insert + customer save + inventory write)
           // and the browser's popup blocker treats the call as
           // non-user-initiated, silently dropping the new tab.
-          let pendingWaUrl: string | undefined
           if (receiptChannel === 'whatsapp' && phoneClean) {
             const text = buildWhatsAppReceiptText({
               customerName: nameClean,
