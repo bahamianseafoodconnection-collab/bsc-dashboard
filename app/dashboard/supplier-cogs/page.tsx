@@ -143,13 +143,14 @@ export default function SupplierCogsPage() {
     (async () => {
       setLoading(true); setError(null);
       try {
-        const [sumRes, reoRes] = await Promise.all([
-          supabase.from('supplier_payables_summary').select('*'),
-          supabase.from('supplier_reorder_list').select('*'),
-        ]);
+        // Sequential rather than Promise.all so we know WHICH view
+        // failed when one does. Previous "Load failed" string hid
+        // the real cause (RLS, missing grant, column rename, etc.).
+        const sumRes = await supabase.from('supplier_payables_summary').select('*');
+        if (sumRes.error) throw new Error(`supplier_payables_summary: ${sumRes.error.message}`);
+        const reoRes = await supabase.from('supplier_reorder_list').select('*');
+        if (reoRes.error) throw new Error(`supplier_reorder_list: ${reoRes.error.message}`);
         if (cancelled) return;
-        if (sumRes.error) throw sumRes.error;
-        if (reoRes.error) throw reoRes.error;
         setSummary((sumRes.data ?? []) as SummaryRow[]);
         setReorder((reoRes.data ?? []) as ReorderRow[]);
       } catch (e) {

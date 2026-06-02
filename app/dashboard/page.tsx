@@ -597,26 +597,31 @@ export default function DashboardPage() {
       // returns YYYY-MM-DD in the local zone. Simpler than tz math.
       const todayStr = nowBs.toLocaleDateString('en-CA', { timeZone: 'America/Nassau' });
 
-      const [sumRes, perSaleRes, reorderRes, productsTodayRes] = await Promise.all([
-        supabase
-          .from('supplier_payables_summary')
-          .select('supplier_id, supplier_name, cogs_owed_today_bsd, cogs_owed_7d_bsd')
-          .order('cogs_owed_today_bsd', { ascending: false, nullsFirst: false })
-          .limit(20),
-        supabase
-          .from('supplier_cogs_per_sale')
-          .select('supplier_id, product_names')
-          .eq('sale_date', todayStr),
-        supabase
-          .from('supplier_reorder_list')
-          .select('supplier_id, product_name, stock_on_hand, unit_of_measure, stock_status')
-          .in('stock_status', ['out', 'low'])
-          .order('stock_on_hand', { ascending: true }),
-        supabase
-          .from('supplier_products_today')
-          .select('supplier_id, product_name, sku, units_sold_today, current_stock, cost_per_unit, cogs_owed_today, unit_of_measure, suggested_reorder_qty')
-          .order('units_sold_today', { ascending: false }),
-      ]);
+      // Sequential rather than Promise.all so any error names the
+      // specific view that failed in the console (helps debug RLS /
+      // grant / column-rename issues without devtools).
+      const sumRes = await supabase
+        .from('supplier_payables_summary')
+        .select('supplier_id, supplier_name, cogs_owed_today_bsd, cogs_owed_7d_bsd')
+        .order('cogs_owed_today_bsd', { ascending: false, nullsFirst: false })
+        .limit(20);
+      if (sumRes.error) { console.warn('[supplier_payables_summary]', sumRes.error.message); }
+      const perSaleRes = await supabase
+        .from('supplier_cogs_per_sale')
+        .select('supplier_id, product_names')
+        .eq('sale_date', todayStr);
+      if (perSaleRes.error) { console.warn('[supplier_cogs_per_sale]', perSaleRes.error.message); }
+      const reorderRes = await supabase
+        .from('supplier_reorder_list')
+        .select('supplier_id, product_name, stock_on_hand, unit_of_measure, stock_status')
+        .in('stock_status', ['out', 'low'])
+        .order('stock_on_hand', { ascending: true });
+      if (reorderRes.error) { console.warn('[supplier_reorder_list]', reorderRes.error.message); }
+      const productsTodayRes = await supabase
+        .from('supplier_products_today')
+        .select('supplier_id, product_name, sku, units_sold_today, current_stock, cost_per_unit, cogs_owed_today, unit_of_measure, suggested_reorder_qty')
+        .order('units_sold_today', { ascending: false });
+      if (productsTodayRes.error) { console.warn('[supplier_products_today]', productsTodayRes.error.message); }
 
       const summary = (sumRes.data ?? []) as Array<{ supplier_id: string | null; supplier_name: string; cogs_owed_today_bsd: number; cogs_owed_7d_bsd: number }>;
       setSupplierTodayRollup(summary);
