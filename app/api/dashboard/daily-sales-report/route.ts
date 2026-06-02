@@ -147,39 +147,104 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const rows = flat.map((r) => {
-    const supId = r.product_id ? (productMap.get(r.product_id) ?? null) : null;
-    const cost  = r.product_id ? (costMap.get(r.product_id) ?? null)    : null;
-    return {
-      time:         r.time,
-      order_id:     r.order_id,
-      product_name: r.name,
-      sku:          r.sku,
-      qty:          Number(r.qty.toFixed(2)),
-      unit:         r.unit,
-      supplier_id:  supId,
-      supplier_name: supId ? (supplierNameMap.get(supId) ?? '— unknown —') : '— No supplier on file —',
-      cost_per_unit: cost,
-      total_cost:    cost != null ? Number((cost * r.qty).toFixed(2)) : 0,
-      revenue:       Number(r.revenue.toFixed(2)),
-    };
-  });
+  // Aggregate per (supplier, product). One row per unique product
+  // within each supplier — qty summed, totals summed.
+  type ProductAgg = {
+    product_id:    string | null;
+    product_name:  string;
+    sku:           string;
+    qty:           number;
+    unit:          string;
+    cost_per_unit: number | null;
+    total_cost:    number;
+    revenue:       number;
+  };
+  type SupplierAgg = {
+    supplier_id:   string | null;
+    supplier_name: string;
+    total_cost:    number;
+    total_revenue: number;
+    product_count: number;
+    products:      ProductAgg[];
+  };
 
-  const totals = rows.reduce((acc, r) => ({
-    revenue:    acc.revenue    + r.revenue,
-    cogs:       acc.cogs       + (r.total_cost || 0),
-    line_count: acc.line_count + 1,
-  }), { revenue: 0, cogs: 0, line_count: 0 });
+  const supMap = new Map<string, SupplierAgg>();
+  const orderIds = new Set<string>();
+
+  for (const r of flat) {
+    orderIds.add(r.order_id);
+    const supId = r.product_id ? (productMap.get(r.product_id) ?? null) : null;
+    const supKey = supId ?? '__none__';
+    const cost   = r.product_id ? (costMap.get(r.product_id) ?? null) : null;
+    const lineCost = cost != null ? cost * r.qty : 0;
+
+    if (!supMap.has(supKey)) {
+      supMap.set(supKey, {
+        supplier_id:   supId,
+        supplier_name: supId ? (supplierNameMap.get(supId) ?? '— unknown —') : '— No supplier on file —',
+        total_cost:    0,
+        total_revenue: 0,
+        product_count: 0,
+        products:      [],
+      });
+    }
+    const sup = supMap.get(supKey)!;
+
+    // Find or create the product row within this supplier
+    const prodKey = r.product_id ?? `name:${r.name}`;
+    let prod = sup.products.find((p) => (p.product_id ?? `name:${p.product_name}`) === prodKey);
+    if (!prod) {
+      prod = {
+        product_id:    r.product_id,
+        product_name:  r.name,
+        sku:           r.sku,
+        qty:           0,
+        unit:          r.unit,
+        cost_per_unit: cost,
+        total_cost:    0,
+        revenue:       0,
+      };
+      sup.products.push(prod);
+    }
+    prod.qty        += r.qty;
+    prod.total_cost += lineCost;
+    prod.revenue    += r.revenue;
+    sup.total_cost    += lineCost;
+    sup.total_revenue += r.revenue;
+  }
+
+  // Sort suppliers by total_cost desc; products within each by total_cost desc.
+  // Round all numeric outputs to 2dp.
+  const suppliers: SupplierAgg[] = Array.from(supMap.values())
+    .map((s) => ({
+      ...s,
+      total_cost:    Number(s.total_cost.toFixed(2)),
+      total_revenue: Number(s.total_revenue.toFixed(2)),
+      product_count: s.products.length,
+      products: s.products
+        .map((p) => ({
+          ...p,
+          qty:        Number(p.qty.toFixed(2)),
+          total_cost: Number(p.total_cost.toFixed(2)),
+          revenue:    Number(p.revenue.toFixed(2)),
+        }))
+        .sort((a, b) => b.total_cost - a.total_cost),
+    }))
+    .sort((a, b) => b.total_cost - a.total_cost);
+
+  const totalRevenue = suppliers.reduce((s, x) => s + x.total_revenue, 0);
+  const totalCogs    = suppliers.reduce((s, x) => s + x.total_cost,    0);
 
   return NextResponse.json({
-    ok:    true,
+    ok:        true,
     date,
-    rows,
+    suppliers,
     totals: {
-      revenue:     Number(totals.revenue.toFixed(2)),
-      cogs:        Number(totals.cogs.toFixed(2)),
-      order_count: new Set(rows.map((r) => r.order_id)).size,
-      line_count:  totals.line_count,
+      revenue:        Number(totalRevenue.toFixed(2)),
+      cogs:           Number(totalCogs.toFixed(2)),
+      supplier_count: suppliers.length,
+      product_count:  suppliers.reduce((s, x) => s + x.product_count, 0),
+      order_count:    orderIds.size,
     },
   });
 }

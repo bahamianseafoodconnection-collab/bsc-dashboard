@@ -267,26 +267,13 @@ export default function DashboardPage() {
   // Founder-requested live supplier activity (2026-06-02): "what I sold +
   // what I need to buy, per supplier, live." Reads the
   // supplier_payables_summary + supplier_cogs_per_sale + reorder views.
-  const [supplierTodayRollup, setSupplierTodayRollup] = useState<Array<{
-    supplier_id: string | null;
-    supplier_name: string;
-    cogs_owed_today_bsd: number;
-    cogs_owed_7d_bsd: number;
-  }>>([]);
-  const [supplierTodayProducts, setSupplierTodayProducts] = useState<Record<string, string[]>>({});
-  const [supplierReorder, setSupplierReorder] = useState<Record<string, Array<{ name: string; stock: number; uom: string | null }>>>({});
-  // Per-supplier · per-product detail for today (from supplier_products_today view).
-  // Drives the "buy back what sold" panel with real numbers per row.
-  const [supplierProductsToday, setSupplierProductsToday] = useState<Record<string, Array<{
-    product_name:        string;
-    sku:                 string | null;
-    units_sold_today:    number;
-    current_stock:       number;
-    cost_per_unit:       number | null;
-    cogs_owed_today:     number;
-    unit_of_measure:     string | null;
-    suggested_reorder:   number;
-  }>>>({});
+  // Daily product-sold report — aggregated per supplier per product.
+  // Service-role API so the qc enum bug never enters the path.
+  type ProductAgg  = { product_id: string | null; product_name: string; sku: string; qty: number; unit: string; cost_per_unit: number | null; total_cost: number; revenue: number };
+  type SupplierAgg = { supplier_id: string | null; supplier_name: string; total_cost: number; total_revenue: number; product_count: number; products: ProductAgg[] };
+  const [dailySuppliers, setDailySuppliers] = useState<SupplierAgg[]>([]);
+  const [dailyTotals,    setDailyTotals]    = useState<{ revenue: number; cogs: number; supplier_count: number; product_count: number; order_count: number }>({ revenue: 0, cogs: 0, supplier_count: 0, product_count: 0, order_count: 0 });
+  const [dailyError,     setDailyError]     = useState<string | null>(null);
   const [recentBatches, setRecentBatches] = useState<{
     species: string | null;
     yield_pct: number | null;
@@ -587,95 +574,29 @@ export default function DashboardPage() {
     setSalesLoading(false);
   }
 
-  // Live supplier activity — what BSC sold today by supplier + what
-  // needs reordering. Reads the supplier_* views shipped 2026-06-02.
-  // Per founder ask: "tell me what I sold and what I need to repurchase."
+  // Daily sales feed — every line item sold today with supplier +
+  // cost. Routes through the service-role API endpoint
+  // /api/dashboard/daily-sales-report so RLS / the qc enum-cast bug
+  // never fire. Replaces the broken view-based supplier panel.
   async function loadLiveSupplierActivity() {
+    setDailyError(null);
     try {
-      // Today (Bahamas time) — match the views' date computation.
-      const nowBs = new Date();
-      // Bahamas is UTC-4 / UTC-5 DST. Use ISO date in en-CA which
-      // returns YYYY-MM-DD in the local zone. Simpler than tz math.
-      const todayStr = nowBs.toLocaleDateString('en-CA', { timeZone: 'America/Nassau' });
-
-      // Sequential rather than Promise.all so any error names the
-      // specific view that failed in the console (helps debug RLS /
-      // grant / column-rename issues without devtools).
-      const sumRes = await supabase
-        .from('supplier_payables_summary')
-        .select('supplier_id, supplier_name, cogs_owed_today_bsd, cogs_owed_7d_bsd')
-        .order('cogs_owed_today_bsd', { ascending: false, nullsFirst: false })
-        .limit(20);
-      if (sumRes.error) { console.warn('[supplier_payables_summary]', sumRes.error.message); }
-      const perSaleRes = await supabase
-        .from('supplier_cogs_per_sale')
-        .select('supplier_id, product_names')
-        .eq('sale_date', todayStr);
-      if (perSaleRes.error) { console.warn('[supplier_cogs_per_sale]', perSaleRes.error.message); }
-      // supplier_reorder_list is currently blocked by a stray 'qc'
-      // enum cast in some upstream RLS / function (left over from
-      // pre-enum-migration code; see open follow-up). Skipping it
-      // here — supplier_products_today covers the "buy back what
-      // sold" need with real data.
-      const reorderRes = { data: [] as Array<{ supplier_id: string | null; product_name: string; stock_on_hand: number; unit_of_measure: string | null }>, error: null as null };
-      const productsTodayRes = await supabase
-        .from('supplier_products_today')
-        .select('supplier_id, product_name, sku, units_sold_today, current_stock, cost_per_unit, cogs_owed_today, unit_of_measure, suggested_reorder_qty')
-        .order('units_sold_today', { ascending: false });
-      if (productsTodayRes.error) { console.warn('[supplier_products_today]', productsTodayRes.error.message); }
-
-      const summary = (sumRes.data ?? []) as Array<{ supplier_id: string | null; supplier_name: string; cogs_owed_today_bsd: number; cogs_owed_7d_bsd: number }>;
-      setSupplierTodayRollup(summary);
-
-      // Build "products sold today" map per supplier (deduped).
-      const productMap: Record<string, Set<string>> = {};
-      ((perSaleRes.data ?? []) as Array<{ supplier_id: string | null; product_names: string[] | null }>).forEach((row) => {
-        const key = row.supplier_id || 'none';
-        if (!productMap[key]) productMap[key] = new Set();
-        (row.product_names ?? []).forEach((n) => { if (n) productMap[key].add(n); });
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setDailyError('Sign in required'); return; }
+      const res = await fetch('/api/dashboard/daily-sales-report', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache:   'no-store',
       });
-      const flat: Record<string, string[]> = {};
-      for (const [k, set] of Object.entries(productMap)) flat[k] = Array.from(set).slice(0, 5);
-      setSupplierTodayProducts(flat);
-
-      // Top reorder needs grouped by supplier (max 4 per supplier).
-      const reorderMap: Record<string, Array<{ name: string; stock: number; uom: string | null }>> = {};
-      ((reorderRes.data ?? []) as Array<{ supplier_id: string | null; product_name: string; stock_on_hand: number; unit_of_measure: string | null }>).forEach((row) => {
-        const key = row.supplier_id || 'none';
-        if (!reorderMap[key]) reorderMap[key] = [];
-        if (reorderMap[key].length < 4) reorderMap[key].push({ name: row.product_name, stock: row.stock_on_hand, uom: row.unit_of_measure });
-      });
-      setSupplierReorder(reorderMap);
-
-      // Per-supplier per-product detail for today — drives the
-      // "buy back what sold" panel with real numbers row by row.
-      const productsTodayMap: Record<string, Array<{
-        product_name: string; sku: string | null; units_sold_today: number;
-        current_stock: number; cost_per_unit: number | null; cogs_owed_today: number;
-        unit_of_measure: string | null; suggested_reorder: number;
-      }>> = {};
-      ((productsTodayRes.data ?? []) as Array<{
-        supplier_id: string | null; product_name: string; sku: string | null;
-        units_sold_today: number; current_stock: number;
-        cost_per_unit: number | null; cogs_owed_today: number;
-        unit_of_measure: string | null; suggested_reorder_qty: number;
-      }>).forEach((row) => {
-        const key = row.supplier_id || 'none';
-        if (!productsTodayMap[key]) productsTodayMap[key] = [];
-        productsTodayMap[key].push({
-          product_name:       row.product_name,
-          sku:                row.sku,
-          units_sold_today:   Number(row.units_sold_today),
-          current_stock:      Number(row.current_stock),
-          cost_per_unit:      row.cost_per_unit !== null ? Number(row.cost_per_unit) : null,
-          cogs_owed_today:    Number(row.cogs_owed_today),
-          unit_of_measure:    row.unit_of_measure,
-          suggested_reorder:  Number(row.suggested_reorder_qty),
-        });
-      });
-      setSupplierProductsToday(productsTodayMap);
+      const j = await res.json();
+      if (!res.ok || !j.ok) {
+        setDailyError(j.error || `HTTP ${res.status}`);
+        return;
+      }
+      setDailySuppliers(j.suppliers ?? []);
+      setDailyTotals(j.totals ?? { revenue: 0, cogs: 0, supplier_count: 0, product_count: 0, order_count: 0 });
     } catch (err) {
-      console.warn('Live supplier activity load failed:', err);
+      setDailyError(err instanceof Error ? err.message : 'Load failed');
     }
   }
 
@@ -1007,106 +928,81 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* ── ROW 3 — Supplier ledger (left) + Buy-back columns (right) ──
-                  Matches the founder wireframe: simple "Supplier | COGS"
-                  table on the left; one column per supplier on the right
-                  listing the products to repurchase from each. */}
+              {/* ── PRODUCT-SOLD REPORT — aggregated per supplier
+                  per product, today. Each supplier section lists its
+                  products with qty + total, then a supplier subtotal.
+                  Service-role API → no qc/RLS issues. */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', marginBottom: '20px', borderTop: '4px solid #1a2e5a' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                   <div>
-                    <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '16px', fontFamily: "'Playfair Display', serif" }}>💸 Supplier Activity Today</div>
-                    <div style={{ color: '#64748b', fontSize: '11px', marginTop: 2 }}>What&apos;s owed to each supplier · what to buy back from each, live.</div>
+                    <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '16px', fontFamily: "'Playfair Display', serif" }}>📋 Product-Sold Report — Today</div>
+                    <div style={{ color: '#64748b', fontSize: '11px', marginTop: 2 }}>
+                      {dailyTotals.supplier_count} supplier{dailyTotals.supplier_count === 1 ? '' : 's'} · {dailyTotals.product_count} product{dailyTotals.product_count === 1 ? '' : 's'} · {dailyTotals.order_count} order{dailyTotals.order_count === 1 ? '' : 's'} · revenue ${fmtBSD(dailyTotals.revenue).replace('BSD ', '')} · COGS owed ${fmtBSD(dailyTotals.cogs).replace('BSD ', '')}
+                    </div>
                   </div>
-                  <Link href="/dashboard/supplier-cogs" style={{ background: '#1a2e5a', color: '#f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 800, textDecoration: 'none' }}>Full ledger →</Link>
+                  <Link href="/dashboard/daily-sales" style={{ background: '#1a2e5a', color: '#f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 800, textDecoration: 'none' }}>Full screen + dates →</Link>
                 </div>
-                {supplierTodayRollup.length === 0 && (
-                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No supplier sales yet today.</div>
+                {dailyError && (
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '8px 12px', borderRadius: 8, fontSize: 12, marginBottom: 12 }}>
+                    ⚠️ {dailyError}
+                  </div>
                 )}
-                {supplierTodayRollup.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 2fr', gap: 16 }}>
-                    {/* LEFT — Supplier | COGS table */}
-                    <div>
-                      <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800, marginBottom: 8 }}>Supplier · COGS owed today</div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                          {supplierTodayRollup
-                            .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0)
-                            .map((r) => (
-                              <tr key={r.supplier_id || r.supplier_name} style={{ borderTop: '1px solid #e2e8f0' }}>
-                                <td style={{ padding: '8px 4px', fontWeight: 700, color: '#1a2e5a' }}>{r.supplier_name}</td>
-                                <td style={{ padding: '8px 4px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#dc2626' }}>{fmtBSD(Number(r.cogs_owed_today_bsd || 0))}</td>
-                              </tr>
-                            ))}
-                          <tr style={{ borderTop: '2px solid #1a2e5a' }}>
-                            <td style={{ padding: '10px 4px', fontWeight: 900, color: '#1a2e5a' }}>TOTAL</td>
-                            <td style={{ padding: '10px 4px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#1a2e5a' }}>
-                              {fmtBSD(supplierTodayRollup.reduce((s, r) => s + Number(r.cogs_owed_today_bsd || 0), 0))}
+                {!dailyError && dailySuppliers.length === 0 && (
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No sales yet today.</div>
+                )}
+                {dailySuppliers.map((sup) => (
+                  <div key={sup.supplier_id ?? sup.supplier_name} style={{ marginBottom: 14, border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                    {/* Supplier header bar with subtotal */}
+                    <div style={{ background: '#1a2e5a', color: '#fff', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.5 }}>🏷 {sup.supplier_name}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 }}>Supplier total</span>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: 16, color: '#f5c518' }}>${sup.total_cost.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    {/* Product rows */}
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead style={{ background: '#f8fafc' }}>
+                        <tr style={{ color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontSize: 9, fontWeight: 800 }}>
+                          <th style={{ padding: '6px 12px', textAlign: 'left'  }}>Product</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'right' }}>Qty sold</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'right' }}>Cost / unit</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'right' }}>Product total</th>
+                          <th style={{ padding: '6px 12px', textAlign: 'right' }}>Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sup.products.map((p) => (
+                          <tr key={(p.product_id ?? p.product_name) + sup.supplier_name} style={{ borderTop: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '6px 12px', color: '#0f172a' }}>
+                              <div style={{ fontWeight: 700 }}>{p.product_name}</div>
+                              {p.sku && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{p.sku}</div>}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
+                              {p.qty.toFixed(p.unit === 'lb' ? 1 : 0)}<span style={{ color: '#94a3b8', fontSize: 10, marginLeft: 3 }}>{p.unit}</span>
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>
+                              {p.cost_per_unit != null ? `$${p.cost_per_unit.toFixed(2)}` : '—'}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#dc2626' }}>
+                              ${p.total_cost.toFixed(2)}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#0f172a' }}>
+                              ${p.revenue.toFixed(2)}
                             </td>
                           </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* RIGHT — per-supplier "buy back what sold" cards
-                        with REAL product rows (units sold today, current
-                        stock, cost, COGS owed, suggested reorder qty). */}
-                    <div>
-                      <div style={{ fontSize: 10, color: '#92400e', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800, marginBottom: 8 }}>
-                        🛒 Buy back what sold today
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                        {supplierTodayRollup
-                          .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0)
-                          .map((r) => {
-                            const key = r.supplier_id || 'none';
-                            const rows = supplierProductsToday[key] ?? [];
-                            const totalOwed = rows.reduce((s, x) => s + Number(x.cogs_owed_today || 0), 0);
-                            return (
-                              <div key={key} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 12 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 8, borderBottom: '1px solid #fde68a', marginBottom: 8 }}>
-                                  <div style={{ fontWeight: 800, fontSize: 12, color: '#1a2e5a', textTransform: 'uppercase', letterSpacing: 0.5 }}>{r.supplier_name}</div>
-                                  <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: 13, color: '#dc2626' }}>{fmtBSD(totalOwed)}</div>
-                                </div>
-                                {rows.length === 0 && <div style={{ fontSize: 10, color: '#a8a29e', fontStyle: 'italic' }}>No products credited yet.</div>}
-                                {rows.length > 0 && (
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                                    <thead>
-                                      <tr style={{ color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                        <th style={{ textAlign: 'left',  padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Product</th>
-                                        <th style={{ textAlign: 'right', padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Sold</th>
-                                        <th style={{ textAlign: 'right', padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Stock</th>
-                                        <th style={{ textAlign: 'right', padding: '4px 4px', fontSize: 9, fontWeight: 800 }}>Owed</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {rows.map((p) => (
-                                        <tr key={p.product_name} style={{ borderTop: '1px solid rgba(253,230,138,0.5)' }}>
-                                          <td style={{ padding: '5px 4px', color: '#1a2e5a', fontWeight: 600 }}>
-                                            <div>{p.product_name}</div>
-                                            <div style={{ fontSize: 9, color: '#94a3b8' }}>
-                                              reorder <strong style={{ color: '#92400e' }}>{Number(p.suggested_reorder).toFixed(p.unit_of_measure === 'lb' ? 1 : 0)}{p.unit_of_measure ? ` ${p.unit_of_measure}` : ''}</strong>
-                                              {p.cost_per_unit != null && <span style={{ color: '#94a3b8' }}> @ ${p.cost_per_unit.toFixed(2)}</span>}
-                                            </div>
-                                          </td>
-                                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: '#1a2e5a', fontWeight: 700 }}>
-                                            {Number(p.units_sold_today).toFixed(p.unit_of_measure === 'lb' ? 1 : 0)}
-                                          </td>
-                                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: p.current_stock <= 0 ? '#dc2626' : p.current_stock <= 10 ? '#ea580c' : '#64748b' }}>
-                                            {Number(p.current_stock).toFixed(p.unit_of_measure === 'lb' ? 1 : 0)}
-                                          </td>
-                                          <td style={{ padding: '5px 4px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626', fontWeight: 700 }}>
-                                            ${Number(p.cogs_owed_today).toFixed(2)}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                {dailySuppliers.length > 0 && (
+                  <div style={{ background: '#f1f5f9', borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontWeight: 900, color: '#0f172a' }}>GRAND TOTAL — All suppliers</span>
+                    <span style={{ display: 'flex', gap: 16 }}>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>COGS owed <strong style={{ fontFamily: 'monospace', color: '#dc2626', fontSize: 14, marginLeft: 6 }}>${dailyTotals.cogs.toFixed(2)}</strong></span>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>Revenue <strong style={{ fontFamily: 'monospace', color: '#0f172a', fontSize: 14, marginLeft: 6 }}>${dailyTotals.revenue.toFixed(2)}</strong></span>
+                    </span>
                   </div>
                 )}
               </div>
