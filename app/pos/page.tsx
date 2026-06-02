@@ -140,14 +140,30 @@ function buildWhatsAppReceiptText(p: {
   return lines.join('\n')
 }
 
-// Build the wa.me link. wa.me expects phone WITHOUT leading + (just the
-// digits). Returns null if the phone can't be normalized to E.164 (rare —
-// would mean the customer phone was unusable).
+// Build the WhatsApp deep-link.
+//   Desktop / iPad → web.whatsapp.com/send?phone=...&text=...
+//     Opens WhatsApp Web directly into the customer's chat with the
+//     receipt pre-typed. Skips the wa.me "Continue to chat" landing
+//     page (one fewer cashier tap).
+//   Mobile (phones)  → wa.me/PHONE?text=...
+//     Triggers the WhatsApp app via the OS share intent.
+// Phone is normalized to E.164 then stripped of '+' (WhatsApp wants
+// digits only). Returns null if the phone can't be parsed.
 function buildWaMeUrl(phone: string, text: string): string | null {
   const e164 = toE164(phone)
   if (!e164) return null
   const digits = e164.replace(/^\+/, '')
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`
+  const enc = encodeURIComponent(text)
+  // iPadOS 13+ sends a Mac user agent, so the simple Mobi/Android regex
+  // misses iPad — that's actually what we want here (iPad treats
+  // web.whatsapp.com/send the same as desktop and lands in WA Web).
+  const isPhone = typeof navigator !== 'undefined'
+    && /Android|iPhone|iPod/i.test(navigator.userAgent)
+    && !/iPad/i.test(navigator.userAgent)
+  if (isPhone) {
+    return `https://wa.me/${digits}?text=${enc}`
+  }
+  return `https://web.whatsapp.com/send?phone=${digits}&text=${enc}`
 }
 
 // RBC terminal slip references are alphanumeric, typically 3-10 chars on the
