@@ -232,6 +232,29 @@ export default function POSPage() {
   // any window.open call that happens after async work like the order
   // insert; a direct click bypasses that).
   const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'whatsapp' | 'print'; to?: string; orderId?: string; error?: string; waUrl?: string } | null>(null)
+  // Share-receipt modal that auto-opens after every successful sale.
+  // Cashier sees the receipt body + tap-to-share buttons (Copy /
+  // WhatsApp / Email / Print). All sends fire from a direct user
+  // gesture so the browser's popup blocker stays out of the way.
+  const [shareReceipt, setShareReceipt] = useState<{
+    orderId:       string
+    customerName:  string
+    customerPhone: string
+    customerEmail: string
+    channelLabel:  string
+    cashierName:   string
+    items:         Array<{ name: string; qty: number; unit_price: number }>
+    subtotal:      number
+    total:         number
+    paymentMethod: string
+    cardRef:       string | null
+    terminalType:  string | null
+    waUrl?:        string
+    receiptText:   string
+  } | null>(null)
+  const [copyOk, setCopyOk] = useState(false)
+  const [emailSendStatus, setEmailSendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [emailSendError,  setEmailSendError]  = useState<string | null>(null)
   // Item 7: separate toast for inventory-write failures (fire-and-forget
   // path that historically failed silently). 30s visibility so cashier
   // sees the order ID to email Dedrick before it auto-clears.
@@ -1023,6 +1046,48 @@ export default function POSPage() {
         }
       }
 
+      // After every successful sale, surface the share-receipt modal
+      // with the full receipt body + tap-to-share buttons. Cashier
+      // picks from Copy / WhatsApp / Email / Print — each fires from
+      // a direct user gesture so the browser doesn't eat the action.
+      if (orderId) {
+        const receiptText = buildWhatsAppReceiptText({
+          customerName: nameClean,
+          channelLabel: 'BSC Marketplace Nassau',
+          items: items.map((i: any) => ({
+            name:       i.name,
+            qty:        i.quantity ?? i.qty ?? 1,
+            unit_price: i.unit_price ?? i.price ?? 0,
+          })),
+          total,
+          orderId,
+          cashierName: user?.user_metadata?.full_name || user?.email || '',
+        })
+        const waUrl = phoneClean ? buildWaMeUrl(phoneClean, receiptText) ?? undefined : undefined
+        setShareReceipt({
+          orderId,
+          customerName:  nameClean,
+          customerPhone: phoneClean || '',
+          customerEmail: validEmail || '',
+          channelLabel:  'BSC Marketplace Nassau',
+          cashierName:   user?.user_metadata?.full_name || user?.email || '',
+          items: items.map((i: any) => ({
+            name:       i.name,
+            qty:        i.quantity ?? i.qty ?? 1,
+            unit_price: i.unit_price ?? i.price ?? 0,
+          })),
+          subtotal, total,
+          paymentMethod,
+          cardRef:      paymentMethod === 'card' ? normalizeCardRef(cardRef) : null,
+          terminalType: paymentMethod === 'card' ? terminal : null,
+          waUrl,
+          receiptText,
+        })
+        setCopyOk(false)
+        setEmailSendStatus('idle')
+        setEmailSendError(null)
+      }
+
       // If no email + no phone (or both failed), or cashier chose print,
       // open the in-browser printable receipt.
       if (orderId && deliveredChannel === 'print') {
@@ -1258,6 +1323,158 @@ export default function POSPage() {
             : lastReceipt.channel === 'sms'   ? `📱 SMS receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : `🖨 Print receipt opened`}
           <button onClick={() => setLastReceipt(null)} className="ml-3 opacity-70 hover:opacity-100" aria-label="Dismiss">×</button>
+        </div>
+      )}
+
+      {/* ── Share-receipt modal — auto-opens after every successful sale.
+          Renders the receipt body the customer would see, plus four
+          tap-to-share buttons. All actions fire from direct clicks so
+          popup blockers + Web Share API gesture-requirements stay
+          out of the way. */}
+      {shareReceipt && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ backgroundColor: '#060d1f' }}>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#f5c518' }}>Sale complete</div>
+                <div className="text-sm font-extrabold text-white mt-0.5">Share Receipt</div>
+              </div>
+              <button onClick={() => setShareReceipt(null)} className="text-white/70 hover:text-white text-xl leading-none" aria-label="Done">×</button>
+            </div>
+
+            {/* Receipt preview */}
+            <div className="px-5 py-4 overflow-y-auto flex-1" style={{ backgroundColor: '#f8fafc' }}>
+              <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-800 font-sans">{shareReceipt.receiptText}</pre>
+            </div>
+
+            {/* Status line — copy + email feedback shows here */}
+            {(copyOk || emailSendStatus !== 'idle') && (
+              <div className="px-5 py-2 text-xs font-bold text-center"
+                style={{
+                  backgroundColor:
+                    copyOk ? '#dcfce7' :
+                    emailSendStatus === 'sent' ? '#dcfce7' :
+                    emailSendStatus === 'error' ? '#fee2e2' :
+                    '#fef3c7',
+                  color:
+                    copyOk ? '#166534' :
+                    emailSendStatus === 'sent' ? '#166534' :
+                    emailSendStatus === 'error' ? '#991b1b' :
+                    '#92400e',
+                }}>
+                {copyOk && '✓ Receipt copied to clipboard'}
+                {emailSendStatus === 'sending' && 'Sending email…'}
+                {emailSendStatus === 'sent' && `✓ Emailed to ${shareReceipt.customerEmail}`}
+                {emailSendStatus === 'error' && `⚠ Email failed: ${emailSendError ?? 'unknown'}`}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="px-5 py-4 border-t bg-white grid grid-cols-2 gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(shareReceipt.receiptText)
+                    setCopyOk(true)
+                    setTimeout(() => setCopyOk(false), 3000)
+                  } catch {
+                    setCopyOk(false)
+                  }
+                }}
+                className="rounded-xl px-3 py-3 text-sm font-bold border border-slate-300 hover:bg-slate-100"
+              >
+                📋 Copy
+              </button>
+              {shareReceipt.waUrl ? (
+                <a
+                  href={shareReceipt.waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl px-3 py-3 text-sm font-extrabold text-center no-underline"
+                  style={{ backgroundColor: '#25d366', color: '#0b3d2e' }}
+                >
+                  💬 WhatsApp
+                </a>
+              ) : (
+                <button
+                  disabled
+                  title="Customer phone required for WhatsApp"
+                  className="rounded-xl px-3 py-3 text-sm font-bold border border-slate-200 text-slate-400 cursor-not-allowed"
+                >
+                  💬 WhatsApp
+                </button>
+              )}
+              {shareReceipt.customerEmail ? (
+                <button
+                  disabled={emailSendStatus === 'sending'}
+                  onClick={async () => {
+                    setEmailSendStatus('sending')
+                    setEmailSendError(null)
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession()
+                      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+                      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+                      const res = await fetch('/api/pos/receipt', {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                          order_id:       shareReceipt.orderId,
+                          customer_email: shareReceipt.customerEmail,
+                          customer_phone: shareReceipt.customerPhone || null,
+                          customer_name:  shareReceipt.customerName || null,
+                          channel_label:  shareReceipt.channelLabel,
+                          cashier_name:   shareReceipt.cashierName,
+                          subtotal:       shareReceipt.subtotal,
+                          vat:            0,
+                          total:          shareReceipt.total,
+                          payment_method: shareReceipt.paymentMethod,
+                          card_ref:       shareReceipt.cardRef,
+                          terminal_type:  shareReceipt.terminalType,
+                          prefer_channel: 'email',
+                          items:          shareReceipt.items,
+                        }),
+                      })
+                      const j = await res.json().catch(() => ({}))
+                      if (res.ok && j?.ok) setEmailSendStatus('sent')
+                      else {
+                        setEmailSendStatus('error')
+                        setEmailSendError(j?.error ?? `HTTP ${res.status}`)
+                      }
+                    } catch (e) {
+                      setEmailSendStatus('error')
+                      setEmailSendError(e instanceof Error ? e.message : 'fetch failed')
+                    }
+                  }}
+                  className="rounded-xl px-3 py-3 text-sm font-bold border border-slate-300 hover:bg-slate-100 disabled:opacity-60"
+                >
+                  {emailSendStatus === 'sending' ? '…Sending' : '📧 Email'}
+                </button>
+              ) : (
+                <button
+                  disabled
+                  title="Customer email required"
+                  className="rounded-xl px-3 py-3 text-sm font-bold border border-slate-200 text-slate-400 cursor-not-allowed"
+                >
+                  📧 Email
+                </button>
+              )}
+              <a
+                href={`/receipt/${shareReceipt.orderId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl px-3 py-3 text-sm font-bold text-center no-underline border border-slate-300 hover:bg-slate-100 text-slate-800"
+              >
+                🖨 Print
+              </a>
+              <button
+                onClick={() => setShareReceipt(null)}
+                className="col-span-2 rounded-xl px-3 py-3 text-sm font-extrabold mt-1"
+                style={{ backgroundColor: '#f5c518', color: '#060d1f' }}
+              >
+                Done — Next Sale
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
