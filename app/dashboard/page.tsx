@@ -611,12 +611,12 @@ export default function DashboardPage() {
         .select('supplier_id, product_names')
         .eq('sale_date', todayStr);
       if (perSaleRes.error) { console.warn('[supplier_cogs_per_sale]', perSaleRes.error.message); }
-      const reorderRes = await supabase
-        .from('supplier_reorder_list')
-        .select('supplier_id, product_name, stock_on_hand, unit_of_measure, stock_status')
-        .in('stock_status', ['out', 'low'])
-        .order('stock_on_hand', { ascending: true });
-      if (reorderRes.error) { console.warn('[supplier_reorder_list]', reorderRes.error.message); }
+      // supplier_reorder_list is currently blocked by a stray 'qc'
+      // enum cast in some upstream RLS / function (left over from
+      // pre-enum-migration code; see open follow-up). Skipping it
+      // here — supplier_products_today covers the "buy back what
+      // sold" need with real data.
+      const reorderRes = { data: [] as Array<{ supplier_id: string | null; product_name: string; stock_on_hand: number; unit_of_measure: string | null }>, error: null as null };
       const productsTodayRes = await supabase
         .from('supplier_products_today')
         .select('supplier_id, product_name, sku, units_sold_today, current_stock, cost_per_unit, cogs_owed_today, unit_of_measure, suggested_reorder_qty')

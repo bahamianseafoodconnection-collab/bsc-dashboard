@@ -143,16 +143,40 @@ export default function SupplierCogsPage() {
     (async () => {
       setLoading(true); setError(null);
       try {
-        // Sequential rather than Promise.all so we know WHICH view
-        // failed when one does. Previous "Load failed" string hid
-        // the real cause (RLS, missing grant, column rename, etc.).
+        // Sequential so any failure names the specific view.
         const sumRes = await supabase.from('supplier_payables_summary').select('*');
         if (sumRes.error) throw new Error(`supplier_payables_summary: ${sumRes.error.message}`);
-        const reoRes = await supabase.from('supplier_reorder_list').select('*');
-        if (reoRes.error) throw new Error(`supplier_reorder_list: ${reoRes.error.message}`);
+        // supplier_reorder_list is currently blocked by a stray 'qc'
+        // enum cast somewhere in the read path (leftover from
+        // pre-enum-migration code). Until that's tracked down we
+        // derive the reorder rows from supplier_products_today
+        // ("buy back what sold today") which is the more useful
+        // version anyway.
+        const prodRes = await supabase
+          .from('supplier_products_today')
+          .select('supplier_id, supplier_name, product_id, sku, product_name, unit_of_measure, units_sold_today, current_stock, cost_per_unit, cogs_owed_today');
+        if (prodRes.error) throw new Error(`supplier_products_today: ${prodRes.error.message}`);
         if (cancelled) return;
         setSummary((sumRes.data ?? []) as SummaryRow[]);
-        setReorder((reoRes.data ?? []) as ReorderRow[]);
+        type ReorderProductRow = { supplier_id: string | null; supplier_name: string; product_id: string; sku: string | null; product_name: string; unit_of_measure: string | null; units_sold_today: number; current_stock: number; cost_per_unit: number | null; cogs_owed_today: number };
+        const stockBadge = (qty: number): 'out' | 'low' | 'monitor' | 'ok' => {
+          if (qty <= 0)  return 'out';
+          if (qty <= 10) return 'low';
+          if (qty <= 25) return 'monitor';
+          return 'ok';
+        };
+        setReorder(((prodRes.data ?? []) as ReorderProductRow[]).map((r) => ({
+          supplier_id:        r.supplier_id,
+          supplier_name:      r.supplier_name,
+          product_id:         r.product_id,
+          sku:                r.sku,
+          product_name:       r.product_name,
+          unit_of_measure:    r.unit_of_measure,
+          stock_on_hand:      Number(r.current_stock),
+          current_cost_bsd:   r.cost_per_unit != null ? Number(r.cost_per_unit) : null,
+          stock_status:       stockBadge(Number(r.current_stock)),
+          last_product_update: null,
+        })));
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed');
       } finally {
