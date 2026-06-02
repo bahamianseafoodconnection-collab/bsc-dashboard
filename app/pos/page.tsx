@@ -1083,6 +1083,25 @@ export default function POSPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* WhatsApp Web link — opens web.whatsapp.com in a popup so
+                the cashier can scan the QR with the BSC business phone
+                ONCE per terminal. After scan, every WhatsApp receipt
+                click-to-chat opens here. Embedding WhatsApp Web in an
+                iframe isn't possible (X-Frame-Options: DENY). */}
+            <button
+              onClick={() => {
+                window.open(
+                  'https://web.whatsapp.com',
+                  'bsc_wa_web',
+                  'width=900,height=700,left=200,top=100,noopener,noreferrer',
+                );
+              }}
+              title="Open WhatsApp Web (scan QR with the BSC business phone — one-time setup per terminal)"
+              className="text-xs font-bold px-2.5 py-1.5 rounded-lg transition"
+              style={{ backgroundColor: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.4)' }}
+            >
+              💬 Link WhatsApp
+            </button>
             {isWednesday && (
               <span className="text-xs font-bold px-2 py-1 rounded-full animate-pulse" style={{ backgroundColor: '#f5c518', color: '#060d1f' }}>
                 🐟 Wed Special
