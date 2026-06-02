@@ -329,6 +329,25 @@ export const TOOLS = [
       },
     },
   },
+  {
+    name: 'compose_flyer',
+    description:
+      'RENDER a finished BSC marketing flyer (1080×1920 portrait PNG, WhatsApp / Instagram story / print-share ready) using BSC house style. Founder/co_founder ONLY. Single-shot — no preview step needed; the founder sees the rendered image inline and reacts. ASSUME EVERY BSC FACT (logo, brand colors, Fire Trail Road address, 361-3474 phone, contact bar, tagline) — do NOT ask the founder for any of these. The only fields you may need to think about are headline + price + product photo. Use search_term to look up the product photo from products.image_url; if the founder attached a photo to this chat turn, pass that URL as product_photo to override. Returns { ok, image_url } — render the image inline in your reply (![flyer](image_url)) and ask if they want to tweak anything.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        headline:       { type: 'string', description: 'Main display headline. 2-4 words, gets uppercased + huge. Examples: "CONCH SPECIAL" · "SNAPPER FILLET" · "FRESH SHRIMP". Do NOT include the price.' },
+        price:          { type: 'string', description: 'Price as a string. Examples: "75.00", "$117", "9.95". Server normalizes.' },
+        price_unit:     { type: 'string', description: 'What the price is for. Examples: "PER 10LB BAG" · "PER CASE" · "EACH" · "PER LB" · "TODAY ONLY". Defaults to "TODAY ONLY".' },
+        day_ribbon:     { type: 'string', description: 'Top-left ribbon callout. Examples: "TUESDAY SPECIAL" · "TODAY ONLY" · "WEEKEND DEAL" · "FLASH SALE". Defaults to "TODAY ONLY". If the founder mentioned a day in their message ("today", "tuesday"), reflect it here.' },
+        search_term:    { type: 'string', description: 'Product name to look up in the products table. The tool fetches products.image_url for the first matching live product and uses it as the hero photo. Pass the noun from the founder\'s message (e.g. "conch", "snapper", "salmon"). Skip if product_photo is being passed directly.' },
+        product_photo:  { type: 'string', description: 'OVERRIDE: direct URL to use for the hero photo. Pass when the founder attached a fresh camera photo to this turn (use the persisted URL from the chat). Wins over search_term.' },
+        secondary_line: { type: 'string', description: 'Optional one-line tagline shown under the headline in gold. Examples: "BAHAMIAN CAUGHT" · "FROM OUR DOCKS TODAY" · "LIMITED STOCK". Keep under 30 chars.' },
+        background:     { type: 'string', description: '"navy" (default — most flyers), "purple" (for snow crab / weekend specials), or "gold" (rarely — only for premium drops). Default navy.' },
+      },
+      required: ['headline', 'price'],
+    },
+  },
 ] as const;
 
 interface ReadFileInput { path?: unknown }
@@ -436,6 +455,17 @@ interface CreateFlyerInput {
   display_order?:    unknown;
   confirmed?:        unknown;
 }
+interface ComposeFlyerInput {
+  headline?:       unknown;
+  price?:          unknown;
+  price_unit?:     unknown;
+  day_ribbon?:     unknown;
+  search_term?:    unknown;
+  product_photo?:  unknown;
+  secondary_line?: unknown;
+  background?:     unknown;
+}
+
 interface SetFlyerActiveInput {
   flyer_id?:  unknown;
   is_active?: unknown;
@@ -516,6 +546,7 @@ export async function dispatchTool(
       case 'list_flyers':          return await listFlyersTool(admin);
       case 'create_flyer':         return await createFlyerTool(input as CreateFlyerInput, admin, callerId);
       case 'set_flyer_active':     return await setFlyerActiveTool(input as SetFlyerActiveInput, admin, callerId);
+      case 'compose_flyer':        return await composeFlyerTool(input as ComposeFlyerInput, admin, callerId);
       case 'list_customers':       return await listCustomersTool(input as ListCustomersInput, admin);
       case 'segment_customers':    return await segmentCustomersTool(input as SegmentCustomersInput, admin);
       case 'customer_history':     return await customerHistoryTool(input as CustomerHistoryInput, admin);
@@ -1797,5 +1828,79 @@ async function suggestProductSkuTool(input: SuggestProductSkuInput, admin: Supab
     note: barcodeMatch
       ? `⚠ Barcode ${barcode} is already on file → SKU "${barcodeMatch.sku}" (${barcodeMatch.name}). Ask the founder whether to UPDATE the existing product (no add_product call) or add a NEW one with a different SKU.`
       : `Primary suggestion: ${primary}. Show this to the founder for confirmation before calling add_product. Alternates are also collision-free.`,
+  });
+}
+
+// ── compose_flyer ────────────────────────────────────────────────────
+// Calls /api/flyers/compose with the founder's tiny spec + a hero
+// photo URL resolved either from the search_term (live products
+// lookup) or from product_photo (override — used when the founder
+// attached a fresh chat photo this turn).
+async function composeFlyerTool(input: ComposeFlyerInput, admin: SupabaseClient, callerId: string | null): Promise<string> {
+  const perms = await checkWritePerms(admin, callerId);
+  if (!perms.ok) {
+    await logWrite(admin, 'compose_flyer', callerId, input, null, 'denied', perms.error ?? 'denied');
+    return JSON.stringify({ error: perms.error ?? 'Founder only' });
+  }
+
+  const headline      = typeof input.headline === 'string' ? input.headline.trim() : '';
+  const price         = typeof input.price === 'string' ? input.price.trim() : '';
+  const priceUnit     = typeof input.price_unit === 'string' ? input.price_unit.trim() : undefined;
+  const dayRibbon     = typeof input.day_ribbon === 'string' ? input.day_ribbon.trim() : undefined;
+  const searchTerm    = typeof input.search_term === 'string' ? input.search_term.trim() : '';
+  const photoOverride = typeof input.product_photo === 'string' ? input.product_photo.trim() : '';
+  const secondaryLine = typeof input.secondary_line === 'string' ? input.secondary_line.trim() : undefined;
+  const bgRaw         = typeof input.background === 'string' ? input.background.trim().toLowerCase() : '';
+  const background    = bgRaw === 'purple' || bgRaw === 'gold' ? bgRaw : 'navy';
+
+  if (!headline || !price) {
+    return JSON.stringify({ error: 'headline + price are required.' });
+  }
+
+  // Resolve the hero photo. Override > products.image_url lookup > none.
+  let heroPhoto = photoOverride;
+  if (!heroPhoto && searchTerm) {
+    const { data: matches } = await admin
+      .from('products')
+      .select('name, image_url')
+      .ilike('name', `%${searchTerm.replace(/[%_]/g, '')}%`)
+      .eq('status', 'active')
+      .not('image_url', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    const first = (matches as Array<{ image_url: string | null }> | null)?.[0];
+    if (first?.image_url) heroPhoto = first.image_url;
+  }
+
+  // Call the renderer. Use the public origin so the edge-runtime
+  // ImageResponse can fetch the BSC logo asset from the same deploy.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.bscbahamas.com';
+  const composeUrl = `${siteUrl.replace(/\/$/, '')}/api/flyers/compose`;
+  const composeRes = await fetch(composeUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      headline,
+      price,
+      price_unit:     priceUnit,
+      day_ribbon:     dayRibbon,
+      product_photo:  heroPhoto || undefined,
+      secondary_line: secondaryLine,
+      background,
+      upload:         true,
+    }),
+  });
+  const j = await composeRes.json().catch(() => ({}));
+  if (!composeRes.ok || !j?.ok) {
+    const err = j?.error || `HTTP ${composeRes.status}`;
+    await logWrite(admin, 'compose_flyer', callerId, input, null, 'error', err);
+    return JSON.stringify({ error: `Flyer render failed: ${err}` });
+  }
+
+  await logWrite(admin, 'compose_flyer', callerId, input, j, 'success', null);
+  return JSON.stringify({
+    ok: true,
+    image_url: j.image_url,
+    note: `Flyer rendered. Display inline with ![flyer](${j.image_url}) and ask Dedrick if he wants to swap the photo, change the price unit, or pick a different ribbon.`,
   });
 }
