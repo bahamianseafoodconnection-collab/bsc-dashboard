@@ -43,8 +43,15 @@ export function isStaffSessionExpired(now: number = Date.now()): boolean {
   return left !== null && left <= 0;
 }
 
-/** Roles that bypass the 10h cap (always-on via dashboard). */
-const BYPASS_ROLES = new Set(['founder', 'co_founder']);
+/**
+ * Roles that bypass the 10h cap (stay signed in until they explicitly
+ * sign out). Founder + co_founder are always-on per the dashboard
+ * contract. Cashier + andros_staff are at the register all day —
+ * Dedrick directed 2026-06-02 "keep him signed in until he signs
+ * out" — so they bypass too. Other roles (manager, processor,
+ * supplier, etc.) still get the cap for security.
+ */
+const BYPASS_ROLES = new Set(['founder', 'co_founder', 'cashier', 'andros_staff']);
 
 export function staffSessionBypassesFor(role: string | null | undefined): boolean {
   return !!role && BYPASS_ROLES.has(role);

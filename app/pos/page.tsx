@@ -349,7 +349,21 @@ export default function POSPage() {
       p_notes:       openNotes.trim() || null,
     })
     setShiftBusy(false)
-    if (error) { alert('Open shift failed: ' + error.message); return }
+    if (error) {
+      // Most-common failure mode for cashiers: the RPC blocks because
+      // a previous shift didn't close cleanly (browser crash, network
+      // blip, app reload). Instead of a dead-end alert, RESUME the
+      // existing open shift transparently — the cashier is already
+      // in it, they just need the UI re-wired to it.
+      if (/already.*open shift|open shift exists/i.test(error.message || '')) {
+        await loadCashierSession()
+        setShiftOpenModal(false)
+        setOpenFloatDollars(''); setOpenNotes('')
+        return
+      }
+      alert('Open shift failed: ' + error.message)
+      return
+    }
     const row = Array.isArray(data) ? data[0] : data
     setCashierSession(row as CashierSession)
     setShiftOpenModal(false)

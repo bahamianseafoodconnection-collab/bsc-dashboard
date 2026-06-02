@@ -61,6 +61,10 @@ notes: string;
 interface Supplier extends SupplierForm {
 id: string;
 product_count?: number;
+// Phase A pricelist refs — populated after the founder uploads the PDF.
+pricelist_url?: string | null;
+pricelist_filename?: string | null;
+pricelist_uploaded_at?: string | null;
 }
 
 // Product summary used by the expanded "Products" section under each supplier card.
@@ -186,6 +190,38 @@ await supabase.from('suppliers')
 .update({ is_active: !s.is_active, updated_at: new Date().toISOString() })
 .eq('id', s.id);
 loadSuppliers();
+}
+
+// ── Phase A: pricelist PDF upload per supplier ──
+// Each wholesale-partner supplier (JBI, Lightbourn, BWA, Tropic,
+// Promoceans) has a current pricelist PDF Dedrick references when
+// reordering. Uploading attaches it to the supplier record so it
+// shows on the card with download link.
+const [pricelistUploadingId, setPricelistUploadingId] = useState<string | null>(null);
+async function uploadPricelist(s: Supplier, file: File) {
+  setPricelistUploadingId(s.id);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const ext  = file.name.split('.').pop() ?? 'pdf';
+    const path = `${s.id}/pricelist-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('supplier-pricelists')
+      .upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) { showToast(`Upload failed: ${upErr.message}`, false); return; }
+    const { data: pub } = supabase.storage.from('supplier-pricelists').getPublicUrl(path);
+    const { error: updErr } = await supabase.from('suppliers').update({
+      pricelist_url:         pub.publicUrl,
+      pricelist_filename:    file.name,
+      pricelist_uploaded_at: new Date().toISOString(),
+      pricelist_uploaded_by: user?.id ?? null,
+      updated_at:            new Date().toISOString(),
+    }).eq('id', s.id);
+    if (updErr) { showToast(`Save failed: ${updErr.message}`, false); return; }
+    showToast(`📄 Pricelist uploaded for ${s.name}`);
+    await loadSuppliers();
+  } finally {
+    setPricelistUploadingId(null);
+  }
 }
 
 // ── Per-supplier product management ──
@@ -1663,7 +1699,31 @@ style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5
 <p className="text-xs font-bold" style={{ color: '#f5c518' }}>
 {s.product_count ?? 0} product{(s.product_count ?? 0) !== 1 ? 's' : ''} assigned
 </p>
-<div className="flex gap-2 flex-wrap">
+<div className="flex gap-2 flex-wrap items-center">
+{/* Pricelist link / upload — Phase A */}
+{s.pricelist_url && (
+  <a href={s.pricelist_url} target="_blank" rel="noopener noreferrer"
+    className="text-xs px-3 py-1.5 rounded-lg font-bold inline-flex items-center gap-1.5"
+    style={{ backgroundColor: 'rgba(34,197,94,0.15)', color: '#4ade80', textDecoration: 'none' }}
+    title={`Pricelist · ${s.pricelist_filename ?? ''}${s.pricelist_uploaded_at ? ' · ' + new Date(s.pricelist_uploaded_at).toLocaleDateString() : ''}`}>
+    📄 Pricelist
+  </a>
+)}
+{canEdit && (
+  <label
+    className="text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer"
+    style={{
+      backgroundColor: pricelistUploadingId === s.id ? 'rgba(148,163,184,0.2)' : (s.pricelist_url ? 'rgba(245,197,24,0.10)' : 'rgba(245,197,24,0.15)'),
+      color: pricelistUploadingId === s.id ? '#94a3b8' : '#f5c518',
+      opacity: pricelistUploadingId === s.id ? 0.7 : 1,
+    }}>
+    {pricelistUploadingId === s.id
+      ? '⏳ Uploading…'
+      : s.pricelist_url ? '🔁 Replace' : '📤 Upload pricelist'}
+    <input type="file" accept="application/pdf,image/*" disabled={pricelistUploadingId === s.id} style={{ display: 'none' }}
+      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPricelist(s, f); e.currentTarget.value = ''; }} />
+  </label>
+)}
 <button onClick={() => toggleExpanded(s)}
 className="text-xs px-3 py-1.5 rounded-lg font-bold"
 style={{ backgroundColor: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>
