@@ -10,6 +10,7 @@ import {
   type OverheadMetrics,
 } from '@/lib/profit'
 import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
+import { toE164 } from '@/lib/phone'
 import AddInventoryButton from '@/components/intake/AddInventoryButton'
 import EditPriceModal from '@/components/pos/EditPriceModal'
 import CustomerNameLookup, { type CustomerMatch } from '@/components/pos/CustomerNameLookup'
@@ -96,6 +97,57 @@ function unitLabel(unit: string | null | undefined): string {
     case 'each': return 'each'
     default:     return unit ? `/${unit}` : 'each'
   }
+}
+
+// ── WhatsApp click-to-chat (Tier 1, no Twilio) ──
+// Builds a wa.me URL that opens WhatsApp on the cashier's device with the
+// receipt body pre-typed to the customer's number. Cashier taps Send
+// inside WhatsApp to deliver. Bypasses Meta/Twilio entirely — works with
+// any phone that has WhatsApp installed, no opt-in, no API approval.
+function buildWhatsAppReceiptText(p: {
+  customerName: string
+  channelLabel: string
+  items: Array<{ name: string; qty: number; unit_price: number }>
+  total: number
+  orderId: string | null
+  cashierName: string
+}): string {
+  const lines: string[] = []
+  lines.push(`🇧🇸 *Bahamian Seafood Connection*`)
+  lines.push(`${p.channelLabel} · ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`)
+  lines.push('')
+  if (p.customerName) lines.push(`Hi ${p.customerName.split(' ')[0]} — thanks for shopping with us today!`)
+  else                lines.push(`Thanks for shopping with us today!`)
+  lines.push('')
+  lines.push('*Your receipt:*')
+  for (const it of p.items) {
+    const qty = it.qty === 1 ? '' : ` × ${it.qty}`
+    lines.push(`• ${it.name}${qty} — $${(it.unit_price * it.qty).toFixed(2)}`)
+  }
+  lines.push('')
+  lines.push(`*Total: BSD $${p.total.toFixed(2)}*`)
+  if (p.orderId) {
+    lines.push('')
+    lines.push(`Order: ${p.orderId.slice(0, 8)}`)
+    lines.push(`Full receipt: https://bscbahamas.com/receipt/${p.orderId}`)
+  }
+  if (p.cashierName) {
+    lines.push('')
+    lines.push(`Served by: ${p.cashierName}`)
+  }
+  lines.push('')
+  lines.push(`bscbahamas.com · +1 242 361-3474`)
+  return lines.join('\n')
+}
+
+// Build the wa.me link. wa.me expects phone WITHOUT leading + (just the
+// digits). Returns null if the phone can't be normalized to E.164 (rare —
+// would mean the customer phone was unusable).
+function buildWaMeUrl(phone: string, text: string): string | null {
+  const e164 = toE164(phone)
+  if (!e164) return null
+  const digits = e164.replace(/^\+/, '')
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`
 }
 
 // RBC terminal slip references are alphanumeric, typically 3-10 chars on the
@@ -859,9 +911,38 @@ export default function POSPage() {
       let receiptError: string | undefined
       if (orderId) {
         try {
+          // ── WhatsApp click-to-chat (Tier 1) ──
+          // Cashier picked WhatsApp + we have a phone → bypass the
+          // server send entirely. Open wa.me with the receipt body
+          // pre-typed; cashier taps Send inside WhatsApp.
+          if (receiptChannel === 'whatsapp' && phoneClean) {
+            const text = buildWhatsAppReceiptText({
+              customerName: nameClean,
+              channelLabel: 'BSC Marketplace Nassau',
+              items: items.map((i: any) => ({
+                name:       i.name,
+                qty:        i.quantity ?? i.qty ?? 1,
+                unit_price: i.unit_price ?? i.price ?? 0,
+              })),
+              total,
+              orderId,
+              cashierName: user?.user_metadata?.full_name || user?.email || '',
+            })
+            const waUrl = buildWaMeUrl(phoneClean, text)
+            if (waUrl) {
+              window.open(waUrl, '_blank')
+              deliveredChannel = 'whatsapp'
+              receiptTo        = phoneClean
+            } else {
+              receiptError = 'Could not normalize phone for WhatsApp.'
+            }
+          }
           const { data: { session } } = await supabase.auth.getSession()
           const accessToken = session?.access_token
-          if (accessToken && (validEmail || phoneClean)) {
+          // Skip the API send when we already handled it via click-to-chat
+          // OR when the cashier picked print.
+          const skipApiSend = (receiptChannel === 'whatsapp' && phoneClean) || receiptChannel === 'print'
+          if (!skipApiSend && accessToken && (validEmail || phoneClean)) {
             const res = await fetch('/api/pos/receipt', {
               method: 'POST',
               headers: {
@@ -1104,7 +1185,7 @@ export default function POSPage() {
           }}>
           {lastReceipt.error
             ? `⚠ Receipt FAILED: ${lastReceipt.error}${lastReceipt.orderId ? ` — open /receipt/${lastReceipt.orderId.slice(0, 8)} manually` : ''}`
-            : lastReceipt.channel === 'whatsapp' ? `💬 WhatsApp receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
+            : lastReceipt.channel === 'whatsapp' ? `💬 WhatsApp opened${lastReceipt.to ? ` for ${lastReceipt.to}` : ''} — tap Send inside WhatsApp`
             : lastReceipt.channel === 'email' ? `📧 Email receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : lastReceipt.channel === 'sms'   ? `📱 SMS receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : `🖨 Print receipt opened`}
@@ -1479,7 +1560,7 @@ export default function POSPage() {
                 <label className="block text-xs text-gray-400 mb-2 uppercase tracking-wide">Receipt via</label>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { key: 'whatsapp', label: '💬 WhatsApp', sub: 'auto-SMS fallback' },
+                    { key: 'whatsapp', label: '💬 WhatsApp', sub: 'opens WhatsApp · tap Send' },
                     { key: 'email',    label: '✉️ Email',    sub: 'inbox' },
                     { key: 'print',    label: '🖨 Print',    sub: 'in browser' },
                   ] as const).map((opt) => {
