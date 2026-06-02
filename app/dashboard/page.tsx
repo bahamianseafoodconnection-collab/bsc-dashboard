@@ -898,110 +898,135 @@ export default function DashboardPage() {
 
           {activeTab === 'overview' && (
             <div>
-              {/* ── HERO STRIP — Revenue · Profit · COGS (live today) ──
-                  Per founder ask 2026-06-02: "at the very top total
-                  revenue, profit and COGS." Three big bold numbers
-                  driven by todaySales (auto-refreshes every 60 s). */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', marginBottom: '14px' }}>
-                <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px', padding: '18px 16px', textAlign: 'center' }}>
-                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px' }}>Revenue Today</div>
-                  <div style={{ color: '#f4c842', fontWeight: 900, fontSize: '24px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(todayRevenue)}</div>
+              {/* ── ROW 1 — Today's Sales · Cash · Card · Online ──
+                  Per founder's wireframe 2026-06-02 — the four numbers
+                  Dedrick scans first. "Today's Sales" is the grand
+                  total across every channel; Cash / Card / Online
+                  are the splits beneath it. */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ backgroundColor: '#1a2e5a', borderRadius: '16px', padding: '16px', textAlign: 'center', borderBottom: '4px solid #f5c518' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px' }}>Today&apos;s Sales</div>
+                  <div style={{ color: '#f5c518', fontWeight: 900, fontSize: '26px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(todayRevenue)}</div>
                 </div>
-                <div style={{ backgroundColor: '#dcfce7', borderRadius: '16px', padding: '18px 16px', textAlign: 'center', borderTop: '4px solid #16a34a' }}>
-                  <div style={{ color: '#166534', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px' }}>Profit Today</div>
-                  <div style={{ color: '#166534', fontWeight: 900, fontSize: '24px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(todayProfit)}</div>
+                <div style={{ backgroundColor: '#fef3c7', borderRadius: '16px', padding: '16px', textAlign: 'center', borderBottom: '4px solid #d97706' }}>
+                  <div style={{ color: '#92400e', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px', fontWeight: 800 }}>💵 Cash</div>
+                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '26px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(nassauCash)}</div>
+                </div>
+                <div style={{ backgroundColor: '#dbeafe', borderRadius: '16px', padding: '16px', textAlign: 'center', borderBottom: '4px solid #0284c7' }}>
+                  <div style={{ color: '#075985', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px', fontWeight: 800 }}>💳 Card</div>
+                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '26px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(nassauCard)}</div>
+                </div>
+                <div style={{ backgroundColor: '#e0e7ff', borderRadius: '16px', padding: '16px', textAlign: 'center', borderBottom: '4px solid #6366f1' }}>
+                  <div style={{ color: '#3730a3', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px', fontWeight: 800 }}>🌐 Online</div>
+                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '26px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(onlineAll)}</div>
+                </div>
+              </div>
+
+              {/* Secondary channels — small chips so Andros + Wholesale
+                  don't vanish from view but stay subordinate to the
+                  four primary numbers above. */}
+              {(androsAll > 0 || wholeAll > 0 || nassauOther > 0) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: 11, color: '#64748b' }}>
+                  {androsAll > 0   && <span style={{ background: '#f3e8ff', padding: '4px 10px', borderRadius: 999 }}>🏝 Andros <strong style={{ color: '#6b21a8' }}>{fmtBSD(androsAll)}</strong></span>}
+                  {wholeAll > 0    && <span style={{ background: '#ecfdf5', padding: '4px 10px', borderRadius: 999 }}>🏭 Wholesale <strong style={{ color: '#065f46' }}>{fmtBSD(wholeAll)}</strong></span>}
+                  {nassauOther > 0 && <span style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: 999 }}>Wire/account <strong style={{ color: '#0f172a' }}>{fmtBSD(nassauOther)}</strong></span>}
+                </div>
+              )}
+
+              {/* ── ROW 2 — Profit · COGS (centered, 2 big cards) ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '18px', maxWidth: 720, marginLeft: 'auto', marginRight: 'auto' }}>
+                <div style={{ backgroundColor: '#dcfce7', borderRadius: '16px', padding: '20px', textAlign: 'center', borderTop: '4px solid #16a34a' }}>
+                  <div style={{ color: '#166534', fontSize: '11px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px', fontWeight: 800 }}>Profit Today</div>
+                  <div style={{ color: '#166534', fontWeight: 900, fontSize: '28px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(todayProfit)}</div>
                   {todayNetProfit !== null && (
-                    <div style={{ color: '#15803d', fontSize: '10px', marginTop: 4 }}>Net (after expenses): <strong>{fmtBSD(todayNetProfit)}</strong></div>
+                    <div style={{ color: '#15803d', fontSize: '10px', marginTop: 4 }}>Net after expenses: <strong>{fmtBSD(todayNetProfit)}</strong></div>
                   )}
                 </div>
-                <div style={{ backgroundColor: '#fee2e2', borderRadius: '16px', padding: '18px 16px', textAlign: 'center', borderTop: '4px solid #dc2626' }}>
-                  <div style={{ color: '#991b1b', fontSize: '10px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px' }}>COGS Today (Supplier Owed)</div>
-                  <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '24px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(todaySupplier)}</div>
+                <div style={{ backgroundColor: '#fee2e2', borderRadius: '16px', padding: '20px', textAlign: 'center', borderTop: '4px solid #dc2626' }}>
+                  <div style={{ color: '#991b1b', fontSize: '11px', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: '6px', fontWeight: 800 }}>COGS Today</div>
+                  <div style={{ color: '#dc2626', fontWeight: 900, fontSize: '28px', fontFamily: "'Playfair Display', serif" }}>{fmtBSD(todaySupplier)}</div>
+                  <div style={{ color: '#b91c1c', fontSize: '10px', marginTop: 4 }}>Total owed across all suppliers today</div>
                 </div>
               </div>
 
-              {/* ── CHANNEL STRIP — Nassau Cash · Nassau Card · Online · Andros ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '18px' }}>
-                <div style={{ backgroundColor: '#fff8e7', borderRadius: '14px', padding: '14px', borderLeft: '4px solid #f5c518' }}>
-                  <div style={{ color: '#92400e', fontSize: '10px', letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 800 }}>💵 Nassau Cash</div>
-                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px', marginTop: 4 }}>{fmtBSD(nassauCash)}</div>
-                </div>
-                <div style={{ backgroundColor: '#f0f9ff', borderRadius: '14px', padding: '14px', borderLeft: '4px solid #0284c7' }}>
-                  <div style={{ color: '#075985', fontSize: '10px', letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 800 }}>💳 Nassau Card</div>
-                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px', marginTop: 4 }}>{fmtBSD(nassauCard)}</div>
-                  {nassauOther > 0 && <div style={{ color: '#64748b', fontSize: 10, marginTop: 2 }}>+{fmtBSD(nassauOther)} wire/account</div>}
-                </div>
-                <div style={{ backgroundColor: '#eef2ff', borderRadius: '14px', padding: '14px', borderLeft: '4px solid #6366f1' }}>
-                  <div style={{ color: '#3730a3', fontSize: '10px', letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 800 }}>🌐 Online</div>
-                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px', marginTop: 4 }}>{fmtBSD(onlineAll)}</div>
-                </div>
-                <div style={{ backgroundColor: '#f3e8ff', borderRadius: '14px', padding: '14px', borderLeft: '4px solid #9333ea' }}>
-                  <div style={{ color: '#6b21a8', fontSize: '10px', letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 800 }}>🏝 Andros POS</div>
-                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px', marginTop: 4 }}>{fmtBSD(androsAll)}</div>
-                </div>
-                <div style={{ backgroundColor: '#ecfdf5', borderRadius: '14px', padding: '14px', borderLeft: '4px solid #059669' }}>
-                  <div style={{ color: '#065f46', fontSize: '10px', letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: 800 }}>🏭 Wholesale</div>
-                  <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '20px', marginTop: 4 }}>{fmtBSD(wholeAll)}</div>
-                </div>
-              </div>
-
-              {/* ── LIVE SUPPLIER ACTIVITY — what sold + what to buy ──
-                  One card per supplier with non-zero COGS today. Each
-                  card shows: $ owed today / 7d, products sold today,
-                  reorder needs (low/out stock). Cards link to
-                  /dashboard/supplier-cogs for the full ledger. */}
+              {/* ── ROW 3 — Supplier ledger (left) + Buy-back columns (right) ──
+                  Matches the founder wireframe: simple "Supplier | COGS"
+                  table on the left; one column per supplier on the right
+                  listing the products to repurchase from each. */}
               <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '18px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', marginBottom: '20px', borderTop: '4px solid #1a2e5a' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                   <div>
-                    <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '16px', fontFamily: "'Playfair Display', serif" }}>💸 Live Supplier Activity</div>
-                    <div style={{ color: '#64748b', fontSize: '11px', marginTop: 2 }}>What sold today, who&apos;s owed, what to buy back from each supplier.</div>
+                    <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '16px', fontFamily: "'Playfair Display', serif" }}>💸 Supplier Activity Today</div>
+                    <div style={{ color: '#64748b', fontSize: '11px', marginTop: 2 }}>What&apos;s owed to each supplier · what to buy back from each, live.</div>
                   </div>
                   <Link href="/dashboard/supplier-cogs" style={{ background: '#1a2e5a', color: '#f5c518', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 800, textDecoration: 'none' }}>Full ledger →</Link>
                 </div>
                 {supplierTodayRollup.length === 0 && (
-                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
-                    No supplier sales yet today.
-                  </div>
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No supplier sales yet today.</div>
                 )}
                 {supplierTodayRollup.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-                    {supplierTodayRollup
-                      .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0 || Number(r.cogs_owed_7d_bsd || 0) > 0)
-                      .map((r) => {
-                        const key  = r.supplier_id || 'none';
-                        const sold = supplierTodayProducts[key] ?? [];
-                        const buy  = supplierReorder[key] ?? [];
-                        return (
-                          <div key={key} style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                              <div style={{ fontWeight: 800, fontSize: 13, color: '#1a2e5a' }}>{r.supplier_name}</div>
-                              <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: 14, color: '#dc2626' }}>{fmtBSD(Number(r.cogs_owed_today_bsd || 0))}</div>
-                            </div>
-                            <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700, marginBottom: 4 }}>Sold today</div>
-                            {sold.length === 0 && <div style={{ fontSize: 11, color: '#cbd5e1', marginBottom: 8 }}>— nothing yet —</div>}
-                            {sold.length > 0 && (
-                              <ul style={{ margin: 0, padding: '0 0 6px 14px', fontSize: 11, color: '#475569' }}>
-                                {sold.slice(0, 4).map((n) => <li key={n}>{n}</li>)}
-                                {sold.length > 4 && <li style={{ color: '#94a3b8', listStyle: 'none', marginLeft: -14 }}>+{sold.length - 4} more</li>}
-                              </ul>
-                            )}
-                            <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 6, paddingTop: 6 }}>
-                              <div style={{ fontSize: 10, color: '#92400e', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 800, marginBottom: 4 }}>🛒 To repurchase</div>
-                              {buy.length === 0 && <div style={{ fontSize: 11, color: '#cbd5e1' }}>— stock looks ok —</div>}
-                              {buy.length > 0 && (
-                                <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: '#92400e' }}>
-                                  {buy.map((b) => (
-                                    <li key={b.name}>
-                                      <span style={{ fontWeight: 700 }}>{b.name}</span>
-                                      <span style={{ color: '#b45309', marginLeft: 4 }}>· {Number(b.stock).toFixed(b.uom === 'lb' ? 1 : 0)} {b.uom || ''} left</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 2fr', gap: 16 }}>
+                    {/* LEFT — Supplier | COGS table */}
+                    <div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800, marginBottom: 8 }}>Supplier · COGS owed today</div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <tbody>
+                          {supplierTodayRollup
+                            .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0)
+                            .map((r) => (
+                              <tr key={r.supplier_id || r.supplier_name} style={{ borderTop: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '8px 4px', fontWeight: 700, color: '#1a2e5a' }}>{r.supplier_name}</td>
+                                <td style={{ padding: '8px 4px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#dc2626' }}>{fmtBSD(Number(r.cogs_owed_today_bsd || 0))}</td>
+                              </tr>
+                            ))}
+                          <tr style={{ borderTop: '2px solid #1a2e5a' }}>
+                            <td style={{ padding: '10px 4px', fontWeight: 900, color: '#1a2e5a' }}>TOTAL</td>
+                            <td style={{ padding: '10px 4px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 900, color: '#1a2e5a' }}>
+                              {fmtBSD(supplierTodayRollup.reduce((s, r) => s + Number(r.cogs_owed_today_bsd || 0), 0))}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* RIGHT — per-supplier "buy these back" columns */}
+                    <div>
+                      <div style={{ fontSize: 10, color: '#92400e', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800, marginBottom: 8 }}>🛒 Buy these back</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                        {supplierTodayRollup
+                          .filter((r) => Number(r.cogs_owed_today_bsd || 0) > 0 || Number(r.cogs_owed_7d_bsd || 0) > 0)
+                          .map((r) => {
+                            const key = r.supplier_id || 'none';
+                            const buy = supplierReorder[key] ?? [];
+                            const sold = supplierTodayProducts[key] ?? [];
+                            return (
+                              <div key={key} style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 10 }}>
+                                <div style={{ fontWeight: 800, fontSize: 12, color: '#1a2e5a', textTransform: 'uppercase', letterSpacing: 0.5, paddingBottom: 6, borderBottom: '1px solid #fde68a', marginBottom: 6 }}>
+                                  {r.supplier_name}
+                                </div>
+                                {buy.length === 0 && (
+                                  <div style={{ fontSize: 10, color: '#a8a29e', fontStyle: 'italic' }}>stock ok — nothing flagged</div>
+                                )}
+                                {buy.length > 0 && (
+                                  <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
+                                    {buy.map((b) => (
+                                      <li key={b.name}>
+                                        <span style={{ fontWeight: 700 }}>{b.name}</span>
+                                        <span style={{ color: '#b45309', fontSize: 10 }}> · {Number(b.stock).toFixed(b.uom === 'lb' ? 1 : 0)}{b.uom ? ` ${b.uom}` : ''} left</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                {sold.length > 0 && (
+                                  <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #fde68a', fontSize: 10, color: '#64748b' }}>
+                                    <span style={{ fontWeight: 700, color: '#475569' }}>Sold today:</span> {sold.slice(0, 2).join(' · ')}{sold.length > 2 ? ` +${sold.length - 2}` : ''}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
