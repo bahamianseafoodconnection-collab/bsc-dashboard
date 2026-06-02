@@ -13,7 +13,13 @@
 // (SSR) or localStorage is unavailable (privacy mode).
 
 const KEY     = 'bsc_signed_in_at';
-const MAX_MS  = 10 * 60 * 60 * 1000;   // 10 hours
+// Bumped from 10h → 30 days on 2026-06-02. Founder repeatedly hit
+// "Claff is signed out mid-shift" issues even with cashier/andros
+// already in BYPASS_ROLES. Belt-and-suspenders: anyone who somehow
+// has a timestamp (left over from older code paths) still won't be
+// force-signed-out unless they've been "signed in" for 30+ days.
+// Real session lifecycle is owned by Supabase auth refresh tokens.
+const MAX_MS  = 30 * 24 * 60 * 60 * 1000;   // 30 days
 
 export function recordSignIn(at: number = Date.now()): void {
   if (typeof window === 'undefined') return;

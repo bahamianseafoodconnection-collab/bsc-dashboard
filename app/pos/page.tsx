@@ -73,6 +73,7 @@ const TERMINALS = [
 const PAYMENT_METHODS = [
   { value: 'cash',    label: '💵 Cash' },
   { value: 'card',    label: '💳 Card' },
+  { value: 'split',   label: '🪙 Split (cash + card)' },
   { value: 'wire',    label: '🏦 Wire Transfer' },
   { value: 'account', label: '🧾 Account (wholesale credit)' },
 ]
@@ -224,6 +225,10 @@ export default function POSPage() {
   const [dupConfirmAt, setDupConfirmAt] = useState<number | null>(null)
   const [cashTendered, setCashTendered] = useState('')
   const [wireRef, setWireRef]           = useState('')
+  // Split-payment state — used when paymentMethod === 'split'.
+  // cardRef + terminal (already declared above) cover the card half.
+  const [splitCashAmount, setSplitCashAmount] = useState('')
+  const [splitCardAmount, setSplitCardAmount] = useState('')
   const [orderSuccess, setOrderSuccess] = useState(false)
   // Receipt-channel feedback shown after every completed sale so the
   // cashier (and Dedrick at /dashboard/cashiers) can see whether the
@@ -587,6 +592,8 @@ export default function POSPage() {
     setCardRef('')
     setCashTendered('')
     setWireRef('')
+    setSplitCashAmount('')
+    setSplitCardAmount('')
     setPaymentMethod('cash')
   }
 
@@ -649,7 +656,16 @@ export default function POSPage() {
   const cartCount     = cart.reduce((sum, item) => sum + item.quantity, 0)
   const cashTenderedNum = parseFloat(cashTendered) || 0
   const changeDue     = paymentMethod === 'cash' && cashTenderedNum >= total ? cashTenderedNum - total : 0
-  const checkoutReady = paymentMethod === 'cash' ? (cashTenderedNum >= total && total > 0) : true
+  // Split-payment math — cash + card portions must add up to total (allow $0.01 rounding).
+  const splitCashNum  = parseFloat(splitCashAmount) || 0
+  const splitCardNum  = parseFloat(splitCardAmount) || 0
+  const splitSum      = +(splitCashNum + splitCardNum).toFixed(2)
+  const splitBalanced = Math.abs(splitSum - total) < 0.01 && total > 0
+  const splitRemaining = +(total - splitSum).toFixed(2)
+  const checkoutReady =
+    paymentMethod === 'cash'  ? (cashTenderedNum >= total && total > 0) :
+    paymentMethod === 'split' ? splitBalanced :
+    true
 
   // Explicit "Save customer" — fires the server-side /api/pos/save-customer
   // route so RLS doesn't block the cashier. Cashier sees an inline toast
@@ -718,6 +734,27 @@ export default function POSPage() {
       return
     }
 
+    // Split payment validation: cash + card must equal total, both > 0,
+    // and card portion still needs a terminal reference like a normal
+    // card sale (RBC reconciliation depends on it).
+    if (paymentMethod === 'split') {
+      if (splitCashNum <= 0 || splitCardNum <= 0) {
+        alert('Split payment needs BOTH a cash amount and a card amount, each greater than $0.')
+        return
+      }
+      if (!splitBalanced) {
+        const diff = total - splitSum
+        alert(
+          `Split amounts (cash $${splitCashNum.toFixed(2)} + card $${splitCardNum.toFixed(2)} = ` +
+          `$${splitSum.toFixed(2)}) don't match the total ($${total.toFixed(2)}). ` +
+          (diff > 0
+            ? `Add $${diff.toFixed(2)} more.`
+            : `Reduce by $${Math.abs(diff).toFixed(2)}.`)
+        )
+        return
+      }
+    }
+
     setSubmitting(true)
 
     // Founder + co_founder are always-on via the dashboard and can ring
@@ -737,10 +774,10 @@ export default function POSPage() {
       }
     }
 
-    // Card sales require a reference from the RBC terminal slip for
-    // RBC daily reconciliation (Items 6 receipt display + Task #77 RBC
-    // ingest cron post-launch). Applies to ALL roles — founder included.
-    if (paymentMethod === 'card') {
+    // Card sales (including the card half of a split) require a
+    // reference from the RBC terminal slip for RBC daily
+    // reconciliation. Applies to ALL roles — founder included.
+    if (paymentMethod === 'card' || paymentMethod === 'split') {
       if (!cardRef.trim()) {
         alert('Card reference required. Type the reference number from the RBC terminal slip, then Complete Sale.')
         setSubmitting(false)
@@ -861,6 +898,7 @@ export default function POSPage() {
       }
 
       let adminNotes = ''
+      let paymentBreakdown: Record<string, unknown> | null = null
       if (paymentMethod === 'card') {
         const terminalLabel = TERMINALS.find(t => t.value === terminal)?.label ?? terminal
         adminNotes = cardRef ? `Card ref: ${cardRef} | Terminal: ${terminalLabel}` : `Terminal: ${terminalLabel}`
@@ -868,6 +906,17 @@ export default function POSPage() {
         adminNotes = `Cash tendered: $${cashTenderedNum.toFixed(2)} | Change: $${changeDue.toFixed(2)}`
       } else if (paymentMethod === 'wire') {
         adminNotes = wireRef ? `Wire ref: ${wireRef}` : 'Wire transfer'
+      } else if (paymentMethod === 'split') {
+        const terminalLabel = TERMINALS.find(t => t.value === terminal)?.label ?? terminal
+        const normRef       = normalizeCardRef(cardRef)
+        adminNotes = `SPLIT: cash $${splitCashNum.toFixed(2)} + card $${splitCardNum.toFixed(2)} (ref ${normRef} via ${terminalLabel})`
+        paymentBreakdown = {
+          cash:     +splitCashNum.toFixed(2),
+          card:     +splitCardNum.toFixed(2),
+          total:    +total.toFixed(2),
+          card_ref: normRef,
+          terminal,
+        }
       }
 
       const items = cart.map(item => {
@@ -899,9 +948,14 @@ export default function POSPage() {
         wholesale_items: items,
         subtotal, vat_amount: vatAmount, total,
         payment_method: paymentMethod,
+        // Split-payment breakdown — JSONB column added 2026-06-02.
+        // Null for non-split sales; { cash, card, total, card_ref,
+        // terminal } for split sales so accounting can attribute
+        // the cash + card halves cleanly.
+        payment_breakdown: paymentBreakdown,
         payment_status: paymentStatus,
-        terminal_type:  paymentMethod === 'card' ? terminal : null,
-        card_ref:       paymentMethod === 'card' ? normalizeCardRef(cardRef) : null,  // NEW — structured column added by migration 20260525000000
+        terminal_type:  (paymentMethod === 'card' || paymentMethod === 'split') ? terminal : null,
+        card_ref:       (paymentMethod === 'card' || paymentMethod === 'split') ? normalizeCardRef(cardRef) : null,  // structured column from 20260525000000
         admin_notes: adminNotes, status: 'completed',                       // back-compat: keeps writing the buried "Card ref: XXX" string for any legacy reader
         customer_id:    customerId,
         customer_name:  nameClean || null,
@@ -2013,6 +2067,66 @@ export default function POSPage() {
                 <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Wire Ref # (optional)</label>
                 <input type="text" placeholder="e.g. TRF-20260513" value={wireRef} onChange={e => setWireRef(e.target.value)}
                   className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400" />
+              </>
+            )}
+
+            {/* Split — cash + card portions must sum to the total. */}
+            {paymentMethod === 'split' && (
+              <>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Cash ($)</label>
+                    <input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" placeholder="0.00"
+                      value={splitCashAmount} onChange={e => setSplitCashAmount(e.target.value)}
+                      className="w-full bg-gray-800 text-white text-lg rounded-xl px-3 py-3 border border-gray-700 text-center focus:outline-none focus:border-yellow-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card ($)</label>
+                    <input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" placeholder="0.00"
+                      value={splitCardAmount} onChange={e => setSplitCardAmount(e.target.value)}
+                      className="w-full bg-gray-800 text-white text-lg rounded-xl px-3 py-3 border border-gray-700 text-center focus:outline-none focus:border-yellow-400" />
+                  </div>
+                </div>
+                {/* Balance indicator */}
+                {splitBalanced ? (
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#052e16' }}>
+                    <p className="text-sm font-bold" style={{ color: '#4ade80' }}>
+                      ✅ Balanced — ${splitCashNum.toFixed(2)} cash + ${splitCardNum.toFixed(2)} card
+                    </p>
+                  </div>
+                ) : splitSum === 0 ? (
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#1f2937' }}>
+                    <p className="text-xs text-gray-400">Enter cash + card amounts. Must total <strong className="text-yellow-300">${total.toFixed(2)}</strong></p>
+                  </div>
+                ) : splitRemaining > 0 ? (
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#3f1010', border: '1px solid #dc2626' }}>
+                    <p className="text-sm font-bold" style={{ color: '#fca5a5' }}>⛔ Short ${splitRemaining.toFixed(2)}</p>
+                    <p className="text-xs mt-1" style={{ color: '#fca5a5' }}>Cash + card must equal ${total.toFixed(2)}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl p-3 mb-4 text-center" style={{ backgroundColor: '#3f1010', border: '1px solid #dc2626' }}>
+                    <p className="text-sm font-bold" style={{ color: '#fca5a5' }}>⛔ Over by ${Math.abs(splitRemaining).toFixed(2)}</p>
+                    <p className="text-xs mt-1" style={{ color: '#fca5a5' }}>Cash + card must equal ${total.toFixed(2)}</p>
+                  </div>
+                )}
+                {/* Card portion needs the terminal + ref same as a regular card sale */}
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Terminal (for card portion)</label>
+                <select value={terminal} onChange={e => setTerminal(e.target.value)}
+                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400">
+                  {TERMINALS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Card Ref # <span className="text-yellow-400">(required)</span></label>
+                <input type="text" placeholder="e.g. 4521" value={cardRef}
+                  onChange={e => { setCardRef(e.target.value); if (dupConfirmAt) setDupConfirmAt(null) }}
+                  className="w-full bg-gray-800 text-white rounded-xl px-4 py-3 mb-4 border border-gray-700 text-sm focus:outline-none focus:border-yellow-400 uppercase font-mono tracking-wide" />
+                {cardRef.trim() && cardRef !== normalizeCardRef(cardRef) && (
+                  <p className="-mt-2 mb-3 text-[11px] text-amber-300">
+                    Will save as <span className="font-mono font-bold">{normalizeCardRef(cardRef)}</span>
+                  </p>
+                )}
+                {cardRef.trim() && !isValidCardRef(cardRef) && (
+                  <p className="-mt-2 mb-3 text-[11px] text-red-300">Reference must be 3–24 alphanumeric characters.</p>
+                )}
               </>
             )}
 

@@ -155,13 +155,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // 10-hour staff session cap. Founder + co_founder are always-on
-        // (bypass via staffSessionBypassesFor). Customers + anyone
-        // without a recorded signin timestamp (pre-deploy sessions OR
-        // /login customer flow) pass through. Cashiers / managers /
-        // andros_staff / supplier / processor / etc. get force-signout
-        // when their staff-login signin is > 10h old.
-        if (!staffSessionBypassesFor(role) && isStaffSessionExpired()) {
+        // Staff session cap. Founder + co_founder + cashier + andros_staff
+        // bypass entirely (no auto-signout — Dedrick's directive 2026-06-02
+        // "keep them signed in until they sign out"). For bypassed roles,
+        // also wipe any leftover localStorage timestamp so the cap can
+        // never accidentally fire against them later. Other roles still
+        // get a force-signout when their signin timestamp is past the cap.
+        if (staffSessionBypassesFor(role)) {
+          clearSignIn();
+        } else if (isStaffSessionExpired()) {
           clearSignIn();
           await supabase.auth.signOut();
           const nextParam = pathname && pathname !== '/staff-login' ? `?next=${encodeURIComponent(pathname)}` : '';
