@@ -227,7 +227,11 @@ export default function POSPage() {
   // Receipt-channel feedback shown after every completed sale so the
   // cashier (and Dedrick at /dashboard/cashiers) can see whether the
   // email/SMS receipt actually went out.
-  const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'whatsapp' | 'print'; to?: string; orderId?: string; error?: string } | null>(null)
+  // waUrl is set when the cashier picked WhatsApp + we have a phone.
+  // The cashier taps the toast button to open it (popup blockers eat
+  // any window.open call that happens after async work like the order
+  // insert; a direct click bypasses that).
+  const [lastReceipt, setLastReceipt] = useState<{ channel: 'email' | 'sms' | 'whatsapp' | 'print'; to?: string; orderId?: string; error?: string; waUrl?: string } | null>(null)
   // Item 7: separate toast for inventory-write failures (fire-and-forget
   // path that historically failed silently). 30s visibility so cashier
   // sees the order ID to email Dedrick before it auto-clears.
@@ -929,8 +933,14 @@ export default function POSPage() {
         try {
           // ── WhatsApp click-to-chat (Tier 1) ──
           // Cashier picked WhatsApp + we have a phone → bypass the
-          // server send entirely. Open wa.me with the receipt body
-          // pre-typed; cashier taps Send inside WhatsApp.
+          // server send entirely. Build the wa.me / web.whatsapp.com
+          // URL and STASH it on lastReceipt so the cashier can tap a
+          // direct button to open. We deliberately do NOT call
+          // window.open here — by this point we're deep into an async
+          // chain (order insert + customer save + inventory write)
+          // and the browser's popup blocker treats the call as
+          // non-user-initiated, silently dropping the new tab.
+          let pendingWaUrl: string | undefined
           if (receiptChannel === 'whatsapp' && phoneClean) {
             const text = buildWhatsAppReceiptText({
               customerName: nameClean,
@@ -946,7 +956,7 @@ export default function POSPage() {
             })
             const waUrl = buildWaMeUrl(phoneClean, text)
             if (waUrl) {
-              window.open(waUrl, '_blank')
+              pendingWaUrl     = waUrl
               deliveredChannel = 'whatsapp'
               receiptTo        = phoneClean
             } else {
@@ -1017,11 +1027,12 @@ export default function POSPage() {
       }
 
       // Surface the result so Claff/TJ see it for ~10 seconds.
-      setLastReceipt({ channel: deliveredChannel, to: receiptTo, orderId, error: receiptError })
-      // Keep the toast up longer when there's an error so the cashier
-      // (and Dedrick) can actually read the failure reason. Success
-      // toasts can disappear in 10s as before.
-      setTimeout(() => setLastReceipt(null), receiptError ? 30000 : 10000)
+      setLastReceipt({ channel: deliveredChannel, to: receiptTo, orderId, error: receiptError, waUrl: pendingWaUrl })
+      // Keep the toast up longer when there's an error OR when the
+      // cashier still needs to tap the WhatsApp button. Success toasts
+      // for email/SMS/print can disappear in 10s as before.
+      const toastMs = receiptError ? 30000 : pendingWaUrl ? 60000 : 10000
+      setTimeout(() => setLastReceipt(null), toastMs)
 
       // Persist the last-card-sale hint so the next ring can spot a typo
       // duplicate before submit. Only set when this sale was a card —
@@ -1211,7 +1222,12 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* ── Receipt-channel feedback ── */}
+      {/* ── Receipt-channel feedback ──
+          WhatsApp success surfaces a prominent "Open WhatsApp" button
+          rather than auto-opening, because window.open() called after
+          async work (order insert / customer save) gets silently
+          eaten by popup blockers. The direct user-click on the
+          button is a real gesture and always opens. */}
       {lastReceipt && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 rounded-xl px-5 py-3 text-xs font-bold shadow-xl max-w-md text-center"
           style={{
@@ -1220,7 +1236,21 @@ export default function POSPage() {
           }}>
           {lastReceipt.error
             ? `⚠ Receipt FAILED: ${lastReceipt.error}${lastReceipt.orderId ? ` — open /receipt/${lastReceipt.orderId.slice(0, 8)} manually` : ''}`
-            : lastReceipt.channel === 'whatsapp' ? `💬 WhatsApp opened${lastReceipt.to ? ` for ${lastReceipt.to}` : ''} — tap Send inside WhatsApp`
+            : lastReceipt.channel === 'whatsapp' && lastReceipt.waUrl ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div>✓ Sale rung. Send the receipt to <strong>{lastReceipt.to}</strong> in WhatsApp:</div>
+                  <a
+                    href={lastReceipt.waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-extrabold no-underline"
+                    style={{ backgroundColor: '#25d366', color: '#0b3d2e' }}
+                  >
+                    💬 Open in WhatsApp
+                  </a>
+                </div>
+              )
+            : lastReceipt.channel === 'whatsapp' ? `💬 WhatsApp picked but no phone on file`
             : lastReceipt.channel === 'email' ? `📧 Email receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : lastReceipt.channel === 'sms'   ? `📱 SMS receipt sent${lastReceipt.to ? ` to ${lastReceipt.to}` : ''}`
             : `🖨 Print receipt opened`}
