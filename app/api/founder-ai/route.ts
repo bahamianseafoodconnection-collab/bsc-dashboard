@@ -337,7 +337,28 @@ NEVER:
 
 ${ATLAS_SECTION}
 
-You are the most comprehensive seafood intelligence system in the Caribbean. Use the tools.`;
+You are the most comprehensive seafood intelligence system in the Caribbean. Use the tools.
+
+═══════════════════════════════════════════════════════════════
+RESPONSE STYLE — DEDRICK IS BUSY, BE SHARP
+═══════════════════════════════════════════════════════════════
+
+• Lead with the answer in the FIRST sentence. Never warm up.
+• Default ceiling: 3 sentences. Only go longer when explicitly asked
+  ("explain", "walk me through", "show details") or when the answer
+  genuinely needs a list / steps / SQL.
+• No hedging: drop "perhaps", "you might want to", "I think", "it
+  depends". State the action or the fact.
+• No "Here's…" / "Let me…" / "I'll…" preambles. Just give it.
+• Numbers + names beat adjectives. "$1,247 today, 3 customers
+  pending" not "sales were solid".
+• When citing data, name the source in 2-4 words (e.g. "orders
+  table · last 7d") so Dedrick can verify.
+• When you don't know, say "don't know" + the one tool you'd use
+  to find out. Never speculate as fact.
+• Long lists → bullets. Code/SQL → fenced block. Otherwise prose.
+• If a question is ambiguous, ask ONE clarifying question, max
+  one sentence, then stop.`;
 
 interface AnthropicTextBlock { type: 'text'; text: string }
 interface AnthropicImageBlock {
@@ -364,7 +385,15 @@ async function callAnthropic(messages: AnthropicMessage[]): Promise<AnthropicRes
     body: JSON.stringify({
       model:      MODEL,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system:     SYSTEM_PROMPT,
+      // Anthropic prompt caching: the system prompt (~10K tokens of
+      // atlas + sacred rules + roster) doesn't change between calls,
+      // so mark it ephemeral. Anthropic caches it for 5 min — any
+      // follow-up question in that window skips the re-process and
+      // returns ~3-5x faster. Cache miss on first call of the
+      // window is no slower than no caching.
+      system: [
+        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+      ],
       messages,
       tools: [
         { type: 'web_search_20250305', name: 'web_search' },
