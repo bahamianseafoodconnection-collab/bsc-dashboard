@@ -11,6 +11,7 @@ import {
 } from '@/lib/profit'
 import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
 import { toE164 } from '@/lib/phone'
+import DailyProtocolChecklist from '@/components/DailyProtocolChecklist'
 import AddInventoryButton from '@/components/intake/AddInventoryButton'
 import EditPriceModal from '@/components/pos/EditPriceModal'
 import CustomerNameLookup, { type CustomerMatch } from '@/components/pos/CustomerNameLookup'
@@ -1493,6 +1494,12 @@ export default function POSPage() {
 
       {/* ── Product grid ── */}
       <main className="flex-1 p-4">
+        {/* Cashier daily protocol — Claff / Patricia / TJ see exactly
+            what they're supposed to log every shift, in order. */}
+        <div className="mb-4 -mx-1">
+          <DailyProtocolChecklist role={userRole} />
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center h-48">
             <p className="text-gray-400 text-sm animate-pulse">Loading catalog...</p>

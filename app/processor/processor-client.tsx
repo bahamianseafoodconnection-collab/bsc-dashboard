@@ -18,6 +18,7 @@ import { plainError } from '@/lib/plain-error';
 import NewBatchForm from './new-batch-form';
 import ApprovalQueue from './approval-queue';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
+import DailyProtocolChecklist from '@/components/DailyProtocolChecklist';
 
 const NAVY = '#060e1c';
 const PANEL = '#0f1a2e';
@@ -147,6 +148,11 @@ export default function ProcessorClient({
       }}
     >
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        {/* Processor / operations daily protocol — surfaces the
+            order-of-operations every shift (Spiny Tail step 1/2/3,
+            CCP freezer temps, SSOP cleaning, case packing). */}
+        <DailyProtocolChecklist role={role} />
+
         {/* Header */}
         <div
           style={{

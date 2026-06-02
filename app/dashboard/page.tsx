@@ -11,6 +11,7 @@ import { useUserRole, canLock } from '@/lib/role';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
 import { parseOrderItems } from '@/lib/order-items';
 import { clearSignIn } from '@/lib/staff-session';
+import DailyProtocolChecklist from '@/components/DailyProtocolChecklist';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -942,6 +943,13 @@ export default function DashboardPage() {
 
           {activeTab === 'overview' && (
             <div>
+              {/* Today's protocol — first thing Dedrick sees, drives
+                  the daily discipline (review supplier COGS → buy
+                  back what sold → approve pending → etc.). Auto-
+                  collapses when all items done; resets at midnight
+                  Bahamas time via the date-keyed localStorage. */}
+              <DailyProtocolChecklist role={userRole} />
+
               {/* ── ROW 1 — Today's Sales · Cash · Card · Online ──
                   Per founder's wireframe 2026-06-02 — the four numbers
                   Dedrick scans first. "Today's Sales" is the grand
