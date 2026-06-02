@@ -55,6 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
           { icon: '🚚', label: 'Pickup Queue',     href: '/pickup-queue' },
           { icon: '👥', label: 'Customers',         href: '/dashboard/customers' },
           { icon: '🧾', label: 'Supplier COGS',     href: '/dashboard/supplier-cogs' },
+          { icon: '📋', label: 'Daily Sales',       href: '/dashboard/daily-sales' },
           { icon: '🫀', label: 'Pulse (live)',     href: '/pulse' },
           { icon: '🇧🇸', label: 'Wholesale Orders', href: '/wholesale-orders',  badge: 'wholesale_orders' },
         ],
