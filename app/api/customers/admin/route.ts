@@ -33,7 +33,23 @@ type Body = {
   delta?: number;
   reason?: string;
   note?: string;
+  // create
+  full_name?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
 };
+
+// Phone normalization → E.164 with Bahamas default. Keeps customer lookup
+// consistent with the phone-E.164 unification rule (see CustomerPhoneLookup).
+function normalizePhone(raw: string): string | null {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (raw.trim().startsWith('+')) return '+' + digits;
+  if (digits.length === 10) return '+1' + digits;          // US/Bahamas 10-digit
+  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+  return '+' + digits;
+}
 
 function adminClient(): SupabaseClient | null {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -141,6 +157,63 @@ export async function POST(req: NextRequest) {
       if (uErr) return NextResponse.json({ ok: false, error: uErr.message }, { status: 500 });
 
       return NextResponse.json({ ok: true, points_balance: next.points_balance });
+    }
+
+    case 'create': {
+      const fullName = (body.full_name || '').trim();
+      if (!fullName) return NextResponse.json({ ok: false, error: 'full_name required' }, { status: 400 });
+
+      const phoneRaw = (body.phone || '').trim();
+      const emailRaw = (body.email || '').trim().toLowerCase();
+      if (!phoneRaw && !emailRaw) {
+        return NextResponse.json({ ok: false, error: 'Phone OR email required' }, { status: 400 });
+      }
+      const phone = phoneRaw ? normalizePhone(phoneRaw) : null;
+      const email = emailRaw || null;
+
+      // Duplicate check — phone-E.164 is the canonical unification key.
+      if (phone) {
+        const { data: existing } = await admin.from('customers').select('id, full_name').eq('phone', phone).maybeSingle();
+        if (existing) {
+          return NextResponse.json(
+            { ok: false, error: `Phone already on file as "${(existing as { full_name: string | null }).full_name ?? 'customer ' + (existing as { id: string }).id.slice(0,8)}"` },
+            { status: 409 },
+          );
+        }
+      }
+      if (email) {
+        const { data: existing } = await admin.from('customers').select('id, full_name').eq('email', email).maybeSingle();
+        if (existing) {
+          return NextResponse.json(
+            { ok: false, error: `Email already on file as "${(existing as { full_name: string | null }).full_name ?? 'customer ' + (existing as { id: string }).id.slice(0,8)}"` },
+            { status: 409 },
+          );
+        }
+      }
+
+      const isCredit = body.is_credit_customer === true;
+      const insert: Record<string, unknown> = {
+        full_name:           fullName,
+        phone,
+        email,
+        address:             typeof body.address === 'string' && body.address.trim() ? body.address.trim() : null,
+        is_walk_in_anonymous: false,
+        is_active:           true,
+        is_credit_customer:  isCredit,
+        created_by:          caller.userId,
+      };
+      if (isCredit) {
+        if (typeof body.credit_terms === 'string' && body.credit_terms.trim()) insert.credit_terms = body.credit_terms.trim();
+        if (typeof body.credit_limit === 'number' && Number.isFinite(body.credit_limit) && body.credit_limit >= 0) insert.credit_limit = body.credit_limit;
+        insert.credit_approved_by = caller.userId;
+        insert.credit_approved_at = new Date().toISOString();
+      }
+
+      const { data, error } = await admin.from('customers').insert(insert)
+        .select('id, full_name, phone, email, is_credit_customer, credit_terms, credit_limit, current_balance, points_balance, points_lifetime, points_redeemed, total_orders, total_spent, is_active, created_at')
+        .single();
+      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, customer: data });
     }
 
     case 'points_history': {

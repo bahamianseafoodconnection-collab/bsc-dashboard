@@ -67,6 +67,43 @@ export default function CustomersAdminPage() {
   const [eTerms, setETerms]     = useState<string>('COD');
   const [eLimit, setELimit]     = useState<string>('0');
 
+  // Add Customer modal state.
+  const [addOpen,  setAddOpen]  = useState(false);
+  const [addBusy,  setAddBusy]  = useState(false);
+  const [aName,    setAName]    = useState('');
+  const [aPhone,   setAPhone]   = useState('');
+  const [aEmail,   setAEmail]   = useState('');
+  const [aAddress, setAAddress] = useState('');
+  const [aCredit,  setACredit]  = useState(false);
+  const [aTerms,   setATerms]   = useState('NET_7');
+  const [aLimit,   setALimit]   = useState('0');
+  const [aErr,     setAErr]     = useState<string | null>(null);
+
+  function resetAddForm() {
+    setAName(''); setAPhone(''); setAEmail(''); setAAddress('');
+    setACredit(false); setATerms('NET_7'); setALimit('0'); setAErr(null);
+  }
+
+  async function createCustomer() {
+    setAErr(null);
+    if (!aName.trim()) { setAErr('Name is required'); return; }
+    if (!aPhone.trim() && !aEmail.trim()) { setAErr('Phone or email required'); return; }
+    setAddBusy(true);
+    const j = await call('create', {
+      full_name: aName, phone: aPhone, email: aEmail, address: aAddress,
+      is_credit_customer: aCredit,
+      credit_terms:       aCredit ? aTerms : undefined,
+      credit_limit:       aCredit ? (Number(aLimit) || 0) : undefined,
+    });
+    setAddBusy(false);
+    if (!j.ok) { setAErr(j.error || 'Create failed'); return; }
+    const created = j.customer as Customer;
+    setRows(prev => [created, ...prev]);
+    setSelected(created);
+    setAddOpen(false);
+    resetAddForm();
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -148,6 +185,10 @@ export default function CustomersAdminPage() {
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name / phone / email"
             className="ml-auto w-56 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-xs text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-gold sm:w-72" />
+          <button onClick={() => { resetAddForm(); setAddOpen(true); }}
+            className="rounded-lg bg-gold px-3 py-1.5 text-xs font-extrabold text-navy hover:bg-gold/90">
+            + Add Customer
+          </button>
         </div>
       </header>
 
@@ -285,6 +326,88 @@ export default function CustomersAdminPage() {
           </aside>
         )}
       </main>
+
+      {/* ── ADD CUSTOMER MODAL ── */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => !addBusy && setAddOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-lg font-black text-navy">+ Add Customer</h3>
+                <p className="text-[11px] text-slate-500">Founder/co-founder can add and set credit terms in one step.</p>
+              </div>
+              <button onClick={() => setAddOpen(false)} disabled={addBusy} className="text-slate-400 hover:text-slate-700">✕</button>
+            </div>
+
+            {aErr && <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs font-bold text-red-700">⚠ {aErr}</div>}
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Name *</label>
+                <input value={aName} onChange={(e) => setAName(e.target.value)} autoFocus
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Patricia Rolle" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Phone</label>
+                  <input value={aPhone} onChange={(e) => setAPhone(e.target.value)} inputMode="tel"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="242-555-0100" />
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Email</label>
+                  <input value={aEmail} onChange={(e) => setAEmail(e.target.value)} inputMode="email"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="optional" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Address (optional)</label>
+                <input value={aAddress} onChange={(e) => setAAddress(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Fire Trail Road, Nassau" />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-3">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <input type="checkbox" checked={aCredit} onChange={(e) => setACredit(e.target.checked)} />
+                  Approve credit account
+                </label>
+                {aCredit && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Terms</label>
+                      <select value={aTerms} onChange={(e) => setATerms(e.target.value)}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                        {TERMS.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Limit (BSD)</label>
+                      <input type="text" inputMode="decimal" value={aLimit}
+                        onChange={(e) => setALimit(e.target.value.replace(/[^0-9.]/g, ''))}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-right text-sm font-bold" />
+                    </div>
+                  </div>
+                )}
+                {!aCredit && (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Leave unchecked for cash-on-delivery only. You can approve credit later.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setAddOpen(false)} disabled={addBusy}
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button onClick={createCustomer} disabled={addBusy}
+                  className="flex-1 rounded-lg bg-navy px-3 py-2 text-sm font-extrabold text-gold hover:bg-navy-700 disabled:opacity-60">
+                  {addBusy ? 'Adding…' : 'Add Customer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
