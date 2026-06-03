@@ -253,10 +253,25 @@ async function extractPricelist(s: Supplier) {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body:    JSON.stringify({ supplier_id: s.id }),
+      cache:   'no-store',
     });
-    const j = await res.json();
+    const rawBody = await res.text();
+    let j: { ok?: boolean; error?: string; products?: ExtractedProduct[]; diagnostic?: ExtractDiagnostic | null };
+    try { j = JSON.parse(rawBody); }
+    catch {
+      setExtractModal({
+        supplier: s, loading: false,
+        error:    `HTTP ${res.status} · non-JSON response (first 400 chars): ${rawBody.slice(0, 400)}`,
+        products: [], importing: false, diagnostic: null,
+      });
+      return;
+    }
     if (!res.ok || !j.ok) {
-      setExtractModal({ supplier: s, loading: false, error: j.error || `HTTP ${res.status}`, products: [], importing: false, diagnostic: null });
+      setExtractModal({
+        supplier: s, loading: false,
+        error:    `${j.error || `HTTP ${res.status}`} [client-build=2026-06-03b]`,
+        products: [], importing: false, diagnostic: null,
+      });
       return;
     }
     // Hydrate UI-local fields. Wholesale partners default to nassau + wholesale ON.
