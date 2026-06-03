@@ -80,15 +80,31 @@ function slugifyForSku(s: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    // Anything we forgot to wrap below ends up here so the modal never
+    // shows an opaque framework error like "The string did not match
+    // the expected pattern".
+    const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    console.error('[extract-pricelist] uncaught:', msg);
+    return NextResponse.json(
+      { ok: false, error: `Server crash in extract-pricelist: ${msg}` },
+      { status: 500 },
+    );
+  }
+}
+
+async function handle(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
   const anthKey = process.env.ANTHROPIC_API_KEY;
   if (!supaUrl || !anonKey || !svcKey) {
-    return NextResponse.json({ ok: false, error: 'Supabase not configured' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Supabase env vars missing on server' }, { status: 500 });
   }
   if (!anthKey) {
-    return NextResponse.json({ ok: false, error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'ANTHROPIC_API_KEY missing on Vercel' }, { status: 500 });
   }
 
   // ── auth: founder / co_founder only ──
@@ -138,12 +154,31 @@ export async function POST(req: NextRequest) {
   }
 
   // ── download PDF and base64 it ──
-  const pdfRes = await fetch(sup.pricelist_url, { cache: 'no-store' });
-  if (!pdfRes.ok) {
-    return NextResponse.json({ ok: false, error: `Could not fetch pricelist (${pdfRes.status})` }, { status: 502 });
+  let arrayBuf: ArrayBuffer;
+  let pdfBase64: string;
+  try {
+    const pdfRes = await fetch(sup.pricelist_url, { cache: 'no-store' });
+    if (!pdfRes.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Step=fetch-pdf — pricelist URL returned ${pdfRes.status}: ${sup.pricelist_url.slice(0, 120)}` },
+        { status: 502 },
+      );
+    }
+    arrayBuf = await pdfRes.arrayBuffer();
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: `Step=fetch-pdf — ${e instanceof Error ? `${e.name}: ${e.message}` : 'network'} · url=${sup.pricelist_url.slice(0, 120)}` },
+      { status: 502 },
+    );
   }
-  const arrayBuf = await pdfRes.arrayBuffer();
-  const pdfBase64 = Buffer.from(arrayBuf).toString('base64');
+  try {
+    pdfBase64 = Buffer.from(arrayBuf).toString('base64');
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: `Step=base64-encode — ${e instanceof Error ? `${e.name}: ${e.message}` : 'unknown'} · bytes=${arrayBuf.byteLength}` },
+      { status: 500 },
+    );
+  }
 
   // ── call Claude ──
   const prompt = `You are extracting BSC's wholesale cost per product from a supplier pricelist PDF.
