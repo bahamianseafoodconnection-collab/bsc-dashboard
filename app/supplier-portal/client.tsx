@@ -70,7 +70,20 @@ type Product = {
   sell_andros?: boolean;
   sell_online?: boolean;
   sell_wholesale?: boolean;
+  // Live-inventory extra fields (populated for the table view only).
+  sku?: string | null;
+  category?: string | null;
+  unit_of_measure?: string | null;
+  pack_size?: string | null;
+  image_url?: string | null;
+  cost_per_unit?: number | null;
 };
+
+const PORTAL_CATEGORIES = [
+  'Seafood','Meat','Poultry','Produce','Dry Goods','Frozen',
+  'Dairy & Eggs','Beverages','Snacks','Cleaning & Paper','Personal Care','Other',
+];
+type RowSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 type Props = {
   supplierId: string;
@@ -91,6 +104,63 @@ export default function SupplierPortalClient({
   const [liveCatalog, setLiveCatalog] = useState<Product[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [toggleMsg, setToggleMsg] = useState<string | null>(null);
+
+  // Inline-table row save state — matches /supplier/[id] table.
+  const [rowState, setRowState] = useState<Record<string, RowSaveState>>({});
+  const [rowError, setRowError] = useState<Record<string, string>>({});
+  const [rowImgBusy, setRowImgBusy] = useState<Record<string, boolean>>({});
+
+  function setRowStatus(id: string, state: RowSaveState, err?: string) {
+    setRowState(prev => ({ ...prev, [id]: state }));
+    setRowError(prev => {
+      const next = { ...prev };
+      if (state === 'error' && err) next[id] = err; else delete next[id];
+      return next;
+    });
+    if (state === 'saved') {
+      setTimeout(() => setRowState(prev => prev[id] === 'saved' ? { ...prev, [id]: 'idle' } : prev), 2000);
+    }
+  }
+
+  async function patchLiveProduct(id: string, patch: Record<string, unknown>) {
+    setRowStatus(id, 'saving');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setRowStatus(id, 'error', 'Sign-in expired'); return; }
+      const res = await fetch('/api/supplier-portal/update-product', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ product_id: id, patch }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setRowStatus(id, 'error', j.error || `HTTP ${res.status}`); return; }
+      setRowStatus(id, 'saved');
+    } catch (e) {
+      setRowStatus(id, 'error', e instanceof Error ? e.message : 'save failed');
+    }
+  }
+
+  function patchLiveField<K extends keyof Product>(id: string, field: K, value: Product[K]) {
+    setLiveCatalog(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    patchLiveProduct(id, { [field]: value });
+  }
+
+  async function uploadLiveImage(p: Product, file: File) {
+    setRowImgBusy(prev => ({ ...prev, [p.id]: true }));
+    try {
+      const ext  = file.name.split('.').pop() ?? 'jpg';
+      const path = `products/${p.sku ?? p.id.slice(0,8)}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { setRowStatus(p.id, 'error', `image: ${upErr.message}`); return; }
+      const { data: pub } = supabase.storage.from('site-images').getPublicUrl(path);
+      patchLiveField(p.id, 'image_url', pub.publicUrl);
+    } finally {
+      setRowImgBusy(prev => { const n = { ...prev }; delete n[p.id]; return n; });
+    }
+  }
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<{ invoices?: string; payments?: string; products?: string; pos?: string; catalog?: string }>({});
@@ -140,7 +210,7 @@ export default function SupplierPortalClient({
       // controls below. Reads sell_* flags so we can show channel pills.
       supabase
         .from('products')
-        .select('id, sku, name, unit_of_measure, sell_nassau, sell_andros, sell_online, sell_wholesale, status')
+        .select('id, sku, name, category, unit_of_measure, pack_size, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale, status, product_costs!left(cost_per_unit, is_current)')
         .eq('primary_supplier_id', supplierId)
         .order('name', { ascending: true })
         .limit(500),
@@ -151,13 +221,26 @@ export default function SupplierPortalClient({
     if (prodRes.error) errs.products = prodRes.error.message; else setProducts((prodRes.data || []) as Product[]);
     if (poRes.error)   errs.pos = poRes.error.message;       else setPos((poRes.data || []) as PurchaseOrder[]);
     if (catRes.error)  errs.catalog = catRes.error.message;  else {
-      type LiveRow = { id: string; sku: string | null; name: string; unit_of_measure: string | null; sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean; status: string | null };
-      setLiveCatalog(((catRes.data || []) as LiveRow[]).map((r): Product => ({
-        id: r.id, name: r.name, case_cost: null, weight_lbs: null, retail_price: null,
-        wholesale_price: null, unit_cost: null, status: r.status,
-        sell_nassau: r.sell_nassau, sell_andros: r.sell_andros,
-        sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
-      })));
+      type LiveRow = {
+        id: string; sku: string | null; name: string;
+        category: string | null; unit_of_measure: string | null; pack_size: string | null;
+        image_url: string | null;
+        sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
+        status: string | null;
+        product_costs?: Array<{ cost_per_unit: number | null; is_current: boolean }>;
+      };
+      setLiveCatalog(((catRes.data || []) as LiveRow[]).map((r): Product => {
+        const cur = (r.product_costs ?? []).find((c) => c.is_current);
+        return {
+          id: r.id, name: r.name, case_cost: null, weight_lbs: null, retail_price: null,
+          wholesale_price: null, unit_cost: null, status: r.status,
+          sell_nassau: r.sell_nassau, sell_andros: r.sell_andros,
+          sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
+          sku: r.sku, category: r.category, unit_of_measure: r.unit_of_measure,
+          pack_size: r.pack_size, image_url: r.image_url,
+          cost_per_unit: cur ? Number(cur.cost_per_unit) : null,
+        };
+      }));
     }
     setErrors(errs);
     setLoading(false);
@@ -790,41 +873,118 @@ export default function SupplierPortalClient({
               No live products under your name yet. Submissions show up here once Dedrick approves them.
             </p>
           ) : (
-            liveCatalog.map((p) => {
-              const active   = !!(p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale);
-              const chans: string[] = [];
-              if (p.sell_nassau)    chans.push('Nassau');
-              if (p.sell_andros)    chans.push('Andros');
-              if (p.sell_online)    chans.push('Online');
-              if (p.sell_wholesale) chans.push('Wholesale');
-              const label = active ? (chans.length === 4 ? 'Active · All channels' : `Active · ${chans.join(' + ')}`) : 'Paused';
-              const busy  = togglingId === p.id;
-              return (
-                <div key={p.id} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
-                  background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`,
-                  borderRadius: 10, padding: '10px 12px', marginTop: 8, flexWrap: 'wrap',
-                }}>
-                  <div style={{ minWidth: 0, flex: '1 1 200px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{p.name}</div>
-                    <div style={{ fontSize: 11, color: TEXT_DIM, marginTop: 2 }}>{label}</div>
-                  </div>
-                  <button
-                    onClick={() => toggleLiveProduct(p)}
-                    disabled={busy}
-                    style={{
-                      padding: '8px 14px', borderRadius: 999, border: 'none',
-                      background: busy ? '#4b5563' : active ? RED : GOLD_BRIGHT,
-                      color: active ? '#fff' : NAVY,
-                      fontWeight: 800, fontSize: 12, cursor: busy ? 'wait' : 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {busy ? '…' : active ? 'Pause' : 'Resume'}
-                  </button>
+            <div style={{ marginTop: 6, borderRadius: 12, overflow: 'hidden', border: `1px solid ${BORDER}` }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#e2e8f0', minWidth: 1080 }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'rgba(255,255,255,0.04)', textAlign: 'left', borderBottom: `1px solid ${BORDER}` }}>
+                      <th style={{ padding: '8px 8px', width: 44 }}>Live</th>
+                      <th style={{ padding: '8px 8px', minWidth: 200 }}>Name</th>
+                      <th style={{ padding: '8px 8px', minWidth: 130 }}>Category</th>
+                      <th style={{ padding: '8px 8px', width: 80 }}>Unit</th>
+                      <th style={{ padding: '8px 8px', width: 100 }}>Pack</th>
+                      <th style={{ padding: '8px 8px', width: 90 }}>Cost $</th>
+                      <th style={{ padding: '8px 8px', minWidth: 220 }}>Image</th>
+                      <th style={{ padding: '8px 8px', textAlign: 'center', width: 46 }}>Nas</th>
+                      <th style={{ padding: '8px 8px', textAlign: 'center', width: 46 }}>And</th>
+                      <th style={{ padding: '8px 8px', textAlign: 'center', width: 46 }}>Onl</th>
+                      <th style={{ padding: '8px 8px', textAlign: 'center', width: 46 }}>Whs</th>
+                      <th style={{ padding: '8px 8px', width: 80, textAlign: 'right' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveCatalog.map((p) => {
+                      const isActive = p.status === 'active';
+                      const state    = rowState[p.id] ?? 'idle';
+                      const err      = rowError[p.id];
+                      const imgBusy  = !!rowImgBusy[p.id];
+                      const rowBg    = state === 'error' ? 'rgba(220,38,38,0.08)' : state === 'saved' ? 'rgba(34,197,94,0.06)' : 'transparent';
+                      const inp: React.CSSProperties = { width: '100%', padding: '5px 7px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.10)', backgroundColor: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 12, outline: 'none', boxSizing: 'border-box' };
+                      const sel: React.CSSProperties = { ...inp, backgroundColor: '#0a1220' };
+                      return (
+                        <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: rowBg, opacity: isActive ? 1 : 0.55 }}>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input type="checkbox" checked={isActive}
+                              onChange={(e) => patchLiveField(p.id, 'status', e.target.checked ? 'active' : 'inactive')} />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input defaultValue={p.name}
+                              onBlur={(e) => { if (e.target.value !== p.name) patchLiveField(p.id, 'name', e.target.value); }}
+                              style={inp} />
+                            <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.sku ?? ''}</div>
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <select value={p.category ?? ''}
+                              onChange={(e) => patchLiveField(p.id, 'category', e.target.value || null)}
+                              style={sel}>
+                              <option value="">—</option>
+                              {PORTAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input defaultValue={p.unit_of_measure ?? ''}
+                              onBlur={(e) => { if (e.target.value !== (p.unit_of_measure ?? '')) patchLiveField(p.id, 'unit_of_measure', e.target.value || null); }}
+                              style={inp} />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input defaultValue={p.pack_size ?? ''}
+                              onBlur={(e) => { if (e.target.value !== (p.pack_size ?? '')) patchLiveField(p.id, 'pack_size', e.target.value || null); }}
+                              style={inp} />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input type="number" step="0.01" inputMode="decimal"
+                              defaultValue={p.cost_per_unit ?? ''}
+                              onBlur={(e) => {
+                                const next = e.target.value === '' ? null : Number(e.target.value);
+                                if (next != null && next !== p.cost_per_unit && next > 0) {
+                                  setLiveCatalog(prev => prev.map(x => x.id === p.id ? { ...x, cost_per_unit: next } : x));
+                                  patchLiveProduct(p.id, { cost_per_unit: next });
+                                }
+                              }}
+                              style={{ ...inp, textAlign: 'right' }} />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <input defaultValue={p.image_url ?? ''} placeholder="https://… or use 📷"
+                                onBlur={(e) => { if (e.target.value !== (p.image_url ?? '')) patchLiveField(p.id, 'image_url', e.target.value || null); }}
+                                style={{ ...inp, flex: 1 }} />
+                              <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 26, borderRadius: 6, backgroundColor: GOLD_BRIGHT, color: NAVY, fontSize: 13, fontWeight: 800, cursor: imgBusy ? 'wait' : 'pointer', opacity: imgBusy ? 0.6 : 1 }}>
+                                {imgBusy ? '⏳' : '📷'}
+                                <input type="file" accept="image/*" disabled={imgBusy} style={{ display: 'none' }}
+                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLiveImage(p, f); e.currentTarget.value = ''; }} />
+                              </label>
+                              {p.image_url && (
+                                <a href={p.image_url} target="_blank" rel="noopener noreferrer"
+                                  title="Open image" style={{ color: GREEN, textDecoration: 'none', fontSize: 14 }}>↗</a>
+                              )}
+                            </div>
+                          </td>
+                          {(['sell_nassau','sell_andros','sell_online','sell_wholesale'] as const).map(ch => (
+                            <td key={ch} style={{ padding: '6px 8px', textAlign: 'center' }}>
+                              <input type="checkbox" checked={!!p[ch]}
+                                onChange={(e) => patchLiveField(p.id, ch, e.target.checked)} />
+                            </td>
+                          ))}
+                          <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                            {state === 'saving' && <span style={{ fontSize: 10, color: '#fbbf24' }}>saving…</span>}
+                            {state === 'saved'  && <span style={{ fontSize: 10, color: GREEN }}>✓ saved</span>}
+                            {state === 'error'  && <span title={err} style={{ fontSize: 10, color: '#fca5a5', fontWeight: 700 }}>⚠ err</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {Object.values(rowError).length > 0 && (
+                <div style={{ padding: '10px 14px', backgroundColor: 'rgba(220,38,38,0.10)', borderTop: '1px solid rgba(220,38,38,0.25)', fontSize: 11, color: '#fca5a5' }}>
+                  {Object.entries(rowError).map(([id, e]) => {
+                    const prod = liveCatalog.find(p => p.id === id);
+                    return <div key={id}><strong>{prod?.name ?? id.slice(0,8)}:</strong> {e}</div>;
+                  })}
                 </div>
-              );
-            })
+              )}
+            </div>
           )}
         </Section>
       </div>
