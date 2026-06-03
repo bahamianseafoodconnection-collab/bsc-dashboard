@@ -178,7 +178,7 @@ Rules:
   // Sonnet 4.6 handles PDF tabular extraction reliably and is ~3x cheaper
   // than Opus for this workload (no creative reasoning needed — just
   // OCR + JSON structuring).
-  const MODEL = 'claude-sonnet-4-5';
+  const MODEL = 'claude-sonnet-4-6';
   let claudeData: unknown;
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
