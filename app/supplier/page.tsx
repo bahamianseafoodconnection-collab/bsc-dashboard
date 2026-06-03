@@ -198,6 +198,139 @@ loadSuppliers();
 // reordering. Uploading attaches it to the supplier record so it
 // shows on the card with download link.
 const [pricelistUploadingId, setPricelistUploadingId] = useState<string | null>(null);
+
+// ── Extract products from a supplier's uploaded pricelist via Claude ──
+// Modal flow: founder taps "🔮 Extract", we POST to
+// /api/supplier/extract-pricelist, render the parsed rows in an editable
+// table, founder approves → bulk-add-products inserts everything with
+// 5-channel pricing applied by bsc_set_channel_price().
+interface ExtractedProduct {
+  raw_line:           string;
+  name:               string;
+  unit_of_measure:    string;
+  pack_size:          string | null;
+  cost_per_unit:      number | null;
+  suggested_category: string;
+  suggested_sku:      string;
+  notes:              string | null;
+  // UI-local extensions:
+  sku:                string;
+  category:           string;
+  skip:               boolean;
+  sell_nassau:        boolean;
+  sell_andros:        boolean;
+  sell_online:        boolean;
+  sell_wholesale:     boolean;
+}
+const CATEGORIES_FOR_EXTRACT = [
+  'Seafood','Meat','Poultry','Produce','Dry Goods','Frozen',
+  'Dairy & Eggs','Beverages','Snacks','Cleaning & Paper','Personal Care','Other',
+];
+const [extractModal, setExtractModal] = useState<null | {
+  supplier:  Supplier;
+  loading:   boolean;
+  error:     string | null;
+  products:  ExtractedProduct[];
+  importing: boolean;
+}>(null);
+
+async function extractPricelist(s: Supplier) {
+  setExtractModal({ supplier: s, loading: true, error: null, products: [], importing: false });
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      setExtractModal({ supplier: s, loading: false, error: 'Sign-in expired — refresh.', products: [], importing: false });
+      return;
+    }
+    const res = await fetch('/api/supplier/extract-pricelist', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ supplier_id: s.id }),
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) {
+      setExtractModal({ supplier: s, loading: false, error: j.error || `HTTP ${res.status}`, products: [], importing: false });
+      return;
+    }
+    // Hydrate UI-local fields. Wholesale partners default to nassau + wholesale ON.
+    const isWholesalePartner = s.supplier_type === 'wholesale_partner';
+    const rows: ExtractedProduct[] = (j.products || []).map((p: ExtractedProduct) => ({
+      ...p,
+      sku:           p.suggested_sku,
+      category:      p.suggested_category,
+      skip:          p.cost_per_unit == null,  // skip rows we couldn't price by default
+      sell_nassau:   true,
+      sell_andros:   false,
+      sell_online:   false,
+      sell_wholesale: isWholesalePartner,
+    }));
+    setExtractModal({ supplier: s, loading: false, error: null, products: rows, importing: false });
+  } catch (e) {
+    setExtractModal({
+      supplier: s, loading: false,
+      error:    e instanceof Error ? e.message : 'Extract failed',
+      products: [], importing: false,
+    });
+  }
+}
+
+function patchExtractRow(idx: number, patch: Partial<ExtractedProduct>) {
+  setExtractModal(prev => prev ? {
+    ...prev,
+    products: prev.products.map((p, i) => i === idx ? { ...p, ...patch } : p),
+  } : prev);
+}
+
+async function importExtracted() {
+  const m = extractModal;
+  if (!m) return;
+  const rowsToImport = m.products.filter(p => !p.skip);
+  if (rowsToImport.length === 0) {
+    showToast('Nothing to import — all rows are skipped.', false);
+    return;
+  }
+  setExtractModal({ ...m, importing: true });
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { showToast('Sign-in expired — refresh.', false); setExtractModal({ ...m, importing: false }); return; }
+    const res = await fetch('/api/supplier/bulk-add-products', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({
+        supplier_id: m.supplier.id,
+        rows: rowsToImport.map(p => ({
+          sku:             p.sku,
+          name:            p.name,
+          category:        p.category,
+          unit_of_measure: p.unit_of_measure,
+          pack_size:       p.pack_size,
+          cost_per_unit:   p.cost_per_unit,
+          channels: {
+            nassau:    p.sell_nassau,
+            andros:    p.sell_andros,
+            online:    p.sell_online,
+            wholesale: p.sell_wholesale,
+          },
+        })),
+      }),
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) {
+      showToast(`Import failed: ${j.error || `HTTP ${res.status}`}`, false);
+      setExtractModal({ ...m, importing: false });
+      return;
+    }
+    const failed = (j.failed ?? []) as Array<{ row_index: number; sku: string; error: string }>;
+    showToast(`📦 Imported ${j.inserted} product${j.inserted === 1 ? '' : 's'}${failed.length ? ` · ${failed.length} failed` : ''}`);
+    setExtractModal(null);
+    await loadSuppliers();
+  } finally {
+    // intentionally leave importing reset to whatever happened above
+  }
+}
+
 async function uploadPricelist(s: Supplier, file: File) {
   setPricelistUploadingId(s.id);
   try {
@@ -1709,6 +1842,15 @@ style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5
     📄 Pricelist
   </a>
 )}
+{/* Extract products from pricelist → review/edit → bulk import */}
+{s.pricelist_url && canEdit && (
+  <button onClick={() => extractPricelist(s)}
+    className="text-xs px-3 py-1.5 rounded-lg font-bold"
+    style={{ backgroundColor: 'rgba(168,85,247,0.18)', color: '#c084fc' }}
+    title="Read the pricelist with Claude and import the lines as products">
+    🔮 Extract products
+  </button>
+)}
 {canEdit && (
   <label
     className="text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer"
@@ -1867,6 +2009,121 @@ Edit
 </div>
 ))}
 </div>
+)}
+
+{/* ── EXTRACT-PRICELIST MODAL ── */}
+{extractModal && (
+  <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+    <div style={{ width: '100%', maxWidth: 1100, maxHeight: '92vh', backgroundColor: '#0f1a2e', borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div>
+          <h3 style={{ color: '#fff', fontWeight: 900, fontSize: 17, margin: 0 }}>🔮 Extract products — {extractModal.supplier.name}</h3>
+          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, margin: '4px 0 0' }}>
+            Edit any field, untick rows you want to skip, then tap “Import”.
+          </p>
+        </div>
+        <button onClick={() => setExtractModal(null)} disabled={extractModal.importing}
+          style={{ background: 'transparent', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: extractModal.importing ? 'not-allowed' : 'pointer' }}>
+          Close
+        </button>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        {extractModal.loading && (
+          <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
+            Reading the PDF with Claude — this can take 20–40 seconds…
+          </div>
+        )}
+
+        {extractModal.error && (
+          <div style={{ padding: 14, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 13, fontWeight: 600 }}>
+            ⚠️ {extractModal.error}
+          </div>
+        )}
+
+        {!extractModal.loading && !extractModal.error && extractModal.products.length === 0 && (
+          <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
+            No products extracted. The PDF may be image-only or unreadable.
+          </div>
+        )}
+
+        {!extractModal.loading && extractModal.products.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#e2e8f0' }}>
+            <thead>
+              <tr style={{ position: 'sticky', top: 0, backgroundColor: '#0a1220', textAlign: 'left' }}>
+                <th style={{ padding: '8px 6px' }}>Keep</th>
+                <th style={{ padding: '8px 6px' }}>Name</th>
+                <th style={{ padding: '8px 6px' }}>Category</th>
+                <th style={{ padding: '8px 6px' }}>Unit</th>
+                <th style={{ padding: '8px 6px' }}>Pack</th>
+                <th style={{ padding: '8px 6px' }}>Cost $</th>
+                <th style={{ padding: '8px 6px', textAlign: 'center' }}>Nas</th>
+                <th style={{ padding: '8px 6px', textAlign: 'center' }}>And</th>
+                <th style={{ padding: '8px 6px', textAlign: 'center' }}>Onl</th>
+                <th style={{ padding: '8px 6px', textAlign: 'center' }}>Whs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {extractModal.products.map((p, i) => (
+                <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.06)', opacity: p.skip ? 0.4 : 1 }}>
+                  <td style={{ padding: '6px 6px' }}>
+                    <input type="checkbox" checked={!p.skip} onChange={e => patchExtractRow(i, { skip: !e.target.checked })} />
+                  </td>
+                  <td style={{ padding: '6px 6px' }}>
+                    <input value={p.name} onChange={e => patchExtractRow(i, { name: e.target.value })}
+                      style={{ width: '100%', padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12 }} />
+                  </td>
+                  <td style={{ padding: '6px 6px' }}>
+                    <select value={p.category} onChange={e => patchExtractRow(i, { category: e.target.value })}
+                      style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0a1220', color: '#fff', fontSize: 12 }}>
+                      {CATEGORIES_FOR_EXTRACT.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '6px 6px' }}>
+                    <input value={p.unit_of_measure} onChange={e => patchExtractRow(i, { unit_of_measure: e.target.value })}
+                      style={{ width: 70, padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12 }} />
+                  </td>
+                  <td style={{ padding: '6px 6px' }}>
+                    <input value={p.pack_size ?? ''} onChange={e => patchExtractRow(i, { pack_size: e.target.value || null })}
+                      style={{ width: 90, padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12 }} />
+                  </td>
+                  <td style={{ padding: '6px 6px' }}>
+                    <input type="number" step="0.01" value={p.cost_per_unit ?? ''}
+                      onChange={e => patchExtractRow(i, { cost_per_unit: e.target.value === '' ? null : Number(e.target.value) })}
+                      style={{ width: 80, padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, textAlign: 'right' }} />
+                  </td>
+                  <td style={{ padding: '6px 6px', textAlign: 'center' }}>
+                    <input type="checkbox" checked={p.sell_nassau} onChange={e => patchExtractRow(i, { sell_nassau: e.target.checked })} />
+                  </td>
+                  <td style={{ padding: '6px 6px', textAlign: 'center' }}>
+                    <input type="checkbox" checked={p.sell_andros} onChange={e => patchExtractRow(i, { sell_andros: e.target.checked })} />
+                  </td>
+                  <td style={{ padding: '6px 6px', textAlign: 'center' }}>
+                    <input type="checkbox" checked={p.sell_online} onChange={e => patchExtractRow(i, { sell_online: e.target.checked })} />
+                  </td>
+                  <td style={{ padding: '6px 6px', textAlign: 'center' }}>
+                    <input type="checkbox" checked={p.sell_wholesale} onChange={e => patchExtractRow(i, { sell_wholesale: e.target.checked })} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+          {extractModal.products.filter(p => !p.skip).length} of {extractModal.products.length} will be imported
+        </div>
+        <button
+          onClick={importExtracted}
+          disabled={extractModal.importing || extractModal.loading || extractModal.products.length === 0}
+          style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 900, fontSize: 13, cursor: (extractModal.importing || extractModal.loading) ? 'wait' : 'pointer', opacity: (extractModal.importing || extractModal.loading || extractModal.products.length === 0) ? 0.5 : 1 }}>
+          {extractModal.importing ? 'Importing…' : `✓ Import ${extractModal.products.filter(p => !p.skip).length} products`}
+        </button>
+      </div>
+    </div>
+  </div>
 )}
 </div>
 );
