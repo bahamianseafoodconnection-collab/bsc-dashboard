@@ -216,22 +216,29 @@ export default function SupplierDetailPage() {
     setLoading(true);
     const { data: sup } = await supabase.from('suppliers').select('*').eq('id', id).maybeSingle();
     setSupplier(sup as Supplier | null);
-    const { data: prods } = await supabase
+    // Fetch products + costs in TWO queries — embedded join was returning
+    // empty rows because the Supabase relation hint mismatched. Two queries
+    // are slower but reliable.
+    const { data: prods, error: prodErr } = await supabase
       .from('products')
-      .select('id, sku, name, category, unit_of_measure, pack_size, status, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale, product_costs!left(cost_per_unit, is_current)')
+      .select('id, sku, name, category, unit_of_measure, pack_size, status, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale')
       .eq('primary_supplier_id', id)
       .order('name');
-    // Flatten the current cost out of the product_costs!left join so the
-    // table column has a plain number to render + edit.
-    const rows: SupplierProduct[] = ((prods ?? []) as Array<Record<string, unknown> & {
-      product_costs?: Array<{ cost_per_unit: number | null; is_current: boolean }>;
-    }>).map((p) => {
-      const cur = (p.product_costs ?? []).find((c) => c.is_current);
-      const { product_costs: _drop, ...rest } = p;
-      void _drop;
-      return { ...(rest as unknown as SupplierProduct), cost_per_unit: cur ? Number(cur.cost_per_unit) : null };
-    });
-    setProducts(rows);
+    if (prodErr) {
+      showToast(`Load products failed: ${prodErr.message}`, false);
+    }
+    const productList = (prods ?? []) as Array<Omit<SupplierProduct, 'cost_per_unit'>>;
+    let costMap: Record<string, number | null> = {};
+    if (productList.length > 0) {
+      const ids = productList.map((p) => p.id);
+      const { data: costs } = await supabase
+        .from('product_costs')
+        .select('product_id, cost_per_unit')
+        .in('product_id', ids)
+        .eq('is_current', true);
+      costMap = Object.fromEntries(((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>).map((c) => [c.product_id, c.cost_per_unit != null ? Number(c.cost_per_unit) : null]));
+    }
+    setProducts(productList.map((p) => ({ ...p, cost_per_unit: costMap[p.id] ?? null })));
     setLoading(false);
   }, [id, supabase]);
 

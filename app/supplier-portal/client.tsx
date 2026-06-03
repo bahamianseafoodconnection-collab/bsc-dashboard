@@ -210,7 +210,7 @@ export default function SupplierPortalClient({
       // controls below. Reads sell_* flags so we can show channel pills.
       supabase
         .from('products')
-        .select('id, sku, name, category, unit_of_measure, pack_size, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale, status, product_costs!left(cost_per_unit, is_current)')
+        .select('id, sku, name, category, unit_of_measure, pack_size, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale, status')
         .eq('primary_supplier_id', supplierId)
         .order('name', { ascending: true })
         .limit(500),
@@ -227,20 +227,28 @@ export default function SupplierPortalClient({
         image_url: string | null;
         sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
         status: string | null;
-        product_costs?: Array<{ cost_per_unit: number | null; is_current: boolean }>;
       };
-      setLiveCatalog(((catRes.data || []) as LiveRow[]).map((r): Product => {
-        const cur = (r.product_costs ?? []).find((c) => c.is_current);
-        return {
-          id: r.id, name: r.name, case_cost: null, weight_lbs: null, retail_price: null,
-          wholesale_price: null, unit_cost: null, status: r.status,
-          sell_nassau: r.sell_nassau, sell_andros: r.sell_andros,
-          sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
-          sku: r.sku, category: r.category, unit_of_measure: r.unit_of_measure,
-          pack_size: r.pack_size, image_url: r.image_url,
-          cost_per_unit: cur ? Number(cur.cost_per_unit) : null,
-        };
-      }));
+      const list = (catRes.data || []) as LiveRow[];
+      // Fetch current costs in a second query — embedded join was returning 0 rows.
+      let costMap: Record<string, number | null> = {};
+      if (list.length > 0) {
+        const ids = list.map((r) => r.id);
+        const { data: costs } = await supabase
+          .from('product_costs')
+          .select('product_id, cost_per_unit')
+          .in('product_id', ids)
+          .eq('is_current', true);
+        costMap = Object.fromEntries(((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>).map((c) => [c.product_id, c.cost_per_unit != null ? Number(c.cost_per_unit) : null]));
+      }
+      setLiveCatalog(list.map((r): Product => ({
+        id: r.id, name: r.name, case_cost: null, weight_lbs: null, retail_price: null,
+        wholesale_price: null, unit_cost: null, status: r.status,
+        sell_nassau: r.sell_nassau, sell_andros: r.sell_andros,
+        sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
+        sku: r.sku, category: r.category, unit_of_measure: r.unit_of_measure,
+        pack_size: r.pack_size, image_url: r.image_url,
+        cost_per_unit: costMap[r.id] ?? null,
+      })));
     }
     setErrors(errs);
     setLoading(false);
