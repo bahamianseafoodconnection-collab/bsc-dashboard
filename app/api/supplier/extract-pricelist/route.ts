@@ -268,6 +268,14 @@ Rules:
     ok:       true,
     supplier: { id: sup.id, code: sup.code, name: sup.name },
     products,
+    // Diagnostic snapshot so the UI can show WHY products is empty when
+    // it is — image-only PDF (low input_tokens), Claude refused to JSON
+    // (claude_preview shows prose), valid JSON but empty array, etc.
+    diagnostic: products.length === 0 ? {
+      raw_products_count: rawProducts.length,
+      claude_preview:     rawText.slice(0, 800),
+      pdf_bytes:          arrayBuf.byteLength,
+    } : null,
     token_usage: {
       input:  data.usage?.input_tokens  ?? 0,
       output: data.usage?.output_tokens ?? 0,

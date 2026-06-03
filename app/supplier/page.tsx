@@ -222,25 +222,31 @@ interface ExtractedProduct {
   sell_online:        boolean;
   sell_wholesale:     boolean;
 }
+interface ExtractDiagnostic {
+  raw_products_count: number;
+  claude_preview:     string;
+  pdf_bytes:          number;
+}
 const CATEGORIES_FOR_EXTRACT = [
   'Seafood','Meat','Poultry','Produce','Dry Goods','Frozen',
   'Dairy & Eggs','Beverages','Snacks','Cleaning & Paper','Personal Care','Other',
 ];
 const [extractModal, setExtractModal] = useState<null | {
-  supplier:  Supplier;
-  loading:   boolean;
-  error:     string | null;
-  products:  ExtractedProduct[];
-  importing: boolean;
+  supplier:   Supplier;
+  loading:    boolean;
+  error:      string | null;
+  products:   ExtractedProduct[];
+  importing:  boolean;
+  diagnostic: ExtractDiagnostic | null;
 }>(null);
 
 async function extractPricelist(s: Supplier) {
-  setExtractModal({ supplier: s, loading: true, error: null, products: [], importing: false });
+  setExtractModal({ supplier: s, loading: true, error: null, products: [], importing: false, diagnostic: null });
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) {
-      setExtractModal({ supplier: s, loading: false, error: 'Sign-in expired — refresh.', products: [], importing: false });
+      setExtractModal({ supplier: s, loading: false, error: 'Sign-in expired — refresh.', products: [], importing: false, diagnostic: null });
       return;
     }
     const res = await fetch('/api/supplier/extract-pricelist', {
@@ -250,7 +256,7 @@ async function extractPricelist(s: Supplier) {
     });
     const j = await res.json();
     if (!res.ok || !j.ok) {
-      setExtractModal({ supplier: s, loading: false, error: j.error || `HTTP ${res.status}`, products: [], importing: false });
+      setExtractModal({ supplier: s, loading: false, error: j.error || `HTTP ${res.status}`, products: [], importing: false, diagnostic: null });
       return;
     }
     // Hydrate UI-local fields. Wholesale partners default to nassau + wholesale ON.
@@ -265,12 +271,19 @@ async function extractPricelist(s: Supplier) {
       sell_online:   false,
       sell_wholesale: isWholesalePartner,
     }));
-    setExtractModal({ supplier: s, loading: false, error: null, products: rows, importing: false });
+    setExtractModal({
+      supplier:   s,
+      loading:    false,
+      error:      null,
+      products:   rows,
+      importing:  false,
+      diagnostic: (j.diagnostic ?? null) as ExtractDiagnostic | null,
+    });
   } catch (e) {
     setExtractModal({
       supplier: s, loading: false,
       error:    e instanceof Error ? e.message : 'Extract failed',
-      products: [], importing: false,
+      products: [], importing: false, diagnostic: null,
     });
   }
 }
@@ -2042,8 +2055,26 @@ Edit
         )}
 
         {!extractModal.loading && !extractModal.error && extractModal.products.length === 0 && (
-          <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
-            No products extracted. The PDF may be image-only or unreadable.
+          <div style={{ padding: 16, color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>
+            <p style={{ color: '#fca5a5', fontWeight: 700, fontSize: 14, marginBottom: 12 }}>
+              No products extracted.
+            </p>
+            {extractModal.diagnostic ? (
+              <div style={{ backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 12 }}>
+                <div style={{ marginBottom: 8 }}>
+                  PDF size: <strong>{(extractModal.diagnostic.pdf_bytes / 1024).toFixed(1)} KB</strong> ·
+                  Claude returned <strong>{extractModal.diagnostic.raw_products_count}</strong> raw rows.
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginBottom: 6 }}>
+                  First 800 chars of what Claude said (helps me tune the prompt):
+                </div>
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, borderRadius: 6, fontSize: 11, color: '#cbd5e1', maxHeight: 360, overflow: 'auto' }}>
+{extractModal.diagnostic.claude_preview || '(empty response)'}
+                </pre>
+              </div>
+            ) : (
+              <div>The PDF may be image-only or unreadable.</div>
+            )}
           </div>
         )}
 
