@@ -265,6 +265,81 @@ export default function SupplierDetailPage() {
     }
   }
 
+  // One-tap: extract + auto-import every row. No review modal — useful
+  // when the founder trusts the extraction and just wants the products
+  // landed (skip on the JBI/Lightbourn/BWA wholesale partners where the
+  // pricelist columns are stable).
+  const [autoImportBusy, setAutoImportBusy] = useState(false);
+  const [autoImportMsg,  setAutoImportMsg]  = useState<string | null>(null);
+  async function extractAndImportAll() {
+    if (!supplier) return;
+    if (!confirm(`Extract products from ${supplier.name}'s pricelist and import EVERY row with no review?\n\nIf you want to review/edit first, tap "🔮 Extract products" instead.`)) return;
+    setAutoImportBusy(true);
+    setAutoImportMsg('Reading pricelist with Claude…');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setAutoImportMsg('Sign-in expired — refresh.'); return; }
+
+      // Step 1: extract
+      const exRes = await fetch('/api/supplier/extract-pricelist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ supplier_id: supplier.id }),
+        cache: 'no-store',
+      });
+      const ex = await exRes.json();
+      if (!exRes.ok || !ex.ok) {
+        setAutoImportMsg(`Extract failed: ${ex.error || `HTTP ${exRes.status}`}`);
+        return;
+      }
+      const extracted = (ex.products ?? []) as ExtractedProduct[];
+      if (extracted.length === 0) {
+        setAutoImportMsg('Claude returned 0 products. Open the review modal to see why.');
+        return;
+      }
+      // Drop rows with no cost — they can't be priced.
+      const rows = extracted.filter(p => p.cost_per_unit != null && p.cost_per_unit > 0);
+      if (rows.length === 0) {
+        setAutoImportMsg(`Extracted ${extracted.length} rows but none had a usable cost. Open the review modal to fix.`);
+        return;
+      }
+      setAutoImportMsg(`Importing ${rows.length} of ${extracted.length} extracted products…`);
+      const isWP = supplier.supplier_type === 'wholesale_partner';
+
+      // Step 2: bulk import
+      const imRes = await fetch('/api/supplier/bulk-add-products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          supplier_id: supplier.id,
+          rows: rows.map(p => ({
+            sku:             p.suggested_sku,
+            name:            p.name,
+            category:        p.suggested_category,
+            unit_of_measure: p.unit_of_measure,
+            pack_size:       p.pack_size,
+            cost_per_unit:   p.cost_per_unit,
+            image_url:       null,
+            channels: { nassau: true, andros: false, online: false, wholesale: isWP },
+          })),
+        }),
+      });
+      const im = await imRes.json();
+      if (!imRes.ok || !im.ok) {
+        setAutoImportMsg(`Import failed: ${im.error || `HTTP ${imRes.status}`}`);
+        return;
+      }
+      const failedN = (im.failed ?? []).length;
+      setAutoImportMsg(`📦 Imported ${im.inserted}${failedN ? ` · ${failedN} failed` : ''}.`);
+      await load();
+    } catch (e) {
+      setAutoImportMsg(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setAutoImportBusy(false);
+    }
+  }
+
   // ── Extract products from pricelist (Claude → review → bulk import) ──
   async function startExtract() {
     if (!supplier) return;
@@ -541,8 +616,15 @@ export default function SupplierDetailPage() {
               {canEdit && supplier.pricelist_url && (
                 <button onClick={startExtract}
                   style={{ padding: '7px 12px', borderRadius: 8, backgroundColor: 'rgba(168,85,247,0.15)', color: '#7c3aed', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                  title="Read pricelist with Claude and import as products">
+                  title="Read pricelist with Claude and review each row before importing">
                   🔮 Extract products
+                </button>
+              )}
+              {canEdit && supplier.pricelist_url && (
+                <button onClick={extractAndImportAll} disabled={autoImportBusy}
+                  style={{ padding: '7px 12px', borderRadius: 8, backgroundColor: 'rgba(34,197,94,0.18)', color: '#15803d', border: 'none', fontSize: 12, fontWeight: 800, cursor: autoImportBusy ? 'wait' : 'pointer', opacity: autoImportBusy ? 0.6 : 1 }}
+                  title="Extract pricelist with Claude AND import every priced row, no review">
+                  {autoImportBusy ? '⏳ Importing…' : '🚀 Extract & import all'}
                 </button>
               )}
               {canEdit && (
@@ -552,6 +634,13 @@ export default function SupplierDetailPage() {
                 </Link>
               )}
             </div>
+
+            {/* Auto-import status banner */}
+            {autoImportMsg && (
+              <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, backgroundColor: autoImportMsg.startsWith('📦') ? 'rgba(34,197,94,0.12)' : autoImportMsg.includes('failed') || autoImportMsg.includes('Sign-in') ? 'rgba(239,68,68,0.10)' : 'rgba(168,85,247,0.10)', color: autoImportMsg.startsWith('📦') ? '#15803d' : autoImportMsg.includes('failed') || autoImportMsg.includes('Sign-in') ? '#b91c1c' : '#6d28d9', fontSize: 13, fontWeight: 700 }}>
+                {autoImportMsg}
+              </div>
+            )}
 
             {/* Search */}
             <div style={{ marginBottom: 14 }}>
