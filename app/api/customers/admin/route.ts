@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       const search = typeof body.search === 'string' ? body.search.trim().replace(/[,()*]/g, '').slice(0, 80) : '';
       let q = admin
         .from('customers')
-        .select('id, full_name, phone, email, is_credit_customer, credit_terms, credit_limit, current_balance, points_balance, points_lifetime, points_redeemed, total_orders, total_spent, is_active, created_at')
+        .select('id, full_name, phone, email, address, is_credit_customer, credit_terms, credit_limit, current_balance, points_balance, points_lifetime, points_redeemed, total_orders, total_spent, is_active, created_at')
         .eq('is_walk_in_anonymous', false)
         .order('total_spent', { ascending: false })
         .limit(limit);
@@ -102,6 +102,61 @@ export async function POST(req: NextRequest) {
       const { data, error } = await q;
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true, customers: data ?? [] });
+    }
+
+    case 'update_info': {
+      if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
+      const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+      if (typeof body.full_name === 'string' && body.full_name.trim()) {
+        update.full_name = body.full_name.trim();
+      }
+      if (body.phone !== undefined) {
+        const raw = (body.phone as string | null) ?? '';
+        if (raw === '') {
+          update.phone = null;
+        } else {
+          const norm = normalizePhone(String(raw));
+          if (!norm) return NextResponse.json({ ok: false, error: 'Invalid phone' }, { status: 400 });
+          // Duplicate check (only if changing)
+          const { data: dup } = await admin.from('customers').select('id, full_name').eq('phone', norm).neq('id', body.id).maybeSingle();
+          if (dup) {
+            return NextResponse.json(
+              { ok: false, error: `Phone already on file as "${(dup as { full_name: string | null }).full_name ?? 'customer ' + (dup as { id: string }).id.slice(0,8)}"` },
+              { status: 409 },
+            );
+          }
+          update.phone = norm;
+        }
+      }
+      if (body.email !== undefined) {
+        const raw = ((body.email as string | null) ?? '').trim().toLowerCase();
+        if (raw === '') {
+          update.email = null;
+        } else {
+          const { data: dup } = await admin.from('customers').select('id, full_name').eq('email', raw).neq('id', body.id).maybeSingle();
+          if (dup) {
+            return NextResponse.json(
+              { ok: false, error: `Email already on file as "${(dup as { full_name: string | null }).full_name ?? 'customer ' + (dup as { id: string }).id.slice(0,8)}"` },
+              { status: 409 },
+            );
+          }
+          update.email = raw;
+        }
+      }
+      if (body.address !== undefined) {
+        const raw = (body.address as string | null) ?? '';
+        update.address = raw.trim() || null;
+      }
+      // is_active toggle (optional)
+      const isActiveRaw = (body as { is_active?: unknown }).is_active;
+      if (typeof isActiveRaw === 'boolean') update.is_active = isActiveRaw;
+
+      const { data, error } = await admin.from('customers').update(update).eq('id', body.id)
+        .select('id, full_name, phone, email, address, is_active')
+        .single();
+      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, customer: data });
     }
 
     case 'update_credit': {
@@ -210,7 +265,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { data, error } = await admin.from('customers').insert(insert)
-        .select('id, full_name, phone, email, is_credit_customer, credit_terms, credit_limit, current_balance, points_balance, points_lifetime, points_redeemed, total_orders, total_spent, is_active, created_at')
+        .select('id, full_name, phone, email, address, is_credit_customer, credit_terms, credit_limit, current_balance, points_balance, points_lifetime, points_redeemed, total_orders, total_spent, is_active, created_at')
         .single();
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true, customer: data });

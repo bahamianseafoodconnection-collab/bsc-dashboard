@@ -18,6 +18,7 @@ type Customer = {
   full_name: string | null;
   phone: string | null;
   email: string | null;
+  address?: string | null;
   is_credit_customer: boolean | null;
   credit_terms: string | null;
   credit_limit: number | null;
@@ -66,6 +67,15 @@ export default function CustomersAdminPage() {
   const [eCredit, setECredit]   = useState<boolean>(false);
   const [eTerms, setETerms]     = useState<string>('COD');
   const [eLimit, setELimit]     = useState<string>('0');
+
+  // Info-edit state (name / phone / email / address / active).
+  const [iName,    setIName]    = useState<string>('');
+  const [iPhone,   setIPhone]   = useState<string>('');
+  const [iEmail,   setIEmail]   = useState<string>('');
+  const [iAddress, setIAddress] = useState<string>('');
+  const [iActive,  setIActive]  = useState<boolean>(true);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [infoErr,    setInfoErr]    = useState<string | null>(null);
 
   // Add Customer modal state.
   const [addOpen,  setAddOpen]  = useState(false);
@@ -126,9 +136,41 @@ export default function CustomersAdminPage() {
     setECredit(!!c.is_credit_customer);
     setETerms(c.credit_terms || 'COD');
     setELimit(c.credit_limit != null ? String(c.credit_limit) : '0');
+    setIName(c.full_name ?? '');
+    setIPhone(c.phone ?? '');
+    setIEmail(c.email ?? '');
+    setIAddress(c.address ?? '');
+    setIActive(c.is_active);
+    setInfoErr(null);
     setLog([]);
     const j = await call('points_history', { id: c.id });
     if (j.ok) setLog((j.log || []) as PointsLogRow[]);
+  }
+
+  async function saveInfo() {
+    if (!selected) return;
+    setInfoErr(null);
+    if (!iName.trim()) { setInfoErr('Name is required'); return; }
+    setSavingInfo(true);
+    const j = await call('update_info', {
+      id:        selected.id,
+      full_name: iName,
+      phone:     iPhone,
+      email:     iEmail,
+      address:   iAddress,
+      is_active: iActive,
+    });
+    setSavingInfo(false);
+    if (!j.ok) { setInfoErr(j.error || 'Save failed'); return; }
+    const patch = {
+      full_name: j.customer.full_name,
+      phone:     j.customer.phone,
+      email:     j.customer.email,
+      address:   j.customer.address,
+      is_active: j.customer.is_active,
+    };
+    setRows(prev => prev.map(r => r.id === selected.id ? { ...r, ...patch } : r));
+    setSelected({ ...selected, ...patch });
   }
 
   async function saveCredit() {
@@ -245,6 +287,44 @@ export default function CustomersAdminPage() {
               </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700">✕</button>
             </div>
+
+            {/* Customer info — name / phone / email / address / active */}
+            <section className="mb-4 rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Customer info</div>
+              {infoErr && <div className="mb-2 rounded-md bg-red-50 px-2 py-1 text-[11px] font-bold text-red-700">⚠ {infoErr}</div>}
+              <div className="space-y-2">
+                <div>
+                  <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Name</label>
+                  <input value={iName} onChange={(e) => setIName(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Phone</label>
+                    <input value={iPhone} onChange={(e) => setIPhone(e.target.value)} inputMode="tel"
+                      className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" placeholder="242-555-0100" />
+                  </div>
+                  <div>
+                    <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Email</label>
+                    <input value={iEmail} onChange={(e) => setIEmail(e.target.value)} inputMode="email"
+                      className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-[10px] font-bold text-slate-500">Address</label>
+                  <input value={iAddress} onChange={(e) => setIAddress(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                </div>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700 pt-0.5">
+                  <input type="checkbox" checked={iActive} onChange={(e) => setIActive(e.target.checked)} />
+                  Active
+                </label>
+              </div>
+              <button onClick={saveInfo} disabled={savingInfo}
+                className="mt-3 w-full rounded-lg bg-navy px-3 py-2 text-xs font-extrabold text-gold hover:bg-navy-700 disabled:opacity-60">
+                {savingInfo ? 'Saving…' : 'Save info'}
+              </button>
+            </section>
 
             {/* Credit terms */}
             <section className="mb-4 rounded-xl border border-slate-200 p-3">
