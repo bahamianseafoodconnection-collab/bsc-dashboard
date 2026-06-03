@@ -18,7 +18,7 @@
 // All product writes go through existing endpoints — /api/admin/products/:id
 // for disable + channel updates. No new backend code, just a tighter UI.
 
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
@@ -54,7 +54,9 @@ interface SupplierProduct {
   sell_andros: boolean;
   sell_online: boolean;
   sell_wholesale: boolean;
+  cost_per_unit: number | null;   // current cost from product_costs join
 }
+type RowSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 interface ExtractedProduct {
   raw_line: string;
@@ -84,6 +86,23 @@ const CATEGORIES_FOR_EXTRACT = [
   'Seafood','Meat','Poultry','Produce','Dry Goods','Frozen',
   'Dairy & Eggs','Beverages','Snacks','Cleaning & Paper','Personal Care','Other',
 ];
+
+// Shared input/select styling for the inline inventory table cells.
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '5px 7px',
+  borderRadius: 5,
+  border: '1px solid rgba(255,255,255,0.10)',
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  color: '#fff',
+  fontSize: 12,
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  backgroundColor: '#0a1220',
+};
 
 interface ProductEditForm {
   name:            string;
@@ -126,6 +145,67 @@ export default function SupplierDetailPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editImgUploading, setEditImgUploading] = useState(false);
 
+  // Inline-save state per row (id → state). 'saved' clears itself after 2s.
+  const [rowState, setRowState] = useState<Record<string, RowSaveState>>({});
+  const [rowError, setRowError] = useState<Record<string, string>>({});
+  const [rowImgBusy, setRowImgBusy] = useState<Record<string, boolean>>({});
+
+  function setRowStatus(id: string, state: RowSaveState, err?: string) {
+    setRowState(prev => ({ ...prev, [id]: state }));
+    setRowError(prev => {
+      const next = { ...prev };
+      if (state === 'error' && err) next[id] = err; else delete next[id];
+      return next;
+    });
+    if (state === 'saved') {
+      setTimeout(() => setRowState(prev => prev[id] === 'saved' ? { ...prev, [id]: 'idle' } : prev), 2000);
+    }
+  }
+
+  // PATCH the product. Accepts a partial — only changed fields go in body.
+  async function patchProduct(id: string, patch: Record<string, unknown>) {
+    setRowStatus(id, 'saving');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setRowStatus(id, 'error', 'Sign-in expired'); return; }
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(patch),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setRowStatus(id, 'error', j.error || `HTTP ${res.status}`); return; }
+      setRowStatus(id, 'saved');
+    } catch (e) {
+      setRowStatus(id, 'error', e instanceof Error ? e.message : 'save failed');
+    }
+  }
+
+  // Update a single field in local state immediately (optimistic) and
+  // PATCH the server. For text/numeric fields, callers should fire this
+  // on blur so we're not PATCH-ing every keystroke.
+  function patchField<K extends keyof SupplierProduct>(id: string, field: K, value: SupplierProduct[K]) {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    patchProduct(id, { [field]: value });
+  }
+
+  async function uploadRowImage(p: SupplierProduct, file: File) {
+    setRowImgBusy(prev => ({ ...prev, [p.id]: true }));
+    try {
+      const ext  = file.name.split('.').pop() ?? 'jpg';
+      const path = `products/${p.sku}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { setRowStatus(p.id, 'error', `image: ${upErr.message}`); return; }
+      const { data: pub } = supabase.storage.from('site-images').getPublicUrl(path);
+      patchField(p.id, 'image_url', pub.publicUrl);
+    } finally {
+      setRowImgBusy(prev => { const n = { ...prev }; delete n[p.id]; return n; });
+    }
+  }
+
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3500);
@@ -138,10 +218,20 @@ export default function SupplierDetailPage() {
     setSupplier(sup as Supplier | null);
     const { data: prods } = await supabase
       .from('products')
-      .select('id, sku, name, category, unit_of_measure, pack_size, status, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale')
+      .select('id, sku, name, category, unit_of_measure, pack_size, status, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale, product_costs!left(cost_per_unit, is_current)')
       .eq('primary_supplier_id', id)
       .order('name');
-    setProducts((prods ?? []) as SupplierProduct[]);
+    // Flatten the current cost out of the product_costs!left join so the
+    // table column has a plain number to render + edit.
+    const rows: SupplierProduct[] = ((prods ?? []) as Array<Record<string, unknown> & {
+      product_costs?: Array<{ cost_per_unit: number | null; is_current: boolean }>;
+    }>).map((p) => {
+      const cur = (p.product_costs ?? []).find((c) => c.is_current);
+      const { product_costs: _drop, ...rest } = p;
+      void _drop;
+      return { ...(rest as unknown as SupplierProduct), cost_per_unit: cur ? Number(cur.cost_per_unit) : null };
+    });
+    setProducts(rows);
     setLoading(false);
   }, [id, supabase]);
 
@@ -476,7 +566,7 @@ export default function SupplierDetailPage() {
               </p>
             </div>
 
-            {/* Product cards grid */}
+            {/* Inline-editable inventory table — auto-saves on blur. */}
             {products.length === 0 ? (
               <div style={{ padding: '50px 20px', textAlign: 'center', backgroundColor: '#fff', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 <p style={{ fontSize: 14, color: '#475569', marginBottom: 8 }}>No products yet for {supplier.name}.</p>
@@ -485,61 +575,127 @@ export default function SupplierDetailPage() {
                 )}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-                {filtered.map((p) => {
-                  const channels: string[] = [];
-                  if (p.sell_nassau)    channels.push('Nas');
-                  if (p.sell_andros)    channels.push('And');
-                  if (p.sell_online)    channels.push('Onl');
-                  if (p.sell_wholesale) channels.push('Whs');
-                  const isActive = p.status === 'active';
-                  return (
-                    <div key={p.id}
-                      onClick={() => canEdit && openProductEditor(p)}
-                      style={{ backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: isActive ? '1px solid #e2e8f0' : '1px dashed #cbd5e1', opacity: isActive ? 1 : 0.7, display: 'flex', flexDirection: 'column', cursor: canEdit ? 'pointer' : 'default', transition: 'transform 0.1s' }}
-                      onMouseEnter={(e) => { if (canEdit) e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}>
-                      <div style={{ height: 140, background: p.image_url ? `url(${p.image_url}) center/cover` : '#f1f5f9', position: 'relative' }}>
-                        <span style={{ position: 'absolute', top: 8, right: 8, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 800, backgroundColor: isActive ? 'rgba(22,163,74,0.92)' : 'rgba(100,116,139,0.92)', color: '#fff' }}>
-                          {isActive ? 'ACTIVE' : 'INACTIVE'}
-                        </span>
-                        {!p.image_url && (
-                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 11 }}>
-                            📷 Tap to add image
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ padding: 12, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#060d1f' }}>{p.name}</h3>
-                        <p style={{ margin: '2px 0 8px', fontSize: 10, fontFamily: 'monospace', color: '#94a3b8' }}>
-                          {p.sku} · {p.category ?? '—'} · {p.unit_of_measure ?? '—'}{p.pack_size ? ` · ${p.pack_size}` : ''}
-                        </p>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
-                          {channels.length === 0
-                            ? <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 700 }}>No channels enabled</span>
-                            : channels.map(c => (
-                                <span key={c} style={{ padding: '2px 6px', borderRadius: 4, backgroundColor: '#f1f5f9', color: '#475569', fontSize: 10, fontWeight: 700 }}>{c}</span>
-                              ))
-                          }
-                        </div>
-                        {canEdit && (
-                          <div style={{ marginTop: 'auto', display: 'flex', gap: 6 }}>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleProductStatus(p); }}
-                              style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', backgroundColor: isActive ? '#fff' : '#f4c842', color: isActive ? '#dc2626' : '#060d1f', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                              {isActive ? 'Disable' : 'Enable'}
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openProductEditor(p); }}
-                              style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: 'none', backgroundColor: '#0a1220', color: '#f4c842', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                              ✏️ Manage
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div style={{ backgroundColor: '#0f1a2e', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#e2e8f0', minWidth: 1100 }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#0a1220', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <th style={{ padding: '10px 8px', width: 44 }}>Live</th>
+                        <th style={{ padding: '10px 8px', minWidth: 200 }}>Name</th>
+                        <th style={{ padding: '10px 8px', minWidth: 130 }}>Category</th>
+                        <th style={{ padding: '10px 8px', width: 80 }}>Unit</th>
+                        <th style={{ padding: '10px 8px', width: 100 }}>Pack</th>
+                        <th style={{ padding: '10px 8px', width: 90 }}>Cost $</th>
+                        <th style={{ padding: '10px 8px', minWidth: 220 }}>Image</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Nas</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>And</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Onl</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Whs</th>
+                        <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((p) => {
+                        const isActive = p.status === 'active';
+                        const state    = rowState[p.id] ?? 'idle';
+                        const err      = rowError[p.id];
+                        const imgBusy  = !!rowImgBusy[p.id];
+                        const rowBg    = state === 'error' ? 'rgba(220,38,38,0.08)' : state === 'saved' ? 'rgba(34,197,94,0.06)' : 'transparent';
+                        return (
+                          <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', backgroundColor: rowBg, opacity: isActive ? 1 : 0.55 }}>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="checkbox" checked={isActive}
+                                onChange={(e) => patchField(p.id, 'status', e.target.checked ? 'active' : 'inactive' as never)} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                defaultValue={p.name}
+                                onBlur={(e) => { if (e.target.value !== p.name) patchField(p.id, 'name', e.target.value); }}
+                                style={inputStyle} />
+                              <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.sku}</div>
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <select value={p.category ?? ''}
+                                onChange={(e) => patchField(p.id, 'category', e.target.value || null)}
+                                style={selectStyle}>
+                                <option value="">—</option>
+                                {CATEGORIES_FOR_EXTRACT.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                defaultValue={p.unit_of_measure ?? ''}
+                                onBlur={(e) => { if (e.target.value !== (p.unit_of_measure ?? '')) patchField(p.id, 'unit_of_measure', e.target.value || null); }}
+                                style={inputStyle} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                defaultValue={p.pack_size ?? ''}
+                                onBlur={(e) => { if (e.target.value !== (p.pack_size ?? '')) patchField(p.id, 'pack_size', e.target.value || null); }}
+                                style={inputStyle} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="number" step="0.01" inputMode="decimal"
+                                defaultValue={p.cost_per_unit ?? ''}
+                                onBlur={(e) => {
+                                  const next = e.target.value === '' ? null : Number(e.target.value);
+                                  if (next != null && next !== p.cost_per_unit && next > 0) {
+                                    // Cost change inserts a new product_costs row server-side.
+                                    setProducts(prev => prev.map(x => x.id === p.id ? { ...x, cost_per_unit: next } : x));
+                                    patchProduct(p.id, { cost_per_unit: next });
+                                  }
+                                }}
+                                style={{ ...inputStyle, textAlign: 'right' }} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                <input
+                                  defaultValue={p.image_url ?? ''}
+                                  placeholder="https://… or use 📷"
+                                  onBlur={(e) => { if (e.target.value !== (p.image_url ?? '')) patchField(p.id, 'image_url', e.target.value || null); }}
+                                  style={{ ...inputStyle, flex: 1 }} />
+                                <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 26, borderRadius: 6, backgroundColor: '#f4c842', color: '#060d1f', fontSize: 13, fontWeight: 800, cursor: imgBusy ? 'wait' : 'pointer', opacity: imgBusy ? 0.6 : 1 }}>
+                                  {imgBusy ? '⏳' : '📷'}
+                                  <input type="file" accept="image/*" disabled={imgBusy} style={{ display: 'none' }}
+                                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRowImage(p, f); e.currentTarget.value = ''; }} />
+                                </label>
+                                {p.image_url && (
+                                  <a href={p.image_url} target="_blank" rel="noopener noreferrer"
+                                    title="Open image" style={{ color: '#86efac', textDecoration: 'none', fontSize: 14 }}>↗</a>
+                                )}
+                              </div>
+                            </td>
+                            {(['sell_nassau','sell_andros','sell_online','sell_wholesale'] as const).map(ch => (
+                              <td key={ch} style={{ padding: '6px 8px', textAlign: 'center' }}>
+                                <input type="checkbox" checked={p[ch]}
+                                  onChange={(e) => patchField(p.id, ch, e.target.checked)} />
+                              </td>
+                            ))}
+                            <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                              {state === 'saving' && <span style={{ fontSize: 10, color: '#fbbf24' }}>saving…</span>}
+                              {state === 'saved'  && <span style={{ fontSize: 10, color: '#4ade80' }}>✓ saved</span>}
+                              {state === 'error'  && <span title={err} style={{ fontSize: 10, color: '#fca5a5', fontWeight: 700 }}>⚠ err</span>}
+                              {state === 'idle'   && (
+                                <button onClick={() => openProductEditor(p)}
+                                  style={{ background: 'transparent', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                                  ✏️ More
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {Object.values(rowError).length > 0 && (
+                  <div style={{ padding: '10px 14px', backgroundColor: 'rgba(220,38,38,0.10)', borderTop: '1px solid rgba(220,38,38,0.25)', fontSize: 11, color: '#fca5a5' }}>
+                    {Object.entries(rowError).map(([id, e]) => {
+                      const prod = products.find(p => p.id === id);
+                      return <div key={id}><strong>{prod?.name ?? id.slice(0,8)}:</strong> {e}</div>;
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </>
