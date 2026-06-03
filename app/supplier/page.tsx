@@ -2,6 +2,7 @@
 // trigger rebuild
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import { canLock, useUserRole } from '@/lib/role';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
@@ -1638,6 +1639,14 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
 
 <header className="sticky top-0 z-40 border-b px-4 py-3"
 style={{ backgroundColor: '#1a2e5a', borderColor: 'rgba(245,197,24,0.2)' }}>
+<div className="flex items-center gap-2 mb-3 flex-wrap">
+<Link href="/dashboard"
+  className="px-3 py-1.5 rounded-lg text-xs font-bold"
+  style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.65)', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.12)' }}>
+  ← Dashboard
+</Link>
+<div className="flex-1" />
+</div>
 <div className="flex items-center justify-between mb-3">
 <div>
 <h1 className="font-bold text-lg" style={{ color: '#f5c518' }}>Suppliers</h1>
@@ -1813,9 +1822,12 @@ Loading suppliers...
 </p>
 </div>
 )}
-{!loading && filtered.map((s: Supplier) => (
-<div key={s.id} className="rounded-2xl overflow-hidden"
-style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+{!loading && filtered.length > 0 && (
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+{filtered.map((s: Supplier) => (
+<Link key={s.id} href={`/supplier/${s.id}`}
+className="block rounded-2xl overflow-hidden transition-transform hover:scale-[1.02]"
+style={{ border: '1px solid rgba(255,255,255,0.08)', textDecoration: 'none' }}>
 <div className="px-4 py-3 flex items-center gap-3"
 style={{ backgroundColor: s.brand_color ?? '#1a2e5a' }}>
 <span className="text-2xl">{s.brand_emoji ?? '🏪'}</span>
@@ -1823,219 +1835,32 @@ style={{ backgroundColor: s.brand_color ?? '#1a2e5a' }}>
 <p className="font-bold text-white text-sm truncate">{s.brand_name || s.name}</p>
 <p className="text-[10px] text-white/60 font-mono">{s.code}</p>
 </div>
-<div className="flex items-center gap-2">
 {!s.is_active && (
 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' }}>
-INACTIVE
+style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.6)' }}>
+OFF
 </span>
 )}
-<span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/20 text-white/70">
+</div>
+<div className="px-4 py-3 flex items-center justify-between"
+style={{ backgroundColor: '#0f1a2e' }}>
+<div>
+<p className="text-[9px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
 {SUPPLIER_TYPES.find(t => t.value === s.supplier_type)?.label ?? s.supplier_type}
-</span>
-</div>
-</div>
-<div className="px-4 py-3 space-y-2" style={{ backgroundColor: '#0f1f3d' }}>
-{(s.contact_name || s.contact_phone || s.contact_email) && (
-<div className="flex flex-wrap gap-x-4 gap-y-1">
-{s.contact_name && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>{s.contact_name}</p>}
-{s.contact_phone && <a href={`tel:${s.contact_phone}`} className="text-xs" style={{ color: '#f5c518' }}>{s.contact_phone}</a>}
-{s.contact_whatsapp && (
-<a href={`https://wa.me/${s.contact_whatsapp.replace(/\D/g, '')}`}
-target="_blank" rel="noopener noreferrer"
-className="text-xs" style={{ color: '#4ade80' }}>WhatsApp</a>
-)}
-{s.contact_email && <a href={`mailto:${s.contact_email}`} className="text-xs" style={{ color: '#60a5fa' }}>{s.contact_email}</a>}
-</div>
-)}
-{s.address && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{s.address}{s.country ? `, ${s.country}` : ''}</p>}
-{s.payment_terms && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{s.payment_terms}</p>}
-{s.notes && (
-<p className="text-xs rounded-lg px-3 py-2"
-style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.5)' }}>
-{s.notes}
 </p>
-)}
-<div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-<p className="text-xs font-bold" style={{ color: '#f5c518' }}>
-{s.product_count ?? 0} product{(s.product_count ?? 0) !== 1 ? 's' : ''} assigned
+<p className="text-sm font-black" style={{ color: '#f5c518' }}>
+{s.product_count ?? 0} product{(s.product_count ?? 0) === 1 ? '' : 's'}
 </p>
-<div className="flex gap-2 flex-wrap items-center">
-{/* Pricelist link / upload — Phase A */}
-{s.pricelist_url && (
-  <a href={s.pricelist_url} target="_blank" rel="noopener noreferrer"
-    className="text-xs px-3 py-1.5 rounded-lg font-bold inline-flex items-center gap-1.5"
-    style={{ backgroundColor: 'rgba(34,197,94,0.15)', color: '#4ade80', textDecoration: 'none' }}
-    title={`Pricelist · ${s.pricelist_filename ?? ''}${s.pricelist_uploaded_at ? ' · ' + new Date(s.pricelist_uploaded_at).toLocaleDateString() : ''}`}>
-    📄 Pricelist
-  </a>
-)}
-{/* Extract products from pricelist → review/edit → bulk import */}
-{s.pricelist_url && canEdit && (
-  <button onClick={() => extractPricelist(s)}
-    className="text-xs px-3 py-1.5 rounded-lg font-bold"
-    style={{ backgroundColor: 'rgba(168,85,247,0.18)', color: '#c084fc' }}
-    title="Read the pricelist with Claude and import the lines as products">
-    🔮 Extract products
-  </button>
-)}
-{canEdit && (
-  <label
-    className="text-xs px-3 py-1.5 rounded-lg font-bold cursor-pointer"
-    style={{
-      backgroundColor: pricelistUploadingId === s.id ? 'rgba(148,163,184,0.2)' : (s.pricelist_url ? 'rgba(245,197,24,0.10)' : 'rgba(245,197,24,0.15)'),
-      color: pricelistUploadingId === s.id ? '#94a3b8' : '#f5c518',
-      opacity: pricelistUploadingId === s.id ? 0.7 : 1,
-    }}>
-    {pricelistUploadingId === s.id
-      ? '⏳ Uploading…'
-      : s.pricelist_url ? '🔁 Replace' : '📤 Upload pricelist'}
-    <input type="file" accept="application/pdf,image/*" disabled={pricelistUploadingId === s.id} style={{ display: 'none' }}
-      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPricelist(s, f); e.currentTarget.value = ''; }} />
-  </label>
-)}
-<button onClick={() => toggleExpanded(s)}
-className="text-xs px-3 py-1.5 rounded-lg font-bold"
-style={{ backgroundColor: 'rgba(96,165,250,0.15)', color: '#60a5fa' }}>
-{expandedId === s.id ? '▴ Hide Products' : `▾ Products (${s.product_count ?? 0})`}
-</button>
-<button onClick={() => toggleActive(s)}
-className="text-xs px-3 py-1.5 rounded-lg font-bold"
-style={{
-backgroundColor: s.is_active ? 'rgba(220,38,38,0.15)' : 'rgba(22,163,74,0.15)',
-color: s.is_active ? '#f87171' : '#4ade80'
-}}>
-{s.is_active ? 'Deactivate' : 'Activate'}
-</button>
-<button onClick={() => openEdit(s)}
-className="text-xs px-3 py-1.5 rounded-lg font-bold"
-style={{ backgroundColor: 'rgba(245,197,24,0.15)', color: '#f5c518' }}>
-Edit
-</button>
+</div>
+<div className="flex items-center gap-2">
+{s.pricelist_url && <span title="Pricelist on file" style={{ fontSize: 14 }}>📄</span>}
+<span style={{ color: '#f5c518', fontSize: 18, fontWeight: 900 }}>→</span>
 </div>
 </div>
-</div>
-
-{expandedId === s.id && (
-<div className="px-3 py-3 border-t" style={{ backgroundColor: '#f5f5f7', borderColor: 'rgba(245,197,24,0.15)' }}>
-{!canEdit && (
-<p className="text-xs mb-2 px-2" style={{ color: '#565959' }}>
-View-only — founder or co-founder role required to enable, disable, or edit products.
-</p>
-)}
-{canEdit && (
-<div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
-<p className="text-xs font-bold" style={{ color: '#565959' }}>
-Products under {s.brand_name || s.name}
-</p>
-<div className="flex gap-2">
-<button onClick={() => openBulkUpload(s)}
-className="text-xs font-medium px-3 py-1.5 rounded-full bg-white"
-style={{ color: '#007185', border: '1px solid #d5d9d9' }}>
-📄 Bulk CSV
-</button>
-<button onClick={() => openAddProduct(s)}
-className="text-xs font-bold px-3 py-1.5 rounded-full"
-style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
-+ Add Product
-</button>
-</div>
-</div>
-)}
-{productsLoading === s.id && (
-<p className="text-xs text-center py-6" style={{ color: '#565959' }}>Loading products…</p>
-)}
-{productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length === 0 && (
-<p className="text-xs text-center py-6" style={{ color: '#565959' }}>
-No products assigned to this supplier yet.
-</p>
-)}
-{productsLoading !== s.id && (productsBySupplier[s.id] ?? []).length > 0 && (
-<div className="space-y-2">
-{(productsBySupplier[s.id] ?? []).map((p) => {
-const isActive = isProductActive(p);
-const channelsLabel = activeChannelsLabel(p);
-return (
-<div key={p.id} className="rounded-lg bg-white px-3 py-3"
-style={{ border: '1px solid #d5d9d9', boxShadow: '0 1px 2px rgba(15,17,17,0.05)' }}>
-<div className="flex items-start gap-3">
-{/* Thumbnail placeholder — emoji for now */}
-<div className="rounded-md flex-shrink-0 flex items-center justify-center text-2xl"
-style={{ width: 56, height: 56, backgroundColor: '#f7f8f8', border: '1px solid #e7e7e7' }}>
-{p.category?.includes('seafood') ? '🐟' : p.category === 'meat' ? '🥩' : '📦'}
-</div>
-<div className="flex-1 min-w-0">
-<a href="#" onClick={(e) => { e.preventDefault(); openEditProduct(p, s.id); }}
-className="text-sm font-medium leading-tight block hover:underline"
-style={{ color: '#007185' }}>
-{p.name}
-</a>
-<p className="text-[11px] mt-0.5" style={{ color: '#565959' }}>
-<span className="font-mono">{p.sku}</span>
-{p.pack_size && <span> · {p.pack_size}</span>}
-{p.unit_of_measure && <span> · /{p.unit_of_measure}</span>}
-</p>
-<div className="flex items-baseline gap-3 mt-1.5 flex-wrap">
-{p.online_sell_price !== null && (
-<span className="text-base font-bold" style={{ color: '#0F1111' }}>
-<span className="text-xs align-top">$</span>{p.online_sell_price.toFixed(2)}
-</span>
-)}
-{p.cost_per_unit !== null && (
-<span className="text-xs" style={{ color: '#565959' }}>
-cost ${p.cost_per_unit.toFixed(2)}
-</span>
-)}
-</div>
-</div>
-<span className="text-[11px] font-bold px-2 py-0.5 rounded whitespace-nowrap self-start"
-style={{
-backgroundColor: isActive ? '#067D62' : '#565959',
-color: '#fff',
-}}
-title={isActive ? 'Tap "Channels" to adjust where this sells' : 'Tap Enable to activate channels'}>
-{channelsLabel}
-</span>
-</div>
-
-{canEdit && (
-<div className="flex gap-2 mt-3 pt-3 border-t flex-wrap" style={{ borderColor: '#e7e7e7' }}>
-{isActive ? (
-  <>
-    <button onClick={() => disableProduct(p, s.id)}
-      className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors bg-white"
-      style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
-      Disable
-    </button>
-    <button onClick={() => openChannelPicker(p, s.id)}
-      className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors bg-white"
-      style={{ color: '#007185', border: '1px solid #d5d9d9' }}>
-      Channels
-    </button>
-  </>
-) : (
-  <button onClick={() => openChannelPicker(p, s.id)}
-    className="text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
-    style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD200' }}>
-    Enable
-  </button>
-)}
-<button onClick={() => openEditProduct(p, s.id)}
-className="text-xs font-medium px-3 py-1.5 rounded-full bg-white"
-style={{ color: '#0F1111', border: '1px solid #d5d9d9' }}>
-Edit
-</button>
-</div>
-)}
-</div>
-);
-})}
-</div>
-)}
-</div>
-)}
-</div>
+</Link>
 ))}
+</div>
+)}
 </div>
 )}
 
