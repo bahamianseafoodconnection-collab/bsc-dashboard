@@ -175,6 +175,10 @@ Rules:
 - If a line has unclear pricing, set cost_per_unit=null and explain in notes.
 - Cap at ${MAX_ROWS} products total. If the PDF has more, take the first ${MAX_ROWS} and add a note on the last row.`;
 
+  // Sonnet 4.6 handles PDF tabular extraction reliably and is ~3x cheaper
+  // than Opus for this workload (no creative reasoning needed — just
+  // OCR + JSON structuring).
+  const MODEL = 'claude-sonnet-4-5';
   let claudeData: unknown;
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -185,7 +189,7 @@ Rules:
         'anthropic-version':  '2023-06-01',
       },
       body: JSON.stringify({
-        model:      'claude-opus-4-5',
+        model:      MODEL,
         max_tokens: 8192,
         messages: [{
           role: 'user',
@@ -198,8 +202,15 @@ Rules:
     });
     if (!claudeRes.ok) {
       const errText = await claudeRes.text().catch(() => '');
+      // Anthropic returns JSON like {"type":"error","error":{"type":"...","message":"..."}}.
+      // Surface the inner message if present so the UI shows something actionable.
+      let innerMsg = errText.slice(0, 400);
+      try {
+        const j = JSON.parse(errText) as { error?: { message?: string; type?: string } };
+        if (j?.error?.message) innerMsg = `${j.error.type ?? 'error'}: ${j.error.message}`;
+      } catch {}
       return NextResponse.json(
-        { ok: false, error: `Anthropic ${claudeRes.status}: ${errText.slice(0, 300)}` },
+        { ok: false, error: `Anthropic ${claudeRes.status} (${MODEL}) — ${innerMsg}` },
         { status: 502 },
       );
     }
