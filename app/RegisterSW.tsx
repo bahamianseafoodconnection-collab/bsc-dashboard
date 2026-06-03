@@ -84,14 +84,52 @@ export default function RegisterSW() {
   async function applyUpdate() {
     if (busy) return;
     setBusy(true);
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (reg?.waiting) {
-      // Tell the waiting SW to take over. controllerchange handler reloads.
-      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-    } else {
-      window.location.reload();
+    // Bulletproof update path. The old "postMessage SKIP_WAITING + wait
+    // for controllerchange" flow could hang if the waiting SW had
+    // already taken over (no controllerchange event fires) — observed
+    // 2026-06-03 mid-sale at /pos: Claff stuck with the banner up and
+    // the page not reloading. Brute-force path: tell any waiting SW to
+    // skip, unregister every SW, blow away every Cache Storage entry,
+    // then hard reload. Guarantees the new bundle lands.
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) {
+        try { r.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch {}
+        try { await r.unregister(); } catch {}
+      }
+      if (typeof caches !== 'undefined') {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+    } catch {
+      // Best-effort cleanup — fall through to reload regardless.
     }
+    // Force a fresh network fetch (location.reload() defaults to true on
+    // newer specs but we explicitly bust by appending a cache-buster).
+    const u = new URL(window.location.href);
+    u.searchParams.set('_v', String(Date.now()));
+    window.location.replace(u.toString());
   }
+
+  function dismiss() {
+    // Snooze for 30 minutes. Persisted to sessionStorage so a page nav
+    // doesn't bring the banner back instantly — cashier needs to finish
+    // the sale without being re-pinged every navigation.
+    try {
+      sessionStorage.setItem('bsc_sw_update_dismiss_until', String(Date.now() + 30 * 60 * 1000));
+    } catch {}
+    setUpdateAvailable(false);
+  }
+
+  // Respect a recent dismissal so the banner doesn't reappear on every
+  // pathname change.
+  useEffect(() => {
+    if (!updateAvailable) return;
+    try {
+      const until = Number(sessionStorage.getItem('bsc_sw_update_dismiss_until') || 0);
+      if (until > Date.now()) setUpdateAvailable(false);
+    } catch {}
+  }, [updateAvailable]);
 
   if (!updateAvailable) return null;
 
@@ -122,6 +160,23 @@ export default function RegisterSW() {
       <span style={{ fontSize: 13, flex: 1 }}>
         New BSC version available.
       </span>
+      <button
+        onClick={dismiss}
+        disabled={busy}
+        style={{
+          background: 'transparent',
+          color: 'rgba(245,197,24,0.7)',
+          border: '1px solid rgba(245,197,24,0.4)',
+          borderRadius: 8,
+          padding: '6px 10px',
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: busy ? 'wait' : 'pointer',
+          opacity: busy ? 0.5 : 1,
+        }}
+      >
+        Later
+      </button>
       <button
         onClick={applyUpdate}
         disabled={busy}
