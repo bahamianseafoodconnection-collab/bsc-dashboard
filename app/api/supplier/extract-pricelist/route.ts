@@ -226,9 +226,10 @@ Rules:
       },
       body: JSON.stringify({
         model:      MODEL,
-        // 4096 is enough for ~200 product rows of compact JSON. Smaller
-        // max_tokens also helps Haiku finish faster.
-        max_tokens: 4096,
+        // 8192 is Haiku's standard output ceiling. JBI's 3-page pricelist
+        // hit 4096 mid-row — bumping to give Claude room to finish the
+        // whole list. Haiku is still fast enough to fit Vercel's cap.
+        max_tokens: 8192,
         messages: [{
           role: 'user',
           content: [
@@ -267,14 +268,44 @@ Rules:
   const data    = claudeData as ClaudeResp;
   const rawText = data.content?.find(c => c.type === 'text')?.text ?? '';
 
-  // Strip any accidental markdown fences before parsing.
-  const cleaned = rawText.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
-  let parsed: { products?: unknown };
-  try { parsed = JSON.parse(cleaned); }
-  catch {
+  // Robust JSON extraction. Claude sometimes wraps in ```json ... ```
+  // fences regardless of prompt; also need to survive a truncated tail
+  // (max_tokens hit mid-row). Strategy:
+  //   1. Strip leading/trailing whitespace + any code fences anywhere.
+  //   2. Find the first '{' and parse forward. If parse fails, walk
+  //      backward from the end stripping incomplete tail rows until
+  //      we find a balanced JSON close. That recovers as many complete
+  //      products as Claude managed to emit before truncation.
+  let parsed: { products?: unknown } | null = null;
+  const fenceStripped = rawText
+    .replace(/```(?:json)?\s*/gi, '')
+    .replace(/```/g, '')
+    .trim();
+  const firstBrace = fenceStripped.indexOf('{');
+  if (firstBrace !== -1) {
+    const body = fenceStripped.slice(firstBrace);
+    // Try the easy path first.
+    try { parsed = JSON.parse(body); }
+    catch {
+      // Truncation recovery: find the last complete row inside products[]
+      // and rebuild a closing `]}`. Works because every product row ends
+      // with `}` and rows are comma-separated.
+      const startIdx = body.indexOf('[');
+      if (startIdx !== -1) {
+        // Walk from the end backwards finding the last `},` and clip there.
+        let end = body.lastIndexOf('},');
+        if (end > startIdx) {
+          const repaired = body.slice(0, end + 1) + ']}';
+          try { parsed = JSON.parse(repaired); }
+          catch {}
+        }
+      }
+    }
+  }
+  if (!parsed) {
     return NextResponse.json({
       ok: false,
-      error: `Claude returned non-JSON. First 300 chars: ${rawText.slice(0, 300)}`,
+      error: `Claude returned unparseable JSON (likely truncated). First 400 chars: ${rawText.slice(0, 400)}`,
     }, { status: 502 });
   }
 
