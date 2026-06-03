@@ -68,6 +68,7 @@ interface ExtractedProduct {
   sku: string;
   category: string;
   skip: boolean;
+  image_url: string;
   sell_nassau: boolean;
   sell_andros: boolean;
   sell_online: boolean;
@@ -83,6 +84,19 @@ const CATEGORIES_FOR_EXTRACT = [
   'Seafood','Meat','Poultry','Produce','Dry Goods','Frozen',
   'Dairy & Eggs','Beverages','Snacks','Cleaning & Paper','Personal Care','Other',
 ];
+
+interface ProductEditForm {
+  name:            string;
+  category:        string;
+  unit_of_measure: string;
+  pack_size:       string;
+  image_url:       string;
+  sell_nassau:     boolean;
+  sell_andros:     boolean;
+  sell_online:     boolean;
+  sell_wholesale:  boolean;
+  status:          string;
+}
 
 export default function SupplierDetailPage() {
   const params  = useParams<{ id: string }>();
@@ -106,6 +120,11 @@ export default function SupplierDetailPage() {
     loading: boolean; error: string | null; products: ExtractedProduct[];
     importing: boolean; diagnostic: ExtractDiagnostic | null;
   }>(null);
+  // Full-screen product editor — opens when you tap a product card
+  const [editingProduct, setEditingProduct] = useState<SupplierProduct | null>(null);
+  const [editForm, setEditForm] = useState<ProductEditForm | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editImgUploading, setEditImgUploading] = useState(false);
 
   function showToast(msg: string, ok = true) {
     setToast({ msg, ok });
@@ -193,6 +212,7 @@ export default function SupplierDetailPage() {
         sku:           p.suggested_sku,
         category:      p.suggested_category,
         skip:          p.cost_per_unit == null,
+        image_url:     '',
         sell_nassau:   true,
         sell_andros:   false,
         sell_online:   false,
@@ -232,6 +252,7 @@ export default function SupplierDetailPage() {
             sku: p.sku, name: p.name, category: p.category,
             unit_of_measure: p.unit_of_measure, pack_size: p.pack_size,
             cost_per_unit: p.cost_per_unit,
+            image_url: p.image_url || null,
             channels: { nassau: p.sell_nassau, andros: p.sell_andros, online: p.sell_online, wholesale: p.sell_wholesale },
           })),
         }),
@@ -259,6 +280,93 @@ export default function SupplierDetailPage() {
     if (error) { showToast(`Update failed: ${error.message}`, false); return; }
     showToast(`${p.name} → ${next}`);
     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, status: next } : x));
+  }
+
+  function openProductEditor(p: SupplierProduct) {
+    setEditingProduct(p);
+    setEditForm({
+      name:            p.name,
+      category:        p.category ?? '',
+      unit_of_measure: p.unit_of_measure ?? '',
+      pack_size:       p.pack_size ?? '',
+      image_url:       p.image_url ?? '',
+      sell_nassau:     p.sell_nassau,
+      sell_andros:     p.sell_andros,
+      sell_online:     p.sell_online,
+      sell_wholesale:  p.sell_wholesale,
+      status:          p.status,
+    });
+  }
+
+  function closeProductEditor() {
+    setEditingProduct(null);
+    setEditForm(null);
+    setEditSaving(false);
+    setEditImgUploading(false);
+  }
+
+  async function uploadProductImage(file: File) {
+    if (!editingProduct || !editForm) return;
+    setEditImgUploading(true);
+    try {
+      const ext  = file.name.split('.').pop() ?? 'jpg';
+      const path = `products/${editingProduct.sku}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('site-images')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { showToast(`Image upload failed: ${upErr.message}`, false); return; }
+      const { data: pub } = supabase.storage.from('site-images').getPublicUrl(path);
+      setEditForm({ ...editForm, image_url: pub.publicUrl });
+      showToast('📷 Image uploaded — tap Save to apply');
+    } finally {
+      setEditImgUploading(false);
+    }
+  }
+
+  async function saveProduct() {
+    if (!editingProduct || !editForm) return;
+    setEditSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { showToast('Sign-in expired — refresh.', false); return; }
+      const res = await fetch(`/api/admin/products/${editingProduct.id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name:            editForm.name,
+          category:        editForm.category || null,
+          unit_of_measure: editForm.unit_of_measure || null,
+          pack_size:       editForm.pack_size || null,
+          image_url:       editForm.image_url || null,
+          sell_nassau:     editForm.sell_nassau,
+          sell_andros:     editForm.sell_andros,
+          sell_online:     editForm.sell_online,
+          sell_wholesale:  editForm.sell_wholesale,
+          status:          editForm.status,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { showToast(`Save failed: ${j.error || `HTTP ${res.status}`}`, false); return; }
+      showToast(`✓ ${editForm.name} saved`);
+      // Reflect locally so the grid updates without a full reload.
+      setProducts(prev => prev.map(x => x.id === editingProduct.id ? {
+        ...x,
+        name:            editForm.name,
+        category:        editForm.category || null,
+        unit_of_measure: editForm.unit_of_measure || null,
+        pack_size:       editForm.pack_size || null,
+        image_url:       editForm.image_url || null,
+        sell_nassau:     editForm.sell_nassau,
+        sell_andros:     editForm.sell_andros,
+        sell_online:     editForm.sell_online,
+        sell_wholesale:  editForm.sell_wholesale,
+        status:          editForm.status,
+      } : x));
+      closeProductEditor();
+    } finally {
+      setEditSaving(false);
+    }
   }
 
   const filtered = products.filter(p =>
@@ -386,11 +494,20 @@ export default function SupplierDetailPage() {
                   if (p.sell_wholesale) channels.push('Whs');
                   const isActive = p.status === 'active';
                   return (
-                    <div key={p.id} style={{ backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: isActive ? '1px solid #e2e8f0' : '1px dashed #cbd5e1', opacity: isActive ? 1 : 0.7, display: 'flex', flexDirection: 'column' }}>
+                    <div key={p.id}
+                      onClick={() => canEdit && openProductEditor(p)}
+                      style={{ backgroundColor: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: isActive ? '1px solid #e2e8f0' : '1px dashed #cbd5e1', opacity: isActive ? 1 : 0.7, display: 'flex', flexDirection: 'column', cursor: canEdit ? 'pointer' : 'default', transition: 'transform 0.1s' }}
+                      onMouseEnter={(e) => { if (canEdit) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}>
                       <div style={{ height: 140, background: p.image_url ? `url(${p.image_url}) center/cover` : '#f1f5f9', position: 'relative' }}>
                         <span style={{ position: 'absolute', top: 8, right: 8, padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 800, backgroundColor: isActive ? 'rgba(22,163,74,0.92)' : 'rgba(100,116,139,0.92)', color: '#fff' }}>
                           {isActive ? 'ACTIVE' : 'INACTIVE'}
                         </span>
+                        {!p.image_url && (
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 11 }}>
+                            📷 Tap to add image
+                          </div>
+                        )}
                       </div>
                       <div style={{ padding: 12, flex: 1, display: 'flex', flexDirection: 'column' }}>
                         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#060d1f' }}>{p.name}</h3>
@@ -405,20 +522,20 @@ export default function SupplierDetailPage() {
                               ))
                           }
                         </div>
-                        <div style={{ marginTop: 'auto', display: 'flex', gap: 6 }}>
-                          {canEdit && (
-                            <>
-                              <button onClick={() => toggleProductStatus(p)}
-                                style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', backgroundColor: isActive ? '#fff' : '#f4c842', color: isActive ? '#dc2626' : '#060d1f', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                                {isActive ? 'Disable' : 'Enable'}
-                              </button>
-                              <Link href={`/admin/inventory?product=${p.id}`}
-                                style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#0a1220', fontSize: 11, fontWeight: 700, textAlign: 'center', textDecoration: 'none' }}>
-                                Edit
-                              </Link>
-                            </>
-                          )}
-                        </div>
+                        {canEdit && (
+                          <div style={{ marginTop: 'auto', display: 'flex', gap: 6 }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleProductStatus(p); }}
+                              style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #cbd5e1', backgroundColor: isActive ? '#fff' : '#f4c842', color: isActive ? '#dc2626' : '#060d1f', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              {isActive ? 'Disable' : 'Enable'}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openProductEditor(p); }}
+                              style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: 'none', backgroundColor: '#0a1220', color: '#f4c842', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              ✏️ Manage
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -474,6 +591,7 @@ export default function SupplierDetailPage() {
                         <th style={{ padding: '8px 6px' }}>Unit</th>
                         <th style={{ padding: '8px 6px' }}>Pack</th>
                         <th style={{ padding: '8px 6px' }}>Cost $</th>
+                        <th style={{ padding: '8px 6px' }}>Image URL (optional)</th>
                         <th style={{ padding: '8px 6px', textAlign: 'center' }}>Nas</th>
                         <th style={{ padding: '8px 6px', textAlign: 'center' }}>And</th>
                         <th style={{ padding: '8px 6px', textAlign: 'center' }}>Onl</th>
@@ -507,6 +625,11 @@ export default function SupplierDetailPage() {
                               onChange={e => patchExtractRow(i, { cost_per_unit: e.target.value === '' ? null : Number(e.target.value) })}
                               style={{ width: 80, padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, textAlign: 'right' }} />
                           </td>
+                          <td style={{ padding: '6px 6px' }}>
+                            <input value={p.image_url} placeholder="https://…"
+                              onChange={e => patchExtractRow(i, { image_url: e.target.value })}
+                              style={{ width: 180, padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 11 }} />
+                          </td>
                           <td style={{ padding: '6px 6px', textAlign: 'center' }}><input type="checkbox" checked={p.sell_nassau} onChange={e => patchExtractRow(i, { sell_nassau: e.target.checked })} /></td>
                           <td style={{ padding: '6px 6px', textAlign: 'center' }}><input type="checkbox" checked={p.sell_andros} onChange={e => patchExtractRow(i, { sell_andros: e.target.checked })} /></td>
                           <td style={{ padding: '6px 6px', textAlign: 'center' }}><input type="checkbox" checked={p.sell_online} onChange={e => patchExtractRow(i, { sell_online: e.target.checked })} /></td>
@@ -526,6 +649,129 @@ export default function SupplierDetailPage() {
                   style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 900, fontSize: 13, cursor: (extractModal.importing || extractModal.loading) ? 'wait' : 'pointer', opacity: (extractModal.importing || extractModal.loading || extractModal.products.length === 0) ? 0.5 : 1 }}>
                   {extractModal.importing ? 'Importing…' : `✓ Import ${extractModal.products.filter(p => !p.skip).length} products`}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── PRODUCT EDITOR MODAL — full screen ── */}
+        {editingProduct && editForm && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(6,13,31,0.92)', zIndex: 80, overflow: 'auto' }}>
+            <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+              {/* Editor top bar */}
+              <header style={{ backgroundColor: '#060d1f', padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, zIndex: 1 }}>
+                <button onClick={closeProductEditor} disabled={editSaving}
+                  style={{ background: 'transparent', color: '#f4c842', border: '1px solid rgba(244,200,66,0.3)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: editSaving ? 'wait' : 'pointer' }}>
+                  ← Back
+                </button>
+                <div style={{ flex: 1, color: '#fff', fontWeight: 800, fontSize: 14 }}>
+                  Manage product
+                </div>
+                <button onClick={saveProduct} disabled={editSaving}
+                  style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 10, padding: '8px 18px', fontWeight: 900, fontSize: 13, cursor: editSaving ? 'wait' : 'pointer', opacity: editSaving ? 0.5 : 1 }}>
+                  {editSaving ? 'Saving…' : '✓ Save'}
+                </button>
+              </header>
+
+              <div style={{ flex: 1, padding: 20, maxWidth: 900, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+                {/* Image section */}
+                <section style={{ backgroundColor: '#0f1a2e', borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                  <h2 style={{ color: '#f5c518', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Image</h2>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ width: 240, height: 240, borderRadius: 12, background: editForm.image_url ? `url(${editForm.image_url}) center/cover` : '#1a2e5a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                      {!editForm.image_url && '📷 no image'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 240, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <label style={{ display: 'inline-block', padding: '10px 16px', borderRadius: 10, backgroundColor: '#f5c518', color: '#060d1f', fontSize: 13, fontWeight: 800, cursor: editImgUploading ? 'wait' : 'pointer', textAlign: 'center', opacity: editImgUploading ? 0.6 : 1 }}>
+                        {editImgUploading ? '⏳ Uploading…' : '📤 Upload image'}
+                        <input type="file" accept="image/*" disabled={editImgUploading} style={{ display: 'none' }}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadProductImage(f); e.currentTarget.value = ''; }} />
+                      </label>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>or paste a URL:</div>
+                      <input value={editForm.image_url} onChange={e => setEditForm({ ...editForm, image_url: e.target.value })}
+                        placeholder="https://…"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, boxSizing: 'border-box' }} />
+                      {editForm.image_url && (
+                        <button onClick={() => setEditForm({ ...editForm, image_url: '' })}
+                          style={{ background: 'transparent', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-start' }}>
+                          Clear image
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Basics */}
+                <section style={{ backgroundColor: '#0f1a2e', borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                  <h2 style={{ color: '#f5c518', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 12px' }}>Basics</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                    <div>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Name</label>
+                      <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 14, boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>SKU (read-only)</label>
+                      <input value={editingProduct.sku} readOnly
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Category</label>
+                      <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0a1220', color: '#fff', fontSize: 14, boxSizing: 'border-box' }}>
+                        <option value="">— pick one —</option>
+                        {CATEGORIES_FOR_EXTRACT.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Unit</label>
+                      <input value={editForm.unit_of_measure} onChange={e => setEditForm({ ...editForm, unit_of_measure: e.target.value })}
+                        placeholder="lb / case / each"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 14, boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Pack size</label>
+                      <input value={editForm.pack_size} onChange={e => setEditForm({ ...editForm, pack_size: e.target.value })}
+                        placeholder="24x4oz / 50lb bag"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 14, boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Status</label>
+                      <select value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0a1220', color: '#fff', fontSize: 14, boxSizing: 'border-box' }}>
+                        <option value="active">active</option>
+                        <option value="inactive">inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Channels */}
+                <section style={{ backgroundColor: '#0f1a2e', borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                  <h2 style={{ color: '#f5c518', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '0 0 4px' }}>Sales channels</h2>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 12px' }}>Where this product is sold. Pricing per channel is set via /admin/inventory.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                    {([
+                      ['sell_nassau',    '🟡 Nassau POS / shop'],
+                      ['sell_andros',    '🟣 Andros'],
+                      ['sell_online',    '🌐 Online'],
+                      ['sell_wholesale', '📦 Wholesale'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, backgroundColor: editForm[key] ? 'rgba(245,197,24,0.15)' : 'rgba(255,255,255,0.04)', cursor: 'pointer', border: `1px solid ${editForm[key] ? 'rgba(245,197,24,0.4)' : 'rgba(255,255,255,0.08)'}` }}>
+                        <input type="checkbox" checked={editForm[key]} onChange={e => setEditForm({ ...editForm, [key]: e.target.checked })} />
+                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Power-user link to /admin/inventory for pricing + advanced fields */}
+                <div style={{ textAlign: 'center', padding: '12px 0 30px' }}>
+                  <Link href={`/admin/inventory?product=${editingProduct.id}`}
+                    style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, textDecoration: 'underline' }}>
+                    Open in /admin/inventory for pricing & advanced fields →
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

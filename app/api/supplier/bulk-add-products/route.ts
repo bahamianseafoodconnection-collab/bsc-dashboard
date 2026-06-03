@@ -50,6 +50,7 @@ interface InRow {
   pack_size?:         unknown;
   cost_per_unit?:     unknown;
   online_sell_price?: unknown;
+  image_url?:         unknown;
   channels?:          unknown;
 }
 
@@ -66,6 +67,7 @@ interface NormalizedRow {
   pack_size:      string | null;
   cost_per_unit:  number | null;
   online_price:   number | null;
+  image_url:      string | null;
   sell_nassau:    boolean;
   sell_andros:    boolean;
   sell_online:    boolean;
@@ -89,12 +91,14 @@ function normalizeRow(r: InRow): NormalizedRow | { error: string } {
   if (!category)      return { error: 'category is required' };
   if (!unitOfMeasure) return { error: 'unit_of_measure is required' };
 
+  const imageUrl = typeof r.image_url === 'string' && r.image_url.trim() ? r.image_url.trim() : null;
   return {
     sku, name, category,
     unit_of_measure: unitOfMeasure,
     pack_size:       packSize,
     cost_per_unit:   costPerUnit,
     online_price:    onlinePrice,
+    image_url:       imageUrl,
     sell_nassau:     ch.nassau    === true,
     sell_andros:     ch.andros    === true,
     sell_online:     ch.online    === true,
@@ -181,6 +185,7 @@ export async function POST(req: NextRequest) {
       created_by:          user.id,
     };
     if (norm.pack_size) productRow.pack_size = norm.pack_size;
+    if (norm.image_url) productRow.image_url = norm.image_url;
 
     const { data: prodInsert, error: prodErr } = await admin
       .from('products')
