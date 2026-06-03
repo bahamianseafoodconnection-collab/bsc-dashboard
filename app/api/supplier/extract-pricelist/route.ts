@@ -210,10 +210,11 @@ Rules:
 - If a line has unclear pricing, set cost_per_unit=null and explain in notes.
 - Cap at ${MAX_ROWS} products total. If the PDF has more, take the first ${MAX_ROWS} and add a note on the last row.`;
 
-  // Sonnet 4.6 handles PDF tabular extraction reliably and is ~3x cheaper
-  // than Opus for this workload (no creative reasoning needed — just
-  // OCR + JSON structuring).
-  const MODEL = 'claude-sonnet-4-6';
+  // Haiku 4.5 — fast PDF OCR + JSON structuring. Sonnet was timing out
+  // the Vercel function (FUNCTION_INVOCATION_TIMEOUT, ~10s cap on
+  // Hobby plan) on a 3-page JBI pricelist. Haiku finishes the same
+  // workload in 3-5s and is much cheaper.
+  const MODEL = 'claude-haiku-4-5-20251001';
   let claudeData: unknown;
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -225,7 +226,9 @@ Rules:
       },
       body: JSON.stringify({
         model:      MODEL,
-        max_tokens: 8192,
+        // 4096 is enough for ~200 product rows of compact JSON. Smaller
+        // max_tokens also helps Haiku finish faster.
+        max_tokens: 4096,
         messages: [{
           role: 'user',
           content: [
