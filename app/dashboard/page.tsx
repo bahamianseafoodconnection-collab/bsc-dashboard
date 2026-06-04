@@ -205,6 +205,7 @@ type SaleRecord = {
   status: string;
   payment_method: string;
   channel?: string;
+  net_profit?: number | null;   // server-computed; preferred over recomputing
 };
 
 type WholesaleOrder = {
@@ -219,13 +220,35 @@ type WholesaleOrder = {
   admin_purchased: boolean;
 };
 
-const MARGIN: Record<string, number> = {
-  nassau: 0.38, andros: 0.43, online: 0.25, wholesale: 0.15,
+// Channel markup-over-cost (NOT profit-share-of-revenue).
+// These are the live channel margins as of 2026-06-04.
+// Updated bulk on 2026-06-03 (wholesale 40 → 12 for online+wholesale combo).
+const CHANNEL_MARKUP: Record<string, number> = {
+  nassau:    0.22,   // 22% Nassau retail
+  nassau_pos:0.19,   // 19% Nassau POS
+  online:    0.35,   // 35% online
+  wholesale: 0.12,   // 12% wholesale partners (changed from 0.40)
+  andros:    0.40,   // 40% Andros
 };
 
+// For a markup m: price = cost × (1 + m), so profit = price × m / (1 + m).
+// Old code used `price × m`, which over-counts profit by ~m/(1+m) — about
+// 18-25% too high for our margins. Dashboard numbers were therefore
+// inflated. Prefer orders.net_profit when set; fall back to this only when
+// the server hasn't populated net_profit yet.
+function profitFromTotal(total: number, channel: string | null | undefined): number {
+  const m = CHANNEL_MARKUP[channel || 'nassau'] ?? 0.22;
+  return total * m / (1 + m);
+}
+
 function calcSplit(sale: SaleRecord) {
-  const margin = MARGIN[sale.channel || 'nassau'] ?? 0.38;
-  return { bscProfit: sale.total * margin, supplierCOGS: sale.total * (1 - margin), margin };
+  // Prefer the server-computed net_profit when present (orders.net_profit
+  // is written by /api/orders/place using the full pricing pipeline).
+  const serverProfit = typeof sale.net_profit === 'number' && Number.isFinite(sale.net_profit) ? sale.net_profit : null;
+  const profit       = serverProfit ?? profitFromTotal(sale.total ?? 0, sale.channel);
+  const cogs         = Math.max(0, (sale.total ?? 0) - profit);
+  const margin       = CHANNEL_MARKUP[sale.channel || 'nassau'] ?? 0.22;
+  return { bscProfit: profit, supplierCOGS: cogs, margin };
 }
 
 function fmtBSD(n: number) { return `BSD $${Number(n || 0).toFixed(2)}`; }
@@ -1203,8 +1226,8 @@ export default function DashboardPage() {
                       <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySales.filter(s => (s.channel || 'nassau') === 'nassau').reduce((a, s) => a + s.total, 0))}</div>
                     </div>
                     <div style={{ backgroundColor: '#e8f5e9', borderRadius: '10px', padding: '10px' }}>
-                      <div style={{ color: '#999', fontSize: '10px', marginBottom: '3px' }}>BSC Profit 38%</div>
-                      <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySales.filter(s => (s.channel || 'nassau') === 'nassau').reduce((a, s) => a + s.total * 0.38, 0))}</div>
+                      <div style={{ color: '#999', fontSize: '10px', marginBottom: '3px' }}>BSC Profit</div>
+                      <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySales.filter(s => (s.channel || 'nassau') === 'nassau').reduce((a, s) => a + calcSplit(s).bscProfit, 0))}</div>
                     </div>
                   </div>
                   <Link href="/pos" style={{ display: 'block', backgroundColor: '#1a2e5a', color: '#f4c842', textDecoration: 'none', borderRadius: '10px', padding: '10px', textAlign: 'center', fontWeight: 800, fontSize: '13px' }}>Open Nassau POS →</Link>
@@ -1224,8 +1247,8 @@ export default function DashboardPage() {
                       <div style={{ color: '#1a2e5a', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySales.filter(s => s.channel === 'andros').reduce((a, s) => a + s.total, 0))}</div>
                     </div>
                     <div style={{ backgroundColor: '#e8f5e9', borderRadius: '10px', padding: '10px' }}>
-                      <div style={{ color: '#999', fontSize: '10px', marginBottom: '3px' }}>BSC Profit 43%</div>
-                      <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySales.filter(s => s.channel === 'andros').reduce((a, s) => a + s.total * 0.43, 0))}</div>
+                      <div style={{ color: '#999', fontSize: '10px', marginBottom: '3px' }}>BSC Profit</div>
+                      <div style={{ color: '#2e7d32', fontWeight: 900, fontSize: '18px' }}>{fmtBSD(todaySales.filter(s => s.channel === 'andros').reduce((a, s) => a + calcSplit(s).bscProfit, 0))}</div>
                     </div>
                   </div>
                   <Link href="/pos-andros" style={{ display: 'block', backgroundColor: '#7c3aed', color: '#fff', textDecoration: 'none', borderRadius: '10px', padding: '10px', textAlign: 'center', fontWeight: 800, fontSize: '13px' }}>Open Andros POS →</Link>
