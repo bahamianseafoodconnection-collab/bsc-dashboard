@@ -271,6 +271,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, customer: data });
     }
 
+    case 'record_credit_change': {
+      // Add (+ amount) or subtract (- amount) to a customer's running credit balance.
+      // Use cases: founder records a cash payment received against an open balance
+      // (negative delta = balance goes down), or charges a manual adjustment.
+      if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
+      const deltaRaw = (body as { delta?: unknown }).delta;
+      const delta    = typeof deltaRaw === 'number' && Number.isFinite(deltaRaw) ? deltaRaw : NaN;
+      if (!Number.isFinite(delta) || delta === 0) {
+        return NextResponse.json({ ok: false, error: 'delta must be a non-zero number' }, { status: 400 });
+      }
+      const reasonRaw = (body as { reason?: unknown }).reason;
+      const reason = typeof reasonRaw === 'string' && reasonRaw.trim() ? reasonRaw.trim() : 'manual';
+      const noteRaw = (body as { note?: unknown }).note;
+      const note   = typeof noteRaw === 'string' && noteRaw.trim() ? noteRaw.trim() : null;
+
+      const { data: cur, error: rErr } = await admin.from('customers').select('current_balance, credit_limit, is_credit_customer').eq('id', body.id).maybeSingle();
+      if (rErr || !cur) return NextResponse.json({ ok: false, error: rErr?.message || 'Customer not found' }, { status: 404 });
+      const curBal = Number((cur as { current_balance: number | null }).current_balance ?? 0);
+      const newBal = +(curBal + delta).toFixed(2);
+
+      const limit = Number((cur as { credit_limit: number | null }).credit_limit ?? 0);
+      // Guard: don't let balance go ABOVE the credit limit unless founder OR limit is 0 (unlimited / not approved)
+      if (delta > 0 && limit > 0 && newBal > limit && !caller.isFounder) {
+        return NextResponse.json(
+          { ok: false, error: `New balance ${newBal.toFixed(2)} exceeds credit limit ${limit.toFixed(2)}.` },
+          { status: 400 },
+        );
+      }
+
+      const { error: uErr } = await admin.from('customers').update({
+        current_balance: newBal,
+        updated_at:      new Date().toISOString(),
+      }).eq('id', body.id);
+      if (uErr) return NextResponse.json({ ok: false, error: uErr.message }, { status: 500 });
+
+      // Best-effort ledger insert. Table may not exist yet — soft-fail.
+      try {
+        await admin.from('customer_credit_ledger').insert({
+          customer_id: body.id,
+          delta,
+          reason,
+          note,
+          balance_after: newBal,
+          created_by:    caller.userId,
+        });
+      } catch {
+        // Ledger missing — balance is still updated, just no history row.
+      }
+
+      return NextResponse.json({ ok: true, current_balance: newBal });
+    }
+
     case 'points_history': {
       if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
       const { data, error } = await admin
@@ -281,6 +333,27 @@ export async function POST(req: NextRequest) {
         .limit(50);
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true, log: data ?? [] });
+    }
+
+    case 'detail': {
+      // One-shot fetch for the customer detail page: customer + recent orders + recent credit ledger + points history.
+      if (!body.id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
+      const [{ data: customer, error: cErr }, ordersRes, ledgerRes, pointsRes] = await Promise.all([
+        admin.from('customers').select('id, full_name, phone, email, address, is_credit_customer, credit_terms, credit_limit, current_balance, points_balance, points_lifetime, points_redeemed, total_orders, total_spent, is_active, created_at').eq('id', body.id).maybeSingle(),
+        admin.from('orders').select('id, total, status, payment_method, order_type, created_at, channel').eq('customer_id', body.id).order('created_at', { ascending: false }).limit(20),
+        admin.from('customer_credit_ledger').select('id, delta, reason, note, balance_after, created_at').eq('customer_id', body.id).order('created_at', { ascending: false }).limit(30),
+        admin.from('customer_points_log').select('id, delta, reason, profit_basis, note, order_id, created_at').eq('customer_id', body.id).order('created_at', { ascending: false }).limit(30),
+      ]);
+      if (cErr || !customer) return NextResponse.json({ ok: false, error: cErr?.message || 'Customer not found' }, { status: 404 });
+      return NextResponse.json({
+        ok:       true,
+        customer,
+        orders:   ordersRes.data ?? [],
+        // Ledger may 404 if table not yet created — return empty array gracefully.
+        ledger:   ledgerRes.error ? [] : (ledgerRes.data ?? []),
+        ledger_table_missing: !!ledgerRes.error,
+        points:   pointsRes.data ?? [],
+      });
     }
   }
 

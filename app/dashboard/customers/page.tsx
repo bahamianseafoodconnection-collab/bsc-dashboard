@@ -256,7 +256,14 @@ export default function CustomersAdminPage() {
                 <tr key={c.id} onClick={() => openCustomer(c)}
                   className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50/60 ${selected?.id === c.id ? 'bg-slate-100' : ''}`}>
                   <td className="px-3 py-2">
-                    <div className="font-bold text-navy">{c.full_name || '—'}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-bold text-navy">{c.full_name || '—'}</div>
+                      <Link href={`/dashboard/customers/${c.id}`} onClick={(e) => e.stopPropagation()}
+                        className="rounded-md bg-navy/10 px-2 py-0.5 text-[10px] font-extrabold text-navy hover:bg-navy hover:text-gold"
+                        title="Open full customer page">
+                        Open →
+                      </Link>
+                    </div>
                     {c.email && <div className="text-[10px] text-slate-500">{c.email}</div>}
                   </td>
                   <td className="px-3 py-2 text-slate-600">{c.phone || '—'}</td>
