@@ -1,24 +1,27 @@
 // /api/supplier-portal/add-product
 //
-// Lets a supplier add their own product live to BSC's catalog without
-// the founder approval queue. Founder direction 2026-06-05.
+// Supplier self-listing endpoint. Lands the product in the PENDING
+// approval queue at /founder-ai/products/pending (all sell_* flags
+// false + status='active' = "awaiting founder review").
 //
 // Auth: 'supplier' or 'partner_us'.
 // Ownership: product is INSERTed with primary_supplier_id = the
 //   suppliers.id linked to the caller's portal_user_id. Supplier
 //   cannot list a product under someone else's name.
 //
-// Channels suppliers can target:
-//   - online_market  (35% markup over cost)
-//   - local_wholesale (12% markup over cost)
+// Channels the supplier can REQUEST:
+//   - online    (BSC retail on /market)
+//   - wholesale (BSC wholesale tier)
 //
-// Other channels (nassau_pos, andros_pos) stay founder-only — that's
-// a distribution decision, not a supplier listing decision.
-//
-// Pricing flow: supplier enters cost_per_unit. We INSERT a
-// product_costs row (opening_balance) + call bsc_set_channel_price
-// for each ticked channel with the standard markup. margin_multiplier
-// = 1 + markup is set automatically by the RPC.
+// Pricing flow: supplier enters cost_per_unit. We INSERT
+//   • products row (sell_* flags ALL false; status='active';
+//     requested_channels stored from supplier intent)
+//   • product_costs row (opening_balance)
+// We DO NOT write any product_pricing / channel pricing rows here.
+// Per-channel margin + price are set by the founder in the management
+// grid at approval — that's where the 35 retail / 15 wholesale (or
+// per-item override) gets applied. Removing pricing-at-upload prevents
+// the supplier endpoint from baking in a guessed markup.
 //
 // Body:
 //   { name, category, unit_of_measure, pack_size?, image_url?,
@@ -31,13 +34,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_ROLES = new Set(['supplier', 'partner_us']);
-
-// Markups in decimal form (0.35 = 35%). bsc_set_channel_price computes
-// price = cost × (1 + p_margin) internally.
-const SUPPLIER_CHANNEL_MARKUP: Record<'online_market' | 'local_wholesale', number> = {
-  online_market:   0.35,
-  local_wholesale: 0.12,
-};
 
 interface Body {
   name?:            unknown;
@@ -122,6 +118,18 @@ export async function POST(req: NextRequest) {
   }
   const supplier = supplierRow as { id: string; code: string; name: string };
 
+  // Supplier-listed products land PENDING — every sell_* flag is forced
+  // false on insert regardless of what the supplier ticked. Combined with
+  // status='active', this matches the filter at /founder-ai/products/pending
+  // (rows are channels-off + active = "awaiting founder review"). The
+  // founder flips the actual sell_* flags during approval.
+  //
+  // requested_channels stores the supplier's intent as a comma-separated
+  // string ("online,wholesale" / "online" / "wholesale") so the founder
+  // sees which channels the supplier asked for when reviewing.
+  const requestedChannels = [sellOnline && 'online', sellWhsale && 'wholesale']
+    .filter(Boolean).join(',') || null;
+
   // Generate SKU + INSERT product.
   const sku = `${supplier.code}-${slug(name)}-${Date.now().toString(36).slice(-4)}`.slice(0, 64);
   const productRow: Record<string, unknown> = {
@@ -134,10 +142,11 @@ export async function POST(req: NextRequest) {
     primary_supplier_id: supplier.id,
     is_bsc_processed:    false,
     status:              'active',
-    sell_nassau:         false,                // supplier doesn't decide retail floor distribution
+    sell_nassau:         false,
     sell_andros:         false,
-    sell_online:         sellOnline,
-    sell_wholesale:      sellWhsale,
+    sell_online:         false,
+    sell_wholesale:      false,
+    requested_channels:  requestedChannels,
     online_only:         false,
     requires_yield_calc: false,
     sell_export:         false,
@@ -181,31 +190,14 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Apply per-channel markup via bsc_set_channel_price.
-  const channelResults: Array<{ channel: string; price?: number; error?: string }> = [];
-  if (sellOnline) {
-    const { error: pErr } = await admin.rpc('bsc_set_channel_price', {
-      p_product_id: productId,
-      p_channel:    'online_market',
-      p_margin:     SUPPLIER_CHANNEL_MARKUP.online_market,
-      p_user:       caller.userId,
-    });
-    channelResults.push({ channel: 'online_market', error: pErr?.message });
-  }
-  if (sellWhsale) {
-    const { error: pErr } = await admin.rpc('bsc_set_channel_price', {
-      p_product_id: productId,
-      p_channel:    'local_wholesale',
-      p_margin:     SUPPLIER_CHANNEL_MARKUP.local_wholesale,
-      p_user:       caller.userId,
-    });
-    channelResults.push({ channel: 'local_wholesale', error: pErr?.message });
-  }
-
+  // No channel pricing written here — founder sets margin + price at
+  // approval in the management grid. requested_channels carries the
+  // supplier's intent through to the pending queue.
   return NextResponse.json({
-    ok:         true,
-    product_id: productId,
+    ok:                 true,
+    product_id:         productId,
     sku,
-    channels:   channelResults,
+    requested_channels: requestedChannels,
+    note:               'Pending founder approval. Channel pricing will be set in the management grid.',
   });
 }
