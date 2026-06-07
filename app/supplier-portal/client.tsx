@@ -146,6 +146,77 @@ export default function SupplierPortalClient({
     patchLiveProduct(id, { [field]: value });
   }
 
+  // Add-product modal state (supplier self-listing)
+  const [addOpen,    setAddOpen]    = useState(false);
+  const [addBusy,    setAddBusy]    = useState(false);
+  const [addErr,     setAddErr]     = useState<string | null>(null);
+  const [aName,      setAName]      = useState('');
+  const [aCategory,  setACategory]  = useState('produce');
+  const [aUnit,      setAUnit]      = useState('lb');
+  const [aPack,      setAPack]      = useState('');
+  const [aCost,      setACost]      = useState('');
+  const [aImageUrl,  setAImageUrl]  = useState('');
+  const [aImgBusy,   setAImgBusy]   = useState(false);
+  const [aOnline,    setAOnline]    = useState(true);
+  const [aWholesale, setAWholesale] = useState(false);
+
+  function resetAddForm() {
+    setAName(''); setACategory('produce'); setAUnit('lb'); setAPack('');
+    setACost(''); setAImageUrl(''); setAOnline(true); setAWholesale(false);
+    setAddErr(null);
+  }
+
+  async function uploadAddImage(file: File) {
+    setAImgBusy(true);
+    try {
+      const ext  = file.name.split('.').pop() ?? 'jpg';
+      const path = `products/new-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('site-images').upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { setAddErr(`Image upload failed: ${upErr.message}`); return; }
+      const { data: pub } = supabase.storage.from('site-images').getPublicUrl(path);
+      setAImageUrl(pub.publicUrl);
+    } finally {
+      setAImgBusy(false);
+    }
+  }
+
+  async function submitNewProduct() {
+    setAddErr(null);
+    if (!aName.trim())                                { setAddErr('Product name required'); return; }
+    if (!aCost.trim() || !(Number(aCost) > 0))        { setAddErr('Cost must be greater than zero'); return; }
+    if (!aOnline && !aWholesale)                      { setAddErr('Pick at least one channel (Online or Wholesale)'); return; }
+    setAddBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setAddErr('Sign-in expired — refresh.'); return; }
+      const res = await fetch('/api/supplier-portal/add-product', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({
+          name:            aName,
+          category:        aCategory,
+          unit_of_measure: aUnit,
+          pack_size:       aPack || null,
+          image_url:       aImageUrl || null,
+          cost_per_unit:   Number(aCost),
+          channels:        { online: aOnline, wholesale: aWholesale },
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setAddErr(j.error || `HTTP ${res.status}`); return; }
+      const warn = j.warning ? ` (${j.warning})` : '';
+      setToggleMsg(`✅ ${aName} added · SKU ${j.sku}${warn}`);
+      setAddOpen(false);
+      resetAddForm();
+      await load();
+    } catch (e) {
+      setAddErr(e instanceof Error ? e.message : 'Add failed');
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
   async function uploadLiveImage(p: Product, file: File) {
     setRowImgBusy(prev => ({ ...prev, [p.id]: true }));
     try {
@@ -864,9 +935,15 @@ export default function SupplierPortalClient({
 
         {/* Live catalog — supplier pauses / resumes their /market listings here */}
         <Section title="Live in marketplace" right={
-          <span style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: 1 }}>
-            {liveCatalog.filter((p) => !!(p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale)).length} active
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 10, color: TEXT_DIM, textTransform: 'uppercase', letterSpacing: 1 }}>
+              {liveCatalog.filter((p) => !!(p.sell_nassau || p.sell_andros || p.sell_online || p.sell_wholesale)).length} active
+            </span>
+            <button onClick={() => { resetAddForm(); setAddOpen(true); }}
+              style={{ background: GOLD_BRIGHT, color: NAVY, border: 'none', borderRadius: 8, padding: '6px 12px', fontWeight: 800, fontSize: 11, cursor: 'pointer' }}>
+              + Add Product
+            </button>
+          </div>
         }>
           {errors.catalog && (
             <p style={{ color: RED, fontSize: 12, margin: '4px 0' }}>⚠️ {errors.catalog}</p>
@@ -996,6 +1073,129 @@ export default function SupplierPortalClient({
           )}
         </Section>
       </div>
+
+      {/* ── ADD-PRODUCT MODAL (supplier self-listing) ── */}
+      {addOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 560, maxHeight: '92vh', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ color: '#fff', margin: 0, fontWeight: 800, fontSize: 16 }}>+ Add Product</h3>
+                <p style={{ color: TEXT_DIM, margin: '4px 0 0', fontSize: 11 }}>You list it. BSC applies the markup. It goes live the moment you save.</p>
+              </div>
+              <button onClick={() => setAddOpen(false)} disabled={addBusy}
+                style={{ background: 'transparent', color: TEXT_DIM, border: `1px solid ${BORDER}`, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: addBusy ? 'not-allowed' : 'pointer' }}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              {addErr && (
+                <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(239,68,68,0.10)', border: `1px solid ${RED}55`, borderRadius: 8, color: '#fca5a5', fontSize: 12, fontWeight: 600 }}>
+                  ⚠ {addErr}
+                </div>
+              )}
+
+              {/* Image */}
+              <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Image (optional)</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ width: 80, height: 80, borderRadius: 10, background: aImageUrl ? `url(${aImageUrl}) center/cover` : 'rgba(255,255,255,0.05)', border: `1px dashed ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXT_DIM, fontSize: 11 }}>
+                  {!aImageUrl && '📷'}
+                </div>
+                <label style={{ padding: '8px 14px', borderRadius: 8, background: GOLD_BRIGHT, color: NAVY, fontWeight: 800, fontSize: 12, cursor: aImgBusy ? 'wait' : 'pointer', opacity: aImgBusy ? 0.6 : 1 }}>
+                  {aImgBusy ? '⏳ Uploading…' : '📤 Upload image'}
+                  <input type="file" accept="image/*" disabled={aImgBusy} style={{ display: 'none' }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAddImage(f); e.currentTarget.value = ''; }} />
+                </label>
+              </div>
+
+              <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Product name *</label>
+              <input value={aName} onChange={e => setAName(e.target.value)} placeholder="e.g. Fresh Snapper" style={inputStyle} />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Category *</label>
+                  <select value={aCategory} onChange={e => setACategory(e.target.value)} style={inputStyle}>
+                    <option value="fresh_seafood">Fresh seafood</option>
+                    <option value="frozen_seafood">Frozen seafood</option>
+                    <option value="processed_seafood">Processed seafood</option>
+                    <option value="produce">Produce</option>
+                    <option value="meat">Meat</option>
+                    <option value="grocery">Grocery</option>
+                    <option value="beverages">Beverages</option>
+                    <option value="snack">Snack</option>
+                    <option value="frozen_meat">Frozen meat</option>
+                    <option value="spices">Spices</option>
+                    <option value="dry_goods">Dry goods</option>
+                    <option value="household">Household</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Unit *</label>
+                  <select value={aUnit} onChange={e => setAUnit(e.target.value)} style={inputStyle}>
+                    <option value="lb">lb</option>
+                    <option value="case">case</option>
+                    <option value="each">each</option>
+                    <option value="kg">kg</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Pack size</label>
+                  <input value={aPack} onChange={e => setAPack(e.target.value)} placeholder="e.g. 24x4oz" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Your cost (BSD) *</label>
+                  <input value={aCost} onChange={e => setACost(e.target.value.replace(/[^0-9.]/g, ''))}
+                    inputMode="decimal" placeholder="0.00" style={{ ...inputStyle, textAlign: 'right', fontWeight: 700 }} />
+                </div>
+              </div>
+
+              {/* Channels */}
+              <label style={{ display: 'block', color: GOLD_BRIGHT, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Where should this sell?</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, background: aOnline ? 'rgba(244,200,66,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${aOnline ? GOLD_BRIGHT : BORDER}`, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={aOnline} onChange={e => setAOnline(e.target.checked)} />
+                  <div>
+                    <div style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>🌐 Online retail</div>
+                    <div style={{ color: TEXT_DIM, fontSize: 10 }}>BSC markup: 35%</div>
+                  </div>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, background: aWholesale ? 'rgba(244,200,66,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${aWholesale ? GOLD_BRIGHT : BORDER}`, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={aWholesale} onChange={e => setAWholesale(e.target.checked)} />
+                  <div>
+                    <div style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>📦 Wholesale</div>
+                    <div style={{ color: TEXT_DIM, fontSize: 10 }}>BSC markup: 12%</div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Price preview */}
+              {Number(aCost) > 0 && (
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(34,197,94,0.08)', border: `1px solid ${GREEN}33`, color: '#86efac', fontSize: 12, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>Customer-facing price preview:</div>
+                  {aOnline && <div>🌐 Online: <strong>${(Number(aCost) * 1.35).toFixed(2)}</strong></div>}
+                  {aWholesale && <div>📦 Wholesale: <strong>${(Number(aCost) * 1.12).toFixed(2)}</strong></div>}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setAddOpen(false)} disabled={addBusy}
+                  style={{ flex: 1, padding: '12px', borderRadius: 10, background: 'transparent', border: `1px solid ${BORDER}`, color: TEXT_DIM, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={submitNewProduct} disabled={addBusy}
+                  style={{ flex: 1, padding: '12px', borderRadius: 10, background: GOLD_BRIGHT, color: NAVY, border: 'none', fontWeight: 900, fontSize: 13, cursor: addBusy ? 'wait' : 'pointer', opacity: addBusy ? 0.6 : 1 }}>
+                  {addBusy ? 'Adding…' : '✓ Add Product'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
