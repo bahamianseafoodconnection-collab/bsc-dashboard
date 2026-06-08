@@ -45,18 +45,43 @@ interface SupplierProduct {
   id: string;
   sku: string;
   name: string;
+  description: string | null;
   category: string | null;
   unit_of_measure: string | null;
   pack_size: string | null;
   status: string;
   image_url: string | null;
+  vat_code: 'X' | 'T' | 'F' | null;          // X=0%  T=10%  F=5%
   sell_nassau: boolean;
   sell_andros: boolean;
   sell_online: boolean;
   sell_wholesale: boolean;
-  cost_per_unit: number | null;   // current cost from product_costs join
+  cost_per_unit: number | null;              // current cost from product_costs join
+  retail_margin_pct: number;                  // current online_market margin (default 35)
+  wholesale_margin_pct: number;               // current local_wholesale margin (default 15)
 }
 type RowSaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+// VAT rate lookup. F = 5% (added 2026-06-07 for BWA diapers/wipes/pads).
+function vatRateFor(code: SupplierProduct['vat_code']): number {
+  if (code === 'T') return 0.10;
+  if (code === 'F') return 0.05;
+  return 0; // X or null
+}
+
+// Customer-price preview (VAT-inclusive). This catalog is taxable.
+// Formula:
+//   base = (cost × (1 + margin/100)) / 0.96    (4% bank-charge gross-up)
+//   customer_price = base × (1 + vatRate)
+function customerPriceFor(cost: number | null, marginPct: number, code: SupplierProduct['vat_code']): number | null {
+  if (cost == null || cost <= 0) return null;
+  if (!Number.isFinite(marginPct) || marginPct < 0) return null;
+  const base = (cost * (1 + marginPct / 100)) / 0.96;
+  return base * (1 + vatRateFor(code));
+}
+
+const DEFAULT_RETAIL_MARGIN = 35;
+const DEFAULT_WHOLESALE_MARGIN = 15;
 
 interface ExtractedProduct {
   raw_line: string;
@@ -190,6 +215,16 @@ export default function SupplierDetailPage() {
     patchProduct(id, { [field]: value });
   }
 
+  // Per-channel margin save. PATCH /api/admin/products/[id] accepts
+  // { channel_margins: { online_market: 35 } } as PERCENT and routes it
+  // through bsc_set_channel_price which keeps margin_multiplier + price
+  // in sync atomically.
+  function patchChannelMargin(productId: string, channel: 'online_market' | 'local_wholesale', pct: number) {
+    const localField: keyof SupplierProduct = channel === 'online_market' ? 'retail_margin_pct' : 'wholesale_margin_pct';
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, [localField]: pct } : p));
+    patchProduct(productId, { channel_margins: { [channel]: pct } });
+  }
+
   async function uploadRowImage(p: SupplierProduct, file: File) {
     setRowImgBusy(prev => ({ ...prev, [p.id]: true }));
     try {
@@ -216,29 +251,51 @@ export default function SupplierDetailPage() {
     setLoading(true);
     const { data: sup } = await supabase.from('suppliers').select('*').eq('id', id).maybeSingle();
     setSupplier(sup as Supplier | null);
-    // Fetch products + costs in TWO queries — embedded join was returning
-    // empty rows because the Supabase relation hint mismatched. Two queries
-    // are slower but reliable.
+    // Fetch products + costs + per-channel margins. Embedded joins were
+    // unreliable so we run three queries and stitch client-side.
+    type ProductRow = {
+      id: string; sku: string; name: string; description: string | null;
+      category: string | null; unit_of_measure: string | null; pack_size: string | null;
+      status: string; image_url: string | null; vat_code: 'X'|'T'|'F'|null;
+      sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
+    };
     const { data: prods, error: prodErr } = await supabase
       .from('products')
-      .select('id, sku, name, category, unit_of_measure, pack_size, status, image_url, sell_nassau, sell_andros, sell_online, sell_wholesale')
+      .select('id, sku, name, description, category, unit_of_measure, pack_size, status, image_url, vat_code, sell_nassau, sell_andros, sell_online, sell_wholesale')
       .eq('primary_supplier_id', id)
       .order('name');
     if (prodErr) {
       showToast(`Load products failed: ${prodErr.message}`, false);
     }
-    const productList = (prods ?? []) as Array<Omit<SupplierProduct, 'cost_per_unit'>>;
-    let costMap: Record<string, number | null> = {};
+    const productList = (prods ?? []) as ProductRow[];
+    let costMap:   Record<string, number | null> = {};
+    let retailMap: Record<string, number>        = {};
+    let wholeMap:  Record<string, number>        = {};
     if (productList.length > 0) {
       const ids = productList.map((p) => p.id);
-      const { data: costs } = await supabase
-        .from('product_costs')
-        .select('product_id, cost_per_unit')
-        .in('product_id', ids)
-        .eq('is_current', true);
+      const [{ data: costs }, { data: pricing }] = await Promise.all([
+        supabase.from('product_costs')
+          .select('product_id, cost_per_unit')
+          .in('product_id', ids).eq('is_current', true),
+        supabase.from('product_pricing')
+          .select('product_id, channel, margin_multiplier')
+          .in('product_id', ids).eq('is_current', true)
+          .in('channel', ['online_market', 'local_wholesale']),
+      ]);
       costMap = Object.fromEntries(((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>).map((c) => [c.product_id, c.cost_per_unit != null ? Number(c.cost_per_unit) : null]));
+      for (const row of ((pricing ?? []) as Array<{ product_id: string; channel: string; margin_multiplier: number | null }>)) {
+        const pct = row.margin_multiplier != null ? Math.round((Number(row.margin_multiplier) - 1) * 10000) / 100 : NaN;
+        if (!Number.isFinite(pct)) continue;
+        if (row.channel === 'online_market')   retailMap[row.product_id] = pct;
+        if (row.channel === 'local_wholesale') wholeMap[row.product_id]  = pct;
+      }
     }
-    setProducts(productList.map((p) => ({ ...p, cost_per_unit: costMap[p.id] ?? null })));
+    setProducts(productList.map((p) => ({
+      ...p,
+      cost_per_unit:        costMap[p.id]   ?? null,
+      retail_margin_pct:    retailMap[p.id] ?? DEFAULT_RETAIL_MARGIN,
+      wholesale_margin_pct: wholeMap[p.id]  ?? DEFAULT_WHOLESALE_MARGIN,
+    })));
     setLoading(false);
   }, [id, supabase]);
 
@@ -673,15 +730,21 @@ export default function SupplierDetailPage() {
             ) : (
               <div style={{ backgroundColor: '#0f1a2e', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#e2e8f0', minWidth: 1100 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#e2e8f0', minWidth: 1600 }}>
                     <thead>
                       <tr style={{ backgroundColor: '#0a1220', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                         <th style={{ padding: '10px 8px', width: 44 }}>Live</th>
-                        <th style={{ padding: '10px 8px', minWidth: 200 }}>Name</th>
+                        <th style={{ padding: '10px 8px', minWidth: 180 }}>Name</th>
+                        <th style={{ padding: '10px 8px', minWidth: 200 }}>Description</th>
                         <th style={{ padding: '10px 8px', minWidth: 130 }}>Category</th>
                         <th style={{ padding: '10px 8px', width: 80 }}>Unit</th>
                         <th style={{ padding: '10px 8px', width: 100 }}>Pack</th>
                         <th style={{ padding: '10px 8px', width: 90 }}>Cost $</th>
+                        <th style={{ padding: '10px 8px', width: 80 }}>VAT</th>
+                        <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}>Retail %</th>
+                        <th style={{ padding: '10px 8px', width: 90, textAlign: 'right', color: '#86efac' }}>Retail $</th>
+                        <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}>Whsl %</th>
+                        <th style={{ padding: '10px 8px', width: 90, textAlign: 'right', color: '#86efac' }}>Whsl $</th>
                         <th style={{ padding: '10px 8px', minWidth: 220 }}>Image</th>
                         <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Nas</th>
                         <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>And</th>
@@ -709,6 +772,13 @@ export default function SupplierDetailPage() {
                                 onBlur={(e) => { if (e.target.value !== p.name) patchField(p.id, 'name', e.target.value); }}
                                 style={inputStyle} />
                               <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{p.sku}</div>
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input
+                                defaultValue={p.description ?? ''}
+                                placeholder="Short customer-facing line"
+                                onBlur={(e) => { if (e.target.value !== (p.description ?? '')) patchField(p.id, 'description', e.target.value || null); }}
+                                style={inputStyle} />
                             </td>
                             <td style={{ padding: '6px 8px' }}>
                               <select value={p.category ?? ''}
@@ -739,9 +809,59 @@ export default function SupplierDetailPage() {
                                     // Cost change inserts a new product_costs row server-side.
                                     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, cost_per_unit: next } : x));
                                     patchProduct(p.id, { cost_per_unit: next });
+                                    // Re-fire both channel margins so the PERSISTED channel
+                                    // price recomputes off the new cost. Without this, the
+                                    // preview updates but product_pricing.manual_unit_price
+                                    // would still reflect the OLD cost until the founder
+                                    // touched a margin cell. Re-uses the same RPC path.
+                                    patchChannelMargin(p.id, 'online_market',   p.retail_margin_pct);
+                                    patchChannelMargin(p.id, 'local_wholesale', p.wholesale_margin_pct);
                                   }
                                 }}
                                 style={{ ...inputStyle, textAlign: 'right' }} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <select value={p.vat_code ?? 'X'}
+                                onChange={(e) => patchField(p.id, 'vat_code', e.target.value as SupplierProduct['vat_code'])}
+                                style={selectStyle}>
+                                <option value="X">Free (0%)</option>
+                                <option value="T">10%</option>
+                                <option value="F">5%</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="number" step="0.1" inputMode="decimal"
+                                defaultValue={p.retail_margin_pct}
+                                onBlur={(e) => {
+                                  const next = Number(e.target.value);
+                                  if (Number.isFinite(next) && next >= 0 && next !== p.retail_margin_pct) {
+                                    patchChannelMargin(p.id, 'online_market', next);
+                                  }
+                                }}
+                                style={{ ...inputStyle, textAlign: 'right' }} />
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', color: '#86efac', fontFamily: 'monospace', fontWeight: 700 }}>
+                              {(() => {
+                                const px = customerPriceFor(p.cost_per_unit, p.retail_margin_pct, p.vat_code);
+                                return px != null ? `$${px.toFixed(2)}` : '—';
+                              })()}
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="number" step="0.1" inputMode="decimal"
+                                defaultValue={p.wholesale_margin_pct}
+                                onBlur={(e) => {
+                                  const next = Number(e.target.value);
+                                  if (Number.isFinite(next) && next >= 0 && next !== p.wholesale_margin_pct) {
+                                    patchChannelMargin(p.id, 'local_wholesale', next);
+                                  }
+                                }}
+                                style={{ ...inputStyle, textAlign: 'right' }} />
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', color: '#86efac', fontFamily: 'monospace', fontWeight: 700 }}>
+                              {(() => {
+                                const px = customerPriceFor(p.cost_per_unit, p.wholesale_margin_pct, p.vat_code);
+                                return px != null ? `$${px.toFixed(2)}` : '—';
+                              })()}
                             </td>
                             <td style={{ padding: '6px 8px' }}>
                               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>

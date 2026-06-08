@@ -29,7 +29,7 @@ const ALLOWED_ROLES = new Set([
 
 const EDITABLE_FIELDS = new Set([
   'name', 'barcode', 'description', 'category', 'unit_of_measure', 'pack_size',
-  'vat_category', 'status',
+  'vat_category', 'vat_code', 'status',
   'sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale',
   'image_url', 'primary_supplier_id', 'is_bsc_processed',
   // Phase 3 — stock + featured fields (added in migration 20260527160000)
