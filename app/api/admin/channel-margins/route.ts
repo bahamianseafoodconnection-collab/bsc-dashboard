@@ -65,6 +65,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // DISARMED 2026-06-08: bsc_apply_channel_margin under-prices (no 4% gross-up, no VAT)
+  // and falsely tags rows manual_override, poisoning margin data. Disabled until the
+  // function is rewritten lock-aware in Phase 1. Per-item pricing via /api/admin/products/[id] is unaffected.
+  return NextResponse.json({ ok: false, error: 'Bulk channel margin is temporarily disabled while the pricing engine is being unified. Use per-item pricing for now.' }, { status: 503 });
   const ctx = await authContext(req);
   if ('error' in ctx) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
 
