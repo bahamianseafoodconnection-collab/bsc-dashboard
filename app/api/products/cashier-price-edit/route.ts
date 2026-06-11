@@ -24,7 +24,7 @@
 //   }
 //
 // Returns: {
-//   ok, edit_id, product_id, new_cost, channel_prices: { nassau_pos, andros_pos, online_retail/online_market, wholesale_in_store, wholesale_online }
+//   ok, edit_id, product_id, new_cost, channel_prices: { nassau_pos, andros_pos, online_market, nassau_wholesale, local_wholesale }
 // }
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -40,12 +40,12 @@ const ALLOWED_ROLES = new Set([
 ]);
 
 // DB channel keys ↔ pricing.ts channel keys ↔ markup pct
-const CHANNELS: Array<{ db: string; pricingCh: 'nassau_pos' | 'andros_pos' | 'online_retail' | 'wholesale_in_store' | 'wholesale_online'; markup: number }> = [
-  { db: 'nassau_pos',         pricingCh: 'nassau_pos',         markup: 40 },
-  { db: 'andros_pos',         pricingCh: 'andros_pos',         markup: 40 },
-  { db: 'online_market',      pricingCh: 'online_retail',      markup: 35 },
-  { db: 'wholesale_in_store', pricingCh: 'wholesale_in_store', markup: 22 },
-  { db: 'wholesale_online',   pricingCh: 'wholesale_online',   markup: 19 },
+const CHANNELS: Array<{ db: string; pricingCh: 'nassau_pos' | 'andros_pos' | 'online_market' | 'nassau_wholesale' | 'local_wholesale'; markup: number }> = [
+  { db: 'nassau_pos',       pricingCh: 'nassau_pos',       markup: 40 },
+  { db: 'andros_pos',       pricingCh: 'andros_pos',       markup: 40 },
+  { db: 'online_market',    pricingCh: 'online_market',    markup: 35 },
+  { db: 'nassau_wholesale', pricingCh: 'nassau_wholesale', markup: 22 },
+  { db: 'local_wholesale',  pricingCh: 'local_wholesale',  markup: 19 },
 ];
 
 export async function POST(req: NextRequest) {
