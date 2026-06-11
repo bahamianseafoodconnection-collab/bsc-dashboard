@@ -7,9 +7,9 @@
 // =====================================================================
 
 export type PricingChannel =
-  | 'wholesale_in_store'
-  | 'wholesale_online'
-  | 'online_retail'
+  | 'nassau_wholesale'
+  | 'local_wholesale'
+  | 'online_market'
   | 'nassau_pos'
   | 'andros_pos';
 
@@ -71,11 +71,11 @@ export interface PricingResult {
 // VAT until BSC is approved. Restore the rates here (22/19/35/40/40 with the
 // 10% VAT block) once approval lands.
 export const BSC_PRICING_RULES: Record<PricingChannel, PricingRule> = {
-  wholesale_in_store: { channel: 'wholesale_in_store', markupPct: 22, vatPct: 0, description: 'In-store wholesale: 10+ lbs of one product OR by case, Nassau or Andros POS' },
-  wholesale_online:   { channel: 'wholesale_online',   markupPct: 19, vatPct: 0, description: 'Online wholesale: 10+ lbs of one product OR by case, online store' },
-  online_retail:      { channel: 'online_retail',      markupPct: 35, vatPct: 0, description: 'Under 10 lbs, per bag, or per portion (online)' },
-  nassau_pos:         { channel: 'nassau_pos',         markupPct: 40, vatPct: 0, description: 'Nassau POS retail, unless qualifies as in-store wholesale' },
-  andros_pos:         { channel: 'andros_pos',         markupPct: 40, vatPct: 0, description: 'Andros POS retail, unless qualifies as in-store wholesale' },
+  nassau_wholesale: { channel: 'nassau_wholesale', markupPct: 22, vatPct: 0, description: 'In-store wholesale: 10+ lbs of one product OR by case, Nassau or Andros POS' },
+  local_wholesale:  { channel: 'local_wholesale',  markupPct: 19, vatPct: 0, description: 'Online wholesale: 10+ lbs of one product OR by case, online store' },
+  online_market:    { channel: 'online_market',    markupPct: 35, vatPct: 0, description: 'Under 10 lbs, per bag, or per portion (online)' },
+  nassau_pos:       { channel: 'nassau_pos',       markupPct: 40, vatPct: 0, description: 'Nassau POS retail, unless qualifies as in-store wholesale' },
+  andros_pos:       { channel: 'andros_pos',       markupPct: 40, vatPct: 0, description: 'Andros POS retail, unless qualifies as in-store wholesale' },
 };
 
 export const WHOLESALE_MIN_LBS = 10;
@@ -98,8 +98,8 @@ function round2(n: number): number {
 // Route a qualified POS line to in-store wholesale (22%); a qualified
 // online line to online wholesale (19%).
 function routeWholesale(channel: PricingChannel): PricingChannel {
-  if (channel === 'nassau_pos' || channel === 'andros_pos') return 'wholesale_in_store';
-  if (channel === 'online_retail')                          return 'wholesale_online';
+  if (channel === 'nassau_pos' || channel === 'andros_pos') return 'nassau_wholesale';
+  if (channel === 'online_market')                          return 'local_wholesale';
   return channel;
 }
 
@@ -114,8 +114,8 @@ export function calculatePrice(input: PricingInput): PricingResult {
 
   if (
     qualifiesAsWholesale(quantity, unit) &&
-    channel !== 'wholesale_in_store' &&
-    channel !== 'wholesale_online'
+    channel !== 'nassau_wholesale' &&
+    channel !== 'local_wholesale'
   ) {
     effectiveChannel    = routeWholesale(channel);
     upgradedToWholesale = effectiveChannel !== channel;
