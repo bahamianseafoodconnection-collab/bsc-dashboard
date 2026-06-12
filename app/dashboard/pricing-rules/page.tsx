@@ -2,8 +2,8 @@
 
 // /dashboard/pricing-rules — admin console for the 5-channel pricing math.
 //
-// Shows the live pricing_rules table (5 channels: wholesale_in_store /
-// wholesale_online / online_retail / nassau_pos / andros_pos) + the
+// Shows the live pricing_rules table (5 channels: nassau_wholesale /
+// local_wholesale / online_market / nassau_pos / andros_pos) + the
 // pricing_config knobs (wholesale_min_lbs, wholesale_case_flag) + the
 // pricing_rules_audit log (who changed what, when).
 //
@@ -49,9 +49,9 @@ interface AuditRow {
 interface ProfileMini { id: string; full_name: string | null; }
 
 const CHANNEL_META: Record<PricingChannel, { label: string; emoji: string; color: string }> = {
-  wholesale_in_store: { label: 'In-store Wholesale', emoji: '📦', color: '#a78bfa' },
-  wholesale_online:   { label: 'Online Wholesale',   emoji: '🌐', color: '#22d3ee' },
-  online_retail:      { label: 'Online Retail',      emoji: '🛒', color: '#60a5fa' },
+  nassau_wholesale:   { label: 'In-store Wholesale', emoji: '📦', color: '#a78bfa' },
+  local_wholesale:    { label: 'Online Wholesale',   emoji: '🌐', color: '#22d3ee' },
+  online_market:      { label: 'Online Retail',      emoji: '🛒', color: '#60a5fa' },
   nassau_pos:         { label: 'Nassau POS',         emoji: '🟡', color: '#f5c518' },
   andros_pos:         { label: 'Andros POS',         emoji: '🟣', color: '#c084fc' },
 };

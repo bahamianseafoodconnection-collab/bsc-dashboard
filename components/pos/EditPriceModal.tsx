@@ -43,9 +43,9 @@ const CHANNEL_LABELS: Record<string, string> = {
 const CHANNEL_MARKUP: Record<string, { pricingCh: PricingChannel; markup: number }> = {
   nassau_pos:         { pricingCh: 'nassau_pos',         markup: 40 },
   andros_pos:         { pricingCh: 'andros_pos',         markup: 40 },
-  online_market:      { pricingCh: 'online_retail',      markup: 35 },
-  wholesale_in_store: { pricingCh: 'wholesale_in_store', markup: 22 },
-  wholesale_online:   { pricingCh: 'wholesale_online',   markup: 19 },
+  online_market:      { pricingCh: 'online_market',      markup: 35 },
+  wholesale_in_store: { pricingCh: 'nassau_wholesale',   markup: 22 },
+  wholesale_online:   { pricingCh: 'local_wholesale',    markup: 19 },
 };
 
 export default function EditPriceModal({ product, channelSet = 'nassau_pos', onClose, onSaved }: Props) {

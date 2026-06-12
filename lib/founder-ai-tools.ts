@@ -284,7 +284,7 @@ export const TOOLS = [
   {
     name: 'explode_product',
     description:
-      'EXPLODE a wholesale/case parent product into one or more retail-portion child products. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (every child SKU, derived cost, and computed sell prices per retail channel); the founder must explicitly say yes; only then call again with confirmed=true. Children are inserted in PENDING state — all sell_* flags off — so they are NOT live until the founder visits /founder-ai/products/pending and clicks ✓ Approve on each one. ALWAYS tell the founder to go to /founder-ai/products/pending after a successful explode. Use this tool when the founder says things like "take SKU SYSCO-PORK-001 and sell it as 5 × 2lb bags", "make the 40lb halibut available as 1lb portions", "diversify the 10lb pasta case into 26 × 6oz retail portions". Each child product is linked to the parent via parent_product_id; child cost_per_unit = parent_cost / count_per_parent. Sell prices flow through calculatePrice() — markups per channel (nassau_pos 40% · andros_pos 40% · online_retail 35%) — so the founder never hand-calculates.',
+      'EXPLODE a wholesale/case parent product into one or more retail-portion child products. Founder/co_founder ONLY. TWO-STEP: first call with confirmed=false to get a preview (every child SKU, derived cost, and computed sell prices per retail channel); the founder must explicitly say yes; only then call again with confirmed=true. Children are inserted in PENDING state — all sell_* flags off — so they are NOT live until the founder visits /founder-ai/products/pending and clicks ✓ Approve on each one. ALWAYS tell the founder to go to /founder-ai/products/pending after a successful explode. Use this tool when the founder says things like "take SKU SYSCO-PORK-001 and sell it as 5 × 2lb bags", "make the 40lb halibut available as 1lb portions", "diversify the 10lb pasta case into 26 × 6oz retail portions". Each child product is linked to the parent via parent_product_id; child cost_per_unit = parent_cost / count_per_parent. Sell prices flow through calculatePrice() — markups per channel (nassau_pos 38% · andros_pos 45% · online_market 35%) — so the founder never hand-calculates.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1451,7 +1451,7 @@ async function customerHistoryTool(input: CustomerHistoryInput, admin: SupabaseC
 // and sell prices computed via lib/pricing.ts calculatePrice() so the
 // founder never hand-calculates retail markups.
 
-const VALID_RETAIL_CHANNELS = new Set<PricingChannel>(['nassau_pos', 'andros_pos', 'online_retail']);
+const VALID_RETAIL_CHANNELS = new Set<PricingChannel>(['nassau_pos', 'andros_pos', 'online_market']);
 const VALID_PORTION_UNITS   = new Set(['lb', 'oz', 'each']);
 const VALID_SALE_UNITS      = new Set<SaleUnit>(['lb', 'bag', 'portion', 'each']);
 
@@ -1516,7 +1516,7 @@ async function explodeProductTool(
   const channelInput = Array.isArray(input.retail_channels) ? input.retail_channels : null;
   const channels: PricingChannel[] = channelInput
     ? channelInput.filter((c): c is PricingChannel => typeof c === 'string' && VALID_RETAIL_CHANNELS.has(c as PricingChannel))
-    : ['nassau_pos', 'andros_pos', 'online_retail'];
+    : ['nassau_pos', 'andros_pos', 'online_market'];
   if (channels.length === 0) {
     const err = 'No valid retail channels. Pick from: nassau_pos, andros_pos, online_retail.';
     await logWrite(admin, 'explode_product', callerId, input, null, 'error', err);
@@ -1685,12 +1685,9 @@ async function explodeProductTool(
     }
 
     // 3. INSERT product_pricing rows per channel.
-    //    Note: lib/pricing uses 'online_retail' as the markup-channel name
-    //    but product_pricing.channel stores 'online_market' (canonical DB
-    //    value queried by /market + /checkout). Map at write time.
     const pricingRows = p.channel_prices.map(cp => ({
       product_id:         childId,
-      channel:            cp.channel === 'online_retail' ? 'online_market' : cp.channel,
+      channel:            cp.channel === 'online_market' ? 'online_market' : cp.channel,
       pricing_mode:       'manual_override',
       margin_multiplier:  1.0,
       vat_multiplier:     1.0,

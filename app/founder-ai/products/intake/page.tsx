@@ -58,7 +58,7 @@ const VAT_CATEGORIES: Array<{ value: string; label: string; vat: number; hint: s
 const RETAIL_CHANNELS: Array<{ db: string; pricingCalc: PricingChannel; label: string; markup: number }> = [
   { db: 'nassau_pos',    pricingCalc: 'nassau_pos',    label: 'Nassau POS',    markup: 40 },
   { db: 'andros_pos',    pricingCalc: 'andros_pos',    label: 'Andros POS',    markup: 40 },
-  { db: 'online_market', pricingCalc: 'online_retail', label: 'Online retail', markup: 35 },
+  { db: 'online_market', pricingCalc: 'online_market', label: 'Online retail', markup: 35 },
 ];
 
 function slugifyForSku(name: string): string {

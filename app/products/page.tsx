@@ -1446,7 +1446,7 @@ function BscPricingPreview({ cost, unit, productId }: { cost: number; unit: stri
   const channels: { ch: PricingChannel; label: string; retailQty: number; upgradeQty: number }[] = [
     { ch: 'nassau_pos',    label: '🟡 Nassau POS',     retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
     { ch: 'andros_pos',    label: '🟢 Andros POS',     retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
-    { ch: 'online_retail', label: '🛒 Online',          retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
+    { ch: 'online_market', label: '🛒 Online',          retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
   ];
   const saleUnit = (isWeight ? 'lb' : 'each') as 'lb' | 'each';
 
@@ -1488,9 +1488,9 @@ function BscPricingPreview({ cost, unit, productId }: { cost: number; unit: stri
       </div>
       <p className="text-[10px] mt-3" style={{ color: 'rgba(255,255,255,0.45)' }}>
         Retail subtotal uses the requested channel; the right column auto-upgrades to{' '}
-        <strong style={{ color: '#a78bfa' }}>wholesale_in_store ({BSC_PRICING_RULES.wholesale_in_store.markupPct}%)</strong>{' '}
+        <strong style={{ color: '#a78bfa' }}>wholesale_in_store ({BSC_PRICING_RULES.nassau_wholesale.markupPct}%)</strong>{' '}
         for POS lines or{' '}
-        <strong style={{ color: '#a78bfa' }}>wholesale_online ({BSC_PRICING_RULES.wholesale_online.markupPct}%)</strong>{' '}
+        <strong style={{ color: '#a78bfa' }}>wholesale_online ({BSC_PRICING_RULES.local_wholesale.markupPct}%)</strong>{' '}
         for online lines.
       </p>
     </div>
