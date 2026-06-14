@@ -30,6 +30,14 @@
 //   here — they are part of the seafood-catalog reconciliation project and
 //   will be folded in once that data is clean. PO creation is best-effort:
 //   a failure is logged but NEVER fails the customer's paid order.
+//
+//   CARD ORDERS DEFER: a card order is 'payment_pending' at insert and may be
+//   abandoned at the Plug'n Pay gateway. We do NOT raise its POs here — that
+//   would commit a supplier order against an unpaid sale. Card auto-raise runs
+//   from /api/payment/return once payment is confirmed. Only COD / non-card
+//   orders (committed at placement) auto-raise here. Each line is stamped with
+//   supplier_id + is_bsc_processed so the deferred path can group without a
+//   re-fetch.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -234,13 +242,25 @@ function deliveryFor(row: Record<string, unknown>): number {
 //          if weight_lb is missing, which should not happen for lb items)
 //   each/case → cost_per_unit × quantity
 // gross margin for any line is then (line_total - cost), derivable anywhere.
+//
+// Also stamps supplier_id + is_bsc_processed (procurement routing) so the card
+// auto-raise in /api/payment/return can group POs straight from the order row
+// without a re-fetch. Non-catalog lines get null for all four.
 function stampLineCosts(row: Record<string, unknown>, costMap: Map<string, CostInfo>): void {
   const active = activeItemsField(row);
   if (!active) return;
   for (const it of active.arr) {
     const productId = String(it.id ?? it.product_id ?? '');
     const info = costMap.get(productId);
-    if (!info) { it.cost_per_unit = null; it.cost = null; continue; }
+    if (!info) {
+      // Non-catalog line (e.g. a COD local_wholesale brand line): no cost or
+      // routing known. Null everything so downstream readers don't misgroup it.
+      it.cost_per_unit = null;
+      it.cost = null;
+      it.supplier_id = null;
+      it.is_bsc_processed = null;
+      continue;
+    }
     const qty      = Number(it.qty ?? it.quantity ?? 0);
     const weightLb = it.weight_lb != null ? Number(it.weight_lb) : null;
     const multiplier = info.unit === 'lb'
@@ -248,6 +268,10 @@ function stampLineCosts(row: Record<string, unknown>, costMap: Map<string, CostI
       : qty;
     it.cost_per_unit = info.costPerUnit;
     it.cost = r2(info.costPerUnit * multiplier);
+    // Procurement routing — lets the deferred (card) auto-raise group POs from
+    // the order row alone.
+    it.supplier_id = info.supplierId;
+    it.is_bsc_processed = info.isBscProcessed;
   }
 }
 
@@ -406,7 +430,8 @@ export async function POST(req: NextRequest) {
     delete row.promo_code;
   }
 
-  // Stamp per-line cost onto items BEFORE insert so the order carries cost facts.
+  // Stamp per-line cost + routing onto items BEFORE insert so the order carries
+  // cost facts and the deferred (card) auto-raise can group without re-fetching.
   stampLineCosts(row, costMap);
 
   const { data, error } = await admin.from('orders').insert(row).select('id').single();
@@ -416,9 +441,15 @@ export async function POST(req: NextRequest) {
 
   const orderId = (data as { id: string }).id;
 
-  // List-then-order: raise resale purchase orders. Best-effort — the customer's
-  // order has already succeeded and must not fail if procurement hiccups.
-  await raiseResalePurchaseOrders(admin, orderId, row, costMap);
+  // List-then-order: raise resale purchase orders — but ONLY for orders that are
+  // committed at placement. COD (and any non-card) order is 'pending' here and
+  // gets its POs now. CARD orders are 'payment_pending' and may be abandoned at
+  // the gateway, so their auto-raise is DEFERRED to /api/payment/return success
+  // — we never raise a supplier PO against an unpaid order. Best-effort either
+  // way (the customer's order has already succeeded).
+  if (row.payment_status !== 'payment_pending') {
+    await raiseResalePurchaseOrders(admin, orderId, row, costMap);
+  }
 
   return NextResponse.json({ ok: true, order_id: orderId });
 }
