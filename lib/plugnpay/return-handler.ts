@@ -19,24 +19,57 @@
 //      lib/plugnpay/rbc-codes.
 //   5. Insert a finalized payment_transactions row (every attempt
 //      logged — success and fail alike).
-//   6. Update orders.payment_status:
-//        approved → 'paid'   (only when hint=success + both factors OK)
-//        anything else → 'pending'  (so customer can retry from /checkout)
+//   6. Update orders.payment_status via an ATOMIC guarded transition:
+//        approved → flip to 'paid' WHERE payment_status IN
+//          ('payment_pending','pending'), RETURNING the row. The
+//          conditional WHERE makes it idempotent: a duplicate PnP return
+//          updates zero rows (the order is already 'paid', not in the set),
+//          so the one-time side-effects below run AT MOST ONCE per order.
+//          The set includes 'pending' because /api/payment/start accepts a
+//          reverted 'pending'/'declined' order against the SAME id and its
+//          re-arm to 'payment_pending' is an unchecked write — so an order
+//          can legitimately reach this success return still in 'pending'.
+//          Without 'pending' in the set, that order would be charged but
+//          never flipped to paid (no fulfilment, no financials, no POs).
+//        anything else → flip to 'pending' WHERE payment_status IN
+//          ('payment_pending','pending') (so a late decline can't clobber an
+//          already-'paid' order); customer can retry from /checkout.
+//   6b. ONE-TIME side-effects, only when THIS call actually flipped the row:
+//        • financial split (deferred from /checkout so abandoned card forms
+//          don't log phantom revenue)
+//        • resale purchase-order auto-raise (deferred from /api/orders/place
+//          for card orders, which are unpaid at placement — never raise a
+//          supplier PO against an unpaid order)
 //   7. Redirect customer's browser:
-//        approved → /account/orders/[id]?paid=1
-//        fraud    → /checkout?problem=cannot_complete   (silent — no detail)
-//        declined → /checkout?declined=1&code=XX        (with friendly message)
-//        retry    → /checkout?problem=1&retry=1
+//        approved → /order-confirmed?order=<id>
+//        fraud/declined/contact → /payment-declined?reason=declined
+//        retry/problem → /payment-declined?reason=problem
 //
 // PCI: no card data anywhere in this file. PAN never touched bscbahamas.com.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { verifyResponseHash, queryTransaction, parseUrlEncodedResponse } from './index';
 import { rbcOutcome } from './rbc-codes';
 import { CHANNEL_MARGIN, VAT_RATE, recordSaleFinancials } from '@/lib/finance';
 
 export type ReturnHint = 'success' | 'declined' | 'problem';
+
+// Statuses an order can legitimately be in at the moment a PnP return fires.
+// /api/orders/place sets card orders to 'payment_pending'; a prior decline can
+// have reverted it to 'pending'; and /api/payment/start (which re-arms to
+// 'payment_pending') does so with an unchecked write, so 'pending' is reachable
+// here too. Used by BOTH the paid-flip and the revert so neither can touch an
+// order already in a terminal 'paid' state — and so a re-paid 'pending' order
+// is never left charged-but-unpaid.
+const PAYABLE_STATUSES = ['payment_pending', 'pending'] as const;
+
+// Spiny Tail Processing Co. supplier id — in-house lines are excluded from
+// resale auto-raise (mirrors the constant in /api/orders/place; kept local so
+// this handler is self-contained on the payment hot path).
+const SPINY_TAIL_SUPPLIER_ID = '001cbec9-e4e8-421d-8dc3-3a1ebd7b50a1';
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Reads request body / query into a flat Record<string,string>. */
 async function readReturnFields(req: NextRequest): Promise<Record<string, string>> {
@@ -72,6 +105,141 @@ async function readReturnFields(req: NextRequest): Promise<Record<string, string
 /** Reads the hash field — PnP uses both names (legacy `resphash` + newer `pt_transaction_response_hash`). */
 function readHash(fields: Record<string, string>): string {
   return fields.pt_transaction_response_hash || fields.resphash || '';
+}
+
+// Raise resale purchase orders for a freshly-PAID card order. Deferred here from
+// /api/orders/place because card orders are unpaid ('payment_pending') at
+// placement. Reads the order's stamped line items — supplier_id +
+// is_bsc_processed + cost_per_unit were stamped onto each line at placement, so
+// no re-pricing is needed. Any resale line MISSING that routing (e.g. an order
+// placed before stamping shipped) is re-derived from product_costs + products in
+// a single round-trip. Best-effort: failures are logged, never thrown — the
+// order is already paid and must stand.
+async function raiseResalePurchaseOrdersForOrder(
+  admin: SupabaseClient,
+  orderId: string,
+  paidRow: { items?: unknown; wholesale_items?: unknown },
+): Promise<void> {
+  try {
+    const items = Array.isArray(paidRow.items) && (paidRow.items as unknown[]).length > 0
+      ? paidRow.items as Record<string, unknown>[]
+      : Array.isArray(paidRow.wholesale_items)
+        ? paidRow.wholesale_items as Record<string, unknown>[]
+        : [];
+    if (items.length === 0) return;
+
+    // Identify lines whose routing wasn't stamped at placement (older orders).
+    // A stamped line has the keys present (value may be null); an unstamped line
+    // lacks them entirely.
+    const needsDerive: string[] = [];
+    for (const it of items) {
+      const productId = String(it.id ?? it.product_id ?? '');
+      if (!productId) continue;
+      if (!('supplier_id' in it) || !('is_bsc_processed' in it)) needsDerive.push(productId);
+    }
+
+    // Re-derive routing for any unstamped lines in one round-trip.
+    const derivedCost   = new Map<string, { supplierId: string | null; costPerUnit: number }>();
+    const derivedOrigin = new Map<string, boolean>();
+    if (needsDerive.length > 0) {
+      const ids = [...new Set(needsDerive)];
+      const [{ data: costRows }, { data: prodRows }] = await Promise.all([
+        admin.from('product_costs').select('product_id, cost_per_unit, supplier_id').in('product_id', ids).eq('is_current', true),
+        admin.from('products').select('id, is_bsc_processed').in('id', ids),
+      ]);
+      for (const c of (costRows ?? []) as { product_id: string; cost_per_unit: number | null; supplier_id: string | null }[]) {
+        derivedCost.set(c.product_id, { supplierId: c.supplier_id ?? null, costPerUnit: c.cost_per_unit != null ? Number(c.cost_per_unit) : 0 });
+      }
+      for (const p of (prodRows ?? []) as { id: string; is_bsc_processed: boolean | null }[]) {
+        derivedOrigin.set(p.id, p.is_bsc_processed === true);
+      }
+    }
+
+    // Group resale lines by supplier.
+    type Line = { productId: string; qty: number; weightLb: number | null; unitCost: number; lineCost: number };
+    const bySupplier = new Map<string, Line[]>();
+    const blocked: string[] = [];
+
+    for (const it of items) {
+      const productId = String(it.id ?? it.product_id ?? '');
+      if (!productId) continue;
+
+      // Resolve routing: prefer the stamped values, fall back to re-derived.
+      let supplierId: string | null;
+      let isBsc: boolean;
+      let costPerUnit: number;
+      if ('supplier_id' in it || 'is_bsc_processed' in it) {
+        supplierId  = it.supplier_id != null ? String(it.supplier_id) : null;
+        isBsc       = it.is_bsc_processed === true;
+        costPerUnit = it.cost_per_unit != null ? Number(it.cost_per_unit) : 0;
+      } else {
+        const dc = derivedCost.get(productId);
+        supplierId  = dc?.supplierId ?? null;
+        isBsc       = derivedOrigin.get(productId) === true;
+        costPerUnit = dc?.costPerUnit ?? 0;
+      }
+
+      if (isBsc) continue;                                     // in-house — skip
+      if (supplierId === SPINY_TAIL_SUPPLIER_ID) continue;     // belt-and-suspenders
+      if (!supplierId) { blocked.push(productId); continue; }  // resale with no source
+
+      const qty      = Number(it.qty ?? it.quantity ?? 0);
+      const weightLb = it.weight_lb != null ? Number(it.weight_lb) : null;
+      // Prefer the stamped line cost if present; else compute from cost_per_unit.
+      const multiplier = weightLb != null && weightLb > 0 ? weightLb : qty;
+      const lineCost = it.cost != null ? Number(it.cost) : r2(costPerUnit * multiplier);
+
+      const line: Line = { productId, qty, weightLb, unitCost: costPerUnit, lineCost };
+      const arr = bySupplier.get(supplierId) ?? [];
+      arr.push(line);
+      bySupplier.set(supplierId, arr);
+    }
+
+    if (blocked.length > 0) {
+      console.warn(`[payment/return] procurement_blocked order=${orderId} products=${blocked.join(',')}`);
+    }
+    if (bySupplier.size === 0) return; // nothing to procure
+
+    // Resolve supplier display names once.
+    const supplierIds = [...bySupplier.keys()];
+    const { data: supRows } = await admin.from('suppliers').select('id, name').in('id', supplierIds);
+    const supName = new Map<string, string>();
+    for (const s of (supRows ?? []) as { id: string; name: string }[]) supName.set(s.id, s.name);
+
+    for (const [supplierId, lines] of bySupplier) {
+      const total = r2(lines.reduce((s, l) => s + l.lineCost, 0));
+      const { data: po, error: poErr } = await admin.from('purchase_orders').insert({
+        order_id:      orderId,
+        supplier_id:   supplierId,
+        supplier_name: supName.get(supplierId) ?? null,
+        status:        'raised',
+        total,
+        notes:         `Auto-raised from paid online order ${orderId.slice(0, 8)}`,
+      }).select('id').single();
+
+      if (poErr || !po) {
+        console.error(`[payment/return] PO insert failed order=${orderId} supplier=${supplierId}: ${poErr?.message ?? 'no id'}`);
+        continue;
+      }
+
+      const poId = (po as { id: string }).id;
+      const itemRows = lines.map((l) => ({
+        po_id:         poId,
+        product_id:    l.productId,
+        units_ordered: l.weightLb == null ? l.qty : null,
+        weight_lb:     l.weightLb != null ? l.weightLb : null,
+        unit_cost:     l.unitCost,
+        total_cost:    l.lineCost,
+      }));
+      const { error: itemErr } = await admin.from('purchase_order_items').insert(itemRows);
+      if (itemErr) {
+        console.error(`[payment/return] PO items insert failed order=${orderId} po=${poId}: ${itemErr.message}`);
+      }
+    }
+  } catch (e) {
+    // Procurement must never fail a paid order.
+    console.error(`[payment/return] auto-raise unexpected error order=${orderId}:`, e);
+  }
 }
 
 export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promise<NextResponse> {
@@ -161,53 +329,77 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
     finalized_at:                 new Date().toISOString(),
   });
 
-  // Update orders.payment_status.
+  // Update orders.payment_status — idempotently.
   if (isPaid) {
-    await admin.from('orders').update({
-      payment_status: 'paid',
-      payment_method: 'card',
-      payment_ref:    pnpOrderId || null,
-    }).eq('id', clientOrderId);
+    // ATOMIC one-time transition. Flip to 'paid' ONLY if the order is still
+    // payable (payment_pending OR a prior-decline-reverted 'pending' — see
+    // PAYABLE_STATUSES). The conditional WHERE + RETURNING is the idempotency
+    // guard: if PnP calls this return URL more than once for the same order
+    // (retry, browser re-POST, network replay), the SECOND call finds it 'paid'
+    // (not in the set) and updates zero rows — so the financials split AND the
+    // resale auto-raise below each run AT MOST ONCE per order. (Previously the
+    // flip was unconditional and the financials INSERT had no order-keyed dedup,
+    // so a double return double-counted revenue.)
+    const { data: flipped } = await admin.from('orders')
+      .update({
+        payment_status: 'paid',
+        payment_method: 'card',
+        payment_ref:    pnpOrderId || null,
+      })
+      .eq('id', clientOrderId)
+      .in('payment_status', [...PAYABLE_STATUSES])
+      .select('id, total, items, wholesale_items');
 
-    // Record the sale's financial split now that payment is confirmed.
-    // Deferred from /checkout (where it ran pre-PnP and would log phantom
-    // revenue for any customer who abandoned at the card form). Cost basis
-    // is back-computed from the online_market sacred pricing; VAT is
-    // currently disabled (VAT_RATE=0) so cost = total / (1 + margin).
-    try {
-      const { data: orderRow } = await admin
-        .from('orders')
-        .select('total')
-        .eq('id', clientOrderId)
-        .maybeSingle();
-      const total = Number((orderRow as { total?: number } | null)?.total ?? 0);
-      if (total > 0) {
-        const onlineToCost =
-          1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
-        await recordSaleFinancials({
-          saleAmount: total,
-          costBasis:  total * onlineToCost,
-          channel:    'online_market',
-          orderId:    clientOrderId,
-        });
+    const paidRow = (flipped && flipped.length > 0)
+      ? flipped[0] as { id: string; total: number | null; items: unknown; wholesale_items: unknown }
+      : null;
+
+    // Only run the money side-effects if WE are the call that flipped the row.
+    if (paidRow) {
+      // (1) Financial split — deferred from /checkout (where it ran pre-PnP and
+      // would log phantom revenue for any customer who abandoned at the card
+      // form). Uses the RETURNING total — no re-fetch. VAT currently disabled
+      // (VAT_RATE=0) so cost = total / (1 + margin).
+      try {
+        const total = Number(paidRow.total ?? 0);
+        if (total > 0) {
+          const onlineToCost =
+            1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
+          await recordSaleFinancials({
+            saleAmount: total,
+            costBasis:  total * onlineToCost,
+            channel:    'online_market',
+            orderId:    clientOrderId,
+          });
+        }
+      } catch (err) {
+        console.warn('Financials log failed on payment confirm:', err);
       }
-    } catch (err) {
-      console.warn('Financials log failed on payment confirm:', err);
+
+      // (2) Resale auto-raise — deferred from /api/orders/place for card orders
+      // (unpaid at placement). Now that payment is confirmed, raise supplier
+      // POs from the RETURNING items/wholesale_items (stamped routing; missing
+      // lines re-derived inside). Best-effort: never throws.
+      await raiseResalePurchaseOrdersForOrder(admin, clientOrderId, paidRow);
     }
+    // paidRow == null → order was already 'paid' (duplicate return). Skip both
+    // side-effects; the first call already performed them exactly once.
   } else {
-    // Revert to 'pending' so the customer can retry from /checkout.
-    // We deliberately do NOT set 'declined' as the order status —
-    // the latest payment_transactions row carries the decline detail.
-    await admin.from('orders').update({
-      payment_status: 'pending',
-    }).eq('id', clientOrderId);
+    // Not paid → revert to 'pending' so the customer can retry from /checkout.
+    // We deliberately do NOT set 'declined' as the order status — the latest
+    // payment_transactions row carries the decline detail. GUARDED on the
+    // payable set so a LATE decline/problem callback that arrives AFTER a
+    // successful return can never clobber a 'paid' order back to pending.
+    await admin.from('orders')
+      .update({ payment_status: 'pending' })
+      .eq('id', clientOrderId)
+      .in('payment_status', [...PAYABLE_STATUSES]);
   }
 
   // Redirect the customer's browser. Different destinations per outcome
   // because the customer experience differs significantly.
   if (isPaid) {
     // Branded, visual "Payment confirmed" screen → then on to the marketplace.
-    // (The old /account/orders/[id] target left customers stranded.)
     return NextResponse.redirect(`${origin}/order-confirmed?order=${clientOrderId}`);
   }
   // Hard decline / must-contact-bank / fraud → the clear "Payment declined"
