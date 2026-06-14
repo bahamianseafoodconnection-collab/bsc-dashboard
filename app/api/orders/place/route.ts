@@ -79,6 +79,21 @@ interface CostInfo {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+// The cart lines can arrive under either `items` (checkout) or `wholesale_items`
+// (market quick-buy / wholesale). recomputeOnlineTotal already reads both for
+// pricing; cost-stamping and auto-raise must operate on the SAME field the lines
+// actually live in, and stamp cost back onto that field. Returns the field key
+// in use plus the array, or null if neither holds lines.
+function activeItemsField(row: Record<string, unknown>): { key: 'items' | 'wholesale_items'; arr: Record<string, unknown>[] } | null {
+  if (Array.isArray(row.items) && (row.items as unknown[]).length > 0) {
+    return { key: 'items', arr: row.items as Record<string, unknown>[] };
+  }
+  if (Array.isArray(row.wholesale_items) && (row.wholesale_items as unknown[]).length > 0) {
+    return { key: 'wholesale_items', arr: row.wholesale_items as Record<string, unknown>[] };
+  }
+  return null;
+}
+
 // Server-authoritative total. The client's total/subtotal/promo_discount are
 // NEVER trusted — we re-derive every line's price from the DB (product_pricing
 // + products), re-validate the promo, and add the flat delivery fee server-side.
@@ -220,9 +235,9 @@ function deliveryFor(row: Record<string, unknown>): number {
 //   each/case → cost_per_unit × quantity
 // gross margin for any line is then (line_total - cost), derivable anywhere.
 function stampLineCosts(row: Record<string, unknown>, costMap: Map<string, CostInfo>): void {
-  const items = Array.isArray(row.items) ? row.items as Record<string, unknown>[] : null;
-  if (!items) return;
-  for (const it of items) {
+  const active = activeItemsField(row);
+  if (!active) return;
+  for (const it of active.arr) {
     const productId = String(it.id ?? it.product_id ?? '');
     const info = costMap.get(productId);
     if (!info) { it.cost_per_unit = null; it.cost = null; continue; }
@@ -247,7 +262,8 @@ async function raiseResalePurchaseOrders(
   costMap: Map<string, CostInfo>,
 ): Promise<void> {
   try {
-    const items = Array.isArray(row.items) ? row.items as Record<string, unknown>[] : [];
+    const active = activeItemsField(row);
+    const items = active ? active.arr : [];
     // Group resale lines by supplier_id.
     type Line = { productId: string; qty: number; weightLb: number | null; lineCost: number; unitCost: number };
     const bySupplier = new Map<string, Line[]>();
