@@ -18,9 +18,9 @@
 //     place resale lines in wholesale_items and may leave items null.
 //
 // Idempotency: before inserting a PO for (order_id, supplier_id) we check for an
-// existing purchase_orders row with that pair and skip if one is present. There is
-// no UNIQUE constraint on (order_id, supplier_id), so this guards against a
-// duplicate auto-raise if the caller ever fires twice for the same order.
+// existing purchase_orders row with that pair and skip if one is present. A UNIQUE
+// index on (order_id, supplier_id) WHERE order_id IS NOT NULL also enforces this
+// at the database level.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -104,8 +104,13 @@ export async function raiseResalePurchaseOrdersForOrder(
       if (supplierId === SPINY_TAIL_SUPPLIER_ID) continue;       // own-processed by supplier id — skip
       if (!supplierId) { blocked.push(productId); continue; }    // resale with no source
 
-      const qty        = Number(it.qty ?? it.quantity ?? 0);
-      const weightLb   = it.weight_lb != null ? Number(it.weight_lb) : null;
+      // qty must resolve to a clean number. A boolean / non-numeric qty (seen on
+      // some line shapes) coerces to NaN here and is floored to 0 rather than
+      // being written through as true/false into a numeric column.
+      const qtyRaw     = Number(it.qty ?? it.quantity ?? 0);
+      const qty        = Number.isFinite(qtyRaw) ? qtyRaw : 0;
+      const weightRaw  = it.weight_lb != null ? Number(it.weight_lb) : null;
+      const weightLb   = weightRaw != null && Number.isFinite(weightRaw) ? weightRaw : null;
       const multiplier = weightLb != null && weightLb > 0 ? weightLb : qty;
       const lineCost   = it.cost != null ? Number(it.cost) : r2(unitCost * multiplier);
 
@@ -151,6 +156,7 @@ export async function raiseResalePurchaseOrdersForOrder(
         total,
         status:        'pending',
         created_by:    null,
+        notes:         `Auto-raised from online order ${orderId.slice(0, 8)}`,
       }).select('id').single();
 
       if (poErr || !po) {
@@ -159,13 +165,18 @@ export async function raiseResalePurchaseOrdersForOrder(
       }
 
       const poId = (po as { id: string }).id;
+      // Line-item contract — IDENTICAL to /api/orders/place (Writer A):
+      //   Weight (lb) items  → units_ordered = null,  weight_lb = <weight>
+      //   Fixed-unit items   → units_ordered = <qty>, weight_lb = null
+      // Never write a boolean/non-numeric into units_ordered. weightLb/qty were
+      // sanitized to finite numbers above.
       const itemRows = group.map((l) => ({
         po_id:         poId,
         product_id:    l.productId,
-        units_ordered: l.qty,
+        units_ordered: l.weightLb == null ? l.qty : null,
+        weight_lb:     l.weightLb != null ? l.weightLb : null,
         unit_cost:     l.unitCost,
         total_cost:    l.lineCost,
-        weight_lb:     l.weightLb,
       }));
       const { error: itemErr } = await admin.from('purchase_order_items').insert(itemRows);
       if (itemErr) {
