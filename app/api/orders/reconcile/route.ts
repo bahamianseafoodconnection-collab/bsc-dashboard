@@ -5,15 +5,26 @@
 // the bank "exchange". Reuses existing orders columns — NO schema change:
 //   payment_approval        = the bank transfer ID (matches our payment ID)
 //   payment_received_at/by  = reconciliation audit (timestamp + staff uuid)
-//   payment_received_method = 'bank_transfer'
+//   payment_received_method = 'wire'
 //   payment_received_notes  = optional note
 //
 // Staff-only + service-role (orders RLS is owner/staff-locked, and money
 // confirmation must never be client-writable). Pass { unreconcile: true } to
 // clear a mistaken match.
+//
+// CARD-PAID FALLBACK (added): an online card order's only automatic path to a
+// paid state is a successful Plug'n Pay browser-return — which is lossy (the
+// customer can close the tab before the redirect lands, stranding the order at
+// 'payment_pending' even though the money cleared at RBC). This route is the
+// reliable fallback: when staff enter the bank trace for a still-'payment_pending'
+// order, we ALSO flip it to 'paid' and raise its resale supplier POs — the same
+// side-effects the return-handler performs — so a stranded card order is fully
+// recovered by the manual reconcile that always happens at next-day settlement.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { raiseResalePurchaseOrdersForOrder } from '@/lib/procurement/raise-resale-purchase-orders';
+import { CHANNEL_MARGIN, VAT_RATE, recordSaleFinancials } from '@/lib/finance';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -99,11 +110,62 @@ export async function POST(req: NextRequest) {
     if (!stErr) statusChangedTo = 'Confirmed';
   }
 
+  // CARD-PAID FLIP + RESALE PO RAISE (idempotent fallback).
+  //
+  // ATOMIC one-time transition, identical guard pattern to the Plug'n Pay
+  // return-handler: flip the order to 'paid' ONLY if it is still
+  // 'payment_pending'. The conditional WHERE + RETURNING is the idempotency
+  // guard — if the order already reached 'paid' (e.g. the browser-return DID
+  // land and already raised the POs), this updates ZERO rows, so the PO raise
+  // below does NOT run a second time. Only when WE win the flip (the order was
+  // genuinely stranded at 'payment_pending') do we raise the resale POs.
+  //
+  // The shared raiseResalePurchaseOrdersForOrder also carries its own
+  // per-(order_id, supplier_id) idempotency SELECT, so this is double-guarded.
+  let paidFlipped = false;
+  const { data: flipped, error: flipErr } = await admin.from('orders')
+    .update({ payment_status: 'paid' })
+    .eq('id', orderId)
+    .eq('payment_status', 'payment_pending')
+    .select('id, total, items, wholesale_items');
+
+  if (!flipErr && flipped && flipped.length > 0) {
+    paidFlipped = true;
+    const paidRow = flipped[0] as { id: string; total: number | null; items: unknown; wholesale_items: unknown };
+
+    // (1) Financial split — parity with the Plug'n Pay return-handler's paid
+    // branch. A card order recovered HERE (because the browser-return was lost)
+    // must still land its revenue/profit in the financials table, or the very
+    // "stranded card order" case this route exists to recover would be
+    // undercounted. Same basis as the return-handler: cost = total / (1+margin)
+    // / (1+VAT). VAT currently disabled (VAT_RATE=0). Best-effort, never throws.
+    try {
+      const total = Number(paidRow.total ?? 0);
+      if (total > 0) {
+        const onlineToCost = 1 / ((1 + CHANNEL_MARGIN.online_market) * (1 + VAT_RATE));
+        await recordSaleFinancials({
+          saleAmount: total,
+          costBasis:  total * onlineToCost,
+          channel:    'online_market',
+          orderId:    orderId,
+        });
+      }
+    } catch (finErr) {
+      console.warn('[reconcile] financials log failed on card-paid flip:', finErr);
+    }
+
+    // (2) Resale PO raise — best-effort: a PO failure must never fail the
+    // reconcile (the money side is already recorded above). Never throws; also
+    // carries its own per-(order_id, supplier_id) idempotency SELECT.
+    await raiseResalePurchaseOrdersForOrder(admin, orderId, paidRow);
+  }
+
   return NextResponse.json({
     ok: true,
     reconciled: true,
     reconciled_at: nowIso,
     bank_transfer_id: bankTransferId,
     status_changed_to: statusChangedTo,
+    paid_flipped: paidFlipped,
   });
 }
