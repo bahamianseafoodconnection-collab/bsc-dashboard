@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { plainError } from '@/lib/plain-error'
 
@@ -35,6 +36,7 @@ interface Supplier {
 
 export default function PurchaseOrdersPage() {
   const supabase = getSupabase()
+  const router = useRouter()
   const [pos, setPOs] = useState<PO[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -205,7 +207,12 @@ export default function PurchaseOrdersPage() {
         ) : (
           <div className="space-y-3">
             {pos.map(po => (
-              <div key={po.id} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
+              <div
+                key={po.id}
+                onClick={() => router.push(`/purchase-orders/${po.id}`)}
+                className="bg-gray-900 rounded-xl p-4 border border-gray-800"
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{po.supplier_name}</p>
@@ -231,6 +238,7 @@ export default function PurchaseOrdersPage() {
                 </div>
                 {po.invoice_photo_url && (
                   <a href={po.invoice_photo_url} target="_blank" rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="mt-3 flex items-center gap-1.5 text-xs text-blue-400 underline">
                     📄 View Invoice Photo
                   </a>
