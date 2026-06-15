@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import BriefPanel from './BriefPanel'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -362,6 +363,7 @@ export default function FounderAIPage() {
           BSC Global Seafood Intelligence · Nassau, Bahamas · bscbahamas.com
         </p>
       </div>
+      <BriefPanel />
     </div>
   )
 }
