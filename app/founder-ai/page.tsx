@@ -145,7 +145,7 @@ export default function FounderAIPage() {
     } catch (error) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Intelligence engine encountered an error. Please try again.',
+        content: `Founder AI error: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: new Date()
       }])
     } finally {
