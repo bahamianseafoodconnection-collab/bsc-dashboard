@@ -76,3 +76,26 @@ Method: Layer isolation (prove each clean in order, cheapest first; eliminate, d
 - [ ] Build founder_principles (north-star rules) and wire it to this ledger.
 - [ ] Founder AI live error: ANTHROPIC_API_KEY exists in Vercel; confirm value is a live key and that production was redeployed after it was set.
 - [ ] Design QC receiving log plus receiving batch code (spec on paper first; legal/audit review because it touches supplier payment), then build.
+
+---
+
+# 2026-06-17 - Loop lock, card-sets, and checklist (defined, not yet built)
+
+## 8. The loop lock (continuous system loop) - the keystone
+The continuous system loop traps all business operations so nothing breaks or is lost, and it makes the system generational.
+- The loop stays closed and intact at all times.
+- Each section (supplier upload/approval, sales/POS, supplier_reorder_list, purchase order, receiving, QC quality/payment gate, processing/yield, lot code, inventory, platform) works on its own but is a locked link in the loop.
+- No section can be removed, reordered, or broken by anyone below founder level.
+- Only the founder can add to or alter the loop; the founder unlocks to extend, then it re-locks.
+- A new staff member, new chat, or new developer can work WITHIN a section but cannot break the chain.
+- Protects against drift (the failure that left supplier_reorder_list live-only with no migration).
+- Status: defined, not yet built. Spec-first; founder-gated; legal/audit review required.
+
+## 9. Processor (qc_staff) card-set
+On login, a processor sees a work queue of cards, one set per batch, showing every record to make and complete for that batch, in their ordered language (English, Haitian Creole, Spanish) and in the required order. Card contents come from BSC compliance documents (QC, HACCP, SOP, SSOP) which the founder will upload later. Until uploaded, build only the card-queue frame, not the contents; do not invent compliance forms. Each completed card writes into the loop's receiving and processing records: receiving log plus receiving batch code; quality check (accept, adjust, or reject) which is the payment gate; processing plus yield loss; lot code STPC-YYYYMMDD-VV-NN. Status: defined, not yet built; pending uploaded forms plus legal/audit.
+
+## 10. Cashier card-set
+On login, a cashier sees their cards: POS; Purchase Order payment; Expenses payment; Returns; Product picture and information edit. HARD RESTRICTION on product edit: may update photo and information, but may NOT change price and may NOT change product name (founder/approval-controlled; enforced via RLS). Cards render in the cashier's ordered language. Status: defined, not yet built; spec-first; legal/audit.
+
+## 11. The checklist lives in the ledger
+The checklist no longer lives in chat memory. It lives here and updates in the same motion as every change. Current open items and items completed this session are recorded in the Supabase system_decision_log entry titled "checklist lives in the ledger" (2026-06-17) and should be mirrored here going forward, append-only, never deleted.
