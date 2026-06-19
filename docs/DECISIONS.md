@@ -99,3 +99,9 @@ On login, a cashier sees their cards: POS; Purchase Order payment; Expenses paym
 
 ## 11. The checklist lives in the ledger
 The checklist no longer lives in chat memory. It lives here and updates in the same motion as every change. Current open items and items completed this session are recorded in the Supabase system_decision_log entry titled "checklist lives in the ledger" (2026-06-17) and should be mirrored here going forward, append-only, never deleted.
+
+---
+
+# 2026-06-19 — HACCP spec landed (cross-reference)
+
+The BSC compliance documents that sections 9 (processor card-set), the HACCP records, and the per-user-page spec were "pending upload" on have now landed in-repo as docs/HACCP_SPEC.md (commit fb7f07c, 171 lines), mirrored in Supabase system_decision_log (5 entries, 2026-06-17). Status remains DEFINED, NOT YET BUILT — the spec is captured but the consultant's authoritative forms, legal/audit review, and the open items (P1 RF, COI meaning, sulfite ppm, gear "beats", grade brackets, blast-freezer target, conch intended-use, PP# pending, US/EU market) still gate the build. See docs/HACCP_SPEC.md for the full farm-to-export record map.
