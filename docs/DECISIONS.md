@@ -10,6 +10,51 @@
 
 ---
 
+## 2026-06-20 — Supplier→Channel Pricing Pipeline: Direction Locked + DB-State Verified
+
+Context: Building the universal server-authoritative Save standard and the supplier pricelist → channel-listing pipeline. Read-only verification against live schema (Supabase MCP bsc_mcp_ro) surfaced four entangled money defects plus a missing column. This entry locks the decisions and records the verified state BEFORE any fix touches production.
+
+### DECISIONS LOCKED
+
+D1 — Pricing direction (SUPERSEDES 2026-06-09 ×1.07-on-cost formula). The 7% is BSC's operating cost, pushed onto the supplier at intake. Supplier is informed the system carries a 7% operating cost; their quote is negotiated down 7%. Stored cost = supplier quote × 0.93. That stored number IS true cost — read directly by COGS, the 7% facility fee, and conch 6% yield. No stripping, no ÷1.07. unit price = stored_cost × (1 + channel_margin); line = unit price × qty; final = line × (1 + vat), VAT last per jurisdiction. Strategy this funds: cheapest online price + widest availability to out-compete Bahamas Food Services / Sysco. OLD ×1.07-added-to-cost formula: RETIRED. Caveat: ×0.93 only applies to suppliers who accepted the term (suppliers.operating_cost_accepted = true); otherwise full quote.
+
+D2 — Save standard: SERVER-AUTHORITATIVE everywhere. Money/inventory/compliance writes go through a server API (service-role, behind auth + role gate, with ai_writes audit) — never browser → RLS direct. Pattern of record: app/api/supplier/add-product/route.ts.
+
+D3 — Product approval lifecycle. Pricelist import → products land pending_approval. Approvers: control_admin, founder, co_founder. On approval → active on selected channels. Re-approval fires ONLY on cost price change OR brand change.
+
+D3a — Supplier approval funnel. TWO GATES. The operating_cost_accepted flag is a "Supplier Approved" on/off switch on each supplier card. Card opens → review pricelist → decide. GATE 1 supplier switch: OFF = nothing created, no ×0.93; ON = accepts supplier (×0.93 intake), auto-creates all pricelist products as pending_approval, opens product management page. On that page per product: select channels, upload/edit photo. GATE 2 per-product "Enable Live" toggle: flips that single product pending_approval → active, live on its selected channels. Per-product, not bulk.
+
+D4 — Enum fix approach: OPTION A. Translation map lives IN the route (online_retail→online_market etc). No schema change now. Enum migration (finish pricing_channel_v2 across product_pricing/channel_markups) is a PARKED separate workstream — NOT inside this build.
+
+D5 — Pricing layer split. STORED per-product fixed shelf prices (route writes these): nassau_pos 40%, andros_pos 40%, online_market 35% (margin source pricing_rules online_retail) — all × true cost. COMPUTED LIVE at cart, NOT stored: in-store wholesale 22%, online wholesale 19%. Wholesale qualifies at 10+ lbs OR 1+ full case. Bulk route stores ONLY the 3 fixed channels. VAT last per org_settings.vat_active.
+
+D6 — Case-break (pack-break) pricing + mandatory packing. Every product carries units_per_case (sub-units per case): snapper 23 pcs, salmon 25 pcs, shrimp 5 bags. Cart math: full_cases = floor(qty ÷ units_per_case); remainder = qty mod units_per_case; total = full_cases × case_wholesale + remainder × retail. Card shows BOTH retail and wholesale; customer taps Retail or Wholesale. Wholesale computed live, not stored. Packing description REQUIRED on every product before go-live.
+
+D7 — Packing data drift + intake handling. Columns units_per_case (int, default 1) and unit_type exist; no new column needed. But data unreliable: units_per_case uniformly 1, pack_size free text, weight leaks into name, unit_of_measure='each' on weight items. INTAKE HANDLING = flag + block go-live, NOT hard-reject. Switch-ON intakes ALL products as pending_approval. A product with unset/default packing is allowed in but CANNOT be enabled live (Gate 2) until reviewer sets real units_per_case + unit_type. Existing-data cleanup is a parked workstream.
+
+### DB-STATE FINDINGS (verified read-only, 2026-06-20)
+
+F-A — Auto-pricing path DEAD + enums don't join. Routes read channel_markups.margin_pct (EMPTY, wrong enum pricing_channel). Real margins live in pricing_rules on pricing_channel_v2. Only nassau_pos/andros_pos share names. Map: online_retail→online_market, wholesale_in_store→local_wholesale, wholesale_online→(no target, handled by cart).
+F-B — margin_multiplier=1.0 footgun CONFIRMED LIVE. bulk-add-products hardcodes 1.0; trigger recalc_channel_prices_on_purchase then recomputes price=cost×1.0 = sells at cost. Fix: store margin = price ÷ cost.
+F-D — VAT master switch. org_settings.vat_active currently false → all channels 0%. On re-enable only cooked_prepared = 10%, rest stay 0%. Verify checkout honors the switch, not the stale 1.10 row default.
+F-E — products.brand did NOT exist (ADDED this session, verified).
+F-F — Approval flow schema-backed: products.status enum {draft, pending_approval, active, discontinued, archived} + approved_by/at, requested_channels.
+F-J — product_category has duplicate members (beverage/beverages, toiletry/toiletries). Route coerces to ONE canonical value. is_bsc_processed default false = resale flag.
+
+### RESOLVED
+
+O1 — pricing_rules is the governing margin source (confirmed via live Founder AI). Margins (pricing_channel_v2): nassau_pos 40, andros_pos 40, online_retail 35, wholesale_in_store 22, wholesale_online 19. Supersedes the 2026-05-23 sacred set (38/45/35/18/15), now STALE.
+O2 — STAY LIVE at last-approved price. Cost/brand change flips to pending_approval but product keeps selling at last-approved price until re-approved. Pending drives the review queue, not storefront visibility.
+
+### SCHEMA CHANGES DONE THIS SESSION (verified)
+- products.brand (text, nullable) — added.
+- suppliers.operating_cost_accepted (boolean NOT NULL default false) — added.
+
+### RULES REAFFIRMED
+Verify live schema before building. SQL → Supabase Editor; .ts/.tsx → Claude Code; full-file writes only. git fetch + behind=0 before any push; per-command approval. No push/deploy/commit without explicit approval. Legal/audit before any money surface.
+
+---
+
 # 2026-06-17 — Founding entry
 
 ## 1. The missing link: the supplier -> sale -> reorder -> receiving loop
