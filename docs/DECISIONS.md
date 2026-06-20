@@ -105,3 +105,39 @@ The checklist no longer lives in chat memory. It lives here and updates in the s
 # 2026-06-19 — HACCP spec landed (cross-reference)
 
 The BSC compliance documents that sections 9 (processor card-set), the HACCP records, and the per-user-page spec were "pending upload" on have now landed in-repo as docs/HACCP_SPEC.md (commit fb7f07c, 171 lines), mirrored in Supabase system_decision_log (5 entries, 2026-06-17). Status remains DEFINED, NOT YET BUILT — the spec is captured but the consultant's authoritative forms, legal/audit review, and the open items (P1 RF, COI meaning, sulfite ppm, gear "beats", grade brackets, blast-freezer target, conch intended-use, PP# pending, US/EU market) still gate the build. See docs/HACCP_SPEC.md for the full farm-to-export record map.
+
+---
+
+# 2026-06-20 — Facility agreement restructured: percentage model (7% + $2k insurance)
+
+PROCESSING FACILITY USE & EXPORT SERVICES AGREEMENT — restructured from hard-number model (7,000 lb processed conch/lobster/yr fee, $6,000/yr insurance per fisherman) to percentage-based, simpler and cleaner. Supersedes the v1 hard-number model.
+
+FEE STRUCTURE (LOCKED):
+- 7% of ALL finished product (conch + lobster combined, in-kind) as processing/packaging/licensing fee. Includes packaging materials up to 100,000 lb collectively/yr.
+- $2,000/yr per partner boat — insurance contribution, due August 15 annually.
+- Example: 10,000 lb raw conch (6% yield = 9,400 lb finished) → facility takes 7% of 9,400 = 658 lb finished as fee.
+
+PARTNER BOATS (3 total):
+- Facility-use agreement, 7% + $2k insurance.
+- Supplier portal login (same portal as external suppliers JBI, BWA) — real-time intake visibility, transparency into their own processing and yields.
+
+OTHER FISHERMEN (all others):
+- BSC buys from them direct. No facility-use agreement. No portal access. Just purchase orders.
+
+OPERATING SEASON & TERM:
+- August 1 – May 31: Spiny Lobster season.
+- June 1 – July 31: Seasonal closure → partner boats harvest conch.
+- Agreement runs year-round, auto-renews August 1 annually.
+- 30 days written notice to terminate; immediate termination for regulatory violations, illegal harvesting, 2 documented quality strikes.
+
+STORAGE & MONITORING:
+- On-site freezer ~30,000 lb + 40-foot reefer container when needed.
+- Temperature monitoring: all storage zones (on-site + reefer when deployed), logged 3x/day (Morning/Noon/Before-Closing) with status (on/off), temperature, time. Satisfies HACCP cold-chain record/verification.
+- OPEN: reefer real-time alarming question for consultant (temp stick logs but does not alarm; overnight reefer failure = catastrophic loss).
+
+TRACEABILITY & SEALING:
+- Vessel info, harvest dates, general fishing areas, mother-ship ID, landing locations required.
+- PRIVACY PROTECTED: exact trap locations, condo locations, GPS coordinates NOT required.
+- Sealing: zip ties, string, or Facility-approved methods only. NO METAL TIES (consistent with HACCP spec).
+
+DOCUMENT STATUS: Draft written, ready for Bahamian attorney review before signing (same bar as Gulf Stream / Tropic). Mirrored in Supabase system_decision_log.
