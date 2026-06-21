@@ -65,6 +65,15 @@ const ALLOWED = new Set([
   'fulfillment_status',
 ]);
 
+// Staff roles allowed to ring a COUNTER sale (POS register / admin quick sale).
+// Counter sales are paid-at-the-counter, so — unlike the auth-free online path —
+// they may set payment_status = paid. That privilege REQUIRES a verified staff
+// session; a browser can no longer mint a paid order on its own.
+const STAFF_ROLES = new Set([
+  'cashier', 'andros_staff', 'manager',
+  'founder', 'co_founder', 'control_admin', 'basic_admin',
+]);
+
 // Spiny Tail Processing Co. supplier id. Its lines are own-processed (in-house)
 // and are excluded from resale auto-raise until the seafood-catalog
 // reconciliation project flags them in. Kept as a named constant so the
@@ -370,6 +379,87 @@ async function raiseResalePurchaseOrders(
   }
 }
 
+// Counter-sale recompute. Prices each line against the POS/wholesale channel the
+// cashier is on, using the SAME priceCartLine primitive the register UI uses
+// (lib/cart-pricing) so the charged total matches the displayed total exactly.
+// Mirrors the client's saleLineInfo: retail = the channel snapshot, wholesale =
+// local_wholesale snapshot for the 10-lb/by-case auto-upgrade (null when the
+// channel already IS wholesale), no promo, VAT 0 (food is zero-rated at POS).
+// Also populates costMap for the per-line cost snapshot + resale auto-raise.
+async function recomputeCounterTotal(
+  admin: SupabaseClient,
+  row: Record<string, unknown>,
+  costMap: Map<string, CostInfo>,
+  channelKey: string,
+): Promise<RecomputeResult> {
+  const rawItems = Array.isArray(row.items) ? row.items
+                 : Array.isArray(row.wholesale_items) ? row.wholesale_items
+                 : [];
+  const items = (rawItems as Record<string, unknown>[]).map((it) => ({
+    productId:       String(it.id ?? it.product_id ?? ''),
+    qty:             Number(it.qty ?? it.quantity ?? 0),
+    weightLb:        it.weight_lb != null ? Number(it.weight_lb) : null,
+    clientUnitPrice: Number(it.unit_price ?? it.price ?? 0),
+  })).filter((x) => x.productId && Number.isFinite(x.qty) && x.qty > 0);
+  if (items.length === 0) return { ok: false, error: 'No valid items in sale' };
+
+  const ids = [...new Set(items.map((x) => x.productId))];
+  const channels = [...new Set([channelKey, 'nassau_pos', 'local_wholesale'])];
+  const [{ data: pricingRows }, { data: prodRows }, { data: costRows }] = await Promise.all([
+    admin.from('product_pricing').select('product_id, channel, manual_unit_price')
+      .in('product_id', ids).in('channel', channels),
+    admin.from('products').select('id, unit_type, is_bsc_processed').in('id', ids),
+    admin.from('product_costs').select('product_id, cost_per_unit, supplier_id')
+      .in('product_id', ids).eq('is_current', true),
+  ]);
+
+  const priceAt = new Map<string, number>(); // `${productId}:${channel}` → price
+  for (const p of (pricingRows ?? []) as { product_id: string; channel: string; manual_unit_price: number }[]) {
+    priceAt.set(`${p.product_id}:${p.channel}`, Number(p.manual_unit_price));
+  }
+  type ProdRow = { id: string; unit_type: string | null; is_bsc_processed: boolean | null };
+  const prodMap = new Map<string, ProdRow>();
+  for (const p of (prodRows ?? []) as ProdRow[]) prodMap.set(p.id, p);
+  type CostRow = { product_id: string; cost_per_unit: number | null; supplier_id: string | null };
+  const costRowMap = new Map<string, CostRow>();
+  for (const c of (costRows ?? []) as CostRow[]) costRowMap.set(c.product_id, c);
+
+  let subtotal = 0;
+  for (const it of items) {
+    const prod = prodMap.get(it.productId);
+    const channelPrice = priceAt.get(`${it.productId}:${channelKey}`)
+                      ?? priceAt.get(`${it.productId}:nassau_pos`);
+    const count = it.weightLb != null && it.weightLb > 0 ? it.weightLb : it.qty;
+    if (!prod || channelPrice == null) {
+      // Non-catalog line (e.g. a B2B brand line). Staff sale, paid at the
+      // counter — accept the cashier's line price (mirrors the register), but it
+      // carries no cost snapshot / PO routing.
+      if (it.clientUnitPrice > 0) { subtotal += r2(it.clientUnitPrice * count); continue; }
+      return { ok: false, error: 'One or more items are not in the catalog — refresh and retry.' };
+    }
+    const unit: SaleUnit = prod.unit_type === 'lb' ? 'lb' : prod.unit_type === 'case' ? 'case' : 'each';
+    const wholesalePrice = priceAt.get(`${it.productId}:local_wholesale`) ?? null;
+    const snap: ProductPriceSnapshot = {
+      retail_price:    channelPrice,
+      wholesale_price: channelKey === 'local_wholesale' ? null : wholesalePrice,
+      promo_price:     null,
+    };
+    subtotal += r2(priceCartLine(snap, count, unit).unit_price * count);
+
+    if (!costMap.has(it.productId)) {
+      const costRow = costRowMap.get(it.productId);
+      costMap.set(it.productId, {
+        costPerUnit:    costRow?.cost_per_unit != null ? Number(costRow.cost_per_unit) : 0,
+        supplierId:     costRow?.supplier_id ?? null,
+        isBscProcessed: prod.is_bsc_processed === true,
+        unit,
+      });
+    }
+  }
+  subtotal = r2(subtotal);
+  return { ok: true, subtotal, promoDiscount: 0, deliveryFee: 0, total: subtotal };
+}
+
 export async function POST(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -397,6 +487,80 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid order total' }, { status: 400 });
   }
 
+  // ── COUNTER SALE (POS register / admin quick sale) ────────────────────────
+  // Paid at the counter, so payment_status may be 'paid_in_full' — but ONLY for
+  // a verified staff session. Money is re-derived server-side against the POS
+  // channel; the client total is never trusted. This closes the hole where a
+  // browser could insert an order pre-marked paid.
+  if (body.sale_mode === 'counter') {
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!anonKey) return NextResponse.json({ ok: false, error: 'Supabase not configured' }, { status: 500 });
+    const authHeader = req.headers.get('authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ ok: false, error: 'Sign in required to ring a sale.' }, { status: 401 });
+    }
+    const userClient = createClient(supaUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth:   { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    });
+    const { data: { user }, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !user) return NextResponse.json({ ok: false, error: 'Invalid session — sign in again.' }, { status: 401 });
+    const { data: prof } = await userClient.from('profiles').select('role').eq('id', user.id).maybeSingle();
+    const role = (prof as { role?: string | null } | null)?.role ?? null;
+    if (!role || !STAFF_ROLES.has(role)) {
+      return NextResponse.json({ ok: false, error: `Role "${role ?? 'none'}" cannot ring a counter sale.` }, { status: 403 });
+    }
+
+    const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
+    const rawChannel = String(row.channel ?? 'nassau_pos');
+    const channelKey = rawChannel === 'online_retail' ? 'online_market' : rawChannel;
+
+    const costMap = new Map<string, CostInfo>();
+    const money = await recomputeCounterTotal(admin, row, costMap, channelKey);
+    if (!money.ok) return NextResponse.json({ ok: false, error: money.error }, { status: 409 });
+
+    const clientTotal = Number(row.total);
+    if (Number.isFinite(clientTotal) && Math.abs(clientTotal - money.total) > 0.01) {
+      console.warn(`[orders/place:counter] total mismatch — client=${clientTotal} server=${money.total} channel=${rawChannel}`);
+    }
+    row.subtotal   = money.subtotal;
+    row.vat_amount = 0; // food zero-rated at POS, matching the register
+    row.total      = money.total;
+    if (row.wholesale_cost_total !== undefined) row.wholesale_cost_total = money.total;
+
+    // Server-forced state — verified staff, paid at counter.
+    row.order_type     = row.order_type ?? 'pos_sale_nassau';
+    row.status         = 'completed';
+    row.payment_status = 'paid_in_full';
+
+    stampLineCosts(row, costMap);
+
+    const { data, error } = await admin.from('orders').insert(row).select('id').single();
+    if (error) {
+      return NextResponse.json({ ok: false, error: `Sale failed: ${error.message}` }, { status: 500 });
+    }
+    const orderId = (data as { id: string }).id;
+
+    // Counter sale is paid + committed at the register → raise resale POs now.
+    await raiseResalePurchaseOrders(admin, orderId, row, costMap);
+
+    try {
+      await admin.from('ai_writes').insert({
+        tool:      'orders_counter_sale',
+        caller_id: user.id,
+        input:     { channel: rawChannel, payment_method: row.payment_method ?? null, total: money.total },
+        result:    { order_id: orderId, role },
+        status:    'success',
+        error:     null,
+      });
+    } catch (auditErr) {
+      console.warn('ai_writes audit insert failed (non-fatal):', auditErr);
+    }
+
+    return NextResponse.json({ ok: true, order_id: orderId });
+  }
+
+  // ── ONLINE ORDER (guest/auth checkout — auth-free by design) ──────────────
   // Force server-controlled fields (never trust the client for these).
   const payMethod = String(row.payment_method ?? 'cod');
   row.order_type     = row.order_type ?? 'online_market';

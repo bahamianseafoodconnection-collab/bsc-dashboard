@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { calculatePrice, BSC_PRICING_RULES, type PricingChannel } from '@/lib/pricing';
 import { priceCartLine, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing';
+import { useServerSave } from '@/lib/useServerSave';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
 function getSupabase() {
@@ -145,6 +146,10 @@ export default function ProductsPage() {
   type SaleChannel  = 'nassau_pos' | 'andros_pos' | 'online_retail' | 'wholesale';
   type SalePayment  = 'cash' | 'card' | 'wire';
   type SaleCustomer = { id: string; full_name: string; phone: string | null; email: string | null; email_marketing_consent: boolean | null; total_orders: number; total_spent: number };
+  // Phase 5/6: Admin Quick Sale rings through the server-authoritative order
+  // creation path (counter mode) — no browser→orders.insert of a paid order.
+  const { save: placeCounterSale } = useServerSave('/api/orders/place');
+
   const [saleOpen,         setSaleOpen]         = useState(false);
   const [saleCart,         setSaleCart]         = useState<SaleLine[]>([]);
   const [saleChannel,      setSaleChannel]      = useState<SaleChannel>('nassau_pos');
@@ -358,23 +363,25 @@ export default function ProductsPage() {
         adminNotes += ` · Cash tendered: $${tendered.toFixed(2)} · Change: $${change.toFixed(2)}`;
       }
 
-      const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
+      // Server-authoritative: payment_status, status, and the money total are
+      // forced/re-derived server-side against the POS channel. The client no
+      // longer inserts a paid order directly.
+      const r = await placeCounterSale({
+        sale_mode:      'counter',
         order_type:     orderTypeMap[saleChannel],
         location:       locationMap[saleChannel],
         channel:        channelMap[saleChannel],
         wholesale_items: items,
         subtotal:       saleSubtotal, vat_amount: saleVat, total: saleTotal,
         payment_method: salePayment,
-        payment_status: 'paid_in_full',
         admin_notes:    adminNotes,
-        status:         'completed',
         customer_id:    customerId,
         customer_name:  nameClean || null,
         customer_phone: phoneClean || null,
-      }).select('id').single();
-      if (orderErr) throw orderErr;
+      });
+      if (!r.ok) throw new Error(r.error ?? 'Sale failed');
 
-      const orderId = newOrder?.id;
+      const orderId = (r.data as { order_id?: string } | undefined)?.order_id;
       if (orderId) window.open(`/receipt/${orderId}`, '_blank');
 
       setSaleSubmitting(false);
