@@ -239,7 +239,66 @@ const [extractModal, setExtractModal] = useState<null | {
   products:   ExtractedProduct[];
   importing:  boolean;
   diagnostic: ExtractDiagnostic | null;
+  progress?:  string | null;
 }>(null);
+
+// ── Chunked extraction: follow the route's next_start_page cursor ──
+// Same loop as /supplier/[id], parameterized by supplierId since this page has
+// no closure supplier. Calls /api/supplier/extract-pricelist from page 0 and
+// keeps going (start_page = next_start_page) until next_start_page=null,
+// accumulating every page and de-duping by suggested_sku (fallback raw_line)
+// against page-boundary overlap. Reports progress via onProgress. Hard-guarded
+// by a 100-iteration cap and a non-advancing-cursor stop so it can never spin.
+async function extractAllPages(
+  supplierId: string,
+  token: string,
+  onProgress?: (msg: string) => void,
+): Promise<{ ok: true; products: ExtractedProduct[]; diagnostic: ExtractDiagnostic | null }
+        | { ok: false; error: string }> {
+  const all: ExtractedProduct[] = [];
+  const seen = new Set<string>();
+  let firstDiagnostic: ExtractDiagnostic | null = null;
+  let startPage = 0;
+  const MAX_ITERS = 100;
+  for (let iter = 0; iter < MAX_ITERS; iter++) {
+    const res = await fetch('/api/supplier/extract-pricelist', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ supplier_id: supplierId, start_page: startPage }),
+      cache:   'no-store',
+    });
+    const rawBody = await res.text();
+    let j: {
+      ok?: boolean; error?: string; products?: ExtractedProduct[];
+      diagnostic?: ExtractDiagnostic | null; next_start_page?: number | null; total_pages?: number;
+    };
+    try { j = JSON.parse(rawBody); }
+    catch { return { ok: false, error: `HTTP ${res.status} · non-JSON response (first 400 chars): ${rawBody.slice(0, 400)}` }; }
+    if (!res.ok || !j.ok) return { ok: false, error: `${j.error || `HTTP ${res.status}`} [client-build=2026-06-03b]` };
+    if (iter === 0) firstDiagnostic = (j.diagnostic ?? null) as ExtractDiagnostic | null;
+
+    for (const p of (j.products ?? [])) {
+      const key = (p.suggested_sku || p.raw_line || '').toLowerCase();
+      if (key && seen.has(key)) continue; // defensive client-side dedupe (page-boundary overlap)
+      if (key) seen.add(key);
+      all.push(p);
+    }
+
+    const next  = j.next_start_page;
+    const total = j.total_pages;
+    if (onProgress) {
+      const pageLabel = total != null
+        ? ` · page ${Math.min(typeof next === 'number' ? next : total, total)} of ${total}`
+        : '';
+      onProgress(`Extracting… ${all.length} products${pageLabel}`);
+    }
+
+    if (next == null) break;                                   // all pages done
+    if (typeof next !== 'number' || next <= startPage) break;  // cursor not advancing → stop
+    startPage = next;
+  }
+  return { ok: true, products: all, diagnostic: all.length === 0 ? firstDiagnostic : null };
+}
 
 async function extractPricelist(s: Supplier) {
   setExtractModal({ supplier: s, loading: true, error: null, products: [], importing: false, diagnostic: null });
@@ -250,34 +309,17 @@ async function extractPricelist(s: Supplier) {
       setExtractModal({ supplier: s, loading: false, error: 'Sign-in expired — refresh.', products: [], importing: false, diagnostic: null });
       return;
     }
-    const res = await fetch('/api/supplier/extract-pricelist', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body:    JSON.stringify({ supplier_id: s.id }),
-      cache:   'no-store',
-    });
-    const rawBody = await res.text();
-    let j: { ok?: boolean; error?: string; products?: ExtractedProduct[]; diagnostic?: ExtractDiagnostic | null };
-    try { j = JSON.parse(rawBody); }
-    catch {
-      setExtractModal({
-        supplier: s, loading: false,
-        error:    `HTTP ${res.status} · non-JSON response (first 400 chars): ${rawBody.slice(0, 400)}`,
-        products: [], importing: false, diagnostic: null,
-      });
-      return;
-    }
-    if (!res.ok || !j.ok) {
-      setExtractModal({
-        supplier: s, loading: false,
-        error:    `${j.error || `HTTP ${res.status}`} [client-build=2026-06-03b]`,
-        products: [], importing: false, diagnostic: null,
-      });
+    // Extract ALL pages (chunked — follows the next_start_page cursor), with
+    // live progress shown in the modal's loading area.
+    const ex = await extractAllPages(s.id, token, (msg) =>
+      setExtractModal(prev => prev ? { ...prev, progress: msg } : prev));
+    if (!ex.ok) {
+      setExtractModal({ supplier: s, loading: false, error: ex.error, products: [], importing: false, diagnostic: null });
       return;
     }
     // Hydrate UI-local fields. Wholesale partners default to nassau + wholesale ON.
     const isWholesalePartner = s.supplier_type === 'wholesale_partner';
-    const rows: ExtractedProduct[] = (j.products || []).map((p: ExtractedProduct) => ({
+    const rows: ExtractedProduct[] = ex.products.map((p: ExtractedProduct) => ({
       ...p,
       sku:           p.suggested_sku,
       category:      p.suggested_category,
@@ -293,7 +335,7 @@ async function extractPricelist(s: Supplier) {
       error:      null,
       products:   rows,
       importing:  false,
-      diagnostic: (j.diagnostic ?? null) as ExtractDiagnostic | null,
+      diagnostic: ex.diagnostic,
     });
   } catch (e) {
     setExtractModal({
@@ -1884,7 +1926,7 @@ style={{ backgroundColor: '#0f1a2e' }}>
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         {extractModal.loading && (
           <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
-            Reading the PDF with Claude — this can take 20–40 seconds…
+            {extractModal.progress ?? 'Reading the PDF with Claude — this can take 20–40 seconds…'}
           </div>
         )}
 
