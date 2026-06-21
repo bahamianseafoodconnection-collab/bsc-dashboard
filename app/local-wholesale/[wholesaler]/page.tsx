@@ -142,17 +142,16 @@ export default function WholesalerPage() {
     setPlacing(true);
     const { data: { session } } = await supabase.auth.getSession();
     const items = cart.map(i => ({ sku: i.sku, name: i.name, qty: i.qty, unit: i.unit, unit_price: i.final_price_bsd, line_total: +(i.final_price_bsd * i.qty).toFixed(2) }));
-    await supabase.from('orders').insert({
-      order_type: 'local_wholesale',
-      wholesaler: key,
-      wholesale_items: items,
-      wholesale_cost_total: +cartTotal.toFixed(2),
-      payment_method: 'cod',
-      payment_status: 'pending',
-      admin_notes: orderNote || null,
-      user_id: session?.user.id || null,
+    // Server-authoritative placement (Phase 5 batch 6c) — forces cod/pending
+    // server-side and stamps the placer from the verified session.
+    const res = await fetch('/api/wholesale/place-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ wholesaler: key, items, total: +cartTotal.toFixed(2), note: orderNote || null }),
     });
+    const j = await res.json().catch(() => ({}));
     setPlacing(false);
+    if (!res.ok || j.ok === false) { alert('Could not place order: ' + (j.error ?? `HTTP ${res.status}`)); return; }
     setOrderDone(true);
     setCart([]);
     setShowCart(false);

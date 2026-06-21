@@ -22,8 +22,6 @@ import { splitSale, recordSaleFinancials } from '@/lib/finance';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
 import {
   fetchOverheadMetrics,
-  computeProfitSplit,
-  ANDROS_POS_MARGIN,
   type OverheadMetrics,
 } from '@/lib/profit';
 
@@ -457,12 +455,6 @@ export default function AndrosPOSPage() {
         }
       }
 
-      const profit = overhead
-        ? computeProfitSplit(Number(subtotal.toFixed(2)), ANDROS_POS_MARGIN, overhead.expense_rate)
-        : null;
-
-      const paymentStatus = paymentMethod === 'account' ? 'unpaid' : 'paid_in_full';
-
       // Andros prices INCLUDE the channel-level VAT markup at the catalog
       // stage (subtotal here = sum of unit_price × qty at line 368, where
       // unit_price comes from get_pos_catalog('andros_pos')). For order
@@ -472,42 +464,42 @@ export default function AndrosPOSPage() {
       // recompute lifts the 10% channel-stage markup entirely.
       const totalDollars = Number(subtotal.toFixed(2));
 
-      const { data: insertedOrder, error: insertError } = await supabase
-        .from('orders')
-        .insert({
-          order_type: 'pos_sale_andros',
-          location:   'cetas_andros',
-          channel:    'andros_pos',
-          status:     'completed',
-          payment_method: paymentMethod,
-          payment_status: paymentStatus,
-          wholesale_items: lineItems,
-          wholesale_cost_total: totalDollars,  // legacy field, kept for back-compat
-          subtotal:   totalDollars,
-          vat_amount: 0,
-          total:      totalDollars,
-          customer_name: customerNameClean || 'Walk-in',
-          customer_phone: customerPhoneClean || null,
-          customer_id: customerIdLinked,
-          admin_notes:
-            paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
-          user_id: userId,  // legacy column — same value as cashier_user_id; column-audit post-launch
-          // Andros cashier shift linkage — admin dashboard joins these.
-          cashier_session_id: cashierSession?.id ?? null,
-          cashier_user_id:    userId,
-          expense_allocation: profit?.expense_allocation ?? null,
-          bill_casale_share:  profit?.bill_casale_share  ?? null,
-          net_profit:         profit?.net_profit         ?? null,
-        })
-        .select('id')
-        .single();
-      if (insertError) {
-        alert('Sale could not be saved: ' + plainError(insertError));
+      // Server-authoritative register sale (Phase 5 batch 6c). Forces
+      // payment_status (account→unpaid), stamps cashier identity from the
+      // session, and recomputes the profit split server-side.
+      const { data: { session: posSession } } = await supabase.auth.getSession();
+      const saleRes = await fetch('/api/pos/record-sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${posSession?.access_token ?? ''}` },
+        body: JSON.stringify({
+          channel: 'andros_pos',
+          expense_rate: overhead?.expense_rate ?? null,
+          order: {
+            order_type: 'pos_sale_andros',
+            location:   'cetas_andros',
+            channel:    'andros_pos',
+            payment_method: paymentMethod,
+            wholesale_items: lineItems,
+            wholesale_cost_total: totalDollars,
+            subtotal:   totalDollars,
+            vat_amount: 0,
+            total:      totalDollars,
+            customer_name: customerNameClean || 'Walk-in',
+            customer_phone: customerPhoneClean || null,
+            customer_id: customerIdLinked,
+            admin_notes: paymentMethod === 'card' && cardRef ? `Card ref: ${cardRef}` : null,
+            cashier_session_id: cashierSession?.id ?? null,
+          },
+        }),
+      });
+      const saleJson = await saleRes.json().catch(() => ({}));
+      if (!saleRes.ok || saleJson.ok === false) {
+        alert('Sale could not be saved: ' + (saleJson.error ?? `HTTP ${saleRes.status}`));
         setCompleting(false);
         return;
       }
 
-      const orderId = insertedOrder?.id ?? null;
+      const orderId = (saleJson.order_id as string | undefined) ?? null;
 
       // Channel-correct financial split. Fire-and-forget.
       recordSaleFinancials({

@@ -5,8 +5,6 @@ import { createBrowserClient } from '@supabase/ssr'
 import { plainError } from '@/lib/plain-error'
 import {
   fetchOverheadMetrics,
-  computeProfitSplit,
-  NASSAU_POS_MARGIN,
   type OverheadMetrics,
 } from '@/lib/profit'
 import { priceCartLine, lineCount, type ProductPriceSnapshot, type CartLinePricing } from '@/lib/cart-pricing'
@@ -935,42 +933,40 @@ export default function POSPage() {
         }
       })
 
-      const profit = overhead
-        ? computeProfitSplit(total, NASSAU_POS_MARGIN, overhead.expense_rate)
-        : null
-
+      // Server-authoritative register sale (Phase 5 batch 6c). The route forces
+      // payment_status from the method (account→unpaid, else paid_in_full),
+      // stamps cashier identity from the session, and recomputes the profit
+      // split server-side — preserving every register field (split payment,
+      // terminal, card_ref, cashier linkage) exactly.
       const { data: { user } } = await supabase.auth.getUser()
-      // Account-credit orders don't move money today — mark as unpaid so AR can chase them.
-      const paymentStatus = paymentMethod === 'account' ? 'unpaid' : 'paid_in_full'
-      const { data: newOrder, error: orderErr } = await supabase.from('orders').insert({
-        order_type: 'pos_sale_nassau',
-        location: 'bsc_marketplace_nassau', channel: 'nassau_pos',
-        wholesale_items: items,
-        subtotal, vat_amount: vatAmount, total,
-        payment_method: paymentMethod,
-        // Split-payment breakdown — JSONB column added 2026-06-02.
-        // Null for non-split sales; { cash, card, total, card_ref,
-        // terminal } for split sales so accounting can attribute
-        // the cash + card halves cleanly.
-        payment_breakdown: paymentBreakdown,
-        payment_status: paymentStatus,
-        terminal_type:  (paymentMethod === 'card' || paymentMethod === 'split') ? terminal : null,
-        card_ref:       (paymentMethod === 'card' || paymentMethod === 'split') ? normalizeCardRef(cardRef) : null,  // structured column from 20260525000000
-        admin_notes: adminNotes, status: 'completed',                       // back-compat: keeps writing the buried "Card ref: XXX" string for any legacy reader
-        customer_id:    customerId,
-        customer_name:  nameClean || null,
-        customer_phone: phoneClean || null,
-        // Cashier shift linkage — the admin dashboard joins on these to show
-        // each cashier's drawer activity in real time.
-        cashier_session_id: cashierSession?.id ?? null,
-        cashier_user_id:    user?.id ?? null,
-        expense_allocation: profit?.expense_allocation ?? null,
-        bill_casale_share:  profit?.bill_casale_share  ?? null,
-        net_profit:         profit?.net_profit         ?? null,
-      }).select('id').single()
-      if (orderErr) throw orderErr
+      const { data: { session: posSession } } = await supabase.auth.getSession()
+      const saleRes = await fetch('/api/pos/record-sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${posSession?.access_token ?? ''}` },
+        body: JSON.stringify({
+          channel: 'nassau_pos',
+          expense_rate: overhead?.expense_rate ?? null,
+          order: {
+            order_type: 'pos_sale_nassau',
+            location: 'bsc_marketplace_nassau', channel: 'nassau_pos',
+            wholesale_items: items,
+            subtotal, vat_amount: vatAmount, total,
+            payment_method: paymentMethod,
+            payment_breakdown: paymentBreakdown,
+            terminal_type:  (paymentMethod === 'card' || paymentMethod === 'split') ? terminal : null,
+            card_ref:       (paymentMethod === 'card' || paymentMethod === 'split') ? normalizeCardRef(cardRef) : null,
+            admin_notes: adminNotes,
+            customer_id:    customerId,
+            customer_name:  nameClean || null,
+            customer_phone: phoneClean || null,
+            cashier_session_id: cashierSession?.id ?? null,
+          },
+        }),
+      })
+      const saleJson = await saleRes.json().catch(() => ({}))
+      if (!saleRes.ok || saleJson.ok === false) throw new Error(saleJson.error || `Sale save failed (HTTP ${saleRes.status})`)
 
-      const orderId = newOrder?.id
+      const orderId = saleJson.order_id as string | undefined
       if (!orderId) throw new Error('Order INSERT returned no id')
       savedOrderId = orderId   // Item 7: from here on, the sale IS in the DB
 
