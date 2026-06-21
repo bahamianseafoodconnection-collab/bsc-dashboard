@@ -2,15 +2,19 @@
 //
 // Server-authoritative "mark paid" for money-state flips that were happening
 // browser→RLS direct (Phase 5 sweep, money tables first). Replaces:
-//   • app/jaquel/page.tsx confirmSupplierPaid  → supplier_payouts.paid = true
-//   • app/jaquel/page.tsx markUtilityProcessed → utility_payments.payment_status = 'completed'
+//   • app/jaquel/page.tsx confirmSupplierPaid      → supplier_payouts.paid = true
+//   • app/jaquel/page.tsx markUtilityProcessed     → utility_payments.payment_status = 'completed'
+//   • app/accounts-payable markPaid (expense)      → expenses.paid_at / payment_method / payment_ref
+//   • app/accounts-payable markPaid (invoice)      → invoice_payments insert + purchase_invoices flip
 //
 // Canonical D2 pattern: Bearer-token auth + role gate (mirrors the page's
 // client gate), service-role client for the write, ai_writes audit row.
 //
-// Body: { kind: 'supplier_payout' | 'utility_payment', id: string }
-//   • supplier_payout: id = supplier_id → marks that supplier's UNPAID payouts paid.
-//   • utility_payment:  id = utility_payments.id → marks it completed.
+// Body: { kind, id, ...extra }
+//   • supplier_payout   { id = supplier_id }                       → marks that supplier's UNPAID payouts paid.
+//   • utility_payment   { id = utility_payments.id }               → marks it completed.
+//   • expense           { id, method, ref }                        → marks expense paid (paid_at = now).
+//   • purchase_invoice  { id, amount, method, ref }                → records an invoice_payments row + zeroes balance.
 // Resp: { ok, kind, affected }
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,8 +23,9 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Matches app/jaquel/page.tsx checkAuth (basic_admin/control_admin/founder/co_founder).
+// Matches the finance pages' client gate (basic_admin/control_admin/founder/co_founder).
 const ALLOWED_ROLES = new Set(['founder', 'co_founder', 'control_admin', 'basic_admin']);
+const KINDS = new Set(['supplier_payout', 'utility_payment', 'expense', 'purchase_invoice']);
 
 export async function POST(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -46,16 +51,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `Role "${role ?? 'none'}" cannot mark payments paid.` }, { status: 403 });
   }
 
-  let body: { kind?: unknown; id?: unknown };
+  let body: { kind?: unknown; id?: unknown; amount?: unknown; method?: unknown; ref?: unknown };
   try { body = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
 
-  const kind = body.kind === 'supplier_payout' || body.kind === 'utility_payment' ? body.kind : '';
-  const id   = typeof body.id === 'string' ? body.id : '';
-  if (!kind) return NextResponse.json({ ok: false, error: "kind must be 'supplier_payout' or 'utility_payment'" }, { status: 400 });
+  const kind   = typeof body.kind === 'string' && KINDS.has(body.kind) ? body.kind : '';
+  const id     = typeof body.id === 'string' ? body.id : '';
+  const method = typeof body.method === 'string' && body.method.trim() ? body.method.trim() : null;
+  const ref    = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim() : null;
+  const amount = typeof body.amount === 'number' && Number.isFinite(body.amount) ? body.amount : null;
+  if (!kind) return NextResponse.json({ ok: false, error: `kind must be one of: ${[...KINDS].join(', ')}` }, { status: 400 });
   if (!id)   return NextResponse.json({ ok: false, error: 'id is required' }, { status: 400 });
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const nowIso = new Date().toISOString();
 
   let affected = 0;
   let err: string | null = null;
@@ -68,10 +77,36 @@ export async function POST(req: NextRequest) {
         .eq('paid', false)
         .select('id');
       if (error) err = error.message; else affected = (data ?? []).length;
-    } else {
+
+    } else if (kind === 'utility_payment') {
       const { data, error } = await admin
         .from('utility_payments')
         .update({ payment_status: 'completed' })
+        .eq('id', id)
+        .select('id');
+      if (error) err = error.message; else affected = (data ?? []).length;
+
+    } else if (kind === 'expense') {
+      const { data, error } = await admin
+        .from('expenses')
+        .update({ paid_at: nowIso, payment_method: method, payment_ref: ref, updated_at: nowIso })
+        .eq('id', id)
+        .select('id');
+      if (error) err = error.message; else affected = (data ?? []).length;
+
+    } else { // purchase_invoice
+      // Record the payment row (best-effort — same fallback the page had),
+      // then zero the balance + flip status authoritatively.
+      const { error: payErr } = await admin.from('invoice_payments').insert({
+        invoice_id:  id,
+        amount:      amount ?? 0,
+        note:        ref ? `${method ?? 'payment'} · ref ${ref}` : (method ?? 'payment'),
+        recorded_by: user.id,
+      });
+      if (payErr) console.warn('invoice_payments insert failed (non-fatal, zeroing balance):', payErr.message);
+      const { data, error } = await admin
+        .from('purchase_invoices')
+        .update({ balance_owed: 0, status: 'paid', updated_at: nowIso })
         .eq('id', id)
         .select('id');
       if (error) err = error.message; else affected = (data ?? []).length;
@@ -85,7 +120,7 @@ export async function POST(req: NextRequest) {
     await admin.from('ai_writes').insert({
       tool:      'finance_mark_paid',
       caller_id: user.id,
-      input:     { kind, id },
+      input:     { kind, id, amount, method, ref },
       result:    { affected, role },
       status:    err ? 'error' : 'success',
       error:     err,

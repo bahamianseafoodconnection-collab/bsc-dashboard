@@ -15,7 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { plainError } from '@/lib/plain-error';
+import { useServerSave } from '@/lib/useServerSave';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +60,10 @@ export default function AccountsPayablePage() {
   const [errors, setErrors] = useState<{ expenses?: string; invoices?: string }>({});
   const [filter, setFilter] = useState<'all' | 'overdue' | 'this_week'>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Phase 5: money writes (mark expense/invoice paid) route through the
+  // role-gated, audited server primitive — no browser→RLS-direct flips.
+  const { save: markPaidServer } = useServerSave('/api/finance/mark-paid');
 
   async function load() {
     setLoading(true);
@@ -166,50 +170,16 @@ export default function AccountsPayablePage() {
     const ref =
       window.prompt('Payment reference (check #, transfer ref, blank for none)?', '') || null;
     setBusyId(it.id);
-    const nowIso = new Date().toISOString();
 
-    if (it.source === 'expense') {
-      const { error } = await supabase
-        .from('expenses')
-        .update({
-          paid_at: nowIso,
-          payment_method: method,
-          payment_ref: ref,
-          updated_at: nowIso,
-        })
-        .eq('id', it.raw_id);
-      if (error) {
-        alert(`Could not mark paid: ${plainError(error)}`);
-        setBusyId(null);
-        return;
-      }
-    } else {
-      // invoice — try the right thing first, fall back if invoice_payments
-      // table isn't there.
-      const { data: { user } } = await supabase.auth.getUser();
-      const paymentInsert = await supabase.from('invoice_payments').insert({
-        invoice_id: it.raw_id,
-        amount: it.amount,
-        note: ref ? `${method} · ref ${ref}` : method,
-        recorded_by: user?.id ?? null,
-      });
-      if (paymentInsert.error) {
-        // Fall back: zero balance directly
-        console.warn('invoice_payments insert failed, falling back to direct update:', paymentInsert.error);
-      }
-      const { error: updErr } = await supabase
-        .from('purchase_invoices')
-        .update({
-          balance_owed: 0,
-          status: 'paid',
-          updated_at: nowIso,
-        })
-        .eq('id', it.raw_id);
-      if (updErr) {
-        alert(`Could not mark invoice paid: ${plainError(updErr)}`);
-        setBusyId(null);
-        return;
-      }
+    const r = await markPaidServer(
+      it.source === 'expense'
+        ? { kind: 'expense', id: it.raw_id, method, ref }
+        : { kind: 'purchase_invoice', id: it.raw_id, amount: it.amount, method, ref }
+    );
+    if (!r.ok) {
+      alert(`Could not mark paid: ${r.error ?? 'unknown error'}`);
+      setBusyId(null);
+      return;
     }
     setBusyId(null);
     await load();
