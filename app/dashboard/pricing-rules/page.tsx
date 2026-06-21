@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { calculatePrice, vatPctForCategory, type PricingChannel, type SaleUnit } from '@/lib/pricing';
+import { useServerSave } from '@/lib/useServerSave';
 
 const ADMIN_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager']);
 
@@ -341,6 +342,7 @@ function RuleModal({ rule, onClose, onSaved }: { rule: PricingRule; onClose: () 
   const [desc, setDesc]       = useState(rule.description);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState<string | null>(null);
+  const { save: savePricing } = useServerSave('/api/pricing/update-rule');
 
   async function submit() {
     const m = parseFloat(markup);
@@ -348,16 +350,15 @@ function RuleModal({ rule, onClose, onSaved }: { rule: PricingRule; onClose: () 
     if (!Number.isFinite(m) || m < 0 || m > 1000) { setErr('Markup must be 0-1000%'); return; }
     if (!Number.isFinite(v) || v < 0 || v > 100)  { setErr('Tax must be 0-100%'); return; }
     setBusy(true); setErr(null);
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('pricing_rules').update({
-      markup_pct:  m,
-      vat_pct:     v,
+    const r = await savePricing({
+      kind: 'rule',
+      channel: rule.channel,
+      markup_pct: m,
+      vat_pct: v,
       description: desc.trim() || rule.description,
-      updated_at:  new Date().toISOString(),
-      updated_by:  user?.id ?? null,
-    }).eq('channel', rule.channel);
+    });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (!r.ok) { setErr(r.error ?? 'Save failed'); return; }
     await onSaved(`✓ ${rule.channel.replace(/_/g, ' ')} updated to ${m}% markup / ${v}% tax`);
   }
 
@@ -386,13 +387,14 @@ function ConfigModal({ row, onClose, onSaved }: { row: PricingConfigRow; onClose
   const [value, setValue] = useState(row.value);
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState<string | null>(null);
+  const { save: savePricing } = useServerSave('/api/pricing/update-rule');
 
   async function submit() {
     if (!value.trim()) { setErr('Value required'); return; }
     setBusy(true); setErr(null);
-    const { error } = await supabase.from('pricing_config').update({ value: value.trim() }).eq('key', row.key);
+    const r = await savePricing({ kind: 'config', key: row.key, value: value.trim() });
     setBusy(false);
-    if (error) { setErr(error.message); return; }
+    if (!r.ok) { setErr(r.error ?? 'Save failed'); return; }
     await onSaved(`✓ Config ${row.key} updated to ${value.trim()}`);
   }
 
