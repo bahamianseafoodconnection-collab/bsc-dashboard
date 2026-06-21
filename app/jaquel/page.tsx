@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
 import { clearSignIn } from '@/lib/staff-session';
+import { useServerSave } from '@/lib/useServerSave';
 
 const MONTHLY_EXPENSES = [
 { label: 'Store Rent — Nassau', amount: 4150 },
@@ -32,6 +33,10 @@ const [staffRoster, setStaffRoster] = useState<any[]>([]);
 const [schedules, setSchedules] = useState<any[]>([]);
 const [loading, setLoading] = useState(true);
 const [tab, setTab] = useState<'overview' | 'payments' | 'utilities' | 'staff' | 'expenses'>('overview');
+
+// Server-authoritative money writes (Phase 5 sweep) — mark-paid no longer
+// goes browser→RLS direct; it routes through a role-gated, audited server API.
+const { save: markPaid } = useServerSave('/api/finance/mark-paid');
 
 useEffect(() => { checkAuth(); loadData(); }, []);
 
@@ -61,12 +66,14 @@ setLoading(false);
 }
 
 async function confirmSupplierPaid(supplierId: string) {
-await supabase.from('supplier_payouts').update({ paid: true }).eq('supplier_id', supplierId).eq('paid', false);
+const r = await markPaid({ kind: 'supplier_payout', id: supplierId });
+if (!r.ok) { alert(`Mark paid failed: ${r.error ?? 'unknown'}`); return; }
 await loadData();
 }
 
 async function markUtilityProcessed(id: string) {
-await supabase.from('utility_payments').update({ payment_status: 'completed' }).eq('id', id);
+const r = await markPaid({ kind: 'utility_payment', id });
+if (!r.ok) { alert(`Mark processed failed: ${r.error ?? 'unknown'}`); return; }
 await loadData();
 }
 
