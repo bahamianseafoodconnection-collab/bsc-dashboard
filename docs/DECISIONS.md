@@ -266,3 +266,17 @@ Founder directive: "online live market needs to be shipped" + "customer build mu
 **Customer-build gap #3 (this entry):** card payment now sends a branded order-confirmation email + WhatsApp inside the return-handler paidRow guard (exactly once). COD/guest email already fired at /checkout. orders has no email column → resolved from customers record.
 
 **Remaining (polish, non-blocking):** out-of-stock visibility (deferred — inventory sync), About page, expanded trust badges, card-503 auto-fallback-to-COD. Storefront is launch-ready for COD now; card-ready the moment the PNP_* env vars are set.
+
+---
+
+## 2026-06-21 — MONEY-TABLE SWEEP COMPLETE (batches 6c, 7, 8)
+
+Phase 5 money-table sweep is DONE — zero browser→RLS-direct money writes remain on any money table; zero client-side order INSERTs.
+
+- Batch 7 (28c6e4a) — product_costs / product_pricing → /api/admin/products/[id] (channel_prices path + DELETE) + new /api/products/record-cost. Fixed 2 footguns: illegal cost UPDATE (supplier page) + missing margin_multiplier on price writes (would be zeroed by next cost receipt).
+- Batch 8 (5ece572) — purchase_invoices → /api/finance/record-purchase-invoice (re-derives total server-side). InvoiceScanner rewired.
+- Batch 6c (0ae006a) — LIVE REGISTERS. New /api/pos/record-sale (faithful: preserves split-payment, terminal, card_ref, cashier linkage; forces payment_status account→unpaid/else paid_in_full, cashier identity, recomputes profit split server-side) + new /api/wholesale/place-order (unpaid B2B, cod/pending). Rewired /pos, /pos-andros, /local-wholesale.
+
+REMAINING (deferred, NOT money creations): orders STATUS transitions (legacy `status` column) on /orders, /pickup-queue, /wholesale-orders + ar-aging customer-link → the fulfillment state-machine consolidation item (should converge on /api/orders/[id]/transition). Batch 9 = Founder AI → Claude Code connect (1 SQL).
+
+VERIFY-AGAINST-LIVE TODO (founder): ring a test sale on EACH register (cash / card / split / account-credit on /pos + /pos-andros) to confirm the server-move didn't break drawer save. Code is tsc-clean but live registers must be smoke-tested before relying on them.
