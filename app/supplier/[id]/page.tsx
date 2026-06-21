@@ -36,6 +36,7 @@ interface Supplier {
   contact_email: string | null;
   payment_terms: string | null;
   is_active: boolean;
+  operating_cost_accepted: boolean;
   pricelist_url: string | null;
   pricelist_filename: string | null;
   pricelist_uploaded_at: string | null;
@@ -327,6 +328,23 @@ export default function SupplierDetailPage() {
     } finally {
       setPricelistBusy(false);
     }
+  }
+
+  // ── Gate 1: "Supplier Approved" toggle (D3a) ──
+  // Writes suppliers.operating_cost_accepted ONLY. Boolean flip — there is
+  // intentionally NO ×0.93 auto-intake side effect here (that belongs to the
+  // deferred product-management flow). Mirrors the client-side update pattern
+  // used by uploadPricelist; server-authoritative hardening is deferred to
+  // Phase 5 per docs/DECISIONS.md (D2).
+  async function toggleOperatingCost() {
+    if (!supplier) return;
+    const next = !supplier.operating_cost_accepted;
+    const { error } = await supabase.from('suppliers')
+      .update({ operating_cost_accepted: next, updated_at: new Date().toISOString() })
+      .eq('id', supplier.id);
+    if (error) { showToast(`Update failed: ${error.message}`, false); return; }
+    showToast(next ? '✅ Supplier Approved' : '○ Supplier set to Not Approved');
+    await load();
   }
 
   // One-tap: extract + auto-import every row. No review modal — useful
@@ -653,6 +671,26 @@ export default function SupplierDetailPage() {
                     {supplier.contact_phone && ' · ' + supplier.contact_phone}
                   </p>
                 </div>
+                {/* Gate 1 — Supplier Approved switch (founder/co_founder only).
+                    Writes operating_cost_accepted; no ×0.93 intake side effect. */}
+                {canEdit && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={supplier.operating_cost_accepted}
+                      onClick={() => toggleOperatingCost()}
+                      title={supplier.operating_cost_accepted
+                        ? 'Supplier Approved — ×0.93 landed cost applies on future intake'
+                        : 'Not Approved — supplier quotes used as-is'}
+                      style={{ position: 'relative', width: 50, height: 28, borderRadius: 999, border: 'none', cursor: 'pointer', backgroundColor: supplier.operating_cost_accepted ? '#16a34a' : '#cbd5e1', transition: 'background-color 0.15s', flexShrink: 0, padding: 0 }}>
+                      <span style={{ position: 'absolute', top: 4, left: supplier.operating_cost_accepted ? 26 : 4, width: 20, height: 20, borderRadius: '50%', backgroundColor: '#fff', transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                    </button>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: supplier.operating_cost_accepted ? '#16a34a' : '#64748b', whiteSpace: 'nowrap' }}>
+                      {supplier.operating_cost_accepted ? 'Supplier Approved' : 'Not Approved'}
+                    </span>
+                  </div>
+                )}
                 <span style={{ padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, backgroundColor: supplier.is_active ? 'rgba(34,197,94,0.15)' : 'rgba(220,38,38,0.15)', color: supplier.is_active ? '#16a34a' : '#dc2626' }}>
                   {supplier.is_active ? '● Active' : '○ Inactive'}
                 </span>
