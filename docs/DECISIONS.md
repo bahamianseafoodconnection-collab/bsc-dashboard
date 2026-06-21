@@ -280,3 +280,11 @@ Phase 5 money-table sweep is DONE — zero browser→RLS-direct money writes rem
 REMAINING (deferred, NOT money creations): orders STATUS transitions (legacy `status` column) on /orders, /pickup-queue, /wholesale-orders + ar-aging customer-link → the fulfillment state-machine consolidation item (should converge on /api/orders/[id]/transition). Batch 9 = Founder AI → Claude Code connect (1 SQL).
 
 VERIFY-AGAINST-LIVE TODO (founder): ring a test sale on EACH register (cash / card / split / account-credit on /pos + /pos-andros) to confirm the server-move didn't break drawer save. Code is tsc-clean but live registers must be smoke-tested before relying on them.
+
+---
+
+## 2026-06-21 — ORDER STATUS WRITES HARDENED + dormant state-machine finding (fe46b63)
+
+Last browser-direct orders writes (admin status + fields) → new /api/orders/admin-update (role-gated, audited, batch-capable). Faithful: same legacy `status` vocabulary (Pending→Confirmed→Packing→Out for Delivery→Delivered, + pickup Ready-for-Pickup, + Cancelled, + wholesale 'processing'), customer notification stays client-side. Rewired /orders, /pickup-queue, /wholesale-orders, /dashboard/ar-aging. ZERO orders client writes remain platform-wide.
+
+KEY FINDING (verify-against-live): the `fulfillment_status` state machine (lib/order-status.ts) + /api/orders/[id]/transition route are DORMANT — wired to NO UI. The live order lifecycle runs entirely on the legacy `status` column: admin pages write it, and the CUSTOMER pages (/track, /my-orders) READ it (`o.status || o.payment_status`). So "consolidate onto the transition route" = a full workflow redesign (driver roles + PoD photos + re-pointing customer pages + vocabulary migration), NOT a refactor. DEFERRED as an explicit product decision: either wire up the state machine as a project, or delete it as dead code. Do not assume it's authoritative.
