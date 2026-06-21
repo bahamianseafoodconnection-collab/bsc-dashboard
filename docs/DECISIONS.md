@@ -186,3 +186,9 @@ TRACEABILITY & SEALING:
 - Sealing: zip ties, string, or Facility-approved methods only. NO METAL TIES (consistent with HACCP spec).
 
 DOCUMENT STATUS: Draft written, ready for Bahamian attorney review before signing (same bar as Gulf Stream / Tropic). Mirrored in Supabase system_decision_log.
+
+---
+
+# 2026-06-20 — STEP 1 SHIPPED
+
+2026-06-20 — STEP 1 SHIPPED: bulk-add-products pricing route (commit 8b5371b) merged to main + deployed to production www.bscbahamas.com. Math SQL-proven via Supabase SQL Editor (×0.93 landed cost, margin=price/cost, no 1.0 footgun) — NOT yet verified via authenticated route call. Route runtime behavior (auth/parsing/ai_writes audit/packing flag/category coercion) logged as 5 post-merge checks in PIPELINE_BUILD_CHECKLIST.md — verify in real use.
