@@ -22,7 +22,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { computeProfitSplit, NASSAU_POS_MARGIN, ANDROS_POS_MARGIN } from '@/lib/profit';
+import { computeProfitSplit, fetchOverheadMetrics, NASSAU_POS_MARGIN, ANDROS_POS_MARGIN } from '@/lib/profit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -99,19 +99,18 @@ export async function POST(req: NextRequest) {
   // expense_rate is a benign session metric (same for every sale that shift);
   // the SPLIT (net_profit etc.) is computed here so it can't be client-forged.
   const margin = channel === 'andros_pos' ? ANDROS_POS_MARGIN : NASSAU_POS_MARGIN;
-  const expenseRate = typeof body.expense_rate === 'number' && Number.isFinite(body.expense_rate) && body.expense_rate >= 0
-    ? body.expense_rate : null;
-  if (expenseRate !== null) {
-    const profit = computeProfitSplit(total, margin, expenseRate);
-    row.expense_allocation = profit.expense_allocation;
-    row.bill_casale_share  = profit.bill_casale_share;
-    row.net_profit         = profit.net_profit;
-  } else {
-    // No overhead metric available → match the page's null-profit fallback.
-    row.expense_allocation = null;
-    row.bill_casale_share  = null;
-    row.net_profit         = null;
-  }
+
+  // Service-role client — used for the overhead read + the insert below.
+  const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  // Overhead is computed SERVER-SIDE with the service role so the cashier never
+  // reads salary/expense data (founder-only under RLS). The client-sent
+  // expense_rate (if any) is ignored — the split is fully server-authoritative.
+  const { expense_rate } = await fetchOverheadMetrics(admin);
+  const profit = computeProfitSplit(total, margin, expense_rate);
+  row.expense_allocation = profit.expense_allocation;
+  row.bill_casale_share  = profit.bill_casale_share;
+  row.net_profit         = profit.net_profit;
 
   // terminal_type / card_ref only meaningful for card / split — null otherwise
   // (mirrors the page logic; the client already nulls them, this is defensive).
@@ -119,8 +118,6 @@ export async function POST(req: NextRequest) {
     row.terminal_type = null;
     row.card_ref = null;
   }
-
-  const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
   let orderId: string | null = null;
   let err: string | null = null;

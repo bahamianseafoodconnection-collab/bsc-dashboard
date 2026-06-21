@@ -33,11 +33,11 @@ const ROLE_ROUTES: Record<string, string[]> = {
   control_admin: ['*'],
   founder:       ['*'],
   co_founder:    ['*'],
-  manager:       ['/ashley', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/expenses', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
+  manager:       ['/ashley', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
   cashier:       ['/pos', '/pos-andros', '/orders', '/pickup-queue'],
   andros_staff:  ['/pos-andros'],
   right_hand:    ['/ashley', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/inventory', '/supplier', '/purchase-orders', '/yield', '/labels', '/wholesale-orders', '/products'],
-  strategist:    ['/ashley', '/reports', '/expenses', '/accounts-payable', '/founder-ai'],
+  strategist:    ['/ashley', '/reports', '/accounts-payable', '/founder-ai'],
   processor:     ['/processor'],
   // 'operations' = TJ-style fulfillment role. Spiny Tail processing,
   // inventory movement, freezer, delivery picking, label printing.

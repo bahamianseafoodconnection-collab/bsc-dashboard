@@ -13,6 +13,7 @@
 //   net_profit         = gross_profit - expense_allocation - bill_casale_share
 
 import { supabase } from './supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Channel margin assumptions, matching the dashboard's calcSplit.
 export const NASSAU_POS_MARGIN = 0.38;
@@ -50,12 +51,16 @@ export interface ProfitSplit {
  * back to ($0 overhead, default $25k target) so the caller can still
  * persist the order with null/zero allocation rather than blocking the sale.
  */
-export async function fetchOverheadMetrics(): Promise<OverheadMetrics> {
+// Accepts an optional Supabase client. Browser callers use the default (their
+// own session — only the founder can read `expenses` under the founder-only RLS).
+// Server callers (e.g. /api/pos/record-sale) pass a SERVICE-ROLE client so the
+// overhead is computed authoritatively WITHOUT exposing salary data to cashiers.
+export async function fetchOverheadMetrics(client: SupabaseClient = supabase): Promise<OverheadMetrics> {
   let monthly_overhead = 0;
   let monthly_target   = DEFAULT_MONTHLY_TARGET;
 
   try {
-    const { data: expRows } = await supabase
+    const { data: expRows } = await client
       .from('expenses')
       .select('amount')
       .in('category', [...OVERHEAD_CATEGORIES]);
@@ -68,7 +73,7 @@ export async function fetchOverheadMetrics(): Promise<OverheadMetrics> {
   try {
     const threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const { data: orderRows } = await supabase
+    const { data: orderRows } = await client
       .from('orders')
       .select('total, created_at')
       .gte('created_at', threeMonthsAgo.toISOString());
