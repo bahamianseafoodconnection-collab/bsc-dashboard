@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { useServerSave } from '@/lib/useServerSave';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +82,10 @@ export default function ExpensesPage() {
   const [paymentRef, setPaymentRef] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Phase 5: expense create + mark-paid route through server-authoritative APIs.
+  const { save: recordExpense } = useServerSave('/api/finance/record-expense');
+  const { save: markPaidServer } = useServerSave('/api/finance/mark-paid');
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -126,10 +131,8 @@ export default function ExpensesPage() {
       return;
     }
     setSubmitting(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const nowIso = new Date().toISOString();
 
-    const payload: Record<string, unknown> = {
+    const r = await recordExpense({
       description: description.trim(),
       category,
       vendor: vendor.trim() || null,
@@ -137,18 +140,13 @@ export default function ExpensesPage() {
       due_date: dueDate || null,
       recurring_interval: recurring || null,
       notes: notes.trim() || null,
-      recorded_by: user?.id ?? null,
-    };
-    if (paidNow) {
-      payload.paid_at = nowIso;
-      payload.payment_method = paymentMethod;
-      payload.payment_ref = paymentRef.trim() || null;
-    }
-
-    const { error: err } = await supabase.from('expenses').insert(payload);
+      paid_now: paidNow,
+      payment_method: paidNow ? paymentMethod : null,
+      payment_ref: paidNow ? (paymentRef.trim() || null) : null,
+    });
     setSubmitting(false);
-    if (err) {
-      setSubmitError(plainError(err));
+    if (!r.ok) {
+      setSubmitError(r.error ?? 'Could not record expense');
       return;
     }
     resetForm();
@@ -160,17 +158,9 @@ export default function ExpensesPage() {
     const method = window.prompt('Payment method (cash / transfer / check / card)?', 'transfer');
     if (!method) return;
     const ref = window.prompt('Payment reference (check #, transfer ref, blank for none)?', '') || null;
-    const { error: err } = await supabase
-      .from('expenses')
-      .update({
-        paid_at: new Date().toISOString(),
-        payment_method: method,
-        payment_ref: ref,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-    if (err) {
-      alert(`Could not mark paid: ${plainError(err)}`);
+    const r = await markPaidServer({ kind: 'expense', id, method, ref });
+    if (!r.ok) {
+      alert(`Could not mark paid: ${r.error ?? 'unknown error'}`);
       return;
     }
     await load();

@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useServerSave } from '@/lib/useServerSave';
 
 type Kind = null | 'product_cost' | 'expense';
 
@@ -37,6 +38,9 @@ export default function ScanInvoicePage() {
   const fileRef    = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef  = useRef<HTMLInputElement>(null);
+
+  // Phase 5: expense create routes through the server-authoritative API.
+  const { save: recordExpense } = useServerSave('/api/finance/record-expense');
 
   function pickImage(f: File | undefined) {
     if (!f) return;
@@ -156,23 +160,17 @@ export default function ScanInvoicePage() {
       if (!uploaded) { setSaving(false); return; }
       url = uploaded;
     }
-    const { data: { user } } = await supabase.auth.getUser();
-    const recordedBy = user?.id ?? FOUNDER_ID;
-
-    const payload: Record<string, unknown> = {
+    const r = await recordExpense({
       description,
       category:   exCategory,
       vendor:     exVendor.trim() || null,
       amount_bsd: amt,
       due_date:   exDueDate || null,
       notes:      url ? `Invoice photo: ${url}` : null,
-      recorded_by: recordedBy,
-    };
-    if (exPaidNow) payload.paid_at = new Date().toISOString();
-
-    const { error } = await supabase.from('expenses').insert(payload);
+      paid_now:   exPaidNow,
+    });
     setSaving(false);
-    if (error) { showToast(false, 'Save failed: ' + error.message); return; }
+    if (!r.ok) { showToast(false, 'Save failed: ' + (r.error ?? 'unknown error')); return; }
     showToast(true, 'Expense recorded.');
     resetAll();
   }

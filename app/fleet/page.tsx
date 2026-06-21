@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { useServerSave } from '@/lib/useServerSave';
 
 export const dynamic = 'force-dynamic';
 
@@ -455,6 +456,7 @@ function MaintForm({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: (
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const { save: recordExpense } = useServerSave('/api/finance/record-expense');
 
   async function submit(ev: React.FormEvent) {
     ev.preventDefault();
@@ -474,18 +476,17 @@ function MaintForm({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: (
     });
     if (error) { setErr(error.message); setBusy(false); return; }
 
-    // Mirror as expense in maintenance category. Fails-soft.
-    supabase.from('expenses').insert({
+    // Mirror as expense in maintenance category (server-authoritative). Fails-soft.
+    recordExpense({
       description: `Maintenance · ${vehicle.name} · ${type.replace('_', ' ')}`,
       category: 'maintenance',
       vendor: vehicle.name,
       amount_bsd: parseFloat(cost) || 0,
-      due_date: performed,
-      paid_at: new Date().toISOString(),
+      due_date: performed || null,
+      paid_now: true,
       payment_method: 'cash',
-      recorded_by: user?.id ?? null,
       notes: `Auto from fleet maintenance · ${description.trim()}`,
-    }).then((r) => { if (r.error) console.warn('Expense mirror failed:', r.error); });
+    }).then((r) => { if (!r.ok) console.warn('Expense mirror failed:', r.error); });
 
     // Update vehicle current_mileage if higher
     if (mileage && (!vehicle.current_mileage || parseInt(mileage, 10) > vehicle.current_mileage)) {
@@ -546,6 +547,7 @@ function FuelForm({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: ()
   const [station, setStation] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const { save: recordExpense } = useServerSave('/api/finance/record-expense');
 
   async function submit(ev: React.FormEvent) {
     ev.preventDefault();
@@ -562,17 +564,16 @@ function FuelForm({ vehicle, onClose, onSaved }: { vehicle: Vehicle; onClose: ()
     });
     if (error) { setErr(error.message); setBusy(false); return; }
 
-    // Mirror as transport expense. Fails-soft.
-    supabase.from('expenses').insert({
+    // Mirror as transport expense (server-authoritative). Fails-soft.
+    recordExpense({
       description: `Fuel · ${vehicle.name} · ${gallons} gal`,
       category: 'transport',
       vendor: station.trim() || vehicle.name,
       amount_bsd: parseFloat(cost),
       due_date: new Date().toISOString().slice(0, 10),
-      paid_at: new Date().toISOString(),
+      paid_now: true,
       payment_method: 'cash',
-      recorded_by: user?.id ?? null,
-    }).then((r) => { if (r.error) console.warn('Expense mirror failed:', r.error); });
+    }).then((r) => { if (!r.ok) console.warn('Expense mirror failed:', r.error); });
 
     if (mileage && (!vehicle.current_mileage || parseInt(mileage, 10) > vehicle.current_mileage)) {
       await supabase.from('fleet_vehicles').update({ current_mileage: parseInt(mileage, 10), updated_at: new Date().toISOString() }).eq('id', vehicle.id);

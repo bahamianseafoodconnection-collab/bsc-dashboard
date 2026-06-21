@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { plainError } from '@/lib/plain-error';
+import { useServerSave } from '@/lib/useServerSave';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,10 @@ export default function PayrollPage() {
   const [deductions, setDeductions] = useState('0');
   const [notes, setNotes] = useState('');
 
+  // Phase 5: payroll create + mark-paid route through server-authoritative APIs.
+  const { save: recordPayroll } = useServerSave('/api/finance/record-payroll');
+  const { save: markPaidServer } = useServerSave('/api/finance/mark-paid');
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -105,28 +110,21 @@ export default function PayrollPage() {
     if (computedGross <= 0) { setFormError('Gross pay must be greater than zero.'); return; }
     setSubmitting(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const payload: Record<string, unknown> = {
+    const r = await recordPayroll({
       staff_user_id: staffUserId || null,
       staff_name: staffName.trim(),
       pay_period_start: periodStart,
       pay_period_end: periodEnd,
       gross_pay: round2(computedGross),
       deductions: round2(parseFloat(deductions) || 0),
-      net_pay: round2(computedNet),
       notes: notes.trim() || null,
-      recorded_by: user?.id ?? null,
-    };
-    if (mode === 'hourly') {
-      payload.hours = parseFloat(hours) || 0;
-      payload.hourly_rate = parseFloat(rate) || 0;
-    } else {
-      payload.salary_amount = parseFloat(salary) || 0;
-    }
-
-    const { error: err } = await supabase.from('payroll_entries').insert(payload);
+      mode,
+      hours: mode === 'hourly' ? (parseFloat(hours) || 0) : undefined,
+      hourly_rate: mode === 'hourly' ? (parseFloat(rate) || 0) : undefined,
+      salary_amount: mode === 'salary' ? (parseFloat(salary) || 0) : undefined,
+    });
     setSubmitting(false);
-    if (err) { setFormError(err.message); return; }
+    if (!r.ok) { setFormError(r.error ?? 'Could not record payroll'); return; }
     resetForm();
     setShowForm(false);
     await load();
@@ -138,35 +136,11 @@ export default function PayrollPage() {
     );
     if (!method) return;
     const ref = window.prompt('Payment reference (check #, transfer ref)?', '') || null;
-    const nowIso = new Date().toISOString();
-    const { data: { user } } = await supabase.auth.getUser();
 
-    const { error: payErr } = await supabase
-      .from('payroll_entries')
-      .update({
-        paid_at: nowIso,
-        payment_method: method,
-        payment_ref: ref,
-        updated_at: nowIso,
-      })
-      .eq('id', entry.id);
-    if (payErr) { alert(`Could not mark paid: ${plainError(payErr)}`); return; }
-
-    // Mirror as an expenses row in the payroll category. Fails-soft.
-    await supabase.from('expenses').insert({
-      description: `Payroll · ${entry.staff_name} · ${entry.pay_period_start} to ${entry.pay_period_end}`,
-      category: 'payroll',
-      vendor: entry.staff_name,
-      amount_bsd: entry.net_pay,
-      due_date: entry.pay_period_end,
-      paid_at: nowIso,
-      payment_method: method,
-      payment_ref: ref,
-      recorded_by: user?.id ?? null,
-      notes: `Auto-generated from payroll entry ${entry.id}`,
-    }).then((r) => {
-      if (r.error) console.warn('Expenses mirror failed:', r.error);
-    });
+    // Server-authoritative: flips paid_at + mirrors an expenses row (reading
+    // the entry's amounts server-side so the mirror can't be client-forged).
+    const r = await markPaidServer({ kind: 'payroll_entry', id: entry.id, method, ref });
+    if (!r.ok) { alert(`Could not mark paid: ${r.error ?? 'unknown error'}`); return; }
 
     await load();
   }

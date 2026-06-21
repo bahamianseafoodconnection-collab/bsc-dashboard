@@ -15,6 +15,7 @@
 //   • utility_payment   { id = utility_payments.id }               → marks it completed.
 //   • expense           { id, method, ref }                        → marks expense paid (paid_at = now).
 //   • purchase_invoice  { id, amount, method, ref }                → records an invoice_payments row + zeroes balance.
+//   • payroll_entry     { id, method, ref }                        → marks payroll paid + mirrors an expenses row.
 // Resp: { ok, kind, affected }
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,7 +26,7 @@ export const dynamic = 'force-dynamic';
 
 // Matches the finance pages' client gate (basic_admin/control_admin/founder/co_founder).
 const ALLOWED_ROLES = new Set(['founder', 'co_founder', 'control_admin', 'basic_admin']);
-const KINDS = new Set(['supplier_payout', 'utility_payment', 'expense', 'purchase_invoice']);
+const KINDS = new Set(['supplier_payout', 'utility_payment', 'expense', 'purchase_invoice', 'payroll_entry']);
 
 export async function POST(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
         .select('id');
       if (error) err = error.message; else affected = (data ?? []).length;
 
-    } else { // purchase_invoice
+    } else if (kind === 'purchase_invoice') {
       // Record the payment row (best-effort — same fallback the page had),
       // then zero the balance + flip status authoritatively.
       const { error: payErr } = await admin.from('invoice_payments').insert({
@@ -110,6 +111,42 @@ export async function POST(req: NextRequest) {
         .eq('id', id)
         .select('id');
       if (error) err = error.message; else affected = (data ?? []).length;
+
+    } else { // payroll_entry
+      // Read the entry server-side so the mirrored expense amount can't be
+      // client-forged, then mark paid + mirror to expenses (fails-soft).
+      const { data: entry, error: readErr } = await admin
+        .from('payroll_entries')
+        .select('id, staff_name, net_pay, pay_period_start, pay_period_end, paid_at')
+        .eq('id', id)
+        .maybeSingle<{ id: string; staff_name: string; net_pay: number; pay_period_start: string; pay_period_end: string; paid_at: string | null }>();
+      if (readErr || !entry) { err = readErr?.message ?? 'Payroll entry not found'; }
+      else {
+        const { data, error } = await admin
+          .from('payroll_entries')
+          .update({ paid_at: nowIso, payment_method: method, payment_ref: ref, updated_at: nowIso })
+          .eq('id', id)
+          .select('id');
+        if (error) err = error.message; else affected = (data ?? []).length;
+
+        if (!err && !entry.paid_at) {
+          // Mirror as an expenses row in the payroll category — only on the
+          // first paid flip (entry wasn't already paid), to avoid duplicates.
+          const { error: mirrorErr } = await admin.from('expenses').insert({
+            description:    `Payroll · ${entry.staff_name} · ${entry.pay_period_start} to ${entry.pay_period_end}`,
+            category:       'payroll',
+            vendor:         entry.staff_name,
+            amount_bsd:     entry.net_pay,
+            due_date:       entry.pay_period_end,
+            paid_at:        nowIso,
+            payment_method: method,
+            payment_ref:    ref,
+            recorded_by:    user.id,
+            notes:          `Auto-generated from payroll entry ${entry.id}`,
+          });
+          if (mirrorErr) console.warn('payroll→expenses mirror failed (non-fatal):', mirrorErr.message);
+        }
+      }
     }
   } catch (e) {
     err = e instanceof Error ? e.message : 'update failed';
