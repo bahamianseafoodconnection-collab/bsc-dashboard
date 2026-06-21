@@ -88,9 +88,10 @@ export async function POST(req: NextRequest) {
       if (error) err = error.message; else affected = (data ?? []).length;
 
     } else if (kind === 'expense') {
+      // expenses has only paid_at (no payment_method/payment_ref/updated_at columns).
       const { data, error } = await admin
         .from('expenses')
-        .update({ paid_at: nowIso, payment_method: method, payment_ref: ref, updated_at: nowIso })
+        .update({ paid_at: nowIso })
         .eq('id', id)
         .select('id');
       if (error) err = error.message; else affected = (data ?? []).length;
@@ -102,7 +103,6 @@ export async function POST(req: NextRequest) {
         invoice_id:  id,
         amount:      amount ?? 0,
         note:        ref ? `${method ?? 'payment'} · ref ${ref}` : (method ?? 'payment'),
-        recorded_by: user.id,
       });
       if (payErr) console.warn('invoice_payments insert failed (non-fatal, zeroing balance):', payErr.message);
       const { data, error } = await admin
@@ -115,16 +115,18 @@ export async function POST(req: NextRequest) {
     } else { // payroll_entry
       // Read the entry server-side so the mirrored expense amount can't be
       // client-forged, then mark paid + mirror to expenses (fails-soft).
+      // payroll_entries lean schema: period_start/period_end, net_pay, paid_at
+      // (no staff_name / pay_period_* / payment_method / payment_ref / updated_at).
       const { data: entry, error: readErr } = await admin
         .from('payroll_entries')
-        .select('id, staff_name, net_pay, pay_period_start, pay_period_end, paid_at')
+        .select('id, net_pay, period_start, period_end, paid_at')
         .eq('id', id)
-        .maybeSingle<{ id: string; staff_name: string; net_pay: number; pay_period_start: string; pay_period_end: string; paid_at: string | null }>();
+        .maybeSingle<{ id: string; net_pay: number; period_start: string; period_end: string; paid_at: string | null }>();
       if (readErr || !entry) { err = readErr?.message ?? 'Payroll entry not found'; }
       else {
         const { data, error } = await admin
           .from('payroll_entries')
-          .update({ paid_at: nowIso, payment_method: method, payment_ref: ref, updated_at: nowIso })
+          .update({ paid_at: nowIso })
           .eq('id', id)
           .select('id');
         if (error) err = error.message; else affected = (data ?? []).length;
@@ -132,17 +134,16 @@ export async function POST(req: NextRequest) {
         if (!err && !entry.paid_at) {
           // Mirror as an expenses row in the payroll category — only on the
           // first paid flip (entry wasn't already paid), to avoid duplicates.
+          // expenses lean schema: created_by, amount_bsd, notes, paid_at, due_date.
+          const payNote = ref ? `${method ?? 'payment'} · ref ${ref}` : (method ?? 'payment');
           const { error: mirrorErr } = await admin.from('expenses').insert({
-            description:    `Payroll · ${entry.staff_name} · ${entry.pay_period_start} to ${entry.pay_period_end}`,
-            category:       'payroll',
-            vendor:         entry.staff_name,
-            amount_bsd:     entry.net_pay,
-            due_date:       entry.pay_period_end,
-            paid_at:        nowIso,
-            payment_method: method,
-            payment_ref:    ref,
-            recorded_by:    user.id,
-            notes:          `Auto-generated from payroll entry ${entry.id}`,
+            description: `Payroll · ${entry.period_start} to ${entry.period_end}`,
+            category:    'payroll',
+            amount_bsd:  entry.net_pay,
+            due_date:    entry.period_end,
+            paid_at:     nowIso,
+            created_by:  user.id,
+            notes:       `Auto-generated from payroll entry ${entry.id} · ${payNote}`,
           });
           if (mirrorErr) console.warn('payroll→expenses mirror failed (non-fatal):', mirrorErr.message);
         }

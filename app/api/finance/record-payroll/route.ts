@@ -63,23 +63,19 @@ export async function POST(req: NextRequest) {
   if (!(gross > 0)) return NextResponse.json({ ok: false, error: 'gross pay must be greater than zero' }, { status: 400 });
   const net = Math.max(0, gross - deductions);
 
+  // Live `payroll_entries` schema is lean: staff_id, period_start, period_end,
+  // gross_pay, deductions, net_pay, paid_at — and NO staff_user_id / staff_name /
+  // pay_period_* / hours / hourly_rate / salary_amount / notes / recorded_by
+  // columns. Map to what exists; the computed gross/net carry the money.
   const row: Record<string, unknown> = {
-    staff_user_id:    typeof b.staff_user_id === 'string' && b.staff_user_id ? b.staff_user_id : null,
-    staff_name:       staffName,
-    pay_period_start: periodStart,
-    pay_period_end:   periodEnd,
-    gross_pay:        round2(gross),
-    deductions:       round2(deductions),
-    net_pay:          round2(net),
-    notes:            typeof b.notes === 'string' && b.notes.trim() ? b.notes.trim() : null,
-    recorded_by:      user.id,
+    staff_id:      typeof b.staff_user_id === 'string' && b.staff_user_id ? b.staff_user_id : null,
+    period_start:  periodStart,
+    period_end:    periodEnd,
+    gross_pay:     round2(gross),
+    deductions:    round2(deductions),
+    net_pay:       round2(net),
   };
-  if (mode === 'hourly') {
-    row.hours       = num(b.hours);
-    row.hourly_rate = num(b.hourly_rate);
-  } else {
-    row.salary_amount = num(b.salary_amount);
-  }
+  void staffName; // not stored — payroll_entries has no name column (join staff_id for display)
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 

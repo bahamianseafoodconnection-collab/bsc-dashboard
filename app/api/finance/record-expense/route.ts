@@ -59,21 +59,29 @@ export async function POST(req: NextRequest) {
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const nowIso = new Date().toISOString();
 
+  // Live `expenses` schema is lean: created_by (not recorded_by), amount_bsd,
+  // notes, paid_at, due_date — and NO payment_method/payment_ref/recurring_interval
+  // columns. Fold those into `notes` so nothing is lost, and use created_by.
+  const paidNow = b.paid_now === true;
+  const method  = paidNow ? (str(b.payment_method) ?? 'transfer') : null;
+  const ref     = paidNow ? str(b.payment_ref) : null;
+  const recurring = str(b.recurring_interval);
+  const noteParts = [
+    str(b.notes),
+    recurring ? `recurring: ${recurring}` : null,
+    paidNow ? `paid via ${method}${ref ? ` ref ${ref}` : ''}` : null,
+  ].filter(Boolean);
+
   const row: Record<string, unknown> = {
     description,
-    category:           str(b.category) ?? 'other',
-    vendor:             str(b.vendor),
-    amount_bsd:         amount,
-    due_date:           str(b.due_date),
-    recurring_interval: str(b.recurring_interval),
-    notes:              str(b.notes),
-    recorded_by:        user.id, // server-stamped from verified session
+    category:    str(b.category) ?? 'other',
+    vendor:      str(b.vendor),
+    amount_bsd:  amount,
+    due_date:    str(b.due_date),
+    notes:       noteParts.length ? noteParts.join(' · ') : null,
+    created_by:  user.id, // server-stamped from verified session
   };
-  if (b.paid_now === true) {
-    row.paid_at        = nowIso;
-    row.payment_method = str(b.payment_method) ?? 'transfer';
-    row.payment_ref    = str(b.payment_ref);
-  }
+  if (paidNow) row.paid_at = nowIso;
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
