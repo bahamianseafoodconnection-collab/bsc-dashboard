@@ -217,3 +217,31 @@ ROLLOUT (sequenced):
 4. Phase 8 User Management Save = server save via Supabase Auth admin API.
 
 RULE: no money/inventory/compliance write may go browser→RLS direct once its server route exists. Front-end is a thin view, never the source of truth.
+
+---
+
+## 2026-06-21 — PHASE 5 MONEY SWEEP PROGRESS + CORRECTED SEQUENCE + FOUNDER-AI→CLAUDE-CODE CONNECT (queued)
+
+**Shipped this session (server-authoritative, role-gated, ai_writes-audited):**
+- Batch 1 — `/api/finance/mark-paid` (supplier_payouts, utility_payments) ← app/jaquel. (f87bde5)
+- Batch 2 — mark-paid +expense/purchase_invoice kinds ← app/accounts-payable. (bb0672c)
+- Batch 3 — `/api/pricing/update-rule` (pricing_rules, pricing_config) ← /dashboard/pricing-rules. (b1d49aa)
+- Batch 4 — DELETED orphaned CardPaymentModal (client-side payment_receipts insert + orders paid-flip were dead but loaded; card authority = PnP return callbacks only). (e00c47e)
+- Batch 5 — `/api/finance/record-expense` + `/api/finance/record-payroll` + mark-paid 'payroll_entry' kind ← app/expenses, app/intake/scan-invoice, app/fleet, app/payroll. Server recomputes payroll gross/net; recorded_by server-stamped. (459d7c3)
+
+**Correction:** multi-line scan revealed the money surface is larger than the original per-table list — notably an `orders` write surface across 8 files not previously enumerated.
+
+**Remaining money-table sweep — CORRECTED SEQUENCE:**
+6. `orders` (8 files: pos, pos-andros, wholesale-orders, local-wholesale/[wholesaler], orders, pickup-queue, dashboard/ar-aging, products) — HIGHEST volume/stakes: every POS sale, wholesale order, AR flip. Some may already flow through /api/orders/place — verify per-file before rewiring.
+7. `product_costs` + `product_pricing` (founder-ai/products/pending, products, supplier, scan-invoice) — cost/price source of truth; preserve margin_multiplier=price/cost (F-B footgun).
+8. `purchase_invoices` (components/InvoiceScanner.tsx) — straggler beyond accounts-payable.
+
+**9. Founder AI → Claude Code connect (NEW — decided 2026-06-21, AFTER money sweep):**
+Goal: maintain / update / upgrade / scale the system from Founder AI in the founder dashboard via a one-button handoff to Claude Code.
+- UX: "🔌 Connect to Claude Code" button (founder/co_founder only) → terminal-style modal → ONE-TOUCH copy-paste launch block → founder pastes into their real terminal; Claude Code launches pointed at the prepared task.
+- ARCHITECTURE TRUTH: web↔CLI is a launch HANDOFF, not a live socket. Claude Code authenticates with the founder's OWN local Claude login — the copy block carries NO secrets (no API/service-role keys). Consistent with RBC-credential-handling rule.
+- CHOSEN: Secure-handoff variant (single SQL). Founder AI writes the task server-side; Claude Code fetches it via a short-lived (15-min) SINGLE-USE token (NOT a credential). Audited.
+- **STEP 1 SQL (run in SQL EDITOR when Batch 9 starts):** create `founder_code_handoffs` (id uuid pk, token_hash text, task text, created_by uuid, status text default 'pending', expires_at timestamptz, claimed_at timestamptz, created_at timestamptz default now()) + RLS founder/co_founder only + index on token_hash. Delivered on clipboard at build time.
+- Components: server route `/api/founder/code-handoff` (POST create → returns token+command; GET claim?token → returns task, marks used) + dashboard panel + terminal modal with copy block. Token hashed at rest; single-use; expiry enforced server-side.
+
+**SQL CONFIRMATION for founder's question:** the money-sweep Batches 6–8 need NO new SQL (routes only). Batch 9 connect needs exactly ONE SQL EDITOR step (the founder_code_handoffs table above), delivered when we build it.
