@@ -18,11 +18,13 @@
 // All product writes go through existing endpoints — /api/admin/products/:id
 // for disable + channel updates. No new backend code, just a tighter UI.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import { canLock, useUserRole } from '@/lib/role';
+import { useServerSave } from '@/lib/useServerSave';
+import { SaveButton } from '@/components/SaveButton';
 
 interface Supplier {
   id: string;
@@ -166,6 +168,10 @@ export default function SupplierDetailPage() {
     loading: boolean; error: string | null; products: ExtractedProduct[];
     importing: boolean; diagnostic: ExtractDiagnostic | null; progress?: string | null;
   }>(null);
+  // Universal server-authoritative Save — persists the reviewed extract set to a
+  // durable draft so edits survive closing the modal (D2 / Phase 5).
+  const { save: saveDraft, state: draftState } = useServerSave('/api/supplier/save-extract-draft');
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Full-screen product editor — opens when you tap a product card
   const [editingProduct, setEditingProduct] = useState<SupplierProduct | null>(null);
   const [editForm, setEditForm] = useState<ProductEditForm | null>(null);
@@ -315,6 +321,18 @@ export default function SupplierDetailPage() {
   }, [id, supabase]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Debounced auto-save: every edit to the reviewed extract rows is captured to
+  // the durable draft 1.5s after typing stops — so closing the modal never
+  // loses work. The explicit Save button below the grid does the same on demand.
+  useEffect(() => {
+    const rows = extractModal?.products;
+    if (!supplier || !extractModal || extractModal.loading || !rows || rows.length === 0) return;
+    const supplierId = supplier.id;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => { void saveDraft({ supplier_id: supplierId, rows }); }, 1500);
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, [extractModal?.products, extractModal?.loading, supplier, saveDraft]);
 
   // ── Pricelist upload (reuses the same bucket + suppliers columns) ──
   async function uploadPricelist(file: File) {
@@ -488,10 +506,11 @@ export default function SupplierDetailPage() {
     }
   }
 
-  // ── Extract products from pricelist (Claude → review → bulk import) ──
+  // ── Open the extract modal: resume the saved draft if one exists, else do a
+  //    fresh Claude extraction. Resuming is what makes edits survive a close. ──
   async function startExtract() {
     if (!supplier) return;
-    setExtractModal({ loading: true, error: null, products: [], importing: false, diagnostic: null, progress: 'Reading the PDF with Claude…' });
+    setExtractModal({ loading: true, error: null, products: [], importing: false, diagnostic: null, progress: 'Loading…' });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -499,36 +518,59 @@ export default function SupplierDetailPage() {
         setExtractModal({ loading: false, error: 'Sign-in expired — refresh.', products: [], importing: false, diagnostic: null });
         return;
       }
-      // Extract ALL pages (chunked — follows the next_start_page cursor), with
-      // live progress shown in the modal's loading area.
-      const ex = await extractAllPages(token, (msg) =>
-        setExtractModal(prev => prev ? { ...prev, progress: msg } : prev));
-      if (!ex.ok) {
-        setExtractModal({ loading: false, error: ex.error, products: [], importing: false, diagnostic: null });
-        return;
-      }
-      const isWP = supplier.supplier_type === 'wholesale_partner';
-      const rows: ExtractedProduct[] = ex.products.map((p) => ({
-        ...p,
-        sku:           p.suggested_sku,
-        category:      p.suggested_category,
-        skip:          p.cost_per_unit == null,
-        image_url:     '',
-        sell_nassau:   true,
-        sell_andros:   false,
-        sell_online:   false,
-        sell_wholesale: isWP,
-      }));
-      setExtractModal({
-        loading: false, error: null, products: rows, importing: false,
-        diagnostic: ex.diagnostic,
-      });
+      // Resume a saved draft if present — reviewed edits survive modal close.
+      try {
+        const dRes = await fetch(`/api/supplier/save-extract-draft?supplier_id=${supplier.id}`, {
+          headers: { Authorization: `Bearer ${token}` }, cache: 'no-store',
+        });
+        const d = (await dRes.json().catch(() => ({}))) as { ok?: boolean; rows?: unknown };
+        if (dRes.ok && d.ok && Array.isArray(d.rows) && d.rows.length > 0) {
+          setExtractModal({ loading: false, error: null, products: d.rows as ExtractedProduct[], importing: false, diagnostic: null });
+          showToast(`Resumed ${d.rows.length} saved row${d.rows.length === 1 ? '' : 's'} — tap 🔄 Re-extract for a fresh read.`);
+          return;
+        }
+      } catch { /* no draft → fresh extract below */ }
+      await runFreshExtract(token);
     } catch (e) {
       setExtractModal({
         loading: false, error: e instanceof Error ? e.message : 'Extract failed',
         products: [], importing: false, diagnostic: null,
       });
     }
+  }
+
+  // Fresh Claude extraction of the uploaded pricelist (first open + Re-extract).
+  async function runFreshExtract(token: string) {
+    if (!supplier) return;
+    setExtractModal({ loading: true, error: null, products: [], importing: false, diagnostic: null, progress: 'Reading the PDF with Claude…' });
+    const ex = await extractAllPages(token, (msg) =>
+      setExtractModal(prev => prev ? { ...prev, progress: msg } : prev));
+    if (!ex.ok) {
+      setExtractModal({ loading: false, error: ex.error, products: [], importing: false, diagnostic: null });
+      return;
+    }
+    const isWP = supplier.supplier_type === 'wholesale_partner';
+    const rows: ExtractedProduct[] = ex.products.map((p) => ({
+      ...p,
+      sku:           p.suggested_sku,
+      category:      p.suggested_category,
+      skip:          p.cost_per_unit == null,
+      image_url:     '',
+      sell_nassau:   true,
+      sell_andros:   false,
+      sell_online:   false,
+      sell_wholesale: isWP,
+    }));
+    setExtractModal({ loading: false, error: null, products: rows, importing: false, diagnostic: ex.diagnostic });
+  }
+
+  async function reExtract() {
+    if (!supplier) return;
+    if (!confirm('Re-read the pricelist with Claude? This replaces the current reviewed rows in the modal.')) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { showToast('Sign-in expired — refresh.', false); return; }
+    await runFreshExtract(token);
   }
   function patchExtractRow(idx: number, patch: Partial<ExtractedProduct>) {
     setExtractModal(prev => prev ? {
@@ -566,6 +608,7 @@ export default function SupplierDetailPage() {
       }
       const failed = (j.failed ?? []) as Array<unknown>;
       showToast(`📦 Imported ${j.inserted} product${j.inserted === 1 ? '' : 's'}${failed.length ? ` · ${failed.length} failed` : ''}`);
+      void saveDraft({ supplier_id: supplier.id, rows: [] }); // drain the draft now it's imported
       setExtractModal(null);
       await load();
     } catch (e) {
@@ -1127,15 +1170,29 @@ export default function SupplierDetailPage() {
                   </table>
                 )}
               </div>
-              <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
                   {extractModal.products.filter(p => !p.skip).length} of {extractModal.products.length} will be imported
+                  {draftState === 'saving' && <span style={{ color: '#fbbf24', marginLeft: 8 }}>· saving draft…</span>}
+                  {draftState === 'saved'  && <span style={{ color: '#4ade80', marginLeft: 8 }}>· draft saved ✓</span>}
+                  {draftState === 'error'  && <span style={{ color: '#fca5a5', marginLeft: 8 }}>· draft save failed</span>}
                 </div>
-                <button onClick={importExtracted}
-                  disabled={extractModal.importing || extractModal.loading || extractModal.products.length === 0}
-                  style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 900, fontSize: 13, cursor: (extractModal.importing || extractModal.loading) ? 'wait' : 'pointer', opacity: (extractModal.importing || extractModal.loading || extractModal.products.length === 0) ? 0.5 : 1 }}>
-                  {extractModal.importing ? 'Importing…' : `✓ Import ${extractModal.products.filter(p => !p.skip).length} products`}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {supplier.pricelist_url && (
+                    <button onClick={reExtract} disabled={extractModal.loading || extractModal.importing}
+                      style={{ background: 'transparent', color: '#c084fc', border: '1px solid rgba(168,85,247,0.4)', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700, cursor: (extractModal.loading || extractModal.importing) ? 'not-allowed' : 'pointer', opacity: (extractModal.loading || extractModal.importing) ? 0.5 : 1 }}>
+                      🔄 Re-extract
+                    </button>
+                  )}
+                  <SaveButton state={draftState} label="💾 Save draft"
+                    disabled={extractModal.loading || extractModal.importing || extractModal.products.length === 0}
+                    onClick={() => { if (supplier) void saveDraft({ supplier_id: supplier.id, rows: extractModal.products }); }} />
+                  <button onClick={importExtracted}
+                    disabled={extractModal.importing || extractModal.loading || extractModal.products.length === 0}
+                    style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 900, fontSize: 13, cursor: (extractModal.importing || extractModal.loading) ? 'wait' : 'pointer', opacity: (extractModal.importing || extractModal.loading || extractModal.products.length === 0) ? 0.5 : 1 }}>
+                    {extractModal.importing ? 'Importing…' : `✓ Import ${extractModal.products.filter(p => !p.skip).length} products`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

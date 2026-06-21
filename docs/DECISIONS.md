@@ -192,3 +192,28 @@ DOCUMENT STATUS: Draft written, ready for Bahamian attorney review before signin
 # 2026-06-20 — STEP 1 SHIPPED
 
 2026-06-20 — STEP 1 SHIPPED: bulk-add-products pricing route (commit 8b5371b) merged to main + deployed to production www.bscbahamas.com. Math SQL-proven via Supabase SQL Editor (×0.93 landed cost, margin=price/cost, no 1.0 footgun) — NOT yet verified via authenticated route call. Route runtime behavior (auth/parsing/ai_writes audit/packing flag/category coercion) logged as 5 post-merge checks in PIPELINE_BUILD_CHECKLIST.md — verify in real use.
+
+---
+
+# 2026-06-21 — UNIVERSAL SERVER-AUTHORITATIVE SAVE STANDARD (D2 made real — must-have)
+
+DIRECTIVE: every new/edited piece of information across the platform is captured by a Save action that is server-authoritative — front-end reflects, backend enforces + locks + audits. This is D2 operationalized, and Phase 5's "canonical persist primitive". It was decided but never built; building now.
+
+SYSTEM SCAN (2026-06-21, 4 parallel agents):
+- 120 browser-direct writes across 53 tables (the sweep surface). Money/inventory first: orders, products, suppliers, product_pricing/costs, expenses, supplier_payouts, payments, vendors, purchase_orders, yield_lots.
+- ~75 server-auth API routes exist but each hand-rolled — NO reusable Save primitive existed (no useServerSave hook, no SaveButton, no shared persist layer). Reference pattern: app/api/supplier/add-product/route.ts; cleanest audited example: app/api/pos/save-customer/route.ts.
+- Pricelist review modal was the worst offender: extracted/edited rows lived ONLY in React state (extractModal.products) — lost on modal close. No durable save, no lock, no per-product approve gate between Extract and Import.
+
+BUILT 2026-06-21 (foundation):
+- lib/useServerSave.ts — universal client Save hook (posts to a role-gated server route; never writes DB directly; surfaces idle→saving→saved/error).
+- components/SaveButton.tsx — universal Save button reflecting that state.
+- app/api/supplier/save-extract-draft/route.ts — server-authoritative durable save + lock + ai_writes audit for the pricelist reviewed set (POST upsert/lock, GET load).
+- supabase/migrations/20260621__supplier_extract_drafts.sql — supplier_extract_drafts staging table (RLS on, service-role only).
+
+ROLLOUT (sequenced):
+1. Wire the pricelist modal to useServerSave: auto-save reviewed edits to the draft + a visible Save button below the extraction that locks front+back; hydrate from the draft on reopen. (Your exact ask.)
+2. Per-product approve / edit / image — confirm on the detail page; add the Gate-2 Enable-Live (4d) so saved products go live per-product.
+3. Sweep the 120 browser-direct writes onto the primitive in money-first batches; lock flagged surfaces (app/ashley terminated, sql-editor → founder only).
+4. Phase 8 User Management Save = server save via Supabase Auth admin API.
+
+RULE: no money/inventory/compliance write may go browser→RLS direct once its server route exists. Front-end is a thin view, never the source of truth.
