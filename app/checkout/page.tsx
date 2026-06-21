@@ -18,7 +18,6 @@ import {
   ONLINE_MARGIN,
   type OverheadMetrics,
 } from '@/lib/profit';
-import type { PaymentPayload } from '@/components/CardPaymentModal';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import { type SaleUnit, ONLINE_DELIVERY_FEE } from '@/lib/pricing';
 
@@ -312,27 +311,6 @@ function CheckoutInner() {
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
     );
   }
-
-  const payload: PaymentPayload = {
-    amount: subtotal,
-    fees: 0,
-    total,
-    description: `BSC Market Order - ${cart.length} item${cart.length !== 1 ? 's' : ''}`,
-    receiptType: 'shopping',
-    orderId: orderId || undefined,
-    metadata: {
-      items: cart.map((i) => ({
-        id: i.id,
-        source: i.source,
-        sku: i.sku,
-        name: i.name,
-        qty: i.qty,
-        unit: i.unit,
-        price: i.price,
-      })),
-      delivery: { name, phone, address, island, note },
-    },
-  };
 
   async function createOrder(): Promise<string> {
     const { data: { session } } = await supabase.auth.getSession();
