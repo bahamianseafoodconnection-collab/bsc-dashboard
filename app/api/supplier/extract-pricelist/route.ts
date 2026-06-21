@@ -21,6 +21,14 @@
 // TIMEOUT on a 33-page sheet. Keeping each invocation to a single Haiku call
 // (same workload the old single-call route survived) makes timeouts impossible.
 //
+// SKU FROM VENDOR ITEM NO (2026-06-21): SKUs used to be `<code>-<slug(name)>`
+// truncated to 24 chars, which collided for near-identical names (e.g.
+// "FL-LY'S REG 1/1Z" vs "FL-LY'S REG 1/1.5Z") — distinct lines collapsed to one
+// SKU and got de-duped / rejected by the unique constraint on import. We now
+// ask Claude for the leftmost ITEM NO column and build `<code>-<item_no>`,
+// which is unique per line. Falls back to the name slug only when no item
+// number is present.
+//
 // Body: { supplier_id: UUID, start_page?: number }   // start_page 0-based, default 0
 // Resp: {
 //   ok: true,
@@ -135,6 +143,18 @@ function parseBatchRows(rawText: string, sup: { code: string }): { products: Ext
                    ? r.suggested_category.trim() : 'Other';
     const raw  = typeof r.raw_line === 'string' ? r.raw_line : '';
     const note = typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim() : null;
+
+    // SKU from the vendor ITEM NO (unique per line). item_no may arrive as a
+    // string ("01990", "MS165I") or, if Claude dropped leading zeros, a number.
+    // Sanitize to alphanumerics + uppercase. Fall back to the name slug only
+    // when there's no item number to key on.
+    const itemNoRaw = typeof r.item_no === 'string' ? r.item_no.trim()
+                    : (typeof r.item_no === 'number' && Number.isFinite(r.item_no)) ? String(r.item_no) : '';
+    const itemNo = itemNoRaw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const suggestedSku = (itemNo
+      ? `${sup.code}-${itemNo}`
+      : `${sup.code}-${slugifyForSku(name)}`).slice(0, 64);
+
     return {
       raw_line:           raw,
       name,
@@ -142,7 +162,7 @@ function parseBatchRows(rawText: string, sup: { code: string }): { products: Ext
       pack_size:          pack,
       cost_per_unit:      cost,
       suggested_category: cat,
-      suggested_sku:      `${sup.code}-${slugifyForSku(name)}`.slice(0, 64),
+      suggested_sku:      suggestedSku,
       notes:              note,
     };
   }).filter(p => p.name); // drop rows without a name
@@ -318,7 +338,7 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `start_page ${startPage} is past the last page (total ${totalPages}).` }, { status: 400 });
   }
 
-  // ── prompt (unchanged from the single-call version) ──
+  // ── prompt ──
   const prompt = `You are extracting BSC's wholesale cost per product from a supplier pricelist PDF.
 
 Supplier: ${sup.name} (BSC code: ${sup.code})
@@ -330,6 +350,7 @@ Return ONLY valid JSON. No markdown, no backticks. Format:
 {
   "products": [
     {
+      "item_no": "the exact ITEM NO column value as a STRING (preserve leading zeros and letters, e.g. \\"01990\\" or \\"MS165I\\"); null if the pricelist has no item-number column",
       "raw_line": "the exact text line as it appears in the PDF",
       "name": "normalized Title Case product name with no quantity suffix",
       "unit_of_measure": "one of: lb, case, each, kg, gallon, bottle, bag, box, dozen",
@@ -342,6 +363,7 @@ Return ONLY valid JSON. No markdown, no backticks. Format:
 }
 
 Rules:
+- item_no is the supplier's own product/item number, usually the leftmost ITEM NO column. Copy it EXACTLY as a string, preserving leading zeros and letters. If there is no such column, use null.
 - Extract every distinct sellable product line. Skip section headers, totals, blank lines.
 - cost_per_unit is the BSD price BSC pays per unit_of_measure. If the pricelist shows "case $40 / 12 units", set unit_of_measure="case" and cost_per_unit=40.00.
 - Title Case names. Strip vendor codes and pack quantities out of the name and into pack_size.
