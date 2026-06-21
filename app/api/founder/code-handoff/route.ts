@@ -87,9 +87,11 @@ export async function POST(req: NextRequest) {
   const origin = req.headers.get('origin') ?? req.nextUrl.origin ?? 'https://bscbahamas.com';
   // One-touch launch: pull latest, then start Claude Code with the task fetched
   // via the single-use token. No secrets — Claude Code uses the local login.
+  // curl -sL: follow the apex→www canonical redirect so the task always fetches
+  // (a bare curl -s would return the redirect body and break the prompt).
   const command =
     `cd ${REPO_PATH} && git pull --ff-only && ` +
-    `claude "$(curl -s '${origin}/api/founder/code-handoff?token=${token}&format=text')"`;
+    `claude "$(curl -sL '${origin}/api/founder/code-handoff?token=${token}&format=text')"`;
 
   return NextResponse.json({ ok: true, token, command, expires_at: expiresAt });
 }
