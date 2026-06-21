@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import BriefPanel from './BriefPanel'
+import ConnectClaudeCode from '@/components/ConnectClaudeCode'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -204,6 +205,9 @@ export default function FounderAIPage() {
                 BSC Founder <span style={{ color: '#f5c518' }}>AI</span>
               </h1>
               <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>Global Seafood Intelligence Engine</p>
+            </div>
+            <div style={{ marginLeft: 'auto' }}>
+              <ConnectClaudeCode />
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '2px' }}>
