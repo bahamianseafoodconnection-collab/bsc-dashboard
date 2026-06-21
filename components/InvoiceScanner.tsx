@@ -1,12 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { useServerSave } from '@/lib/useServerSave';
 
 type LocationKey = 'nassau' | 'andros' | 'online' | 'all';
 
@@ -30,6 +25,10 @@ export default function InvoiceScanner() {
   const [result, setResult]         = useState<{bscKeeps: number; supplierOwed: number; summary: string} | null>(null);
   const cameraRef                   = useRef<HTMLInputElement>(null);
   const fileRef                     = useRef<HTMLInputElement>(null);
+
+  // Phase 5 batch 8: the purchase_invoices record is written server-side
+  // (role-gated + audited; totals re-derived there), not browser→RLS direct.
+  const { save: recordPurchaseInvoice } = useServerSave('/api/finance/record-purchase-invoice');
 
   function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -64,18 +63,14 @@ export default function InvoiceScanner() {
           summary: data.split.summary || 'Invoice processed.',
         });
 
-        // Save to Supabase
-        await supabase.from('purchase_invoices').insert([{
-          invoice_ref: `BSC-INV-${Date.now()}`,
+        // Persist server-side (role-gated + audited; total re-derived there).
+        const saved = await recordPurchaseInvoice({
           location: loc.label,
-          total_amount: total,
-          balance_owed: total * (1 - loc.margin),
-          status: 'unpaid',
-          items: data.split.items || [],
-          summary: data.split.summary || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }]);
+          margin:   loc.margin,
+          items:    data.split.items || [],
+          summary:  data.split.summary || '',
+        });
+        if (!saved.ok) { setError(`Could not save invoice: ${saved.error ?? 'unknown error'}`); setLoading(false); return; }
 
         setStep('done');
       } else {
