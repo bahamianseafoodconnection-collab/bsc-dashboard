@@ -10,12 +10,16 @@
 //
 // CHUNKED EXTRACTION (2026-06-21): a single whole-PDF call capped at
 // max_tokens 8192 silently truncated big pricelists (~99 rows of a 1000-item
-// sheet). Now the PDF is split server-side with pdf-lib into small page-range
-// batches; each batch is extracted in its own Haiku call and the rows are
-// accumulated + de-duped by suggested_sku, so EVERY product comes back. To
-// stay inside Vercel's 60s function cap, the loop stops when it runs low on
-// time and returns a `next_start_page` cursor (0-based); the UI passes that
-// back as `start_page` to resume. Cursor is null when all pages are done.
+// sheet). The PDF is now split server-side with pdf-lib into small page-range
+// batches.
+//
+// ONE BATCH PER INVOCATION (2026-06-21, fix): the route processes EXACTLY one
+// BATCH_PAGES-page batch per call and returns a `next_start_page` cursor; the
+// UI loops (start_page = next_start_page) until null, accumulating + de-duping
+// every page client-side. Earlier this loop lived INSIDE the route (many
+// batches per call) and blew the 60s function limit → FUNCTION_INVOCATION_
+// TIMEOUT on a 33-page sheet. Keeping each invocation to a single Haiku call
+// (same workload the old single-call route survived) makes timeouts impossible.
 //
 // Body: { supplier_id: UUID, start_page?: number }   // start_page 0-based, default 0
 // Resp: {
@@ -44,16 +48,12 @@ import { PDFDocument } from 'pdf-lib';
 
 export const runtime  = 'nodejs';
 export const dynamic  = 'force-dynamic';
-export const maxDuration = 60; // PDF extraction can run up to a minute
+export const maxDuration = 60; // single batch runs well under this
 
 const ALLOWED_ROLES = new Set(['founder', 'co_founder']);
-const MAX_ROWS = 200;          // per-batch prompt guidance; a 3-page batch never reaches it
+const MAX_ROWS = 200;          // per-batch prompt guidance; a few pages never reaches it
 const MODEL = 'claude-haiku-4-5-20251001';
-const BATCH_PAGES = 3;         // pages per Claude call — small enough that
-                               // 8192 output tokens never truncates a batch.
-const TIME_BUDGET_MS = 50_000; // stop starting new batches past this; leaves
-                               // ~10s under maxDuration=60 to finish the
-                               // in-flight batch + serialize the response.
+const BATCH_PAGES = 3;         // pages per call — one Haiku batch, well inside maxDuration.
 
 // Categories the UI offers — keep in sync with /admin/inventory category
 // selector. Used in the prompt so Claude picks from BSC's vocabulary.
@@ -171,7 +171,7 @@ async function callClaude(
       },
       body: JSON.stringify({
         model:      MODEL,
-        // 3-page batch fits well inside Haiku's 8192 output ceiling.
+        // A few pages fit well inside Haiku's 8192 output ceiling.
         max_tokens: 8192,
         messages: [{
           role: 'user',
@@ -221,7 +221,6 @@ export async function POST(req: NextRequest) {
 }
 
 async function handle(req: NextRequest) {
-  const startedAt = Date.now();
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -349,81 +348,64 @@ Rules:
 - If a line has unclear pricing, set cost_per_unit=null and explain in notes.
 - Cap at ${MAX_ROWS} products total. If the PDF has more, take the first ${MAX_ROWS} and add a note on the last row.`;
 
-  // ── batched extraction loop ──
-  // Split the PDF into BATCH_PAGES-page excerpts, extract each in its own
-  // Haiku call, accumulate rows, de-dupe by suggested_sku (falling back to
-  // raw_line) so a product whose text spans a page boundary isn't counted
-  // twice. Stop early on the time budget and hand back a resume cursor.
-  const accumulated: ExtractedProduct[] = [];
-  const seen = new Set<string>();
-  let totalRaw = 0;
-  let usageIn = 0, usageOut = 0;
-  let firstPreview = '';
-  let nextStartPage: number | null = null;
+  // ── ONE batch per invocation: pages [startPage, endExcl) ──
+  // Copy this page range into a fresh PDF, run a single Haiku call, parse,
+  // and return a cursor. The UI re-calls with start_page = next_start_page
+  // until next_start_page is null. One Haiku call per invocation keeps each
+  // function well under maxDuration (no FUNCTION_INVOCATION_TIMEOUT).
+  const endExcl = Math.min(startPage + BATCH_PAGES, totalPages);
 
-  let page = startPage; // 0-based
-  while (page < totalPages) {
-    // Out of time budget → stop before a new batch, return cursor (0-based).
-    if (Date.now() - startedAt > TIME_BUDGET_MS) {
-      nextStartPage = page;
-      break;
-    }
-    const endExcl = Math.min(page + BATCH_PAGES, totalPages);
-
-    // Copy this page range [page, endExcl) into a fresh single-batch PDF.
-    let batchBase64: string;
-    try {
-      const sub = await PDFDocument.create();
-      const idxs = Array.from({ length: endExcl - page }, (_, k) => page + k);
-      const copied = await sub.copyPages(src, idxs);
-      copied.forEach((pg) => sub.addPage(pg));
-      const bytes = await sub.save();
-      batchBase64 = Buffer.from(bytes).toString('base64');
-    } catch (e) {
-      return NextResponse.json(
-        { ok: false, error: `Step=pdf-split (pages ${page}-${endExcl - 1}) — ${e instanceof Error ? `${e.name}: ${e.message}` : 'unknown'}` },
-        { status: 500 },
-      );
-    }
-
-    const batch = await callClaude(batchBase64, prompt, anthKey);
-    if (!batch.ok) {
-      return NextResponse.json({ ok: false, error: batch.error }, { status: batch.status });
-    }
-    usageIn  += batch.usage.input;
-    usageOut += batch.usage.output;
-    if (!firstPreview) firstPreview = batch.rawText.slice(0, 800);
-
-    const { products, rawCount } = parseBatchRows(batch.rawText, sup);
-    totalRaw += rawCount;
-    for (const p of products) {
-      const key = (p.suggested_sku || p.raw_line).toLowerCase();
-      if (key && seen.has(key)) continue; // page-boundary duplicate — keep first
-      if (key) seen.add(key);
-      accumulated.push(p);
-    }
-
-    page = endExcl;
+  let batchBase64: string;
+  try {
+    const sub = await PDFDocument.create();
+    const idxs = Array.from({ length: endExcl - startPage }, (_, k) => startPage + k);
+    const copied = await sub.copyPages(src, idxs);
+    copied.forEach((pg) => sub.addPage(pg));
+    const bytes = await sub.save();
+    batchBase64 = Buffer.from(bytes).toString('base64');
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: `Step=pdf-split (pages ${startPage}-${endExcl - 1}) — ${e instanceof Error ? `${e.name}: ${e.message}` : 'unknown'}` },
+      { status: 500 },
+    );
   }
-  // Loop completed all pages → no cursor. (Early break already set one.)
+
+  const batch = await callClaude(batchBase64, prompt, anthKey);
+  if (!batch.ok) {
+    return NextResponse.json({ ok: false, error: batch.error }, { status: batch.status });
+  }
+
+  // Parse + de-dupe within this batch by suggested_sku (fallback raw_line).
+  // The UI also de-dupes across batches against page-boundary overlap.
+  const { products: parsed, rawCount } = parseBatchRows(batch.rawText, sup);
+  const seen = new Set<string>();
+  const products: ExtractedProduct[] = [];
+  for (const p of parsed) {
+    const key = (p.suggested_sku || p.raw_line).toLowerCase();
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    products.push(p);
+  }
+
+  const nextStartPage = endExcl >= totalPages ? null : endExcl;
 
   return NextResponse.json({
     ok:       true,
     supplier: { id: sup.id, code: sup.code, name: sup.name },
-    products: accumulated,
+    products,
     next_start_page: nextStartPage,
     total_pages:     totalPages,
     // Diagnostic snapshot so the UI can show WHY products is empty when
     // it is — image-only PDF (low input_tokens), Claude refused to JSON
     // (claude_preview shows prose), valid JSON but empty array, etc.
-    diagnostic: accumulated.length === 0 ? {
-      raw_products_count: totalRaw,
-      claude_preview:     firstPreview,
+    diagnostic: products.length === 0 ? {
+      raw_products_count: rawCount,
+      claude_preview:     batch.rawText.slice(0, 800),
       pdf_bytes:          arrayBuf.byteLength,
     } : null,
     token_usage: {
-      input:  usageIn,
-      output: usageOut,
+      input:  batch.usage.input,
+      output: batch.usage.output,
     },
   });
 }
