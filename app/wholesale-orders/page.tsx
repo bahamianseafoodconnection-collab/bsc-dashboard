@@ -86,19 +86,24 @@ export default function WholesaleOrdersPage() {
     setLoading(false);
   }
 
+  async function adminUpdate(orderId: string, body: Record<string, unknown>): Promise<boolean> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/orders/admin-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ order_id: orderId, ...body }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.ok === false) { alert(`Update failed: ${j.error ?? `HTTP ${res.status}`}`); return false; }
+    return true;
+  }
+
   async function markPurchased(orderId: string) {
     setSaving(true);
-    await supabase
-      .from('orders')
-      .update({
-        admin_purchased:    true,
-        admin_purchased_at: new Date().toISOString(),
-        admin_notes:        notes,
-        status:             'processing',
-        updated_at:         new Date().toISOString(),
-      })
-      .eq('id', orderId);
+    // Server-authoritative (role-gated + audited); server stamps purchased_at + updated_at.
+    const ok = await adminUpdate(orderId, { status: 'processing', admin_notes: notes, admin_purchased: true });
     setSaving(false);
+    if (!ok) return;
     setSelectedOrder(null);
     setNotes('');
     setSuccess('Order marked as purchased.');
@@ -107,10 +112,8 @@ export default function WholesaleOrdersPage() {
   }
 
   async function updateNotes(orderId: string) {
-    await supabase
-      .from('orders')
-      .update({ admin_notes: notes, updated_at: new Date().toISOString() })
-      .eq('id', orderId);
+    const ok = await adminUpdate(orderId, { admin_notes: notes });
+    if (!ok) return;
     setSuccess('Notes saved.');
     setTimeout(() => setSuccess(''), 2000);
   }

@@ -352,12 +352,17 @@ export default function OrdersPage() {
     if (idx === -1 || idx === flow.length - 1) return;
     const next = flow[idx + 1];
     setLoading(true);
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: next })
-      .eq('id', order.id);
-    if (error) {
-      alert(`Could not advance status: ${plainError(error)}`);
+    // Server-authoritative status write (role-gated + audited). Same legacy
+    // vocabulary; the customer notification below is unchanged.
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/orders/admin-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ order_id: order.id, status: next }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.ok === false) {
+      alert(`Could not advance status: ${j.error ?? `HTTP ${res.status}`}`);
       setLoading(false);
       return;
     }
@@ -379,12 +384,15 @@ export default function OrdersPage() {
       alert('This order is locked. Unlock it first to cancel.');
       return;
     }
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'Cancelled' })
-      .eq('id', order.id);
-    if (error) {
-      alert(`Could not cancel order: ${plainError(error)}`);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/orders/admin-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ order_id: order.id, status: 'Cancelled' }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.ok === false) {
+      alert(`Could not cancel order: ${j.error ?? `HTTP ${res.status}`}`);
       return;
     }
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, status: 'Cancelled' } : o));

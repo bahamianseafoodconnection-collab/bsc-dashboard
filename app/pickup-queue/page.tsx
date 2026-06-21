@@ -138,9 +138,16 @@ export default function PickupQueuePage() {
     const next = nextStatus(o);
     if (!next) return;
     setBusyId(o.id);
-    const { error: err } = await supabase.from('orders').update({ status: next }).eq('id', o.id);
+    // Server-authoritative status write (role-gated + audited). Notification unchanged.
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/orders/admin-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ order_id: o.id, status: next }),
+    });
+    const j = await res.json().catch(() => ({}));
     setBusyId(null);
-    if (err) { alert(`Could not advance: ${plainError(err)}`); return; }
+    if (!res.ok || j.ok === false) { alert(`Could not advance: ${j.error ?? `HTTP ${res.status}`}`); return; }
     setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: next } : x)));
     notifyOrderStatusChange({
       orderId: o.id,

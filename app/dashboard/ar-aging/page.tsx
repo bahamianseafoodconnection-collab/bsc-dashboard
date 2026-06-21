@@ -376,12 +376,16 @@ function CustomerDrill({ customer, orders, markPaid, markBusy, onClose, onLinked
     if (!linkMatch || !isOrphan) return;
     setLinkBusy(true);
     const ids = orders.map(o => o.id);
-    const { error } = await supabase
-      .from('orders')
-      .update({ customer_id: linkMatch.id })
-      .in('id', ids);
+    // Server-authoritative batch customer-link (role-gated + audited).
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/orders/admin-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({ order_ids: ids, customer_id: linkMatch.id }),
+    });
+    const j = await res.json().catch(() => ({}));
     setLinkBusy(false);
-    if (error) { setLinkErr('Link failed: ' + error.message); return; }
+    if (!res.ok || j.ok === false) { setLinkErr('Link failed: ' + (j.error ?? `HTTP ${res.status}`)); return; }
     await onLinked();
   }
 
