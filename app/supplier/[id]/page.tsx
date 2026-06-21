@@ -163,7 +163,7 @@ export default function SupplierDetailPage() {
   const [pricelistBusy, setPricelistBusy] = useState(false);
   const [extractModal, setExtractModal] = useState<null | {
     loading: boolean; error: string | null; products: ExtractedProduct[];
-    importing: boolean; diagnostic: ExtractDiagnostic | null;
+    importing: boolean; diagnostic: ExtractDiagnostic | null; progress?: string | null;
   }>(null);
   // Full-screen product editor — opens when you tap a product card
   const [editingProduct, setEditingProduct] = useState<SupplierProduct | null>(null);
@@ -347,6 +347,64 @@ export default function SupplierDetailPage() {
     await load();
   }
 
+  // ── Chunked extraction: follow the route's next_start_page cursor ──
+  // Calls /api/supplier/extract-pricelist starting at page 0 and keeps going
+  // (start_page = next_start_page) until the route reports next_start_page=null,
+  // accumulating every page's rows into one array and de-duping by
+  // suggested_sku (fallback raw_line) against page-boundary overlap. Reports
+  // "Extracting… N products · page X of Y" via onProgress. Hard-guarded by a
+  // 100-iteration cap and a non-advancing-cursor stop so it can never spin.
+  async function extractAllPages(
+    token: string,
+    onProgress?: (msg: string) => void,
+  ): Promise<{ ok: true; products: ExtractedProduct[]; diagnostic: ExtractDiagnostic | null }
+          | { ok: false; error: string }> {
+    if (!supplier) return { ok: false, error: 'No supplier loaded.' };
+    const all: ExtractedProduct[] = [];
+    const seen = new Set<string>();
+    let firstDiagnostic: ExtractDiagnostic | null = null;
+    let startPage = 0;
+    const MAX_ITERS = 100;
+    for (let iter = 0; iter < MAX_ITERS; iter++) {
+      const res = await fetch('/api/supplier/extract-pricelist', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ supplier_id: supplier.id, start_page: startPage }),
+        cache:   'no-store',
+      });
+      const rawBody = await res.text();
+      let j: {
+        ok?: boolean; error?: string; products?: ExtractedProduct[];
+        diagnostic?: ExtractDiagnostic | null; next_start_page?: number | null; total_pages?: number;
+      };
+      try { j = JSON.parse(rawBody); }
+      catch { return { ok: false, error: `HTTP ${res.status} · non-JSON (first 400 chars): ${rawBody.slice(0, 400)}` }; }
+      if (!res.ok || !j.ok) return { ok: false, error: j.error || `HTTP ${res.status}` };
+      if (iter === 0) firstDiagnostic = (j.diagnostic ?? null) as ExtractDiagnostic | null;
+
+      for (const p of (j.products ?? [])) {
+        const key = (p.suggested_sku || p.raw_line || '').toLowerCase();
+        if (key && seen.has(key)) continue; // defensive client-side dedupe (page-boundary overlap)
+        if (key) seen.add(key);
+        all.push(p);
+      }
+
+      const next  = j.next_start_page;
+      const total = j.total_pages;
+      if (onProgress) {
+        const pageLabel = total != null
+          ? ` · page ${Math.min(typeof next === 'number' ? next : total, total)} of ${total}`
+          : '';
+        onProgress(`Extracting… ${all.length} products${pageLabel}`);
+      }
+
+      if (next == null) break;                                   // all pages done
+      if (typeof next !== 'number' || next <= startPage) break;  // cursor not advancing → stop
+      startPage = next;
+    }
+    return { ok: true, products: all, diagnostic: all.length === 0 ? firstDiagnostic : null };
+  }
+
   // One-tap: extract + auto-import every row. No review modal — useful
   // when the founder trusts the extraction and just wants the products
   // landed (skip on the JBI/Lightbourn/BWA wholesale partners where the
@@ -363,19 +421,13 @@ export default function SupplierDetailPage() {
       const token = session?.access_token;
       if (!token) { setAutoImportMsg('Sign-in expired — refresh.'); return; }
 
-      // Step 1: extract
-      const exRes = await fetch('/api/supplier/extract-pricelist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ supplier_id: supplier.id }),
-        cache: 'no-store',
-      });
-      const ex = await exRes.json();
-      if (!exRes.ok || !ex.ok) {
-        setAutoImportMsg(`Extract failed: ${ex.error || `HTTP ${exRes.status}`}`);
+      // Step 1: extract ALL pages (chunked — follows the next_start_page cursor).
+      const ex = await extractAllPages(token, setAutoImportMsg);
+      if (!ex.ok) {
+        setAutoImportMsg(`Extract failed: ${ex.error}`);
         return;
       }
-      const extracted = (ex.products ?? []) as ExtractedProduct[];
+      const extracted = ex.products;
       if (extracted.length === 0) {
         setAutoImportMsg('Claude returned 0 products. Open the review modal to see why.');
         return;
@@ -425,7 +477,7 @@ export default function SupplierDetailPage() {
   // ── Extract products from pricelist (Claude → review → bulk import) ──
   async function startExtract() {
     if (!supplier) return;
-    setExtractModal({ loading: true, error: null, products: [], importing: false, diagnostic: null });
+    setExtractModal({ loading: true, error: null, products: [], importing: false, diagnostic: null, progress: 'Reading the PDF with Claude…' });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -433,28 +485,16 @@ export default function SupplierDetailPage() {
         setExtractModal({ loading: false, error: 'Sign-in expired — refresh.', products: [], importing: false, diagnostic: null });
         return;
       }
-      const res = await fetch('/api/supplier/extract-pricelist', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ supplier_id: supplier.id }),
-        cache:   'no-store',
-      });
-      const rawBody = await res.text();
-      let j: { ok?: boolean; error?: string; products?: ExtractedProduct[]; diagnostic?: ExtractDiagnostic | null };
-      try { j = JSON.parse(rawBody); }
-      catch {
-        setExtractModal({
-          loading: false, error: `HTTP ${res.status} · non-JSON (first 400 chars): ${rawBody.slice(0, 400)}`,
-          products: [], importing: false, diagnostic: null,
-        });
-        return;
-      }
-      if (!res.ok || !j.ok) {
-        setExtractModal({ loading: false, error: j.error || `HTTP ${res.status}`, products: [], importing: false, diagnostic: null });
+      // Extract ALL pages (chunked — follows the next_start_page cursor), with
+      // live progress shown in the modal's loading area.
+      const ex = await extractAllPages(token, (msg) =>
+        setExtractModal(prev => prev ? { ...prev, progress: msg } : prev));
+      if (!ex.ok) {
+        setExtractModal({ loading: false, error: ex.error, products: [], importing: false, diagnostic: null });
         return;
       }
       const isWP = supplier.supplier_type === 'wholesale_partner';
-      const rows: ExtractedProduct[] = (j.products || []).map((p) => ({
+      const rows: ExtractedProduct[] = ex.products.map((p) => ({
         ...p,
         sku:           p.suggested_sku,
         category:      p.suggested_category,
@@ -467,7 +507,7 @@ export default function SupplierDetailPage() {
       }));
       setExtractModal({
         loading: false, error: null, products: rows, importing: false,
-        diagnostic: (j.diagnostic ?? null) as ExtractDiagnostic | null,
+        diagnostic: ex.diagnostic,
       });
     } catch (e) {
       setExtractModal({
@@ -972,7 +1012,7 @@ export default function SupplierDetailPage() {
               <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
                 {extractModal.loading && (
                   <div style={{ padding: 40, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
-                    Reading the PDF with Claude — 3–5 seconds…
+                    {extractModal.progress ?? 'Reading the PDF with Claude — 3–5 seconds…'}
                   </div>
                 )}
                 {extractModal.error && (
