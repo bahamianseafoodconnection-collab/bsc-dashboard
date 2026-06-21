@@ -245,3 +245,24 @@ Goal: maintain / update / upgrade / scale the system from Founder AI in the foun
 - Components: server route `/api/founder/code-handoff` (POST create → returns token+command; GET claim?token → returns task, marks used) + dashboard panel + terminal modal with copy block. Token hashed at rest; single-use; expiry enforced server-side.
 
 **SQL CONFIRMATION for founder's question:** the money-sweep Batches 6–8 need NO new SQL (routes only). Batch 9 connect needs exactly ONE SQL EDITOR step (the founder_code_handoffs table above), delivered when we build it.
+
+---
+
+## 2026-06-21 — CUSTOMER BUILD COMPLETION (online live market) + Batch 6a
+
+Founder directive: "online live market needs to be shipped" + "customer build must be completely built" (chose: publicly launch + enable card + fresh deploy).
+
+**Verified state:** storefront already live (bscbahamas.com → /market, 200). Order creation already server-side via /api/orders/place. Card path fully wired (checkout → /api/payment/start → PnP hosted page → return callbacks); gated ONLY on Vercel env PNP_GATEWAY_ACCOUNT / PNP_PUBLISHER_PASSWORD / PNP_VERIFICATION_HASH_SECRET (RBC approval). Founder action: add those + verify at /api/payment/health.
+
+**Audit (4 parallel agents):** storefront ~85% complete — browse, decimal-lb, cart, checkout, COD, server-authoritative totals, receipt, tracking, status emails, account, order history, legal CONTENT, policies all BUILT.
+
+**Batch 6a (Phase 5):** /api/orders/place extended with sale_mode:'counter' (staff-gated, server-forced paid_in_full, POS-channel recompute via priceCartLine, cost snapshot, PO auto-raise, audited). app/products Admin Quick Sale rewired through it. (89ad5db)
+
+**Customer-build batch A (a650bab):**
+- Password reset — /login "Forgot password?" + new /reset-password page (was a hard lockout; gap #1).
+- Legal discoverability — Terms/Privacy linked in SiteFooter + checkout acceptance line (gap #2).
+- Anti-double-click guard on checkout Proceed (duplicate-paid-order risk; gap #4).
+
+**Customer-build gap #3 (this entry):** card payment now sends a branded order-confirmation email + WhatsApp inside the return-handler paidRow guard (exactly once). COD/guest email already fired at /checkout. orders has no email column → resolved from customers record.
+
+**Remaining (polish, non-blocking):** out-of-stock visibility (deferred — inventory sync), About page, expanded trust badges, card-503 auto-fallback-to-COD. Storefront is launch-ready for COD now; card-ready the moment the PNP_* env vars are set.

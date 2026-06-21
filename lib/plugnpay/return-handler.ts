@@ -29,6 +29,7 @@ import { verifyResponseHash, queryTransaction, parseUrlEncodedResponse } from '.
 import { rbcOutcome } from './rbc-codes';
 import { CHANNEL_MARGIN, VAT_RATE, recordSaleFinancials } from '@/lib/finance';
 import { raiseResalePurchaseOrdersForOrder } from '@/lib/procurement/raise-resale-purchase-orders';
+import { sendOrderConfirmation } from '@/lib/email-templates';
 
 export type ReturnHint = 'success' | 'declined' | 'problem';
 
@@ -217,6 +218,73 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
       // lines re-derived inside). Best-effort: never throws. Shared domain
       // service in lib/procurement (also used by the reconcile fallback path).
       await raiseResalePurchaseOrdersForOrder(admin, clientOrderId, paidRow);
+
+      // (3) Order confirmation to the customer. Card orders previously got NO
+      // confirmation after payment (COD/email already fire at /checkout). Runs
+      // inside the paidRow guard so it sends EXACTLY once. Best-effort: never
+      // throws, never blocks the redirect. orders has no email column, so the
+      // address is resolved from the linked customers record.
+      try {
+        const { data: ord } = await admin.from('orders')
+          .select('customer_id, customer_name, customer_phone, subtotal, total, delivery_type, items, wholesale_items')
+          .eq('id', clientOrderId)
+          .maybeSingle<{
+            customer_id: string | null; customer_name: string | null; customer_phone: string | null;
+            subtotal: number | null; total: number | null; delivery_type: string | null;
+            items: unknown; wholesale_items: unknown;
+          }>();
+        if (ord) {
+          const name = ord.customer_name || 'friend';
+          const rawItems = (Array.isArray(ord.items) && (ord.items as unknown[]).length > 0)
+            ? ord.items as Record<string, unknown>[]
+            : Array.isArray(ord.wholesale_items) ? ord.wholesale_items as Record<string, unknown>[] : [];
+          const subtotal = Number(ord.subtotal ?? ord.total ?? 0);
+          const total = Number(ord.total ?? 0);
+          const deliveryFee = Math.max(0, total - subtotal);
+
+          let email: string | null = null;
+          let phone: string | null = ord.customer_phone || null;
+          const customerId = ord.customer_id || undefined;
+          if (ord.customer_id) {
+            const { data: cust } = await admin.from('customers')
+              .select('email, phone, phone_e164')
+              .eq('id', ord.customer_id)
+              .maybeSingle<{ email: string | null; phone: string | null; phone_e164: string | null }>();
+            if (cust) {
+              email = cust.email || null;
+              phone = phone || cust.phone_e164 || cust.phone || null;
+            }
+          }
+
+          if (email) {
+            await sendOrderConfirmation({
+              to: email, customer_id: customerId, customer_name: name, order_id: clientOrderId,
+              items: rawItems.map((it) => ({
+                name: typeof it.name === 'string' ? it.name : undefined,
+                quantity: Number(it.quantity ?? it.qty ?? 0),
+                unit_price: Number(it.unit_price ?? 0),
+                line_total: Number(it.line_total ?? 0),
+              })),
+              subtotal, delivery_fee: deliveryFee, total,
+              delivery_type: ord.delivery_type ?? null, payment_method: 'card',
+            });
+          }
+          if (phone) {
+            // WhatsApp/SMS confirmation via the same queue /checkout uses.
+            await fetch(`${origin}/api/notifications/queue`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                channel: 'whatsapp', recipient_phone: phone, recipient_name: name,
+                template_key: 'order_confirmation_online', subject: 'Your BSC Marketplace order',
+                body: `Hi ${name.split(' ')[0]}, your BSC card payment is confirmed — order #${clientOrderId.slice(0, 8)} for BSD $${total.toFixed(2)}. We're preparing it now. — BSC`,
+                related_order_id: clientOrderId, related_customer_id: customerId ?? null,
+              }),
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('Card order confirmation send failed (non-fatal):', err);
+      }
     }
     // paidRow == null → order was already 'paid' (duplicate return). Skip both
     // side-effects; the first call already performed them exactly once.
