@@ -28,6 +28,7 @@ const LINKS = {
     { label: 'Supplier Portal',   href: '/supplier' },
     { label: 'Pay Utility Bills', href: '/utilities' },
     { label: 'Login / Sign Up',   href: '/login' },
+    { label: 'Terms & Privacy',   href: '/legal' },
   ],
 };
 

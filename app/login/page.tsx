@@ -57,6 +57,9 @@ function LoginInner() {
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
+  // Password-reset feedback — kept separate from the confirmation-resend block.
+  const [resetMsg, setResetMsg] = useState('');
+  const [resettingPw, setResettingPw] = useState(false);
 
   async function handleResendConfirmation() {
     if (!email.trim()) { setResendMsg('Enter your email above first.'); return; }
@@ -77,6 +80,24 @@ function LoginInner() {
       setResendMsg(`Couldn't resend: ${err instanceof Error ? err.message : 'try again'}`);
     } finally {
       setResending(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email.trim()) { setResetMsg('Enter your email above, then tap “Forgot password”.'); return; }
+    setResettingPw(true);
+    setResetMsg('');
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${publicSiteUrl()}/reset-password`,
+      });
+      setResetMsg(err
+        ? `Couldn't send reset link: ${err.message}`
+        : '✅ Password-reset link sent — check your inbox (and spam).');
+    } catch (err) {
+      setResetMsg(`Couldn't send reset link: ${err instanceof Error ? err.message : 'try again'}`);
+    } finally {
+      setResettingPw(false);
     }
   }
 
@@ -341,6 +362,20 @@ function LoginInner() {
                     className={INPUT}
                   />
                 </Field>
+
+                {mode === 'signin' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={resettingPw}
+                      className="-mt-1 self-end text-xs font-semibold text-slate-500 transition hover:text-navy disabled:opacity-50"
+                    >
+                      {resettingPw ? 'Sending…' : 'Forgot password?'}
+                    </button>
+                    {resetMsg && <p className="-mt-1 text-xs font-semibold text-slate-600">{resetMsg}</p>}
+                  </>
+                )}
 
                 <button
                   type="submit"

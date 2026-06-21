@@ -107,6 +107,7 @@ function CheckoutInner() {
   const [mailboatDate, setMailboatDate] = useState('');
   const [view, setView] = useState<View>('summary');
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false); // anti-double-click guard on order placement
   const [refNo, setRefNo] = useState('');
   const [overhead, setOverhead] = useState<OverheadMetrics | null>(null);
 
@@ -542,16 +543,22 @@ function CheckoutInner() {
 
   async function handleProceedToPayment() {
     if (!name.trim() || !phone.trim() || !address.trim()) return;
-    const id = await createOrder();
-    if (!id) {
-      alert('Sorry — we couldn’t place your order just now. Please try again, or choose Cash on Delivery.');
-      return;  // do NOT advance to the payment step with no order
+    if (placing) return; // guard against double-submit creating duplicate orders
+    setPlacing(true);
+    try {
+      const id = await createOrder();
+      if (!id) {
+        alert('Sorry — we couldn’t place your order just now. Please try again, or choose Cash on Delivery.');
+        return;  // do NOT advance to the payment step with no order
+      }
+      setOrderId(id);
+      // Card flow → 'payment' view renders <PnpRedirect> which POSTs to
+      // /api/payment/start and auto-submits the returned form to
+      // pay1.plugnpay.com (customer leaves bscbahamas.com).
+      setView(payMethod === 'cod' ? 'done' : 'payment');
+    } finally {
+      setPlacing(false);
     }
-    setOrderId(id);
-    // Card flow → 'payment' view renders <PnpRedirect> which POSTs to
-    // /api/payment/start and auto-submits the returned form to
-    // pay1.plugnpay.com (customer leaves bscbahamas.com).
-    setView(payMethod === 'cod' ? 'done' : 'payment');
   }
 
   // Earliest mailboat drop-off date: the first calendar date whose start is
@@ -1029,17 +1036,25 @@ function CheckoutInner() {
             </div>
 
             {view === 'summary' && (
-              <button
-                onClick={handleProceedToPayment}
-                disabled={!formValid}
-                className={`mt-4 w-full rounded-xl px-4 py-3.5 text-sm font-black transition ${
-                  formValid
-                    ? 'bg-navy text-gold shadow-md hover:bg-navy-700 hover:-translate-y-0.5'
-                    : 'cursor-not-allowed bg-slate-300 text-slate-500'
-                }`}
-              >
-                {payMethod === 'card' ? 'Proceed to card payment' : 'Place COD order'}
-              </button>
+              <>
+                <button
+                  onClick={handleProceedToPayment}
+                  disabled={!formValid || placing}
+                  className={`mt-4 w-full rounded-xl px-4 py-3.5 text-sm font-black transition ${
+                    formValid && !placing
+                      ? 'bg-navy text-gold shadow-md hover:bg-navy-700 hover:-translate-y-0.5'
+                      : 'cursor-not-allowed bg-slate-300 text-slate-500'
+                  }`}
+                >
+                  {placing
+                    ? 'Placing your order…'
+                    : payMethod === 'card' ? 'Proceed to card payment' : 'Place COD order'}
+                </button>
+                <p className="mt-2 text-center text-[11px] leading-snug text-slate-400">
+                  By placing this order you agree to our{' '}
+                  <Link href="/legal" className="underline hover:text-navy">Terms &amp; Privacy Policy</Link>.
+                </p>
+              </>
             )}
           </aside>
         )}
