@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
     : (typeof b.order_id === 'string' && b.order_id ? [b.order_id] : []);
   if (ids.length === 0) return NextResponse.json({ ok: false, error: 'order_id or order_ids required' }, { status: 400 });
 
-  // Build the whitelisted update payload.
-  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // Build the whitelisted update payload. NOTE: orders has NO updated_at column.
+  const payload: Record<string, unknown> = {};
   if (b.status !== undefined) {
     const status = typeof b.status === 'string' ? b.status : '';
     if (!ALLOWED_STATUSES.has(status)) {
@@ -89,8 +89,7 @@ export async function POST(req: NextRequest) {
   }
   if (typeof b.customer_id === 'string' && b.customer_id) payload.customer_id = b.customer_id;
 
-  // Need at least one real field beyond updated_at.
-  if (Object.keys(payload).length <= 1) {
+  if (Object.keys(payload).length === 0) {
     return NextResponse.json({ ok: false, error: 'No editable fields in request' }, { status: 400 });
   }
 
@@ -109,7 +108,7 @@ export async function POST(req: NextRequest) {
     await admin.from('ai_writes').insert({
       tool:      'orders_admin_update',
       caller_id: user.id,
-      input:     { ids_count: ids.length, fields: Object.keys(payload).filter((k) => k !== 'updated_at') },
+      input:     { ids_count: ids.length, fields: Object.keys(payload) },
       result:    { affected, role },
       status:    err ? 'error' : 'success',
       error:     err,

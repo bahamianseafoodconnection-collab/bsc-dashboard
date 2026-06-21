@@ -93,8 +93,7 @@ export async function POST(req: NextRequest) {
   const payMethod = String(row.payment_method ?? 'cash');
   row.status = 'completed';
   row.payment_status = payMethod === 'account' ? 'unpaid' : 'paid_in_full';
-  row.cashier_user_id = user.id;
-  row.user_id = user.id; // legacy column on the Andros path; harmless on Nassau
+  row.cashier_user_id = user.id; // orders has NO user_id column — cashier_user_id is the linkage
 
   // Profit split recomputed server-side with the server-chosen channel margin.
   // expense_rate is a benign session metric (same for every sale that shift);

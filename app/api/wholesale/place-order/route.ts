@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       payment_method:       'cod',
       payment_status:       'pending',
       admin_notes:          note,
-      user_id:              user.id,
+      // orders has NO user_id column; record the placer in admin_notes instead.
     }).select('id').single();
     if (error) err = error.message; else orderId = (data as { id: string }).id;
   } catch (e) {
