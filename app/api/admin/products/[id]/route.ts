@@ -185,6 +185,49 @@ export async function PATCH(
     }
   }
 
+  // ─── Per-channel explicit PRICES (from the price-input UIs) ───────────
+  // Client sends a target price per channel. We anchor it to the current cost
+  // so margin_multiplier (=price/cost) is STORED and survives the next cost
+  // receipt — closing the F-B footgun where a price set without a margin gets
+  // zeroed by recalc_channel_prices_on_purchase. When cost>0 we route through
+  // bsc_set_channel_price with the implied margin (exact round-trip + stored
+  // margin). With no cost basis yet, we write the price directly with
+  // margin_multiplier 1.0 (matches /api/supplier/add-product's no-cost base).
+  if (body.channel_prices && typeof body.channel_prices === 'object') {
+    const { data: costRow } = await admin.from('product_costs')
+      .select('cost_per_unit').eq('product_id', prod.id).eq('is_current', true).maybeSingle<{ cost_per_unit: number | null }>();
+    const curCost = costRow?.cost_per_unit != null ? Number(costRow.cost_per_unit) : 0;
+    for (const [ch, v] of Object.entries(body.channel_prices as Record<string, unknown>)) {
+      const price = Number(v);
+      if (!VALID_PRICE_CHANNELS.has(ch) || !Number.isFinite(price) || price <= 0) continue;
+      if (curCost > 0) {
+        const { data: priced, error: rpcErr } = await admin.rpc('bsc_set_channel_price', {
+          p_product_id: prod.id,
+          p_channel:    ch,
+          p_margin:     price / curCost - 1,   // margin_multiplier = price/cost
+          p_user:       user.id,
+        });
+        if (rpcErr) {
+          return NextResponse.json({ ok: false, error: `Price update failed (${ch}): ${rpcErr.message}`, updatedFields }, { status: 500 });
+        }
+        newPrices = { ...(newPrices ?? {}), [ch]: Number(priced) };
+      } else {
+        // No cost basis — write the price directly with a 1.0 margin base.
+        await admin.from('product_pricing').delete().eq('product_id', prod.id).eq('channel', ch);
+        const { error: insErr } = await admin.from('product_pricing').insert({
+          product_id: prod.id, channel: ch, pricing_mode: 'manual',
+          manual_unit_price: price, margin_multiplier: 1.0,
+          is_current: true, is_active: true, recorded_by: user.id,
+        });
+        if (insErr) {
+          return NextResponse.json({ ok: false, error: `Price update failed (${ch}): ${insErr.message}`, updatedFields }, { status: 500 });
+        }
+        newPrices = { ...(newPrices ?? {}), [ch]: price };
+      }
+      updatedFields.push(`price_${ch}`);
+    }
+  }
+
   if (updatedFields.length === 0) {
     return NextResponse.json({ ok: false, error: 'No editable fields in request' }, { status: 400 });
   }
@@ -195,4 +238,48 @@ export async function PATCH(
     updated_fields: updatedFields,
     new_prices: newPrices,
   });
+}
+
+// DELETE — discard a product and its child cost/pricing rows. Backs the
+// "discard pending product" action. Founder/admin only (same gate as PATCH).
+export async function DELETE(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id: productId } = await ctx.params;
+
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  if (!supaUrl || !anonKey || !svcKey) {
+    return NextResponse.json({ ok: false, error: 'Supabase not configured' }, { status: 500 });
+  }
+
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return NextResponse.json({ ok: false, error: 'Sign in required' }, { status: 401 });
+  }
+  const userClient = createClient(supaUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth:   { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+  const { data: { user }, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !user) return NextResponse.json({ ok: false, error: 'Invalid session' }, { status: 401 });
+  const { data: prof } = await userClient.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  const role = (prof as { role?: string | null } | null)?.role ?? null;
+  if (!role || !ALLOWED_ROLES.has(role)) {
+    return NextResponse.json({ ok: false, error: `Role "${role ?? 'none'}" cannot delete products.` }, { status: 403 });
+  }
+  if (!productId) return NextResponse.json({ ok: false, error: 'product id required' }, { status: 400 });
+
+  const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  // Child rows first (FK safety), then the product. Best-effort on children.
+  await admin.from('product_pricing').delete().eq('product_id', productId);
+  await admin.from('product_costs').delete().eq('product_id', productId);
+  const { error: delErr } = await admin.from('products').delete().eq('id', productId);
+  if (delErr) {
+    return NextResponse.json({ ok: false, error: `Discard failed: ${delErr.message}` }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, product_id: productId, deleted: true });
 }

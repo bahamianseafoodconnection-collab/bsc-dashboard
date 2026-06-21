@@ -196,16 +196,26 @@ export default function PendingProductsPage() {
         if (error) { showToast(false, `⚠ Update failed: ${error.message}`); return; }
       }
 
-      // 3. Save any price edits — update manual_unit_price on existing pricing rows.
+      // 3. Save any price edits server-side (Phase 5 batch 7). The route anchors
+      //    each price to the current cost so margin_multiplier is stored — a raw
+      //    manual_unit_price update would be zeroed by the next cost receipt.
+      const channelPrices: Record<string, number> = {};
       for (const ch of p.channels) {
         const newPrice = priceEdits[ch.pricing_id];
         if (typeof newPrice === 'number' && newPrice > 0 && Math.abs(newPrice - ch.price) > 0.001) {
-          const { error: prErr } = await supabase
-            .from('product_pricing')
-            .update({ manual_unit_price: newPrice })
-            .eq('id', ch.pricing_id);
-          if (prErr) { showToast(false, `⚠ Price update failed: ${prErr.message}`); return; }
+          channelPrices[ch.channel] = newPrice;
         }
+      }
+      if (Object.keys(channelPrices).length > 0) {
+        const { data: { session: psess } } = await supabase.auth.getSession();
+        const ptoken = psess?.access_token;
+        const res = await fetch(`/api/admin/products/${p.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ptoken ?? ''}` },
+          body: JSON.stringify({ channel_prices: channelPrices }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.ok === false) { showToast(false, `⚠ Price update failed: ${j.error || res.status}`); return; }
       }
 
       // Flip any related product_intake_log row(s) to approved + stamp approver.
@@ -231,10 +241,14 @@ export default function PendingProductsPage() {
     if (!confirm(`Discard pending product ${p.sku}? This deletes the child row + its cost + pricing.`)) return;
     setBusy(b => ({ ...b, [p.id]: true }));
     try {
-      await supabase.from('product_pricing').delete().eq('product_id', p.id);
-      await supabase.from('product_costs').delete().eq('product_id', p.id);
-      const { error } = await supabase.from('products').delete().eq('id', p.id);
-      if (error) { showToast(false, `⚠ Discard failed: ${error.message}`); return; }
+      // Server-authoritative discard (deletes pricing + costs + product). Role-gated.
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/admin/products/${p.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.ok === false) { showToast(false, `⚠ Discard failed: ${j.error || res.status}`); return; }
       showToast(true, `🗑 Discarded ${p.sku}`);
       await load();
     } finally {

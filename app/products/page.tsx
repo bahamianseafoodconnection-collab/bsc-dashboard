@@ -551,17 +551,22 @@ export default function ProductsPage() {
         supplier_sku:        editSupplierSku.trim() || null,
       }).eq('id', selected.id);
 
+      // Channel prices server-side (Phase 5 batch 7) — the route stores
+      // margin_multiplier=price/cost so a cost receipt can't zero the price.
+      const channelPrices: Record<string, number> = {};
       for (const ch of CHANNELS) {
         const price = parseFloat(editPrices[ch.key]);
-        if (isNaN(price) || price <= 0) continue;
-        await supabase.from('product_pricing').delete()
-          .eq('product_id', selected.id).eq('channel', ch.key);
-        await supabase.from('product_pricing').insert({
-          product_id: selected.id, channel: ch.key,
-          pricing_mode: 'manual', manual_unit_price: price,
-          is_current: true, is_active: true,
-          recorded_by: FOUNDER_ID, recorded_at: new Date().toISOString(),
+        if (!isNaN(price) && price > 0) channelPrices[ch.key] = price;
+      }
+      if (Object.keys(channelPrices).length > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/admin/products/${selected.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+          body: JSON.stringify({ channel_prices: channelPrices }),
         });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.ok === false) throw new Error(j.error || `HTTP ${res.status}`);
       }
 
       showToast('✓ Product updated');
@@ -611,15 +616,23 @@ export default function ProductsPage() {
 
       if (insertErr) throw insertErr;
 
+      // Channel prices server-side (Phase 5 batch 7). New product has no cost
+      // yet → the route writes margin_multiplier 1.0 (no-cost base), avoiding the
+      // zero-margin footgun a raw insert would leave.
+      const channelPrices: Record<string, number> = {};
       for (const ch of CHANNELS) {
         const price = parseFloat(newProduct.prices[ch.key]);
-        if (isNaN(price) || price <= 0) continue;
-        await supabase.from('product_pricing').insert({
-          product_id: inserted.id, channel: ch.key,
-          pricing_mode: 'manual', manual_unit_price: price,
-          is_current: true, is_active: true,
-          recorded_by: FOUNDER_ID, recorded_at: new Date().toISOString(),
+        if (!isNaN(price) && price > 0) channelPrices[ch.key] = price;
+      }
+      if (Object.keys(channelPrices).length > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/admin/products/${inserted.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+          body: JSON.stringify({ channel_prices: channelPrices }),
         });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.ok === false) throw new Error(j.error || `HTTP ${res.status}`);
       }
 
       showToast('✓ Product added successfully');

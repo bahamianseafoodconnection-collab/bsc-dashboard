@@ -25,8 +25,6 @@ const EXPENSE_CATEGORIES = [
   'accounts_payable', 'fuel', 'office', 'marketing', 'travel', 'other',
 ];
 
-const FOUNDER_ID = '7b62672c-9259-4c1b-98d4-3b78369a52ab';
-
 export default function ScanInvoicePage() {
   // ── Image state ──────────────────────────────────────────
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -39,8 +37,9 @@ export default function ScanInvoicePage() {
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef  = useRef<HTMLInputElement>(null);
 
-  // Phase 5: expense create routes through the server-authoritative API.
+  // Phase 5: expense create + cost receipt route through server-authoritative APIs.
   const { save: recordExpense } = useServerSave('/api/finance/record-expense');
+  const { save: recordCost } = useServerSave('/api/products/record-cost');
 
   function pickImage(f: File | undefined) {
     if (!f) return;
@@ -123,26 +122,15 @@ export default function ScanInvoicePage() {
       if (!uploaded) { setSaving(false); return; }
       url = uploaded;
     }
-    const { data: { user } } = await supabase.auth.getUser();
-    const recordedBy = user?.id ?? FOUNDER_ID;
-
-    const { error } = await supabase.from('product_costs').insert({
-      product_id:       pcProductId,
-      supplier_id:      pcSupplierId || null,
-      cost_type:        'opening_balance',
-      cost_per_unit:    cost,
-      unit_of_measure:  pcUnitOfMeasure,
-      shipping_per_lb:  0,
-      customs_duty_pct: 0,
-      vat_levy_pct:     0,
-      processing_fee:   0,
-      effective_from:   new Date().toISOString(),
-      is_current:       true,
-      recorded_by:      recordedBy,
-      notes:            url ? `Invoice photo: ${url}${pcNotes ? ' — ' + pcNotes : ''}` : (pcNotes || null),
+    const r = await recordCost({
+      product_id:      pcProductId,
+      supplier_id:     pcSupplierId || null,
+      cost_per_unit:   cost,
+      unit_of_measure: pcUnitOfMeasure,
+      notes:           url ? `Invoice photo: ${url}${pcNotes ? ' — ' + pcNotes : ''}` : (pcNotes || null),
     });
     setSaving(false);
-    if (error) { showToast(false, 'Save failed: ' + error.message); return; }
+    if (!r.ok) { showToast(false, 'Save failed: ' + (r.error ?? 'unknown error')); return; }
     showToast(true, 'Cost recorded. Founder will review.');
     resetAll();
   }

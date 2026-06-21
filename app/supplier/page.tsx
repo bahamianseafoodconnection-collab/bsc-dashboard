@@ -1085,21 +1085,25 @@ if (newPrice !== null && (Number.isNaN(newPrice) || newPrice < 0)) { showToast('
 
 setEditSaving(true);
 try {
-if (newName !== p.name) {
-const { error } = await supabase.from('products').update({ name: newName }).eq('id', p.id);
-if (error) throw new Error('products: ' + error.message);
-}
-if (newCost !== null && newCost !== p.cost_per_unit) {
-const { error } = await supabase.from('product_costs')
-.update({ cost_per_unit: newCost })
-.eq('product_id', p.id).eq('is_current', true);
-if (error) throw new Error('product_costs: ' + error.message);
-}
-if (newPrice !== null && newPrice !== p.online_sell_price) {
-const { error } = await supabase.from('product_pricing')
-.update({ manual_unit_price: newPrice })
-.eq('product_id', p.id).eq('channel', 'online_market').eq('is_current', true);
-if (error) throw new Error('product_pricing: ' + error.message);
+// Server-authoritative product edit (Phase 5 batch 7). The route INSERTs a new
+// product_costs row (never UPDATEs cost_per_unit — immutability) and anchors the
+// price to cost so margin_multiplier is stored (closes the F-B footgun). One
+// PATCH carries name + cost + online price.
+const patchBody: Record<string, unknown> = {};
+if (newName !== p.name) patchBody.name = newName;
+if (newCost !== null && newCost !== p.cost_per_unit) patchBody.cost_per_unit = newCost;
+if (newPrice !== null && newPrice !== p.online_sell_price) patchBody.channel_prices = { online_market: newPrice };
+if (Object.keys(patchBody).length > 0) {
+const { data: { session } } = await supabase.auth.getSession();
+const token = session?.access_token;
+if (!token) throw new Error('Sign-in expired — refresh and try again.');
+const res = await fetch(`/api/admin/products/${p.id}`, {
+method: 'PATCH',
+headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+body: JSON.stringify(patchBody),
+});
+const j = await res.json().catch(() => ({}));
+if (!res.ok || j.ok === false) throw new Error(j.error || `HTTP ${res.status}`);
 }
 
 setProductsBySupplier((prev) => ({
