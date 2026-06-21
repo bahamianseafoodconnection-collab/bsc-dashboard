@@ -159,6 +159,7 @@ export default function SupplierDetailPage() {
   const [products,  setProducts]  = useState<SupplierProduct[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState('');
+  const [page,      setPage]      = useState(0);   // product-grid pagination (PAGE_SIZE per page)
   const [toast,     setToast]     = useState<{ msg: string; ok: boolean } | null>(null);
   const [pricelistBusy, setPricelistBusy] = useState(false);
   const [extractModal, setExtractModal] = useState<null | {
@@ -250,54 +251,67 @@ export default function SupplierDetailPage() {
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const { data: sup } = await supabase.from('suppliers').select('*').eq('id', id).maybeSingle();
-    setSupplier(sup as Supplier | null);
-    // Fetch products + costs + per-channel margins. Embedded joins were
-    // unreliable so we run three queries and stitch client-side.
-    type ProductRow = {
-      id: string; sku: string; name: string; description: string | null;
-      category: string | null; unit_of_measure: string | null; pack_size: string | null;
-      status: string; image_url: string | null; vat_code: 'X'|'T'|'F'|null;
-      sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
-    };
-    const { data: prods, error: prodErr } = await supabase
-      .from('products')
-      .select('id, sku, name, description, category, unit_of_measure, pack_size, status, image_url, vat_code, sell_nassau, sell_andros, sell_online, sell_wholesale')
-      .eq('primary_supplier_id', id)
-      .order('name');
-    if (prodErr) {
-      showToast(`Load products failed: ${prodErr.message}`, false);
-    }
-    const productList = (prods ?? []) as ProductRow[];
-    let costMap:   Record<string, number | null> = {};
-    let retailMap: Record<string, number>        = {};
-    let wholeMap:  Record<string, number>        = {};
-    if (productList.length > 0) {
-      const ids = productList.map((p) => p.id);
-      const [{ data: costs }, { data: pricing }] = await Promise.all([
-        supabase.from('product_costs')
-          .select('product_id, cost_per_unit')
-          .in('product_id', ids).eq('is_current', true),
-        supabase.from('product_pricing')
-          .select('product_id, channel, margin_multiplier')
-          .in('product_id', ids).eq('is_current', true)
-          .in('channel', ['online_market', 'local_wholesale']),
-      ]);
-      costMap = Object.fromEntries(((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>).map((c) => [c.product_id, c.cost_per_unit != null ? Number(c.cost_per_unit) : null]));
-      for (const row of ((pricing ?? []) as Array<{ product_id: string; channel: string; margin_multiplier: number | null }>)) {
-        const pct = row.margin_multiplier != null ? Math.round((Number(row.margin_multiplier) - 1) * 10000) / 100 : NaN;
-        if (!Number.isFinite(pct)) continue;
-        if (row.channel === 'online_market')   retailMap[row.product_id] = pct;
-        if (row.channel === 'local_wholesale') wholeMap[row.product_id]  = pct;
+    // try/finally so a failed query can NEVER strand the page on "Loading
+    // supplier…" (the white-screen bug). finally always clears loading.
+    try {
+      const { data: sup } = await supabase.from('suppliers').select('*').eq('id', id).maybeSingle();
+      setSupplier(sup as Supplier | null);
+      // Fetch products + costs + per-channel margins. Embedded joins were
+      // unreliable so we run three queries and stitch client-side.
+      type ProductRow = {
+        id: string; sku: string; name: string; description: string | null;
+        category: string | null; unit_of_measure: string | null; pack_size: string | null;
+        status: string; image_url: string | null; vat_code: 'X'|'T'|'F'|null;
+        sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
+      };
+      const { data: prods, error: prodErr } = await supabase
+        .from('products')
+        .select('id, sku, name, description, category, unit_of_measure, pack_size, status, image_url, vat_code, sell_nassau, sell_andros, sell_online, sell_wholesale')
+        .eq('primary_supplier_id', id)
+        .order('name');
+      if (prodErr) {
+        showToast(`Load products failed: ${prodErr.message}`, false);
       }
+      const productList = (prods ?? []) as ProductRow[];
+      const costMap:   Record<string, number | null> = {};
+      const retailMap: Record<string, number>        = {};
+      const wholeMap:  Record<string, number>        = {};
+      // Chunk the id-set so .in() never builds an oversized request URL — a
+      // ~1,800-product supplier would otherwise blow the URL limit and throw.
+      const ids = productList.map((p) => p.id);
+      const ID_CHUNK = 100;
+      for (let k = 0; k < ids.length; k += ID_CHUNK) {
+        const slice = ids.slice(k, k + ID_CHUNK);
+        const [{ data: costs }, { data: pricing }] = await Promise.all([
+          supabase.from('product_costs')
+            .select('product_id, cost_per_unit')
+            .in('product_id', slice).eq('is_current', true),
+          supabase.from('product_pricing')
+            .select('product_id, channel, margin_multiplier')
+            .in('product_id', slice).eq('is_current', true)
+            .in('channel', ['online_market', 'local_wholesale']),
+        ]);
+        for (const c of ((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>)) {
+          costMap[c.product_id] = c.cost_per_unit != null ? Number(c.cost_per_unit) : null;
+        }
+        for (const row of ((pricing ?? []) as Array<{ product_id: string; channel: string; margin_multiplier: number | null }>)) {
+          const pct = row.margin_multiplier != null ? Math.round((Number(row.margin_multiplier) - 1) * 10000) / 100 : NaN;
+          if (!Number.isFinite(pct)) continue;
+          if (row.channel === 'online_market')   retailMap[row.product_id] = pct;
+          if (row.channel === 'local_wholesale') wholeMap[row.product_id]  = pct;
+        }
+      }
+      setProducts(productList.map((p) => ({
+        ...p,
+        cost_per_unit:        costMap[p.id]   ?? null,
+        retail_margin_pct:    retailMap[p.id] ?? DEFAULT_RETAIL_MARGIN,
+        wholesale_margin_pct: wholeMap[p.id]  ?? DEFAULT_WHOLESALE_MARGIN,
+      })));
+    } catch (e) {
+      showToast(`Load failed: ${e instanceof Error ? e.message : 'unknown'}`, false);
+    } finally {
+      setLoading(false);
     }
-    setProducts(productList.map((p) => ({
-      ...p,
-      cost_per_unit:        costMap[p.id]   ?? null,
-      retail_margin_pct:    retailMap[p.id] ?? DEFAULT_RETAIL_MARGIN,
-      wholesale_margin_pct: wholeMap[p.id]  ?? DEFAULT_WHOLESALE_MARGIN,
-    })));
-    setLoading(false);
   }, [id, supabase]);
 
   useEffect(() => { load(); }, [load]);
@@ -663,6 +677,13 @@ export default function SupplierDetailPage() {
     (p.category ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
+  // Paginate the grid so a supplier with hundreds/thousands of products doesn't
+  // render every editable row at once (DOM blow-up / freeze).
+  const PAGE_SIZE = 100;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage  = Math.min(Math.max(page, 0), pageCount - 1);
+  const pageItems = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
   // ── Render ──
   const headerColor = supplier?.brand_color ?? '#1a2e5a';
 
@@ -788,13 +809,29 @@ export default function SupplierDetailPage() {
             <div style={{ marginBottom: 14 }}>
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                 placeholder={`Search products in ${supplier.name}…`}
                 style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0', backgroundColor: '#fff', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
               />
-              <p style={{ margin: '6px 4px 0', fontSize: 11, color: '#64748b' }}>
-                {filtered.length} of {products.length} product{products.length === 1 ? '' : 's'}
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, margin: '6px 4px 0' }}>
+                <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>
+                  {filtered.length} of {products.length} product{products.length === 1 ? '' : 's'}
+                  {pageCount > 1 && ` · showing ${safePage * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE + PAGE_SIZE, filtered.length)}`}
+                </p>
+                {pageCount > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage <= 0}
+                      style={{ background: 'transparent', color: '#0a1220', border: '1px solid #cbd5e1', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: safePage <= 0 ? 'not-allowed' : 'pointer', opacity: safePage <= 0 ? 0.4 : 1 }}>
+                      ← Prev
+                    </button>
+                    <span style={{ fontSize: 11, color: '#475569' }}>Page {safePage + 1} / {pageCount}</span>
+                    <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={safePage >= pageCount - 1}
+                      style={{ background: 'transparent', color: '#0a1220', border: '1px solid #cbd5e1', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer', opacity: safePage >= pageCount - 1 ? 0.4 : 1 }}>
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Inline-editable inventory table — auto-saves on blur. */}
@@ -832,7 +869,7 @@ export default function SupplierDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map((p) => {
+                      {pageItems.map((p) => {
                         const isActive = p.status === 'active';
                         const state    = rowState[p.id] ?? 'idle';
                         const err      = rowError[p.id];
