@@ -338,3 +338,15 @@ EXISTING: /lobster-labels (trilingual export, Zebra ZD420 4x6 + Avery), /spinyta
 PLAN: reusable label engine — QR (qrcode lib, local) + barcode Code128 (JsBarcode) rendered to data URLs, label HTML at configurable size (default 4x6), window.print() to Rollo (also satisfies print-to-PDF). 5 label types share one renderer pulling fields from batch_number/lot/intake/processing. Start with RECEIVING label (printed right after Receiving Station generates the batch). Needs deps: qrcode + jsbarcode (+ @types/qrcode). This is Spiny Tail Phase 4 (tray/rack/carton/receiving labels).
 
 STATUS: spec captured; build next after combined receiving SQL is run + receiving tested.
+
+---
+
+## 2026-06-22 — UNIVERSAL DOCUMENT CAPTURE & AUTO-FORM COMPLETION (spec captured)
+
+Any uploaded image/scan/PDF/invoice/receipt/fisheries form/export permit/health cert/PO/price list/shipping/customs/vessel logbook/landing report/handwritten form → OCR → identify type → extract fields → match to system fields → auto-fill form → optionally create records (supplier/customer/product/vessel/fisherman/PO/receiving) on approval → MIRROR original (kept permanently, linked to the digital record) → connect any batch/lot/vessel/export number to traceability. Plus an AI Document Assistant ("what is this?", "create receiving record"). Mobile-first; no retyping when data is in the doc. Formats: JPG/JPEG/PNG/PDF/HEIC/DOCX/XLSX. Preview (original + extracted + highlighted matches + correct + approve). Price-list extraction (products/SKU/unit/price/photos → Import All or Approve Individually). Principle: read, mirror, digitize, link to traceability, auto-complete records, preserve original as legal evidence.
+
+EXISTING ENGINE (build on, don't duplicate): /api/invoice-scan (Claude opus vision → invoice split JSON), /api/supplier/extract-pricelist (chunked PDF, Claude Haiku, accept-all/normalize/flag), /api/intake/scan-invoice (photo→cost/expense), /api/vendor-listings/create, founder-ai (assistant). ANTHROPIC_API_KEY in env.
+
+PLAN (phased): P1 FOUNDATION — captured_documents mirror table + /api/documents/capture (Claude vision: classify doc_type + extract structured fields + traceability ids) + mobile capture/preview UI (original ↔ extracted, correct, approve). P2 field-matching → record creation (match-or-create supplier/customer/product/vessel/fisherman/PO/receiving on approval; per-type form prefill). P3 AI Document Assistant (upload + ask → prepares the right form). P4 formats (PDF multipage via pdf-lib like pricelist, HEIC convert, DOCX/XLSX text-extract).
+
+STATUS: spec captured; building P1 foundation.
