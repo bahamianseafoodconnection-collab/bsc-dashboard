@@ -34,6 +34,7 @@ export async function raiseResalePurchaseOrdersForOrder(
   admin: SupabaseClient,
   orderId: string,
   paidRow: { items?: unknown; wholesale_items?: unknown },
+  deliverTo: 'customer' | 'spiny_tail' = 'customer',
 ): Promise<void> {
   try {
     // Read resale lines from BOTH fields (online card orders put them in
@@ -155,8 +156,9 @@ export async function raiseResalePurchaseOrdersForOrder(
         items:         itemsJson,
         total,
         status:        'pending',
+        deliver_to:    deliverTo, // 'customer' (online) | 'spiny_tail' (POS sales)
         created_by:    null,
-        notes:         `Auto-raised from online order ${orderId.slice(0, 8)}`,
+        notes:         `Auto-raised from ${deliverTo === 'spiny_tail' ? 'POS' : 'online'} order ${orderId.slice(0, 8)}`,
       }).select('id').single();
 
       if (poErr || !po) {
@@ -186,5 +188,38 @@ export async function raiseResalePurchaseOrdersForOrder(
   } catch (e) {
     // Procurement must never fail a paid order.
     console.error(`[procurement] auto-raise unexpected error order=${orderId}:`, e);
+  }
+}
+
+// Round-robin, load-balanced assignment of an order's purchase orders across the
+// (up to 4) drivers. Each unassigned PO goes to the driver with the fewest
+// currently-unconfirmed POs — so a multi-supplier order naturally spreads across
+// 2+ drivers, and the day's pickups stay balanced. Best-effort; never throws.
+export async function assignDriversForOrder(admin: SupabaseClient, orderId: string): Promise<void> {
+  try {
+    const { data: drivers } = await admin.from('profiles').select('id').eq('role', 'driver').order('id');
+    const driverIds = (drivers ?? []).map((d) => (d as { id: string }).id);
+    if (driverIds.length === 0) return; // no drivers configured — leave unassigned
+
+    // Current load = unconfirmed POs already assigned to each driver.
+    const { data: loadRows } = await admin.from('purchase_orders')
+      .select('driver_assigned_to')
+      .in('driver_assigned_to', driverIds)
+      .is('supplier_confirmed_at', null);
+    const load = new Map<string, number>(driverIds.map((id) => [id, 0]));
+    for (const r of (loadRows ?? []) as { driver_assigned_to: string | null }[]) {
+      if (r.driver_assigned_to) load.set(r.driver_assigned_to, (load.get(r.driver_assigned_to) ?? 0) + 1);
+    }
+
+    const { data: pos } = await admin.from('purchase_orders')
+      .select('id').eq('order_id', orderId).is('driver_assigned_to', null);
+    for (const po of (pos ?? []) as { id: string }[]) {
+      let best = driverIds[0];
+      for (const id of driverIds) if ((load.get(id) ?? 0) < (load.get(best) ?? 0)) best = id;
+      await admin.from('purchase_orders').update({ driver_assigned_to: best }).eq('id', po.id);
+      load.set(best, (load.get(best) ?? 0) + 1);
+    }
+  } catch (e) {
+    console.error(`[procurement] driver assignment error order=${orderId}:`, e);
   }
 }

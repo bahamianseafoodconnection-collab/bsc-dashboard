@@ -43,6 +43,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { priceCartLine, type ProductPriceSnapshot } from '@/lib/cart-pricing';
 import { type SaleUnit, ONLINE_DELIVERY_FEE } from '@/lib/pricing';
+import { assignDriversForOrder } from '@/lib/procurement/raise-resale-purchase-orders';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -341,13 +342,17 @@ async function raiseResalePurchaseOrders(
 
     for (const [supplierId, lines] of bySupplier) {
       const total = r2(lines.reduce((s, l) => s + l.lineCost, 0));
+      // POS/counter sales (order_type pos_sale_*) deliver to Spiny Tail; online
+      // orders deliver to the customer.
+      const deliverTo = String(row.order_type ?? '').startsWith('pos_sale') ? 'spiny_tail' : 'customer';
       const { data: po, error: poErr } = await admin.from('purchase_orders').insert({
         order_id:      orderId,
         supplier_id:   supplierId,
         supplier_name: supName.get(supplierId) ?? null,
         status:        'raised',
         total,
-        notes:         `Auto-raised from online order ${orderId.slice(0, 8)}`,
+        deliver_to:    deliverTo,
+        notes:         `Auto-raised from ${deliverTo === 'spiny_tail' ? 'POS' : 'online'} order ${orderId.slice(0, 8)}`,
       }).select('id').single();
 
       if (poErr || !po) {
@@ -532,6 +537,7 @@ export async function POST(req: NextRequest) {
     row.order_type     = row.order_type ?? 'pos_sale_nassau';
     row.status         = 'completed';
     row.payment_status = 'paid_in_full';
+    row.deliver_by     = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // approved now → +24h
 
     stampLineCosts(row, costMap);
 
@@ -541,8 +547,10 @@ export async function POST(req: NextRequest) {
     }
     const orderId = (data as { id: string }).id;
 
-    // Counter sale is paid + committed at the register → raise resale POs now.
+    // Counter sale is paid + committed at the register → raise resale POs +
+    // assign drivers (round-robin) now.
     await raiseResalePurchaseOrders(admin, orderId, row, costMap);
+    await assignDriversForOrder(admin, orderId);
 
     try {
       await admin.from('ai_writes').insert({
@@ -567,6 +575,11 @@ export async function POST(req: NextRequest) {
   row.status         = 'pending';
   row.payment_status = payMethod === 'card' ? 'payment_pending' : 'pending';
   row.fulfillment_status = 'placed';
+  // COD/committed online orders get a +24h delivery deadline now; card orders
+  // get theirs when payment is confirmed in /api/payment/return.
+  if (row.payment_status !== 'payment_pending') {
+    row.deliver_by = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  }
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
@@ -613,6 +626,7 @@ export async function POST(req: NextRequest) {
   // way (the customer's order has already succeeded).
   if (row.payment_status !== 'payment_pending') {
     await raiseResalePurchaseOrders(admin, orderId, row, costMap);
+    await assignDriversForOrder(admin, orderId);
   }
 
   return NextResponse.json({ ok: true, order_id: orderId });

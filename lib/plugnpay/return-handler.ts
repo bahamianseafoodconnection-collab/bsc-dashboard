@@ -28,7 +28,7 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyResponseHash, queryTransaction, parseUrlEncodedResponse } from './index';
 import { rbcOutcome } from './rbc-codes';
 import { CHANNEL_MARGIN, VAT_RATE, recordSaleFinancials } from '@/lib/finance';
-import { raiseResalePurchaseOrdersForOrder } from '@/lib/procurement/raise-resale-purchase-orders';
+import { raiseResalePurchaseOrdersForOrder, assignDriversForOrder } from '@/lib/procurement/raise-resale-purchase-orders';
 import { sendOrderConfirmation } from '@/lib/email-templates';
 
 export type ReturnHint = 'success' | 'declined' | 'problem';
@@ -181,6 +181,8 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
         payment_status: 'paid',
         payment_method: 'card',
         payment_ref:    pnpOrderId || null,
+        // Payment approved now → +24h delivery deadline (America/Nassau / ET).
+        deliver_by:     new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       })
       .eq('id', clientOrderId)
       .in('payment_status', [...PAYABLE_STATUSES])
@@ -217,7 +219,8 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
       // POs from the RETURNING items/wholesale_items (stamped routing; missing
       // lines re-derived inside). Best-effort: never throws. Shared domain
       // service in lib/procurement (also used by the reconcile fallback path).
-      await raiseResalePurchaseOrdersForOrder(admin, clientOrderId, paidRow);
+      await raiseResalePurchaseOrdersForOrder(admin, clientOrderId, paidRow); // online card → deliver_to 'customer' (default)
+      await assignDriversForOrder(admin, clientOrderId);
 
       // (3) Order confirmation to the customer. Card orders previously got NO
       // confirmation after payment (COD/email already fire at /checkout). Runs

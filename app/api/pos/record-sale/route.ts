@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { computeProfitSplit, fetchOverheadMetrics, NASSAU_POS_MARGIN, ANDROS_POS_MARGIN } from '@/lib/profit';
+import { raiseResalePurchaseOrdersForOrder, assignDriversForOrder } from '@/lib/procurement/raise-resale-purchase-orders';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -119,6 +120,12 @@ export async function POST(req: NextRequest) {
     row.card_ref = null;
   }
 
+  // Phase 5: a counter sale is paid-in-full now (unless account credit) → it has
+  // an approved payment, so the delivery deadline is +24h (America/Nassau / ET).
+  if (row.payment_status === 'paid_in_full') {
+    row.deliver_by = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  }
+
   let orderId: string | null = null;
   let err: string | null = null;
   try {
@@ -126,6 +133,14 @@ export async function POST(req: NextRequest) {
     if (error) err = error.message; else orderId = (data as { id: string }).id;
   } catch (e) {
     err = e instanceof Error ? e.message : 'insert failed';
+  }
+
+  // Phase 2+3: POS sales are picked from suppliers + delivered to SPINY TAIL.
+  // Raise per-supplier POs (deliver_to='spiny_tail') + round-robin assign drivers.
+  // Best-effort — never fails the completed sale.
+  if (orderId && !err) {
+    await raiseResalePurchaseOrdersForOrder(admin, orderId, { wholesale_items: row.wholesale_items }, 'spiny_tail');
+    await assignDriversForOrder(admin, orderId);
   }
 
   try {
