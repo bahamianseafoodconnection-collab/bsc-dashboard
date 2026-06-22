@@ -57,9 +57,10 @@ export async function POST(req: NextRequest) {
   let b: { document_id?: unknown; target?: unknown; fields?: unknown };
   try { b = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
   const docId = str(b.document_id);
-  const target = b.target === 'customer' || b.target === 'supplier' || b.target === 'fisherman' ? b.target : '';
+  const target = (['customer', 'supplier', 'fisherman', 'purchase'].includes(b.target as string)) ? b.target as string : '';
   const f = (b.fields && typeof b.fields === 'object') ? b.fields as Record<string, unknown> : {};
-  if (!target) return NextResponse.json({ ok: false, error: "target must be 'customer', 'supplier', or 'fisherman'" }, { status: 400 });
+  if (!target) return NextResponse.json({ ok: false, error: "target must be 'customer', 'supplier', 'fisherman', or 'purchase'" }, { status: 400 });
+  const money = (v: unknown) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
@@ -107,6 +108,22 @@ export async function POST(req: NextRequest) {
         if (error) throw new Error(error.message);
         recordId = (ins as { id: string }).id; created = true;
       }
+    }
+
+    if (target === 'purchase') {
+      // Invoice / PO → a purchase_invoices record (what BSC owes). Supplier is
+      // captured separately via the "+ Supplier" action; named here in summary.
+      recordType = 'purchase_invoice';
+      const supplierName = firstOf(f, ['supplier_name', 'company_name']) ?? 'Unknown supplier';
+      const invoiceRef = firstOf(f, ['invoice_number', 'po_number']) ?? `CAP-${Date.now().toString(36).toUpperCase()}`;
+      const total = money(f.total ?? f.subtotal);
+      const items = Array.isArray(f.line_items) ? f.line_items : [];
+      const { data: ins, error } = await admin.from('purchase_invoices').insert({
+        invoice_ref: invoiceRef, total_amount: total, balance_owed: total, status: 'unpaid',
+        items, summary: `Invoice from ${supplierName} (auto-captured from document)`,
+      }).select('id').single();
+      if (error) throw new Error(error.message);
+      recordId = (ins as { id: string }).id; created = true; name = `${invoiceRef} · ${supplierName} · $${total.toFixed(2)}`;
     }
 
     // Link the captured document to the record (mirroring).

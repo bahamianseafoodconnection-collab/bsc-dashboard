@@ -68,6 +68,35 @@ export default function ReceivingStationPage() {
     })();
   }, []);
 
+  // Phase 2b: prefill from a captured document (?doc=…) once species+vessels load.
+  useEffect(() => {
+    const docId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('doc') : null;
+    if (!docId || species.length === 0) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(`/api/documents/${docId}`, { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` } });
+      const j = await r.json();
+      if (!j.ok) return;
+      const f = (j.document?.extracted ?? {}) as Record<string, unknown>;
+      const s = (k: string) => (typeof f[k] === 'string' ? f[k] as string : '');
+      const prodName = s('product_name') || (Array.isArray(f.products) ? String(f.products[0] ?? '') : s('products'));
+      const spMatch = species.find((x) => prodName && x.name.toLowerCase().includes(prodName.toLowerCase()))
+        || species.find((x) => s('species') && x.name.toLowerCase().includes(s('species').toLowerCase()));
+      if (spMatch) { setSpeciesCode(spMatch.code); setQc({}); setGrade(''); }
+      if (prodName) setProductName(prodName);
+      const wt = (s('weight') || s('total_weight') || s('total_weight_lbs')).replace(/[^0-9.]/g, '');
+      if (wt) setTotalWeight(wt);
+      if (s('fishing_area')) setFishingArea(s('fishing_area'));
+      if (s('fishing_method')) setFishingMethod(s('fishing_method'));
+      if (s('trip_start') || s('trip_start_location')) setTripStart(s('trip_start') || s('trip_start_location'));
+      if (s('trip_end') || s('trip_end_location')) setTripEnd(s('trip_end') || s('trip_end_location'));
+      const vName = (s('fisherman_name') || s('vessel_owner_name')).toLowerCase();
+      const vMatch = (vName && vessels.find((v) => (v.fisherman_name ?? '').toLowerCase().includes(vName)))
+        || (s('vessel_name') && vessels.find((v) => (v.vessel_name ?? '').toLowerCase().includes(s('vessel_name').toLowerCase())));
+      if (vMatch) setVesselId(vMatch.id);
+    })();
+  }, [species, vessels]);
+
   async function capturePhoto(file: File) {
     setBusy(true);
     try {

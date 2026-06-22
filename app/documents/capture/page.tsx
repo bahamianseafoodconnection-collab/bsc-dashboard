@@ -9,6 +9,7 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,7 @@ export default function DocumentCapturePage() {
   const [created, setCreated] = useState<{ label: string; matched: boolean; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   async function handleFile(file: File) {
     setErr(''); setRes(null);
@@ -60,7 +62,7 @@ export default function DocumentCapturePage() {
     reader.readAsDataURL(file);
   }
 
-  async function createEntity(target: 'supplier' | 'fisherman' | 'customer', label: string) {
+  async function createEntity(target: 'supplier' | 'fisherman' | 'customer' | 'purchase', label: string) {
     if (!res) return;
     setCreating(target); setErr('');
     try {
@@ -80,11 +82,14 @@ export default function DocumentCapturePage() {
   // Which "create record" actions apply, based on the extracted fields.
   const f = res?.fields ?? {};
   const has = (...keys: string[]) => keys.some((k) => f[k]);
-  const actions: Array<{ target: 'supplier' | 'fisherman' | 'customer'; label: string }> = res ? [
+  type Tgt = 'supplier' | 'fisherman' | 'customer' | 'purchase';
+  const actions: Array<{ target: Tgt; label: string }> = res ? [
     (res.doc_type === 'landing_report' || has('fisherman_name', 'vessel_name', 'vessel_registration')) ? { target: 'fisherman' as const, label: 'Fisherman / Vessel' } : null,
     has('supplier_name', 'company_name') ? { target: 'supplier' as const, label: 'Supplier' } : null,
     has('customer', 'customer_name', 'customer_phone') ? { target: 'customer' as const, label: 'Customer' } : null,
-  ].filter(Boolean) as Array<{ target: 'supplier' | 'fisherman' | 'customer'; label: string }> : [];
+    (res.doc_type === 'purchase_invoice' || res.doc_type === 'purchase_order' || has('invoice_number', 'line_items')) ? { target: 'purchase' as const, label: 'Purchase Invoice' } : null,
+  ].filter(Boolean) as Array<{ target: Tgt; label: string }> : [];
+  const canReceive = !!res && (res.doc_type === 'landing_report' || has('fisherman_name', 'vessel_name', 'fishing_area'));
 
   const traceEntries = res ? Object.entries(res.traceability).filter(([, v]) => v) : [];
   const sec: React.CSSProperties = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16, marginBottom: 14 };
@@ -151,7 +156,7 @@ export default function DocumentCapturePage() {
             </div>
           )}
 
-          {actions.length > 0 && !created && (
+          {(actions.length > 0 || canReceive) && !created && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Create / link record</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -161,6 +166,12 @@ export default function DocumentCapturePage() {
                     {creating === a.target ? 'Working…' : `+ ${a.label}`}
                   </button>
                 ))}
+                {canReceive && res?.document_id && (
+                  <button onClick={() => router.push(`/spinytails/receiving?doc=${res.document_id}`)}
+                    style={{ padding: '12px 16px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+                    📥 Send to Receiving Station →
+                  </button>
+                )}
               </div>
             </div>
           )}
