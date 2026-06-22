@@ -35,6 +35,8 @@ export default function DocumentCapturePage() {
   const [err, setErr] = useState('');
   const [creating, setCreating] = useState('');
   const [created, setCreated] = useState<{ label: string; matched: boolean; name: string } | null>(null);
+  const [command, setCommand] = useState('');
+  const [assistant, setAssistant] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -56,27 +58,47 @@ export default function DocumentCapturePage() {
         const j = await r.json();
         if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
         setRes(j as Result);
+        if (command.trim()) interpretAndAct(j as Result, command);
       } catch (e) { setErr(e instanceof Error ? e.message : 'Capture failed'); }
       finally { setBusy(false); }
     };
     reader.readAsDataURL(file);
   }
 
-  async function createEntity(target: 'supplier' | 'fisherman' | 'customer' | 'purchase', label: string) {
-    if (!res) return;
+  async function createEntity(target: 'supplier' | 'fisherman' | 'customer' | 'purchase', label: string, r: Result | null = res) {
+    if (!r) return;
     setCreating(target); setErr('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const r = await fetch('/api/documents/create-entity', {
+      const resp = await fetch('/api/documents/create-entity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ document_id: res.document_id, target, fields: res.fields }),
+        body: JSON.stringify({ document_id: r.document_id, target, fields: r.fields }),
       });
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      const j = await resp.json();
+      if (!resp.ok || !j.ok) throw new Error(j.error || `HTTP ${resp.status}`);
       setCreated({ label, matched: j.matched, name: j.name });
     } catch (e) { setErr(e instanceof Error ? e.message : 'Create failed'); }
     finally { setCreating(''); }
+  }
+
+  // Phase 3: interpret a natural-language command against the extracted doc.
+  function interpretAndAct(r: Result, cmd: string) {
+    const c = cmd.toLowerCase().trim();
+    const what = TYPE_LABEL[r.doc_type] ?? r.doc_type;
+    if (!c) return;
+    if (c.includes('what') || c.includes('identify') || c.endsWith('?')) { setAssistant(`This is a ${what}. ${r.summary}`); return; }
+    if (c.includes('receiv')) {
+      if (r.document_id) { setAssistant(`${what} → opening the Receiving Station prefilled…`); router.push(`/spinytails/receiving?doc=${r.document_id}`); }
+      else setAssistant('No document id — run the document SQL first.');
+      return;
+    }
+    if (c.includes('fisherman') || c.includes('vessel')) { setAssistant('Creating / linking fisherman / vessel…'); createEntity('fisherman', 'Fisherman / Vessel', r); return; }
+    if (c.includes('supplier')) { setAssistant('Creating / linking supplier…'); createEntity('supplier', 'Supplier', r); return; }
+    if (c.includes('customer')) { setAssistant('Creating / linking customer…'); createEntity('customer', 'Customer', r); return; }
+    if (c.includes('purchase') || c.includes('invoice') || c.includes(' po') || c.includes('order')) { setAssistant('Creating purchase invoice…'); createEntity('purchase', 'Purchase Invoice', r); return; }
+    if (c.includes('inventory') || c.includes('export') || c.includes('shipment')) { setAssistant(`This is a ${what}. Data is extracted + mirrored; that record type lands in a later phase.`); return; }
+    setAssistant(`This looks like a ${what}. ${r.summary} Try: "create supplier", "create receiving record", or "create purchase invoice".`);
   }
 
   // Which "create record" actions apply, based on the extracted fields.
@@ -104,11 +126,26 @@ export default function DocumentCapturePage() {
         <Link href="/dashboard" style={{ fontSize: 12, color: '#64748b' }}>← Control</Link>
       </div>
 
+      {/* AI assistant command */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>🤖 Ask / command (optional)</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={command} onChange={(e) => setCommand(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && res) interpretAndAct(res, command); }}
+            placeholder='e.g. "what is this?" · "create receiving record" · "create supplier"'
+            style={{ flex: 1, padding: 12, fontSize: 14, border: '2px solid #cbd5e1', borderRadius: 10 }} />
+          {res && <button onClick={() => interpretAndAct(res, command)} style={{ padding: '0 16px', background: '#f5c518', color: '#0b1628', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Go</button>}
+        </div>
+        <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>Type a command, then take a photo / upload — the assistant runs it automatically. Or upload first, then ask.</p>
+      </div>
+
       <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
         <button onClick={() => camRef.current?.click()} disabled={busy} style={{ flex: 1, padding: 16, background: '#0b1628', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>📷 Take photo</button>
         <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ flex: 1, padding: 16, background: '#fff', color: '#0b1628', border: '2px solid #cbd5e1', borderRadius: 12, fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>📁 Upload file</button>
       </div>
       <p style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: -6, marginBottom: 14 }}>Invoice · price list · landing report · export cert · health cert · PO · logbook…</p>
+
+      {assistant && <div style={{ background: '#eef2ff', border: '2px solid #6366f1', borderRadius: 12, padding: 14, marginBottom: 14, color: '#3730a3', fontSize: 14, fontWeight: 600 }}>🤖 {assistant}</div>}
 
       {busy && <div style={{ ...sec, textAlign: 'center', color: '#475569', fontWeight: 700 }}>🔍 Reading document… identifying type + extracting fields</div>}
       {err && <div style={{ ...sec, border: '2px solid #dc2626', background: '#fef2f2', color: '#b91c1c', fontWeight: 700 }}>⚠ {err}</div>}
