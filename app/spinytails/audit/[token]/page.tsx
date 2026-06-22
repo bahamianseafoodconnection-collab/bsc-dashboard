@@ -122,6 +122,12 @@ export default function AuditLandingPage({ params }: { params: Promise<{ token: 
       {/* Quick nav */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
         <NavTile icon="🦞" label="Lots" hint={`${lots.length} in scope`} />
+        <Link href={`/spinytails/audit/${encodeURIComponent(token)}/receiving`}
+          style={{ background: '#fff', borderRadius: 12, padding: 14, textDecoration: 'none', color: '#1a2e5a', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div style={{ fontSize: 22 }}>📥</div>
+          <div style={{ fontWeight: 800, fontSize: 14, marginTop: 4 }}>Receiving records (CCP-1)</div>
+          <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Temp · sulfite · sensory · harvest photos</div>
+        </Link>
         <Link href={`/spinytails/audit/${encodeURIComponent(token)}/documents`}
           style={{ background: '#fff', borderRadius: 12, padding: 14, textDecoration: 'none', color: '#1a2e5a', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <div style={{ fontSize: 22 }}>📚</div>
