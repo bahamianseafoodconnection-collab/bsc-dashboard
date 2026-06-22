@@ -288,3 +288,20 @@ VERIFY-AGAINST-LIVE TODO (founder): ring a test sale on EACH register (cash / ca
 Last browser-direct orders writes (admin status + fields) → new /api/orders/admin-update (role-gated, audited, batch-capable). Faithful: same legacy `status` vocabulary (Pending→Confirmed→Packing→Out for Delivery→Delivered, + pickup Ready-for-Pickup, + Cancelled, + wholesale 'processing'), customer notification stays client-side. Rewired /orders, /pickup-queue, /wholesale-orders, /dashboard/ar-aging. ZERO orders client writes remain platform-wide.
 
 KEY FINDING (verify-against-live): the `fulfillment_status` state machine (lib/order-status.ts) + /api/orders/[id]/transition route are DORMANT — wired to NO UI. The live order lifecycle runs entirely on the legacy `status` column: admin pages write it, and the CUSTOMER pages (/track, /my-orders) READ it (`o.status || o.payment_status`). So "consolidate onto the transition route" = a full workflow redesign (driver roles + PoD photos + re-pointing customer pages + vocabulary migration), NOT a refactor. DEFERRED as an explicit product decision: either wire up the state machine as a project, or delete it as dead code. Do not assume it's authoritative.
+
+---
+
+## 2026-06-22 — PICK TICKET + DRIVER FULFILLMENT SYSTEM (spec captured)
+
+Founder spec (Bahamas = US EASTERN time zone; use America/Nassau):
+- Every completed sale (online, POS Nassau, POS Andros, any future POS) produces a PICK TICKET separate from the invoice.
+- Pick ticket shows: SUPPLIER name, product name + SKU, product COST price.
+- Pick ticket goes to the supplier → 1 of 4 drivers confirms correct product name + SKU + cost on the Supplier Invoice (which IS our Purchase Order) → payment via online transfer → completes the customer order + purchase for delivery.
+- ALL POS sales (Nassau + Andros) are delivered to SPINY TAIL PROCESSING FACILITY — their pick tickets must state "DELIVER TO SPINY TAIL". Online sales deliver to the customer.
+- Any order with APPROVED PAYMENT before 9:00 PM ET → delivered 24 hours after approved payment.
+- Each day's total orders split across 4 drivers for supplier pickup + delivery to customer/Spiny Tail.
+- Assignment is per customer-product (per supplier group); 2+ drivers may serve one customer in a 24h window when the order spans multiple suppliers.
+
+EXISTING BACKBONE (do not rebuild): per-supplier purchase_orders auto-raised w/ supplier_name+items+unit_cost (lib/procurement/raise-resale-purchase-orders); /pick-ticket/[orderId] (combined, no supplier/cost); /driver dashboard + /api/driver/queue (online-only, fulfillment_status state machine, PoD); /purchase-orders/[id] (record transfer → mark paid); supplier-portal (PO status). GAPS: per-supplier pick ticket w/ cost + deliver-to, Spiny-Tail POS routing, driver PO-confirm→payment, 9pm/+24h window, driver_assigned_to assignment across 4, multi-supplier→multi-driver.
+
+STATUS: spec captured; 3 design decisions pending (payment automation, driver assignment, pick-ticket delivery channel) before phased build.
