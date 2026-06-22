@@ -324,3 +324,17 @@ COMPLIANCE: Bahamas Fisheries + Health regs, FDA Seafood HACCP, export docs, int
 EXISTING (per [[project_spinytails_haccp]] + [[project_inventory_revamp_plan]] + [[project_intake_step_ownership]] + [[project_vessel_registration]] + [[project_fisherman_login]]): ~14 spinytails_* tables, lot code STPC-YYYYMMDD-VV-NN via spinytails_next_lot_code(), 5 CCPs (CHECK), full trace view, RLS qc_staff write/admin delete; lobster-intake receiving flow (Step1 fisherman vessel+GPS+raw weight; Step2/3 operator freezer/production/grading/case-packing).
 
 STATUS: spec captured. MUST gap-analyze against existing spinytails_* + lobster-intake BEFORE building. Decisions pending (batch# scheme vs existing lot code; new device pages vs extend lobster-intake; mixing-lock enforcement).
+
+---
+
+## 2026-06-22 — LABEL PRINTING SYSTEM (spec captured)
+
+Printer: Rollo X1040 thermal (Zebra-compatible). Requirements: direct browser print, PDF generation, thermal print, batch printing, QR + barcode, + label TYPES: export carton, tray, blast-freezer rack, receiving, inventory. Configurable templates. Sizes: 4x6 shipping, custom thermal, carton, inventory.
+Required fields: Product Name, Batch Number, Product Weight, Processing Date, Supplier/Fisherman, Storage Location, Tray Number, Rack Number, QR Code, Barcode.
+Batch number MUST appear human-readable + QR; original receiving batch number unchanged on ALL labels receiving->export. Libs named: PDFKit/jsPDF/react-to-print, JsBarcode, qrcode.
+
+EXISTING: /lobster-labels (trilingual export, Zebra ZD420 4x6 + Avery), /spinytails/lots/[lot_code]/stickers (trace QR Avery). Both use qrserver.com EXTERNAL API for QR; NO barcode; qrcode/jsbarcode/jspdf NOT installed.
+
+PLAN: reusable label engine — QR (qrcode lib, local) + barcode Code128 (JsBarcode) rendered to data URLs, label HTML at configurable size (default 4x6), window.print() to Rollo (also satisfies print-to-PDF). 5 label types share one renderer pulling fields from batch_number/lot/intake/processing. Start with RECEIVING label (printed right after Receiving Station generates the batch). Needs deps: qrcode + jsbarcode (+ @types/qrcode). This is Spiny Tail Phase 4 (tray/rack/carton/receiving labels).
+
+STATUS: spec captured; build next after combined receiving SQL is run + receiving tested.
