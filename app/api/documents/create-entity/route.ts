@@ -1,0 +1,126 @@
+// /api/documents/create-entity
+//
+// Universal Document Capture — Phase 2 (match → create records).
+// Given a captured document's extracted fields + a target entity, MATCHES an
+// existing record (by name / phone) or CREATES a new one, then links the
+// captured document to it (mirroring: original ↔ system record).
+//
+// Targets: 'customer', 'supplier', 'fisherman' (a supplier with vessel fields).
+// Guardrails: new suppliers default to supplier_type='bsc_direct' (never an
+// auto-classification that could mislabel a partner/competitor — flagged in
+// notes for founder review). Complex records (products / receiving / PO /
+// export) route to their existing validated forms instead of direct insert.
+//
+// Body: { document_id?, target, fields }
+// Resp: { ok, matched, created, record_type, record_id, name }
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// Creating master records (suppliers/customers) is an admin action.
+const ADMIN = new Set(['founder', 'co_founder', 'control_admin', 'basic_admin', 'manager']);
+const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+function firstOf(f: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) { const v = str(f[k]); if (v) return v; }
+  return null;
+}
+
+async function uniqueSupplierCode(admin: SupabaseClient, name: string): Promise<string> {
+  const base = (name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'SUP');
+  for (let i = 0; i < 50; i++) {
+    const candidate = i === 0 ? base : `${base.slice(0, 6)}${i}`;
+    const { data } = await admin.from('suppliers').select('id').eq('code', candidate).limit(1);
+    if (!data || data.length === 0) return candidate;
+  }
+  return `${base.slice(0, 5)}${Date.now().toString().slice(-3)}`;
+}
+
+export async function POST(req: NextRequest) {
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  if (!supaUrl || !anonKey || !svcKey) return NextResponse.json({ ok: false, error: 'Supabase not configured' }, { status: 500 });
+
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.startsWith('Bearer ')) return NextResponse.json({ ok: false, error: 'Sign in required' }, { status: 401 });
+  const userClient = createClient(supaUrl, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
+  const { data: { user }, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !user) return NextResponse.json({ ok: false, error: 'Invalid session' }, { status: 401 });
+  const { data: prof } = await userClient.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  const role = (prof as { role?: string | null } | null)?.role ?? null;
+  if (!role || !ADMIN.has(role)) return NextResponse.json({ ok: false, error: `Role "${role ?? 'none'}" cannot create records from documents.` }, { status: 403 });
+
+  let b: { document_id?: unknown; target?: unknown; fields?: unknown };
+  try { b = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
+  const docId = str(b.document_id);
+  const target = b.target === 'customer' || b.target === 'supplier' || b.target === 'fisherman' ? b.target : '';
+  const f = (b.fields && typeof b.fields === 'object') ? b.fields as Record<string, unknown> : {};
+  if (!target) return NextResponse.json({ ok: false, error: "target must be 'customer', 'supplier', or 'fisherman'" }, { status: 400 });
+
+  const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  let recordType = '', recordId: string | null = null, name = '', matched = false, created = false;
+
+  try {
+    if (target === 'customer') {
+      recordType = 'customer';
+      name = firstOf(f, ['customer', 'customer_name', 'full_name', 'name']) ?? '';
+      const phone = firstOf(f, ['customer_phone', 'phone']);
+      if (!name && !phone) return NextResponse.json({ ok: false, error: 'No customer name/phone in the document' }, { status: 422 });
+      // Match by phone first, then name.
+      let q = admin.from('customers').select('id, full_name').limit(1);
+      q = phone ? q.eq('phone', phone) : q.ilike('full_name', name);
+      const { data: existing } = await q;
+      if (existing && existing.length > 0) { recordId = (existing[0] as { id: string }).id; matched = true; name = (existing[0] as { full_name: string }).full_name ?? name; }
+      else {
+        const { data: ins, error } = await admin.from('customers').insert({ full_name: name || null, phone, origin_channel: 'document', created_by: user.id, notes: 'Auto-created from captured document' }).select('id').single();
+        if (error) throw new Error(error.message);
+        recordId = (ins as { id: string }).id; created = true;
+      }
+    } else {
+      // supplier / fisherman → suppliers table
+      recordType = 'supplier';
+      const isFisherman = target === 'fisherman';
+      name = firstOf(f, isFisherman ? ['fisherman_name', 'vessel_owner_name', 'company_name', 'supplier_name'] : ['supplier_name', 'company_name', 'name']) ?? '';
+      if (!name) return NextResponse.json({ ok: false, error: 'No supplier/fisherman name in the document' }, { status: 422 });
+      const { data: existing } = await admin.from('suppliers').select('id, name').ilike('name', name).limit(1);
+      if (existing && existing.length > 0) { recordId = (existing[0] as { id: string }).id; matched = true; name = (existing[0] as { name: string }).name ?? name; }
+      else {
+        const code = await uniqueSupplierCode(admin, name);
+        const row: Record<string, unknown> = {
+          code, name, supplier_type: 'bsc_direct', country: 'The Bahamas', default_currency: 'BSD',
+          contact_phone: firstOf(f, ['phone', 'supplier_phone', 'fisherman_phone', 'contact_phone']),
+          contact_name: firstOf(f, ['contact_name', 'fisherman_name']),
+          notes: 'Auto-created from captured document — review classification.',
+          created_by: user.id,
+        };
+        if (isFisherman) {
+          row.vessel_name = firstOf(f, ['vessel_name']);
+          row.vessel_registration_number = firstOf(f, ['vessel_registration', 'vessel_number', 'vessel_registration_number']);
+          row.vessel_captain_name = firstOf(f, ['captain', 'fisherman_name']);
+        }
+        const { data: ins, error } = await admin.from('suppliers').insert(row).select('id').single();
+        if (error) throw new Error(error.message);
+        recordId = (ins as { id: string }).id; created = true;
+      }
+    }
+
+    // Link the captured document to the record (mirroring).
+    if (docId && recordId) {
+      await admin.from('captured_documents').update({ status: 'linked', linked_record_type: recordType, linked_record_id: recordId }).eq('id', docId);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'create failed';
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
+
+  try {
+    await admin.from('ai_writes').insert({ tool: 'documents_create_entity', caller_id: user.id, input: { target, document_id: docId }, result: { record_type: recordType, record_id: recordId, matched, created, role }, status: 'success', error: null });
+  } catch { /* non-fatal */ }
+
+  return NextResponse.json({ ok: true, matched, created, record_type: recordType, record_id: recordId, name });
+}

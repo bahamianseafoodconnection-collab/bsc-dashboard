@@ -32,6 +32,8 @@ export default function DocumentCapturePage() {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<Result | null>(null);
   const [err, setErr] = useState('');
+  const [creating, setCreating] = useState('');
+  const [created, setCreated] = useState<{ label: string; matched: boolean; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
 
@@ -57,6 +59,32 @@ export default function DocumentCapturePage() {
     };
     reader.readAsDataURL(file);
   }
+
+  async function createEntity(target: 'supplier' | 'fisherman' | 'customer', label: string) {
+    if (!res) return;
+    setCreating(target); setErr('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch('/api/documents/create-entity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ document_id: res.document_id, target, fields: res.fields }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      setCreated({ label, matched: j.matched, name: j.name });
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Create failed'); }
+    finally { setCreating(''); }
+  }
+
+  // Which "create record" actions apply, based on the extracted fields.
+  const f = res?.fields ?? {};
+  const has = (...keys: string[]) => keys.some((k) => f[k]);
+  const actions: Array<{ target: 'supplier' | 'fisherman' | 'customer'; label: string }> = res ? [
+    (res.doc_type === 'landing_report' || has('fisherman_name', 'vessel_name', 'vessel_registration')) ? { target: 'fisherman' as const, label: 'Fisherman / Vessel' } : null,
+    has('supplier_name', 'company_name') ? { target: 'supplier' as const, label: 'Supplier' } : null,
+    has('customer', 'customer_name', 'customer_phone') ? { target: 'customer' as const, label: 'Customer' } : null,
+  ].filter(Boolean) as Array<{ target: 'supplier' | 'fisherman' | 'customer'; label: string }> : [];
 
   const traceEntries = res ? Object.entries(res.traceability).filter(([, v]) => v) : [];
   const sec: React.CSSProperties = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16, marginBottom: 14 };
@@ -116,7 +144,28 @@ export default function DocumentCapturePage() {
         <div style={sec}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Extracted fields</div>
           {Object.keys(res.fields).length === 0 ? <div style={{ color: '#94a3b8', fontSize: 13 }}>No fields extracted.</div> : <FieldTable fields={res.fields} />}
-          <p style={{ fontSize: 12, color: '#64748b', marginTop: 12 }}>✓ Original preserved + mirrored. Auto-creating the matching record (supplier / receiving / PO / export) from these fields is the next phase.</p>
+
+          {created && (
+            <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: '#f0fdf4', border: '2px solid #16a34a', color: '#166534', fontWeight: 700, fontSize: 14 }}>
+              ✓ {created.label}: {created.matched ? 'linked to existing' : 'created'} — <b>{created.name}</b>{!created.matched && created.label.startsWith('Supplier') ? ' (review classification)' : ''}
+            </div>
+          )}
+
+          {actions.length > 0 && !created && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Create / link record</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {actions.map((a) => (
+                  <button key={a.target} onClick={() => createEntity(a.target, a.label)} disabled={!!creating}
+                    style={{ padding: '12px 16px', background: '#0b1628', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer', opacity: creating ? 0.6 : 1 }}>
+                    {creating === a.target ? 'Working…' : `+ ${a.label}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p style={{ fontSize: 12, color: '#64748b', marginTop: 12 }}>✓ Original preserved + mirrored. Products · receiving · purchase orders route to their dedicated forms (next).</p>
         </div>
       )}
     </div>
