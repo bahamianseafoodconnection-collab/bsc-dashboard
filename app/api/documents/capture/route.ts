@@ -14,6 +14,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import mammoth from 'mammoth';
+import * as XLSX from 'xlsx';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,11 +79,30 @@ export async function POST(req: NextRequest) {
     if (!upErr) fileUrl = admin.storage.from('site-images').getPublicUrl(path).data.publicUrl;
   } catch { /* non-fatal — extraction can still proceed */ }
 
-  // 2) Claude vision: classify + extract.
-  const isPdf = mime.includes('pdf');
-  const contentBlock = isPdf
-    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }
-    : { type: 'image', source: { type: 'base64', media_type: mime.startsWith('image/') ? mime : 'image/jpeg', data: b64 } };
+  // 2) Build the Claude content. Images + PDF go as vision blocks; DOCX/XLSX
+  //    are text-extracted server-side (Claude reads the text). HEIC is converted
+  //    to JPEG client-side before upload, so the server only sees jpeg/png/pdf.
+  const isPdf  = mime.includes('pdf');
+  const isDocx = mime.includes('wordprocessingml') || fileName.toLowerCase().endsWith('.docx');
+  const isXlsx = mime.includes('spreadsheetml') || /\.(xlsx|xls)$/i.test(fileName);
+
+  let content: unknown[];
+  try {
+    if (isDocx) {
+      const { value } = await mammoth.extractRawText({ buffer: Buffer.from(b64, 'base64') });
+      content = [{ type: 'text', text: `Document content (extracted from a Word .docx):\n\n${value.slice(0, 24000)}\n\n${PROMPT}` }];
+    } else if (isXlsx) {
+      const wb = XLSX.read(Buffer.from(b64, 'base64'), { type: 'buffer' });
+      const text = wb.SheetNames.map((n) => `# Sheet: ${n}\n${XLSX.utils.sheet_to_csv(wb.Sheets[n])}`).join('\n\n').slice(0, 24000);
+      content = [{ type: 'text', text: `Document content (extracted from an Excel spreadsheet):\n\n${text}\n\n${PROMPT}` }];
+    } else if (isPdf) {
+      content = [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }, { type: 'text', text: PROMPT }];
+    } else {
+      content = [{ type: 'image', source: { type: 'base64', media_type: mime.startsWith('image/') ? mime : 'image/jpeg', data: b64 } }, { type: 'text', text: PROMPT }];
+    }
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: `Could not read this file: ${e instanceof Error ? e.message : 'unsupported'}` }, { status: 422 });
+  }
 
   let parsed: Record<string, unknown> = { doc_type: 'other', confidence: 0, summary: '', fields: {}, traceability: {} };
   let aiErr: string | null = null;
@@ -91,7 +112,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-opus-4-5', max_tokens: 2048,
-        messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: PROMPT }] }],
+        messages: [{ role: 'user', content }],
       }),
     });
     const data = await res.json();

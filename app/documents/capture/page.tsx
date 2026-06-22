@@ -41,8 +41,20 @@ export default function DocumentCapturePage() {
   const camRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  async function handleFile(file: File) {
-    setErr(''); setRes(null);
+  async function handleFile(input: File) {
+    setErr(''); setRes(null); setAssistant(''); setCreated(null);
+    let file = input;
+    // Phase 4: convert HEIC → JPEG (Claude can't read HEIC) before sending.
+    if (file.type === 'image/heic' || file.type === 'image/heif' || /\.heic$/i.test(file.name)) {
+      setBusy(true);
+      try {
+        const heic2any = (await import('heic2any')).default as (o: { blob: Blob; toType?: string; quality?: number }) => Promise<Blob | Blob[]>;
+        const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+        const blob = Array.isArray(out) ? out[0] : out;
+        file = new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+      } catch { setBusy(false); setErr('Could not convert that HEIC photo — try saving it as JPEG.'); return; }
+      setBusy(false);
+    }
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
@@ -118,7 +130,7 @@ export default function DocumentCapturePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', padding: 16, fontFamily: 'system-ui', maxWidth: 640, margin: '0 auto' }}>
-      <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFile(f); }} />
+      <input ref={fileRef} type="file" accept="image/*,application/pdf,.heic,.docx,.xlsx,.xls" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFile(f); }} />
       <input ref={camRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFile(f); }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
