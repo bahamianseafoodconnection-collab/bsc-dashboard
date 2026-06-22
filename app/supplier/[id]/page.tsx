@@ -62,6 +62,13 @@ interface SupplierProduct {
   cost_per_unit: number | null;              // current cost from product_costs join
   retail_margin_pct: number;                  // current online_market margin (default 35)
   wholesale_margin_pct: number;               // current local_wholesale margin (default 15)
+  // Whether a CURRENT product_pricing row exists for each channel. A product is
+  // only truly "live" to customers when its sell_* flag is on AND a price exists
+  // (the storefront/POS filter on a current channel price). Defaults false.
+  priced_nassau?: boolean;
+  priced_andros?: boolean;
+  priced_online?: boolean;
+  priced_wholesale?: boolean;
 }
 type RowSaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -201,22 +208,32 @@ export default function SupplierDetailPage() {
   }
 
   // PATCH the product. Accepts a partial — only changed fields go in body.
-  async function patchProduct(id: string, patch: Record<string, unknown>) {
+  // Returns true on a confirmed server success, false otherwise, so callers
+  // (e.g. the Live toggle) can revert their optimistic update on failure.
+  async function patchProduct(id: string, patch: Record<string, unknown>): Promise<boolean> {
     setRowStatus(id, 'saving');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) { setRowStatus(id, 'error', 'Sign-in expired'); return; }
+      if (!token) { setRowStatus(id, 'error', 'Sign-in expired'); console.error('[patchProduct] no session token', { id, patch }); return false; }
       const res = await fetch(`/api/admin/products/${id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify(patch),
       });
-      const j = await res.json();
-      if (!res.ok || !j.ok) { setRowStatus(id, 'error', j.error || `HTTP ${res.status}`); return; }
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) {
+        setRowStatus(id, 'error', j.error || `HTTP ${res.status}`);
+        console.error('[patchProduct] FAILED', { id, patch, httpStatus: res.status, response: j });
+        return false;
+      }
       setRowStatus(id, 'saved');
+      console.log('[patchProduct] ok', { id, patch, updated: j.updated_fields });
+      return true;
     } catch (e) {
       setRowStatus(id, 'error', e instanceof Error ? e.message : 'save failed');
+      console.error('[patchProduct] EXCEPTION', { id, patch, error: e });
+      return false;
     }
   }
 
@@ -232,10 +249,13 @@ export default function SupplierDetailPage() {
   // { channel_margins: { online_market: 35 } } as PERCENT and routes it
   // through bsc_set_channel_price which keeps margin_multiplier + price
   // in sync atomically.
-  function patchChannelMargin(productId: string, channel: 'online_market' | 'local_wholesale', pct: number) {
+  async function patchChannelMargin(productId: string, channel: 'online_market' | 'local_wholesale', pct: number) {
     const localField: keyof SupplierProduct = channel === 'online_market' ? 'retail_margin_pct' : 'wholesale_margin_pct';
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, [localField]: pct } : p));
-    patchProduct(productId, { channel_margins: { [channel]: pct } });
+    const ok = await patchProduct(productId, { channel_margins: { [channel]: pct } });
+    // Setting a margin creates/updates a channel price — re-read so the price-aware
+    // "Live" pill flips green once a price actually exists.
+    if (ok) await refreshProductState(productId);
   }
 
   async function uploadRowImage(p: SupplierProduct, file: File) {
@@ -287,6 +307,10 @@ export default function SupplierDetailPage() {
       const costMap:   Record<string, number | null> = {};
       const retailMap: Record<string, number>        = {};
       const wholeMap:  Record<string, number>        = {};
+      // Per-product set of channels that have a CURRENT price (manual_unit_price
+      // not null). Drives the price-aware "Live" pill — a sell_* flag without a
+      // price doesn't actually show to customers.
+      const pricedMap: Record<string, { nassau: boolean; andros: boolean; online: boolean; wholesale: boolean }> = {};
       // Chunk the id-set so .in() never builds an oversized request URL — a
       // ~1,800-product supplier would otherwise blow the URL limit and throw.
       const ids = productList.map((p) => p.id);
@@ -298,18 +322,26 @@ export default function SupplierDetailPage() {
             .select('product_id, cost_per_unit')
             .in('product_id', slice).eq('is_current', true),
           supabase.from('product_pricing')
-            .select('product_id, channel, margin_multiplier')
-            .in('product_id', slice).eq('is_current', true)
-            .in('channel', ['online_market', 'local_wholesale']),
+            .select('product_id, channel, margin_multiplier, manual_unit_price')
+            .in('product_id', slice).eq('is_current', true).eq('is_active', true)
+            .in('channel', ['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale']),
         ]);
         for (const c of ((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>)) {
           costMap[c.product_id] = c.cost_per_unit != null ? Number(c.cost_per_unit) : null;
         }
-        for (const row of ((pricing ?? []) as Array<{ product_id: string; channel: string; margin_multiplier: number | null }>)) {
+        for (const row of ((pricing ?? []) as Array<{ product_id: string; channel: string; margin_multiplier: number | null; manual_unit_price: number | null }>)) {
           const pct = row.margin_multiplier != null ? Math.round((Number(row.margin_multiplier) - 1) * 10000) / 100 : NaN;
-          if (!Number.isFinite(pct)) continue;
-          if (row.channel === 'online_market')   retailMap[row.product_id] = pct;
-          if (row.channel === 'local_wholesale') wholeMap[row.product_id]  = pct;
+          if (Number.isFinite(pct)) {
+            if (row.channel === 'online_market')   retailMap[row.product_id] = pct;
+            if (row.channel === 'local_wholesale') wholeMap[row.product_id]  = pct;
+          }
+          if (row.manual_unit_price != null) {
+            const e = (pricedMap[row.product_id] ??= { nassau: false, andros: false, online: false, wholesale: false });
+            if (row.channel === 'nassau_pos')      e.nassau    = true;
+            if (row.channel === 'andros_pos')      e.andros    = true;
+            if (row.channel === 'online_market')   e.online    = true;
+            if (row.channel === 'local_wholesale') e.wholesale = true;
+          }
         }
       }
       setProducts(productList.map((p) => ({
@@ -317,6 +349,10 @@ export default function SupplierDetailPage() {
         cost_per_unit:        costMap[p.id]   ?? null,
         retail_margin_pct:    retailMap[p.id] ?? DEFAULT_RETAIL_MARGIN,
         wholesale_margin_pct: wholeMap[p.id]  ?? DEFAULT_WHOLESALE_MARGIN,
+        priced_nassau:    pricedMap[p.id]?.nassau    ?? false,
+        priced_andros:    pricedMap[p.id]?.andros    ?? false,
+        priced_online:    pricedMap[p.id]?.online    ?? false,
+        priced_wholesale: pricedMap[p.id]?.wholesale ?? false,
       })));
     } catch (e) {
       showToast(`Load failed: ${e instanceof Error ? e.message : 'unknown'}`, false);
@@ -623,34 +659,103 @@ export default function SupplierDetailPage() {
   }
 
   // ── Product card actions ──
+  type ChannelFlag = 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale';
+  const CHANNEL_LABEL: Record<ChannelFlag, string> = {
+    sell_nassau: 'Nassau', sell_andros: 'Andros', sell_online: 'Online', sell_wholesale: 'Wholesale',
+  };
+  // pricing-channel + priced_* field that pairs with each sell_* flag.
+  const CHANNEL_PRICE: Record<ChannelFlag, { channel: string; pricedField: keyof SupplierProduct }> = {
+    sell_nassau:    { channel: 'nassau_pos',      pricedField: 'priced_nassau' },
+    sell_andros:    { channel: 'andros_pos',      pricedField: 'priced_andros' },
+    sell_online:    { channel: 'online_market',   pricedField: 'priced_online' },
+    sell_wholesale: { channel: 'local_wholesale', pricedField: 'priced_wholesale' },
+  };
+
+  // Re-read the authoritative DB state for one product — sell_* flags, status,
+  // and which channels actually have a current price — then sync local state so
+  // the UI can NEVER drift from the database. Returns the fresh row (or null).
+  async function refreshProductState(productId: string) {
+    const [{ data: prow }, { data: prices }] = await Promise.all([
+      supabase.from('products')
+        .select('sell_nassau, sell_andros, sell_online, sell_wholesale, status')
+        .eq('id', productId).maybeSingle(),
+      supabase.from('product_pricing')
+        .select('channel, manual_unit_price')
+        .eq('product_id', productId).eq('is_current', true).eq('is_active', true),
+    ]);
+    if (!prow) return null;
+    const r = prow as Pick<SupplierProduct, 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale' | 'status'>;
+    const priced = { nassau_pos: false, andros_pos: false, online_market: false, local_wholesale: false } as Record<string, boolean>;
+    for (const row of (prices ?? []) as Array<{ channel: string; manual_unit_price: number | null }>) {
+      if (row.manual_unit_price != null) priced[row.channel] = true;
+    }
+    const fresh: Partial<SupplierProduct> = {
+      sell_nassau: r.sell_nassau, sell_andros: r.sell_andros, sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
+      status: r.status,
+      priced_nassau: priced.nassau_pos, priced_andros: priced.andros_pos, priced_online: priced.online_market, priced_wholesale: priced.local_wholesale,
+    };
+    setProducts(prev => prev.map(x => x.id === productId ? { ...x, ...fresh } : x));
+    console.log('[Live toggle] DB confirm', { productId, db: r, pricedChannels: priced });
+    return { ...r, priced };
+  }
+
   // Toggle ONE sell channel from the "Live" popover. The lifecycle `status`
   // enum (product_status: draft | pending_approval | active | discontinued |
   // archived) is SEPARATE from per-channel visibility (sell_*). Turning a
-  // channel ON promotes a not-yet-live product to 'active' so it actually
-  // shows; turning channels OFF only clears the flag (never writes a bogus
-  // 'inactive' — that value isn't in the enum and 500s the whole UPDATE).
-  type ChannelFlag = 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale';
-  function toggleChannel(p: SupplierProduct, ch: ChannelFlag) {
-    const nextVal = !p[ch];
-    // Going live on a channel forces status=active (valid for any prior state).
-    // Turning a channel off leaves status untouched — sell_* alone controls
-    // per-channel visibility, so all-off simply means "not sold anywhere".
+  // channel ON promotes a not-yet-live product to 'active'; OFF leaves status
+  // untouched (never writes a bogus 'inactive' — not in the enum, 500s the row).
+  // Awaits the write, REVERTS the optimistic flip on failure, then re-reads the
+  // DB to confirm and to warn when a product is on-but-unpriced (so invisible).
+  async function toggleChannel(p: SupplierProduct, ch: ChannelFlag) {
+    const prevVal = p[ch];
+    const prevStatus = p.status;
+    const nextVal = !prevVal;
     const nextStatus = nextVal && p.status !== 'active' ? 'active' : p.status;
+    console.log('[Live toggle] click', { productId: p.id, name: p.name, channel: ch, prevValue: prevVal, newValue: nextVal, prevStatus, newStatus: nextStatus });
+
+    // Optimistic
     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [ch]: nextVal, status: nextStatus } : x));
     const patch: Record<string, unknown> = { [ch]: nextVal };
-    if (nextStatus !== p.status) patch.status = nextStatus;
-    patchProduct(p.id, patch);
+    if (nextStatus !== prevStatus) patch.status = nextStatus;
+
+    const ok = await patchProduct(p.id, patch);
+    if (!ok) {
+      // Revert — never leave the switch showing ON when the DB write failed.
+      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [ch]: prevVal, status: prevStatus } : x));
+      showToast(`Couldn't update ${p.name} — change reverted. Try again.`, false);
+      return;
+    }
+
+    // Confirm against the DB (data refresh) + report true customer visibility.
+    const fresh = await refreshProductState(p.id);
+    const label = CHANNEL_LABEL[ch];
+    if (nextVal) {
+      const isPriced = fresh?.priced?.[CHANNEL_PRICE[ch].channel];
+      if (isPriced) showToast(`✓ ${p.name} is now LIVE on ${label}`);
+      else showToast(`${p.name} turned ON for ${label}, but it has no ${label} price yet — set a cost/price so customers can see it.`, false);
+    } else {
+      showToast(`${p.name} removed from ${label}`);
+    }
   }
 
   // Take a product fully offline from the "Live" popover — clears every channel
   // in one write. status is left as-is (clearing channels already hides it
   // everywhere; the pill reads "Off" because no channel is on).
-  function takeOffline(p: SupplierProduct) {
+  async function takeOffline(p: SupplierProduct) {
+    setChannelMenu(null);
+    const snapshot = { sell_nassau: p.sell_nassau, sell_andros: p.sell_andros, sell_online: p.sell_online, sell_wholesale: p.sell_wholesale };
+    console.log('[Live toggle] takeOffline', { productId: p.id, name: p.name, was: snapshot });
     setProducts(prev => prev.map(x => x.id === p.id
       ? { ...x, sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false }
       : x));
-    patchProduct(p.id, { sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false });
-    setChannelMenu(null);
+    const ok = await patchProduct(p.id, { sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false });
+    if (!ok) {
+      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, ...snapshot } : x));
+      showToast(`Couldn't take ${p.name} offline — reverted. Try again.`, false);
+      return;
+    }
+    await refreshProductState(p.id);
+    showToast(`${p.name} taken offline (all channels)`);
   }
 
   function openProductEditor(p: SupplierProduct) {
@@ -945,22 +1050,20 @@ export default function SupplierDetailPage() {
                         const err      = rowError[p.id];
                         const imgBusy  = !!rowImgBusy[p.id];
                         const rowBg    = state === 'error' ? 'rgba(220,38,38,0.08)' : state === 'saved' ? 'rgba(34,197,94,0.06)' : 'transparent';
-                        // "Live" = active AND on ≥1 sell channel (active-but-no-channel
-                        // is invisible to customers, so we never call that Live).
-                        const liveChannels = [
-                          p.sell_nassau    && 'Nas',
-                          p.sell_andros    && 'And',
-                          p.sell_online    && 'Onl',
-                          p.sell_wholesale && 'Whs',
-                        ].filter(Boolean) as string[];
-                        const isLive   = isActive && liveChannels.length > 0;
                         const menuOpen = channelMenu?.id === p.id;
-                        const CHANNELS: { flag: ChannelFlag; label: string }[] = [
-                          { flag: 'sell_nassau',    label: '🟡 Nassau POS / shop' },
-                          { flag: 'sell_andros',    label: '🟣 Andros' },
-                          { flag: 'sell_online',    label: '🌐 Online market' },
-                          { flag: 'sell_wholesale', label: '📦 Wholesale' },
+                        const CHANNELS: { flag: ChannelFlag; abbr: string; label: string; priced: boolean }[] = [
+                          { flag: 'sell_nassau',    abbr: 'Nas', label: '🟡 Nassau POS / shop', priced: !!p.priced_nassau },
+                          { flag: 'sell_andros',    abbr: 'And', label: '🟣 Andros',           priced: !!p.priced_andros },
+                          { flag: 'sell_online',    abbr: 'Onl', label: '🌐 Online market',    priced: !!p.priced_online },
+                          { flag: 'sell_wholesale', abbr: 'Whs', label: '📦 Wholesale',        priced: !!p.priced_wholesale },
                         ];
+                        // A channel is truly LIVE (visible to customers) only when its
+                        // flag is on AND a price exists. Flag-on-but-unpriced shows amber.
+                        const onChannels    = CHANNELS.filter(c => p[c.flag]);
+                        const livePriced    = onChannels.filter(c => c.priced);
+                        const isLive        = isActive && livePriced.length > 0;
+                        const needsPrice    = isActive && onChannels.length > 0 && livePriced.length === 0;
+                        const liveChannels  = livePriced.map(c => c.abbr);
                         return (
                           <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', backgroundColor: rowBg, opacity: isActive ? 1 : 0.55 }}>
                             <td style={{ padding: '6px 8px', position: 'relative' }}>
@@ -970,16 +1073,20 @@ export default function SupplierDetailPage() {
                                   const r = e.currentTarget.getBoundingClientRect();
                                   setChannelMenu({ id: p.id, x: r.left, y: r.bottom });
                                 }}
-                                title={isLive ? `Live on: ${liveChannels.join(', ')} — tap to change channels` : 'Off — tap to activate to a channel'}
+                                title={
+                                  isLive ? `Live on: ${liveChannels.join(', ')} — tap to change channels`
+                                  : needsPrice ? 'Switched on, but no price yet — set a cost/price so customers can see it'
+                                  : 'Off — tap to activate to a channel'
+                                }
                                 style={{
                                   display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer',
                                   borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap',
-                                  border: isLive ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.18)',
-                                  backgroundColor: isLive ? 'rgba(34,197,94,0.14)' : 'rgba(255,255,255,0.04)',
-                                  color: isLive ? '#4ade80' : 'rgba(255,255,255,0.55)',
+                                  border: isLive ? '1px solid rgba(34,197,94,0.5)' : needsPrice ? '1px solid rgba(251,191,36,0.5)' : '1px solid rgba(255,255,255,0.18)',
+                                  backgroundColor: isLive ? 'rgba(34,197,94,0.14)' : needsPrice ? 'rgba(251,191,36,0.14)' : 'rgba(255,255,255,0.04)',
+                                  color: isLive ? '#4ade80' : needsPrice ? '#fbbf24' : 'rgba(255,255,255,0.55)',
                                 }}>
-                                <span style={{ fontSize: 9 }}>{isLive ? '🟢' : '⚪'}</span>
-                                {isLive ? liveChannels.join('·') : 'Off'}
+                                <span style={{ fontSize: 9 }}>{isLive ? '🟢' : needsPrice ? '⚠️' : '⚪'}</span>
+                                {isLive ? liveChannels.join('·') : needsPrice ? 'No price' : 'Off'}
                                 <span style={{ opacity: 0.6, fontSize: 8 }}>▾</span>
                               </button>
                               {menuOpen && (
@@ -997,6 +1104,12 @@ export default function SupplierDetailPage() {
                                     </div>
                                     {CHANNELS.map(c => {
                                       const on = p[c.flag];
+                                      // on + no price = visible-blocking; flag it so the
+                                      // founder knows why the product isn't showing.
+                                      const badge = on ? (c.priced ? 'LIVE' : 'NO PRICE') : 'off';
+                                      const badgeColor = on ? (c.priced ? '#4ade80' : '#fbbf24') : 'rgba(255,255,255,0.4)';
+                                      const badgeBg = on ? (c.priced ? 'rgba(34,197,94,0.18)' : 'rgba(251,191,36,0.18)') : 'rgba(255,255,255,0.06)';
+                                      const badgeBorder = on ? (c.priced ? 'rgba(34,197,94,0.4)' : 'rgba(251,191,36,0.4)') : 'rgba(255,255,255,0.12)';
                                       return (
                                         <button key={c.flag} onClick={() => toggleChannel(p, c.flag)}
                                           style={{
@@ -1007,19 +1120,22 @@ export default function SupplierDetailPage() {
                                           }}>
                                           <span>{c.label}</span>
                                           <span style={{
-                                            fontSize: 10, fontWeight: 800, borderRadius: 999, padding: '2px 8px',
-                                            backgroundColor: on ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.06)',
-                                            color: on ? '#4ade80' : 'rgba(255,255,255,0.4)',
-                                            border: on ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.12)',
-                                          }}>{on ? 'ON' : 'off'}</span>
+                                            fontSize: 9, fontWeight: 800, borderRadius: 999, padding: '2px 7px', whiteSpace: 'nowrap',
+                                            backgroundColor: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}`,
+                                          }}>{badge}</span>
                                         </button>
                                       );
                                     })}
+                                    {needsPrice && (
+                                      <div style={{ fontSize: 10, color: '#fbbf24', padding: '4px 6px 2px', lineHeight: 1.35 }}>
+                                        ⚠️ Switched on but unpriced — set a Cost (and Retail/Whsl %) so a price exists, or customers won&apos;t see it.
+                                      </div>
+                                    )}
                                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 6, paddingTop: 6 }}>
-                                      <button onClick={() => takeOffline(p)} disabled={!isLive}
+                                      <button onClick={() => takeOffline(p)} disabled={onChannels.length === 0}
                                         style={{
-                                          width: '100%', background: 'transparent', borderRadius: 7, cursor: isLive ? 'pointer' : 'not-allowed',
-                                          border: '1px solid rgba(248,113,113,0.3)', color: isLive ? '#fca5a5' : 'rgba(248,113,113,0.35)',
+                                          width: '100%', background: 'transparent', borderRadius: 7, cursor: onChannels.length === 0 ? 'not-allowed' : 'pointer',
+                                          border: '1px solid rgba(248,113,113,0.3)', color: onChannels.length === 0 ? 'rgba(248,113,113,0.35)' : '#fca5a5',
                                           padding: '6px 8px', fontSize: 11, fontWeight: 800,
                                         }}>
                                         ⏻ Take fully offline
