@@ -623,31 +623,19 @@ export default function SupplierDetailPage() {
   }
 
   // ── Product card actions ──
-  async function toggleProductStatus(p: SupplierProduct) {
-    const next = p.status === 'active' ? 'inactive' : 'active';
-    const { error } = await supabase.from('products').update({ status: next }).eq('id', p.id);
-    if (error) { showToast(`Update failed: ${error.message}`, false); return; }
-    showToast(`${p.name} → ${next}`);
-    setProducts(prev => prev.map(x => x.id === p.id ? { ...x, status: next } : x));
-  }
-
-  // Toggle ONE sell channel from the "Live" popover. Activating any channel
-  // forces status=active so the product actually appears to customers; turning
-  // the last channel off takes it fully offline. Channel + status persist
-  // together through the admin-gated PATCH (server-authoritative).
+  // Toggle ONE sell channel from the "Live" popover. The lifecycle `status`
+  // enum (product_status: draft | pending_approval | active | discontinued |
+  // archived) is SEPARATE from per-channel visibility (sell_*). Turning a
+  // channel ON promotes a not-yet-live product to 'active' so it actually
+  // shows; turning channels OFF only clears the flag (never writes a bogus
+  // 'inactive' — that value isn't in the enum and 500s the whole UPDATE).
   type ChannelFlag = 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale';
   function toggleChannel(p: SupplierProduct, ch: ChannelFlag) {
     const nextVal = !p[ch];
-    const after = {
-      sell_nassau:    ch === 'sell_nassau'    ? nextVal : p.sell_nassau,
-      sell_andros:    ch === 'sell_andros'    ? nextVal : p.sell_andros,
-      sell_online:    ch === 'sell_online'    ? nextVal : p.sell_online,
-      sell_wholesale: ch === 'sell_wholesale' ? nextVal : p.sell_wholesale,
-    };
-    const anyOn = after.sell_nassau || after.sell_andros || after.sell_online || after.sell_wholesale;
-    const nextStatus: SupplierProduct['status'] = anyOn ? 'active' : 'inactive';
-    // Optimistic: reflect the channel + any status flip immediately so the pill,
-    // the far-right checkboxes, and the popover all stay in sync.
+    // Going live on a channel forces status=active (valid for any prior state).
+    // Turning a channel off leaves status untouched — sell_* alone controls
+    // per-channel visibility, so all-off simply means "not sold anywhere".
+    const nextStatus = nextVal && p.status !== 'active' ? 'active' : p.status;
     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [ch]: nextVal, status: nextStatus } : x));
     const patch: Record<string, unknown> = { [ch]: nextVal };
     if (nextStatus !== p.status) patch.status = nextStatus;
@@ -655,12 +643,13 @@ export default function SupplierDetailPage() {
   }
 
   // Take a product fully offline from the "Live" popover — clears every channel
-  // and sets status=inactive in one write.
+  // in one write. status is left as-is (clearing channels already hides it
+  // everywhere; the pill reads "Off" because no channel is on).
   function takeOffline(p: SupplierProduct) {
     setProducts(prev => prev.map(x => x.id === p.id
-      ? { ...x, sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false, status: 'inactive' }
+      ? { ...x, sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false }
       : x));
-    patchProduct(p.id, { sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false, status: 'inactive' });
+    patchProduct(p.id, { sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false });
     setChannelMenu(null);
   }
 
@@ -1400,7 +1389,10 @@ export default function SupplierDetailPage() {
                       <select value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0a1220', color: '#fff', fontSize: 14, boxSizing: 'border-box' }}>
                         <option value="active">active</option>
-                        <option value="inactive">inactive</option>
+                        <option value="draft">draft</option>
+                        <option value="pending_approval">pending approval</option>
+                        <option value="discontinued">discontinued</option>
+                        <option value="archived">archived</option>
                       </select>
                     </div>
                   </div>
