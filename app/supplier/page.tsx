@@ -42,6 +42,8 @@ const COLOR_OPTIONS = [
 interface SupplierForm {
 code: string;
 name: string;
+business_name: string;
+location: string;
 supplier_type: string;
 brand_color: string;
 brand_emoji: string;
@@ -88,7 +90,7 @@ online_sell_price: number | null;
 interface Toast { msg: string; ok: boolean; }
 
 const BLANK: SupplierForm = {
-code: '', name: '', supplier_type: 'wholesale_partner',
+code: '', name: '', business_name: '', location: '', supplier_type: 'wholesale_partner',
 brand_color: '#1a2e5a', brand_emoji: '🏪', brand_name: '',
 contact_name: '', contact_email: '', contact_phone: '',
 contact_whatsapp: '', address: '', country: 'Bahamas',
@@ -152,6 +154,8 @@ try {
 const payload = {
 code: form.code?.trim().toUpperCase(),
 name: form.name?.trim(),
+business_name: form.business_name?.trim() || null,
+location: form.location?.trim() || null,
 supplier_type: form.supplier_type,
 brand_color: form.brand_color,
 brand_emoji: form.brand_emoji,
@@ -1789,6 +1793,8 @@ style={{ backgroundColor: '#1a2e5a', border: '1px solid rgba(245,197,24,0.3)' }}
 </div>
 </div>
 {F('Supplier Name *', 'name', 'e.g. Tropic Seafood')}
+{F('Business Name', 'business_name', 'Registered business / company name')}
+{F('Location', 'location', 'Island / city / area')}
 {F('Website', 'website', 'https://...')}
 {F('Address', 'address', 'Street, City')}
 {F('Country', 'country', 'Bahamas')}
