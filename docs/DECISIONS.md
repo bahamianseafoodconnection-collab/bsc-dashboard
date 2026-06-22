@@ -305,3 +305,22 @@ Founder spec (Bahamas = US EASTERN time zone; use America/Nassau):
 EXISTING BACKBONE (do not rebuild): per-supplier purchase_orders auto-raised w/ supplier_name+items+unit_cost (lib/procurement/raise-resale-purchase-orders); /pick-ticket/[orderId] (combined, no supplier/cost); /driver dashboard + /api/driver/queue (online-only, fulfillment_status state machine, PoD); /purchase-orders/[id] (record transfer → mark paid); supplier-portal (PO status). GAPS: per-supplier pick ticket w/ cost + deliver-to, Spiny-Tail POS routing, driver PO-confirm→payment, 9pm/+24h window, driver_assigned_to assignment across 4, multi-supplier→multi-driver.
 
 STATUS: spec captured; 3 design decisions pending (payment automation, driver assignment, pick-ticket delivery channel) before phased build.
+
+---
+
+## 2026-06-22 — SPINY TAIL RECEIVING & PROCESSING TRACEABILITY SYSTEM (spec captured)
+
+Founder spec (full HACCP harvest→customer traceability). Login: spinytail@bahamianseafoodconnection.com.
+TWO dedicated devices: (1) RECEIVING STATION, (2) PROCESSING STATION.
+
+RECEIVING captures: supplier (fisherman, company, vessel name+reg#, phone, email); product (name, species, #bags, total weight, weight/bag, grade, condition, temp on arrival, fresh/frozen); harvest verification (geo-tagged photos w/ date/time/lat/lng, trip start+end, catch area, fishing method); receiving inspection (appearance/smell/texture/temp/compliance/fisheries inspection status); auto records (date/time stamp, employee, location, device ID). On completion → auto BATCH NUMBER per product, e.g. CON-20260622-001 / LOB-...-002 / SNP-...-003 (species prefix + date + seq). Batch # = permanent lifecycle identifier.
+
+PROCESSING station: freezer removal (batch#, product, date/time, employee, weight removed, storage location, tray#, rack#, blast freezer location; removal purpose checkbox: BSC POS Nassau/Andros, Wholesale, Export, Processing, Sampling, QC, Disposal; auto-compares weight removed vs received vs remaining). Processing workflow (batch#, product, starting weight, processing type [tenderizing/filleting/portioning/vac-pack/trim/clean/package/label/blast-freeze], ordered steps recorded). Completion (finished name, finished weight, #packages, tray#, rack#, blast freezer loc → system calcs yield %, processing loss, remaining raw). Tray labels: QR + barcode + batch# + product + processing date + expiration + storage loc.
+
+BATCH CONTINUITY POLICY: (1) NO BATCH MIXING — only ONE receiving batch in processing area at a time; none introduced until current fully processed+documented+returned. (2) Original batch# retained permanently, never changed/reassigned. (3) Processing records require a valid receiving batch# (system blocks otherwise). (4) Blast freezer trays/racks display product+batch#+date+net weight+employee, physically attached + electronically recorded. (5) Packaging scans/enters original batch# → auto-prints onto product/carton/export labels + packing lists + shipping docs. (6) Export traceable to fisherman/vessel/harvest date/photos/GPS/receiving/processing/freezer/packaging via batch#. (7) Recall: locate all products for a batch# in seconds (fisherman, weights, tray+freezer locations, packaging, export, customer records).
+
+COMPLIANCE: Bahamas Fisheries + Health regs, FDA Seafood HACCP, export docs, intl traceability. Permanent electronic records for audit/recall/QC/export.
+
+EXISTING (per [[project_spinytails_haccp]] + [[project_inventory_revamp_plan]] + [[project_intake_step_ownership]] + [[project_vessel_registration]] + [[project_fisherman_login]]): ~14 spinytails_* tables, lot code STPC-YYYYMMDD-VV-NN via spinytails_next_lot_code(), 5 CCPs (CHECK), full trace view, RLS qc_staff write/admin delete; lobster-intake receiving flow (Step1 fisherman vessel+GPS+raw weight; Step2/3 operator freezer/production/grading/case-packing).
+
+STATUS: spec captured. MUST gap-analyze against existing spinytails_* + lobster-intake BEFORE building. Decisions pending (batch# scheme vs existing lot code; new device pages vs extend lobster-intake; mixing-lock enforcement).
