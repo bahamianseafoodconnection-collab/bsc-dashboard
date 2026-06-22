@@ -12,6 +12,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { printLabels } from '@/lib/label-print';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,7 @@ export default function ReceivingStationPage() {
   const [qc, setQc] = useState<Record<string, string | number | boolean>>({});
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ batch: string; warnings: string[]; pass: boolean } | null>(null);
+  const [result, setResult] = useState<{ batch: string; warnings: string[]; pass: boolean; product: string; weight: string; supplier: string; species: string } | null>(null);
   const [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -115,7 +116,12 @@ export default function ReceivingStationPage() {
       });
       const j = await res.json();
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      setResult({ batch: j.batch_number, warnings: j.ccp_warnings ?? [], pass: j.qc_pass });
+      const v = vessels.find((x) => x.id === vesselId);
+      setResult({
+        batch: j.batch_number, warnings: j.ccp_warnings ?? [], pass: j.qc_pass,
+        product: productName || sp?.name || '', weight: `${totalWeight} lb`,
+        supplier: v?.fisherman_name ?? '', species: sp?.name ?? speciesCode,
+      });
       // reset the per-lot fields, keep vessel/species for the next bag of the same delivery
       setProductName(''); setNumBags(''); setTotalWeight(''); setWeightPerBag(''); setGrade(''); setCondition(''); setCoreTemp(''); setQc({}); setPhotos([]);
     } catch (e) {
@@ -149,6 +155,14 @@ export default function ReceivingStationPage() {
             {result.pass ? '✓ CCP-1 within limits — accepted' : '⚠ CCP-1 FAILED — reject/hold + corrective action'}
           </div>
           {result.warnings.map((w, i) => <div key={i} style={{ fontSize: 13, color: '#b91c1c', marginTop: 4 }}>• {w}</div>)}
+          <button
+            onClick={() => printLabels([{
+              title: 'RECEIVING', product_name: result.product, batch_number: result.batch,
+              weight: result.weight, date: new Date().toLocaleDateString('en-US'),
+              supplier: result.supplier, extra: [{ label: 'Species', value: result.species }],
+            }], { widthIn: 4, heightIn: 6 })}
+            style={{ marginTop: 12, width: '100%', padding: 14, background: '#0b1628', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer', fontSize: 15 }}
+          >🖨 Print receiving label (Rollo · batch + QR + barcode)</button>
         </div>
       )}
 
