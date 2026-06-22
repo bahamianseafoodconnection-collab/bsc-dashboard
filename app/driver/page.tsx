@@ -37,9 +37,20 @@ interface OrderCard {
   pod_photo_urls:      string[] | null;
 }
 
+interface Pickup {
+  po_id:         string;
+  supplier_name: string;
+  deliver_to:    string;
+  deliver_label: string;
+  order_ref:     string;
+  total_cost:    number;
+  items: Array<{ name: string; sku: string; qty: number; unit: string; cost: number }>;
+}
+
 export default function DriverPage() {
   const [authState, setAuthState] = useState<'checking' | 'no_session' | 'forbidden' | 'ok'>('checking');
   const [orders, setOrders]   = useState<OrderCard[]>([]);
+  const [pickups, setPickups] = useState<Pickup[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId]   = useState<string | null>(null);
   const [toast, setToast]     = useState<{ ok: boolean; msg: string } | null>(null);
@@ -71,17 +82,55 @@ export default function DriverPage() {
     }
   }
 
+  async function loadPickups() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/driver/pickups', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: 'no-store',
+      });
+      const json = await res.json();
+      setPickups(res.ok && json.ok ? (json.pickups as Pickup[]) : []);
+    } catch {
+      setPickups([]);
+    }
+  }
+
+  async function confirmPickup(poId: string) {
+    setBusyId(poId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not signed in');
+      const res = await fetch('/api/fulfillment/confirm-po', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ po_id: poId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      showToast(true, json.order_released ? 'Confirmed — order released to delivery' : 'Pickup confirmed + supplier marked paid');
+      await Promise.all([loadPickups(), loadOrders()]);
+    } catch (err) {
+      showToast(false, err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setAuthState('no_session'); return; }
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
       const role = (prof as { role?: string | null } | null)?.role ?? null;
-      if (!role || !['founder', 'co_founder', 'manager', 'driver'].includes(role)) {
+      if (!role || !['founder', 'co_founder', 'manager', 'driver', 'operations', 'control_admin', 'basic_admin'].includes(role)) {
         setAuthState('forbidden'); return;
       }
       setAuthState('ok');
       loadOrders();
+      loadPickups();
     })();
   }, []);
 
@@ -161,9 +210,63 @@ export default function DriverPage() {
         }`}>{toast.ok ? '✅ ' : '⚠ '}{toast.msg}</div>
       )}
 
+      {/* ── Supplier pickups — confirm name/SKU/cost on-site → auto-pay + release ── */}
+      {pickups.length > 0 && (
+        <div className="mb-5">
+          <h1 className="mb-3 font-display text-xl font-extrabold text-navy">📋 Supplier Pickups</h1>
+          <div className="space-y-3">
+            {pickups.map((p) => {
+              const spiny = p.deliver_to === 'spiny_tail';
+              return (
+                <div key={p.po_id} className="rounded-2xl border-2 border-slate-300 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-base font-extrabold text-navy">{p.supplier_name}</div>
+                      <div className="font-mono text-[11px] text-slate-500">Order #{p.order_ref} · PO {p.po_id.slice(0, 8).toUpperCase()}</div>
+                    </div>
+                    <span className="text-sm font-extrabold text-navy">${p.total_cost.toFixed(2)}</span>
+                  </div>
+
+                  <div className={`mt-2 rounded-lg px-3 py-2 text-center text-xs font-extrabold ${spiny ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {spiny ? '🏭 DELIVER TO SPINY TAIL' : `📦 ${p.deliver_label}`}
+                  </div>
+
+                  <table className="mt-2 w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wide text-slate-400">
+                        <th className="py-1">Product</th><th>SKU</th>
+                        <th className="text-right">Qty</th><th className="text-right">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.items.map((it, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="py-1 font-semibold text-slate-800">{it.name}</td>
+                          <td className="font-mono text-[10px] text-slate-500">{it.sku}</td>
+                          <td className="text-right font-bold">{it.qty}{it.unit ? ` ${it.unit}` : ''}</td>
+                          <td className="text-right">${it.cost.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <button
+                    onClick={() => confirmPickup(p.po_id)}
+                    disabled={busyId === p.po_id}
+                    className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-extrabold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    ✓ Confirm name · SKU · cost match → pay supplier
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex items-center justify-between">
         <h1 className="font-display text-xl font-extrabold text-navy">🚚 Delivery Queue</h1>
-        <button onClick={loadOrders} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600">
+        <button onClick={() => { loadOrders(); loadPickups(); }} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600">
           ↻ Refresh
         </button>
       </div>
