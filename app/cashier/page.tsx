@@ -76,7 +76,7 @@ export default function CashierDashboard() {
     { key: 'new_orders',     label: 'New / pending customer orders',     value: data.today.new_orders,               href: '/orders',            cta: 'Open orders' },
     { key: 'awaiting_pay',   label: 'Orders awaiting payment',           value: data.today.awaiting_payment,         href: '/orders',            cta: 'Collect payment' },
     { key: 'cod',            label: 'COD orders awaiting dispatch',      value: data.today.cod_awaiting_dispatch,    href: '/pickup-queue',      cta: 'Dispatch' },
-    { key: 'credit',         label: 'Credit orders awaiting approval',   value: data.today.credit_awaiting_approval, href: '/orders',            cta: 'Review' },
+    { key: 'credit',         label: 'Credit orders awaiting approval',   value: data.today.credit_awaiting_approval, href: '/credit',            cta: 'Review' },
     { key: 'invoices',       label: 'Invoices to turn into purchase orders', value: data.today.invoices_to_convert, href: '/documents/capture', cta: 'Upload / convert' },
     { key: 'supplier_bills', label: 'Supplier bills still owed',         value: data.today.unpaid_purchase_invoices, href: '/purchase-orders',   cta: 'Open POs' },
   ] : [];

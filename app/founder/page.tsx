@@ -77,7 +77,7 @@ export default function FounderDashboard() {
     { label: 'COD collected today',    value: num(data?.fulfillment.cod_collected_today),href: '/orders' },
     { label: 'Deliveries in progress', value: num(data?.fulfillment.deliveries_active),  href: '/driver' },
     { label: 'New POs today',          value: num(data?.operations.new_pos_today),       href: '/purchase-orders' },
-    { label: 'Credit accounts due',    value: num(data?.operations.credit_due),          href: '/customers',       alert: (data?.operations.credit_due ?? 0) > 0 },
+    { label: 'Credit accounts due',    value: num(data?.operations.credit_due),          href: '/credit',          alert: (data?.operations.credit_due ?? 0) > 0 },
     { label: 'Active lots',            value: num(data?.haccp.active_lots),              href: '/spinytails' },
     { label: 'QC pending',             value: num(data?.haccp.pending_qc),               href: '/spinytails',      alert: (data?.haccp.pending_qc ?? 0) > 0 },
     { label: 'Temp excursions today',  value: num(data?.haccp.temp_excursions_today),    href: '/spinytails',      alert: (data?.haccp.temp_excursions_today ?? 0) > 0 },
