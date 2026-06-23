@@ -51,21 +51,21 @@ const CUSTOMER_NAV = [
 // current language and t() resolves them to the right phrase.
 const STAFF_NAV: Record<string, { label: string; href: string; icon: string }[]> = {
   founder: [
-    { label: 'nav.control',  href: '/dashboard', icon: '📊' },
+    { label: 'nav.control',  href: '/founder', icon: '📊' },
     { label: 'nav.pos',      href: '/pos',       icon: '🛒' },
     { label: 'nav.market',   href: '/market',    icon: '🏪' },
     { label: 'nav.vehicles', href: '/vehicles',  icon: '🚗' },
     { label: 'nav.payBills', href: '/utilities', icon: '⚡' },
   ],
   co_founder: [
-    { label: 'nav.control',  href: '/dashboard', icon: '📊' },
+    { label: 'nav.control',  href: '/founder', icon: '📊' },
     { label: 'nav.pos',      href: '/pos',       icon: '🛒' },
     { label: 'nav.market',   href: '/market',    icon: '🏪' },
     { label: 'nav.vehicles', href: '/vehicles',  icon: '🚗' },
     { label: 'nav.payBills', href: '/utilities', icon: '⚡' },
   ],
   control_admin: [
-    { label: 'nav.control',  href: '/dashboard', icon: '📊' },
+    { label: 'nav.control',  href: '/founder', icon: '📊' },
     { label: 'nav.pos',      href: '/pos',       icon: '🛒' },
     { label: 'nav.market',   href: '/market',    icon: '🏪' },
     { label: 'nav.vehicles', href: '/vehicles',  icon: '🚗' },
@@ -213,7 +213,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {showBackToDashboard && (
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(['founder', 'co_founder', 'control_admin'].includes(roleState) ? '/founder' : '/dashboard')}
             aria-label="Back to dashboard"
             style={{
               position: 'fixed',

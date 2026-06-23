@@ -69,12 +69,13 @@ export default function StaffLoginPage() {
       // staff session cap (founder + co_founder bypass — see lib/staff-session.ts).
       recordSignIn();
 
-      const dashboardRoles = ['control_admin', 'founder', 'co_founder', 'manager', 'right_hand', 'supervisor'];
+      const dashboardRoles = ['manager', 'right_hand', 'supervisor'];
 
       // Per-role "electronic handbook" homes (founder spec).
       const roleHome: Record<string, string> = {
         founder:          '/founder',       // oversight home (links to every dashboard)
         co_founder:       '/founder',
+        control_admin:    '/founder',
         cashier:          '/cashier',
         supplier_handler: '/supplier-handler',
         processor:        '/spinytails',   // Spiny Tail HACCP hub
