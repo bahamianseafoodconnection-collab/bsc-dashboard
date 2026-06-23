@@ -193,11 +193,21 @@ export async function POST(req: Request) {
         email,
         password: tempPassword,
         email_confirm: true,
+        // Seed the profile mirror (handle_new_user trigger) with the real staff
+        // role + name, so middleware grants them the right access immediately.
+        user_metadata: { role, name: body.full_name || '' },
       });
       if (authErr || !created.user) {
         return NextResponse.json({ ok: false, error: authErr?.message || 'Auth create failed' }, { status: 500 });
       }
       const userId = created.user.id;
+
+      // Belt-and-suspenders: guarantee profiles carries the real role + name
+      // (the trigger uses on-conflict-do-nothing, and we never want a staff
+      // member stranded as 'customer' in middleware). Best-effort.
+      await admin.from('profiles')
+        .upsert({ id: userId, email, role, full_name: body.full_name || null }, { onConflict: 'id' })
+        .then(() => undefined, () => undefined);
       const token = genToken();
 
       // Create the salaries-category expense row first so the staff row
