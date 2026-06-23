@@ -69,16 +69,20 @@ export default function StaffLoginPage() {
       // staff session cap (founder + co_founder bypass — see lib/staff-session.ts).
       recordSignIn();
 
-      const dashboardRoles = ['control_admin', 'founder', 'co_founder', 'manager', 'cashier', 'right_hand', 'supervisor'];
+      const dashboardRoles = ['control_admin', 'founder', 'co_founder', 'manager', 'right_hand', 'supervisor'];
 
-      if (role === 'processor' || role === 'operations') {
-        // operations (TJ-style fulfillment) shares the processor landing
-        // page until a dedicated /operations dashboard ships.
-        window.location.href = '/processor';
-      } else if (role === 'supplier') {
-        window.location.href = '/supplier';
-      } else if (role === 'driver') {
-        window.location.href = '/driver';
+      // Per-role "electronic handbook" homes (founder spec).
+      const roleHome: Record<string, string> = {
+        cashier:          '/cashier',
+        supplier_handler: '/supplier-handler',
+        processor:        '/spinytails',   // Spiny Tail HACCP hub
+        operations:       '/processor',
+        supplier:         '/supplier',
+        driver:           '/driver',
+      };
+
+      if (roleHome[role]) {
+        window.location.href = roleHome[role];
       } else if (dashboardRoles.includes(role)) {
         window.location.href = '/dashboard';
       } else {

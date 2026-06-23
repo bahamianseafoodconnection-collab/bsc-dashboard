@@ -136,6 +136,47 @@ export default function SpinytailsHubPage() {
       </header>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16 }}>
+        {/* ── Processor handbook: today's tasks (guided checklist) ── */}
+        {(() => {
+          const lc = (s: string) => openLots.filter(l => l.status === s).length;
+          const tasks: { icon: string; label: string; href: string; count: number | null; cta: string; danger?: boolean }[] = [
+            { icon: '📥', label: 'Receive incoming product — weigh, temp (CCP-1), generate lot', href: '/spinytails/receiving', count: null, cta: 'Receive' },
+            { icon: '📦', label: 'Lots received, awaiting processing',        href: '/spinytails/processing', count: lc('received'), cta: 'Start' },
+            { icon: '🧊', label: 'Lots in processing / blast freezing',       href: '/spinytails/processing', count: lc('processing') + lc('blast_freezing'), cta: 'Open' },
+            { icon: '🌡️', label: 'Temperature excursions to correct (today)', href: '/spinytails/processing', count: tempExcursions, cta: 'Correct', danger: true },
+            { icon: '✅', label: 'Quality inspections pending',               href: '/spinytails/processing', count: pendingQc, cta: 'Inspect' },
+            { icon: '🔧', label: 'Open corrective actions (CAPA)',            href: '/spinytails/processing', count: openCapas, cta: 'Resolve', danger: true },
+            { icon: '🏷️', label: 'Lots approved — pack, label & prep export', href: '/spinytails/labels', count: lc('approved'), cta: 'Pack' },
+            { icon: '📜', label: 'HACCP · SOP · SSOP document library',        href: '/spinytails/documents', count: null, cta: 'Open' },
+          ];
+          const openCount = tasks.reduce((s, t) => s + (t.count ?? 0), 0);
+          return (
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
+                <div style={{ color: '#fff', fontWeight: 900, fontSize: 15 }}>✅ Today&apos;s tasks</div>
+                <div style={{ color: openCount > 0 ? '#f5c518' : '#4ade80', fontWeight: 900, fontSize: 12 }}>
+                  {loading ? '…' : openCount > 0 ? `${openCount} open` : 'All clear 🎉'}
+                </div>
+              </div>
+              {tasks.map((t) => {
+                const done = t.count === 0;
+                const badgeColor = t.count == null ? 'rgba(255,255,255,0.5)' : done ? '#4ade80' : t.danger ? '#f87171' : '#f5c518';
+                const badgeBg = t.count == null ? 'rgba(255,255,255,0.06)' : done ? 'rgba(74,222,128,0.15)' : t.danger ? 'rgba(248,113,113,0.15)' : 'rgba(245,197,24,0.15)';
+                return (
+                  <Link key={t.label} href={t.href} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none' }}>
+                    <span style={{ fontSize: 16, width: 22, textAlign: 'center' }}>{t.icon}</span>
+                    <span style={{ width: 30, height: 26, borderRadius: 7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12, color: badgeColor, background: badgeBg, border: `1px solid ${badgeColor}55` }}>
+                      {loading ? '·' : t.count == null ? '•' : done ? '✓' : t.count}
+                    </span>
+                    <span style={{ flex: 1, color: '#e2e8f0', fontSize: 12.5, fontWeight: 600 }}>{t.label}</span>
+                    <span style={{ color: '#f5c518', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>{t.cta} →</span>
+                  </Link>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         <div style={statGrid}>
           <Stat label="Today's intake" value={`${todayIntakeLbs.toFixed(1)} lbs`} accent="#f5c518" />
           <Stat label="Active lots"    value={openLots.length.toString()}        accent="#4ade80" />
