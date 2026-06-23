@@ -185,11 +185,6 @@ export default function SupplierDetailPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editImgUploading, setEditImgUploading] = useState(false);
 
-  // Per-product "Live" channel popover. Holds the open product id + the anchor
-  // button's viewport coords so the menu can render position:fixed and escape
-  // the product table's `overflow:hidden` card clip. null = closed.
-  const [channelMenu, setChannelMenu] = useState<{ id: string; x: number; y: number } | null>(null);
-
   // Inline-save state per row (id → state). 'saved' clears itself after 2s.
   const [rowState, setRowState] = useState<Record<string, RowSaveState>>({});
   const [rowError, setRowError] = useState<Record<string, string>>({});
@@ -738,26 +733,6 @@ export default function SupplierDetailPage() {
     }
   }
 
-  // Take a product fully offline from the "Live" popover — clears every channel
-  // in one write. status is left as-is (clearing channels already hides it
-  // everywhere; the pill reads "Off" because no channel is on).
-  async function takeOffline(p: SupplierProduct) {
-    setChannelMenu(null);
-    const snapshot = { sell_nassau: p.sell_nassau, sell_andros: p.sell_andros, sell_online: p.sell_online, sell_wholesale: p.sell_wholesale };
-    console.log('[Live toggle] takeOffline', { productId: p.id, name: p.name, was: snapshot });
-    setProducts(prev => prev.map(x => x.id === p.id
-      ? { ...x, sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false }
-      : x));
-    const ok = await patchProduct(p.id, { sell_nassau: false, sell_andros: false, sell_online: false, sell_wholesale: false });
-    if (!ok) {
-      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, ...snapshot } : x));
-      showToast(`Couldn't take ${p.name} offline — reverted. Try again.`, false);
-      return;
-    }
-    await refreshProductState(p.id);
-    showToast(`${p.name} taken offline (all channels)`);
-  }
-
   function openProductEditor(p: SupplierProduct) {
     setEditingProduct(p);
     setEditForm({
@@ -1050,100 +1025,37 @@ export default function SupplierDetailPage() {
                         const err      = rowError[p.id];
                         const imgBusy  = !!rowImgBusy[p.id];
                         const rowBg    = state === 'error' ? 'rgba(220,38,38,0.08)' : state === 'saved' ? 'rgba(34,197,94,0.06)' : 'transparent';
-                        const menuOpen = channelMenu?.id === p.id;
+                        // Each sell channel is its own always-visible, directly-tappable
+                        // chip (no popover/backdrop — those could swallow taps on mobile).
+                        // green = live (on + priced) · amber = on but no price · grey = off.
                         const CHANNELS: { flag: ChannelFlag; abbr: string; label: string; priced: boolean }[] = [
-                          { flag: 'sell_nassau',    abbr: 'Nas', label: '🟡 Nassau POS / shop', priced: !!p.priced_nassau },
-                          { flag: 'sell_andros',    abbr: 'And', label: '🟣 Andros',           priced: !!p.priced_andros },
-                          { flag: 'sell_online',    abbr: 'Onl', label: '🌐 Online market',    priced: !!p.priced_online },
-                          { flag: 'sell_wholesale', abbr: 'Whs', label: '📦 Wholesale',        priced: !!p.priced_wholesale },
+                          { flag: 'sell_nassau',    abbr: 'Nas', label: 'Nassau POS / shop', priced: !!p.priced_nassau },
+                          { flag: 'sell_andros',    abbr: 'And', label: 'Andros',            priced: !!p.priced_andros },
+                          { flag: 'sell_online',    abbr: 'Onl', label: 'Online market',     priced: !!p.priced_online },
+                          { flag: 'sell_wholesale', abbr: 'Whs', label: 'Wholesale',         priced: !!p.priced_wholesale },
                         ];
-                        // A channel is truly LIVE (visible to customers) only when its
-                        // flag is on AND a price exists. Flag-on-but-unpriced shows amber.
-                        const onChannels    = CHANNELS.filter(c => p[c.flag]);
-                        const livePriced    = onChannels.filter(c => c.priced);
-                        const isLive        = isActive && livePriced.length > 0;
-                        const needsPrice    = isActive && onChannels.length > 0 && livePriced.length === 0;
-                        const liveChannels  = livePriced.map(c => c.abbr);
                         return (
                           <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', backgroundColor: rowBg, opacity: isActive ? 1 : 0.55 }}>
-                            <td style={{ padding: '6px 8px', position: 'relative' }}>
-                              <button
-                                onClick={(e) => {
-                                  if (menuOpen) { setChannelMenu(null); return; }
-                                  const r = e.currentTarget.getBoundingClientRect();
-                                  setChannelMenu({ id: p.id, x: r.left, y: r.bottom });
-                                }}
-                                title={
-                                  isLive ? `Live on: ${liveChannels.join(', ')} — tap to change channels`
-                                  : needsPrice ? 'Switched on, but no price yet — set a cost/price so customers can see it'
-                                  : 'Off — tap to activate to a channel'
-                                }
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer',
-                                  borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap',
-                                  border: isLive ? '1px solid rgba(34,197,94,0.5)' : needsPrice ? '1px solid rgba(251,191,36,0.5)' : '1px solid rgba(255,255,255,0.18)',
-                                  backgroundColor: isLive ? 'rgba(34,197,94,0.14)' : needsPrice ? 'rgba(251,191,36,0.14)' : 'rgba(255,255,255,0.04)',
-                                  color: isLive ? '#4ade80' : needsPrice ? '#fbbf24' : 'rgba(255,255,255,0.55)',
-                                }}>
-                                <span style={{ fontSize: 9 }}>{isLive ? '🟢' : needsPrice ? '⚠️' : '⚪'}</span>
-                                {isLive ? liveChannels.join('·') : needsPrice ? 'No price' : 'Off'}
-                                <span style={{ opacity: 0.6, fontSize: 8 }}>▾</span>
-                              </button>
-                              {menuOpen && (
-                                <>
-                                  {/* tap-anywhere backdrop to dismiss */}
-                                  <div onClick={() => setChannelMenu(null)}
-                                    style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                                  <div style={{
-                                    position: 'fixed', top: (channelMenu?.y ?? 0) + 4, left: channelMenu?.x ?? 0, zIndex: 41,
-                                    width: 210, maxHeight: '70vh', overflowY: 'auto', backgroundColor: '#0f1a2e', borderRadius: 10,
-                                    border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', padding: 8,
-                                  }}>
-                                    <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 1, color: 'rgba(255,255,255,0.4)', padding: '2px 4px 6px' }}>
-                                      Sell channels — {p.name.slice(0, 20)}
-                                    </div>
-                                    {CHANNELS.map(c => {
-                                      const on = p[c.flag];
-                                      // on + no price = visible-blocking; flag it so the
-                                      // founder knows why the product isn't showing.
-                                      const badge = on ? (c.priced ? 'LIVE' : 'NO PRICE') : 'off';
-                                      const badgeColor = on ? (c.priced ? '#4ade80' : '#fbbf24') : 'rgba(255,255,255,0.4)';
-                                      const badgeBg = on ? (c.priced ? 'rgba(34,197,94,0.18)' : 'rgba(251,191,36,0.18)') : 'rgba(255,255,255,0.06)';
-                                      const badgeBorder = on ? (c.priced ? 'rgba(34,197,94,0.4)' : 'rgba(251,191,36,0.4)') : 'rgba(255,255,255,0.12)';
-                                      return (
-                                        <button key={c.flag} onClick={() => toggleChannel(p, c.flag)}
-                                          style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                                            background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: 7,
-                                            padding: '7px 8px', fontSize: 12, fontWeight: 700,
-                                            color: on ? '#e2e8f0' : 'rgba(255,255,255,0.5)',
-                                          }}>
-                                          <span>{c.label}</span>
-                                          <span style={{
-                                            fontSize: 9, fontWeight: 800, borderRadius: 999, padding: '2px 7px', whiteSpace: 'nowrap',
-                                            backgroundColor: badgeBg, color: badgeColor, border: `1px solid ${badgeBorder}`,
-                                          }}>{badge}</span>
-                                        </button>
-                                      );
-                                    })}
-                                    {needsPrice && (
-                                      <div style={{ fontSize: 10, color: '#fbbf24', padding: '4px 6px 2px', lineHeight: 1.35 }}>
-                                        ⚠️ Switched on but unpriced — set a Cost (and Retail/Whsl %) so a price exists, or customers won&apos;t see it.
-                                      </div>
-                                    )}
-                                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: 6, paddingTop: 6 }}>
-                                      <button onClick={() => takeOffline(p)} disabled={onChannels.length === 0}
-                                        style={{
-                                          width: '100%', background: 'transparent', borderRadius: 7, cursor: onChannels.length === 0 ? 'not-allowed' : 'pointer',
-                                          border: '1px solid rgba(248,113,113,0.3)', color: onChannels.length === 0 ? 'rgba(248,113,113,0.35)' : '#fca5a5',
-                                          padding: '6px 8px', fontSize: 11, fontWeight: 800,
-                                        }}>
-                                        ⏻ Take fully offline
-                                      </button>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
+                            <td style={{ padding: '6px 8px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+                                {CHANNELS.map((c) => {
+                                  const on = p[c.flag];
+                                  const live = on && c.priced;
+                                  const amber = on && !c.priced;
+                                  return (
+                                    <button key={c.flag} onClick={() => toggleChannel(p, c.flag)}
+                                      title={`${c.label}: ${on ? (c.priced ? 'LIVE' : 'ON — needs a price') : 'off'} · tap to toggle`}
+                                      style={{
+                                        cursor: 'pointer', borderRadius: 6, padding: '5px 0', fontSize: 9, fontWeight: 800, whiteSpace: 'nowrap',
+                                        border: `1px solid ${live ? 'rgba(34,197,94,0.55)' : amber ? 'rgba(251,191,36,0.55)' : 'rgba(255,255,255,0.15)'}`,
+                                        backgroundColor: live ? 'rgba(34,197,94,0.18)' : amber ? 'rgba(251,191,36,0.18)' : 'rgba(255,255,255,0.04)',
+                                        color: live ? '#4ade80' : amber ? '#fbbf24' : 'rgba(255,255,255,0.45)',
+                                      }}>
+                                      {on ? '●' : '○'} {c.abbr}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </td>
                             <td style={{ padding: '6px 8px' }}>
                               <input
