@@ -73,6 +73,8 @@ export default function StaffLoginPage() {
 
       // Per-role "electronic handbook" homes (founder spec).
       const roleHome: Record<string, string> = {
+        founder:          '/founder',       // oversight home (links to every dashboard)
+        co_founder:       '/founder',
         cashier:          '/cashier',
         supplier_handler: '/supplier-handler',
         processor:        '/spinytails',   // Spiny Tail HACCP hub
