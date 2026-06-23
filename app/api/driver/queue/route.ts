@@ -21,7 +21,8 @@ const ACTIVE_STATES = ['placed', 'preparing', 'collected', 'in_transit', 'out_fo
 const QUEUE_COLUMNS =
   'id, fulfillment_status, customer_name, customer_phone, customer_address, ' +
   'delivery_directions, delivery_lat, delivery_lng, total, created_at, ' +
-  'wholesale_items, pod_photo_urls, driver_assigned_to';
+  'wholesale_items, pod_photo_urls, driver_assigned_to, ' +
+  'payment_method, payment_status, payment_received_at';
 
 export async function GET(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

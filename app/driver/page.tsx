@@ -35,6 +35,9 @@ interface OrderCard {
   created_at:          string;
   wholesale_items:     Array<{ name: string; qty: number; unit?: string }> | null;
   pod_photo_urls:      string[] | null;
+  payment_method:      string | null;
+  payment_status:      string | null;
+  payment_received_at: string | null;
 }
 
 interface Pickup {
@@ -201,6 +204,17 @@ export default function DriverPage() {
     <Shell><p className="font-bold text-red-700">Driver / manager / founder only.</p></Shell>
   );
 
+  // ── Handbook summary: today's run at a glance (derived from loaded data) ──
+  const isPaid = (s: string | null) => s === 'paid' || s === 'paid_in_full';
+  const codToCollect = orders.filter((o) => !o.payment_received_at && !isPaid(o.payment_status)).length;
+  const confirmPending = orders.filter((o) => o.fulfillment_status === 'out_for_delivery').length;
+  const tiles: { label: string; value: number; tone: string }[] = [
+    { label: 'Pickups',       value: pickups.length,  tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { label: 'Deliveries',    value: orders.length,   tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { label: 'COD to collect',value: codToCollect,    tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { label: 'Confirm POD',   value: confirmPending,  tone: 'bg-violet-50 text-violet-700 border-violet-200' },
+  ];
+
   return (
     <Shell>
       <input ref={fileRef} type="file" accept="image/*" onChange={onPodFile} className="hidden" />
@@ -209,6 +223,22 @@ export default function DriverPage() {
           toast.ok ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-red-300 bg-red-50 text-red-900'
         }`}>{toast.ok ? '✅ ' : '⚠ '}{toast.msg}</div>
       )}
+
+      {/* ── Driver handbook header: who/what + today at a glance ── */}
+      <div className="mb-5 rounded-2xl bg-navy p-4 text-white">
+        <div className="text-lg font-extrabold text-gold">🚚 Your run today</div>
+        <p className="mt-0.5 text-[11px] leading-snug text-white/60">
+          Pick up from suppliers · deliver to customers · collect COD · confirm delivery with a photo.
+        </p>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {tiles.map((t) => (
+            <div key={t.label} className={`rounded-xl border bg-white/95 px-2 py-2 text-center ${t.tone}`}>
+              <div className="text-xl font-extrabold leading-none">{loading ? '·' : t.value}</div>
+              <div className="mt-1 text-[9px] font-bold uppercase leading-tight tracking-wide">{t.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* ── Supplier pickups — confirm name/SKU/cost on-site → auto-pay + release ── */}
       {pickups.length > 0 && (
