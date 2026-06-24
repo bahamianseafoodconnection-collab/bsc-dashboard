@@ -12,9 +12,14 @@
   + `/api/founder/retail`. Read-only analytics: case→unit economics, fast/slow
   movers (order_cogs_lines), supplier price changes (product_costs history),
   reorder recs, founder alerts. Display label renamed Online Market → "Retail
-  Online Market" (enum `online_market` UNCHANGED). **Phase 2 (deferred):**
-  structured case_cost + retail inventory reservation/accumulation vs master case
-  (needs schema — probe live first).
+  Online Market" (enum `online_market` UNCHANGED).
+- **C — Retail · Phase 2 (shipped 2026-06-24):** structured Case Receipt —
+  `/api/founder/retail/receive-cases` + `case_receipts` audit table + 📦 Receive
+  modal. Derives unit_cost = case_cost ÷ units_per_case → existing product_costs
+  system (re-prices) → bumps stock_count → traceable receipt.
+- **C — Phase 2b (DEFERRED by Founder decision 2026-06-24):** auto-decrement
+  retail stock_count on online sale = NOT wanted for now. Sale path stays
+  unchanged (online sales write inventory_movements only). Revisit later.
 
 ---
 
