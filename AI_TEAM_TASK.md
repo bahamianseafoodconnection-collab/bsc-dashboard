@@ -8,6 +8,11 @@
 **None in progress.** Founder picks the next item from the BACKLOG.
 
 ### Done this cycle
+- **D — Supplier Handler Product Photos (shipped 2026-06-24):**
+  `/supplier-handler/photos` + `/api/supplier-handler/products` + `/api/supplier-
+  handler/set-photo`. Upload + in-browser square cropper (drag+zoom, no deps) →
+  1000x1000 JPEG → service-role upload to site-images → sets only image_url
+  (least privilege). Missing-photo-first grid. Phone→web handoff de-emphasized.
 - **A — Processing Records Per Batch Pull (shipped 2026-06-24):**
   `/api/spinytails/batch-pull/[batch]` + `/spinytails/batch/[batch]` + scan card on
   the hub. One batch = one complete read-only audit file (receiving→export) from
