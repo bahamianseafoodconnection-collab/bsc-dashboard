@@ -37,6 +37,11 @@ export default function SpinytailsHubPage() {
   const [loading, setLoading]   = useState(true);
   const [ssopBusy, setSsopBusy] = useState(false);
   const [ssopToast, setSsopToast] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [batchQuery, setBatchQuery] = useState('');
+  function openBatchPull() {
+    const b = batchQuery.trim();
+    if (b) window.location.href = `/spinytails/batch/${encodeURIComponent(b)}`;
+  }
 
   async function sendSsopDigest() {
     setSsopBusy(true); setSsopToast(null);
@@ -136,6 +141,19 @@ export default function SpinytailsHubPage() {
       </header>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16 }}>
+        {/* ── PROCESSING RECORDS PER BATCH PULL — one batch = one audit file ── */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(245,197,24,0.12), rgba(245,197,24,0.03))', border: '1px solid rgba(245,197,24,0.35)', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+          <div style={{ color: '#f5c518', fontWeight: 900, fontSize: 14 }}>📑 Processing Records Per Batch Pull</div>
+          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11.5, margin: '2px 0 10px' }}>Scan or type a batch number — opens the complete audit file (receiving → export).</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={batchQuery} onChange={e => setBatchQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') openBatchPull(); }}
+              placeholder="e.g. CON-20260624-01-01"
+              style={{ flex: 1, background: 'rgba(0,0,0,0.25)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 9, padding: '10px 12px', fontSize: 13, fontFamily: 'monospace' }} />
+            <button onClick={openBatchPull} disabled={!batchQuery.trim()}
+              style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 9, padding: '10px 16px', fontWeight: 900, fontSize: 13, cursor: batchQuery.trim() ? 'pointer' : 'not-allowed', opacity: batchQuery.trim() ? 1 : 0.5 }}>Pull →</button>
+          </div>
+        </div>
+
         {/* ── Processor handbook: today's tasks (guided checklist) ── */}
         {(() => {
           const lc = (s: string) => openLots.filter(l => l.status === s).length;
