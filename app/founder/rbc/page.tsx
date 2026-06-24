@@ -81,16 +81,22 @@ export default function RbcPortal() {
   const appsScript = `function pushRbcReport() {
   var ENDPOINT = '${inbound?.endpoint ?? 'https://www.bscbahamas.com/api/rbc/inbound'}';
   var TOKEN = '${inbound?.token ?? 'SET_RBC_INBOUND_TOKEN_IN_VERCEL'}';
-  var threads = GmailApp.search('has:attachment filename:docx newer_than:2d (RBCC OR "Merchant Services Point of Sale")');
+  var LABEL = 'RBC-Pushed';
+  var label = GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
+  // Locked to RBC's sender; skips emails already pushed.
+  var threads = GmailApp.search('from:msw@app.rbc.com has:attachment filename:docx newer_than:3d -label:' + LABEL);
   threads.forEach(function (th) {
+    var pushed = false;
     th.getMessages().forEach(function (m) {
       m.getAttachments().forEach(function (a) {
         if (a.getName().toLowerCase().indexOf('.docx') === -1) return;
-        UrlFetchApp.fetch(ENDPOINT, { method: 'post', contentType: 'application/json',
+        var resp = UrlFetchApp.fetch(ENDPOINT, { method: 'post', contentType: 'application/json',
           payload: JSON.stringify({ token: TOKEN, file_name: a.getName(), file_base64: Utilities.base64Encode(a.getBytes()) }),
           muteHttpExceptions: true });
+        if (resp.getResponseCode() === 200) pushed = true;
       });
     });
+    if (pushed) th.addLabel(label);
   });
 }`;
 
