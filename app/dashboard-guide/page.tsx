@@ -105,7 +105,7 @@ const SECTIONS: Section[] = [
     title: 'Customer-facing (review only)',
     entries: [
       { url: '/',           name: 'Public Home',         icon: '🏝️', what: 'Marketing landing. Hero (Spline 3D when configured), categories, wholesale, US shopping, why-bsc, CTA, newsletter, footer.', when: 'Verify customer-facing presentation.', actions: ['Test on mobile', 'Click Shop Now → /market'], audience: 'customer' },
-      { url: '/market',     name: 'Online Market',       icon: '🛒', what: 'Main shop. Categories, brand pills, search, featured carousel, stock urgency badges, ratings.', when: 'Spot-check what customers see.', actions: ['Browse', 'Search', 'Filter category / brand'], audience: 'customer' },
+      { url: '/market',     name: 'Retail Online Market',       icon: '🛒', what: 'Main shop. Categories, brand pills, search, featured carousel, stock urgency badges, ratings.', when: 'Spot-check what customers see.', actions: ['Browse', 'Search', 'Filter category / brand'], audience: 'customer' },
       { url: '/category/seafood', name: 'Category Landing', icon: '🦐', what: 'SEO landing pages per category (also /meat /produce /beverages /dairy /frozen /dry-goods).', when: 'Verify SEO copy + product listings per category.', actions: ['Click product', 'Click Shop on Market'], audience: 'customer' },
       { url: '/help',       name: 'Customer FAQ',        icon: '❓', what: 'Customer FAQ accordion + WhatsApp CTA.', when: 'Verify FAQ content; add to it as questions repeat.', actions: ['Read', 'WhatsApp link'], audience: 'customer' },
       { url: '/shipping',   name: 'Shipping Policy',     icon: '🚚', what: 'Nassau pickup / delivery / mailboat policy.', when: 'Verify wording matches reality.', actions: ['Read'], audience: 'customer' },

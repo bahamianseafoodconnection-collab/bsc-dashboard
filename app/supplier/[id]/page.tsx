@@ -1031,7 +1031,7 @@ export default function SupplierDetailPage() {
                         const CHANNELS: { flag: ChannelFlag; abbr: string; label: string; priced: boolean }[] = [
                           { flag: 'sell_nassau',    abbr: 'Nas', label: 'Nassau POS / shop', priced: !!p.priced_nassau },
                           { flag: 'sell_andros',    abbr: 'And', label: 'Andros',            priced: !!p.priced_andros },
-                          { flag: 'sell_online',    abbr: 'Onl', label: 'Online market',     priced: !!p.priced_online },
+                          { flag: 'sell_online',    abbr: 'Onl', label: 'Retail Online Market',     priced: !!p.priced_online },
                           { flag: 'sell_wholesale', abbr: 'Whs', label: 'Wholesale',         priced: !!p.priced_wholesale },
                         ];
                         return (
@@ -1434,7 +1434,7 @@ export default function SupplierDetailPage() {
                     {([
                       ['sell_nassau',    '🟡 Nassau POS / shop'],
                       ['sell_andros',    '🟣 Andros'],
-                      ['sell_online',    '🌐 Online'],
+                      ['sell_online',    '🌐 Retail Online'],
                       ['sell_wholesale', '📦 Wholesale'],
                     ] as const).map(([key, label]) => (
                       <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, backgroundColor: editForm[key] ? 'rgba(245,197,24,0.15)' : 'rgba(255,255,255,0.04)', cursor: 'pointer', border: `1px solid ${editForm[key] ? 'rgba(245,197,24,0.4)' : 'rgba(255,255,255,0.08)'}` }}>

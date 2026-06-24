@@ -1258,7 +1258,7 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
       {([
         { key: 'nassau',    label: '📍 Nassau POS' },
         { key: 'andros',    label: '🟣 Andros POS' },
-        { key: 'online',    label: '🛒 Online Market' },
+        { key: 'online',    label: '🛒 Retail Online Market' },
         { key: 'wholesale', label: '📦 Wholesale' },
       ] as const).map((c) => (
         <label key={c.key}
@@ -1475,7 +1475,7 @@ style={{ backgroundColor: '#FFD814', color: '#0F1111', border: '1px solid #FCD20
           {([
             { key: 'nassau',    label: '📍 Nassau POS' },
             { key: 'andros',    label: '🟣 Andros POS' },
-            { key: 'online',    label: '🛒 Online Market' },
+            { key: 'online',    label: '🛒 Retail Online Market' },
             { key: 'wholesale', label: '📦 Wholesale' },
           ] as const).map((c) => (
             <label key={c.key} className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-gray-50 cursor-pointer">

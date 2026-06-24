@@ -1598,7 +1598,7 @@ function ChannelToggle({
       {[
         { lab: 'Nassau POS', v: n, s: setN },
         { lab: 'Andros POS', v: a, s: setA },
-        { lab: 'Online Market', v: o, s: setO },
+        { lab: 'Retail Online Market', v: o, s: setO },
         { lab: 'Wholesale', v: w, s: setW },
       ].map((c) => (
         <label
@@ -2083,7 +2083,7 @@ function ProductOnboard({
             k: 'andros_pos' as ChannelKey,
           },
           {
-            lab: 'Online Market (25%)',
+            lab: 'Retail Online Market (25%)',
             v: sellOnline,
             s: setSellOnline,
             k: 'online_market' as ChannelKey,

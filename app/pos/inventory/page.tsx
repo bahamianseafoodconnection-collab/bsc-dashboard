@@ -487,7 +487,7 @@ style={primaryBtn(saving)}
 {[
 { key: 'sell_nassau', label: 'Nassau POS', val: chNassau, set: setChNassau },
 { key: 'sell_andros', label: 'Andros POS', val: chAndros, set: setChAndros },
-{ key: 'sell_online', label: 'Online Market', val: chOnline, set: setChOnline },
+{ key: 'sell_online', label: 'Retail Online Market', val: chOnline, set: setChOnline },
 { key: 'sell_wholesale', label: 'Local Wholesale', val: chWholesale, set: setChWholesale },
 ].map((c) => (
 <label key={c.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}>

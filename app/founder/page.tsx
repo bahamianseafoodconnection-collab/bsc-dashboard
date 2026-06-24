@@ -66,6 +66,7 @@ export default function FounderDashboard() {
   const dashboards: { label: string; desc: string; href: string; icon: string }[] = [
     { label: 'Founder AI Briefing', desc: 'Full daily narrative + P&L', href: '/founder-ai',       icon: '🤖' },
     { label: 'Bank Reconciliation', desc: 'System totals vs bank',       href: '/founder/bank',     icon: '🏦' },
+    { label: 'Retail Online Market',desc: 'Movers · prices · reorder',    href: '/founder/retail',   icon: '🛒' },
     { label: 'Control Center',      desc: 'All 80+ admin tools',        href: '/dashboard',        icon: '🎛️' },
     { label: 'Cashier',             desc: 'POS, orders, invoices',      href: '/cashier',          icon: '🧾' },
     { label: 'Supplier Handler',    desc: 'Suppliers, catalogue',       href: '/supplier-handler', icon: '🏪' },
