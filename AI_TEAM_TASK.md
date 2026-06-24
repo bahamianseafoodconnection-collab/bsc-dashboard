@@ -53,13 +53,51 @@
 - One-click **"PROCESSING RECORDS PER BATCH PULL"** that opens a complete digital audit file for a batch_number: Batch info, Receiving HACCP, Traceability, Processing, Temperature, HACCP/CCP, SSOP sanitation, Employee, Packing, Blast Freezer, Frozen Storage, Export, plus all attachments (photos/videos/PDFs/signatures).
 - **Architect notes:** assemble read-only from existing tables first (don't invent schema until we confirm gaps live). Probe live for which sub-records already exist vs missing; deliver any new columns/tables as SQL. Add a simple processor flow: Scan batch → weight → temp → photo → step → save (auto-stamps user/date/time/facility/batch/prev-history).
 
-### B. RBC Daily Payment Confirmation Portal + Founder Setup Guide
-**Why staged:** needs **inbound-email infrastructure** the app doesn't have yet (a mail webhook / parse endpoint to receive RBC's report attachment). That's the gating dependency — decide the inbound channel first.
-- Generate a unique receiving address/token (e.g. `rbc-reports+bsc-<id>-<token>@bscbahamas.com`), shown for copy/paste into RBC.
-- Setup status states: Not connected → Waiting for RBC test email → Test email received → RBC file verified → Auto confirmation active.
-- Parse report → extract trace#, auth code, amount, card type, terminal, fee, dates → match trace#+amount to online checkout orders → mark PAID; unmatched → manual review. Store original file for audit.
-- Sections: Daily RBC Inbox · Auto-Matched · Unmatched · Manual Match · Audit Trail · File Storage · Founder AI daily payment summary.
-- **Guardrail:** confirms payment only by matching trace#+amount. **Never** touches tax or sales-tax math.
+### B. RBC Daily Payment Confirmation Portal + Founder Setup Guide  — SCOPED 2026-06-24
+
+**Goal:** ingest RBC's daily Merchant POS Transaction Report, match each line to an
+online checkout order, mark PAID (or recover lossy ones), route unmatched to manual
+review, store the original file for audit, Founder AI daily summary.
+
+**Grounding (verified live):** online card orders already carry
+`orders.pt_authorization_code` + `payment_ref` (PnP order id) and are flipped to
+`payment_status='paid'` by the PnP return handler — but that browser return is
+LOSSY. So the RBC report is the AUTHORITATIVE confirmation. **Match key:
+auth_code + amount** (exact), then trace#/ref as secondary; amount-only/near-date →
+manual review. Reuses the "recover stranded card orders" path.
+
+**The gating dependency = how RBC's email reaches the app. Phased:**
+- **Phase 1 (build now, zero infra): MANUAL UPLOAD + the matcher.** Founder uploads
+  the RBC report file (reuse document-capture pattern). Parser + matcher + audit are
+  IDENTICAL to the automated version — this de-risks the unknown file format and
+  ships the high-value engine immediately. NEEDS: a real sample RBC report to lock
+  the parser.
+- **Phase 2 (automate ingestion): inbound-email webhook.** RBC → a receiving address
+  → provider POSTs a webhook (`/api/rbc/inbound`, signature-verified) → same parser/
+  matcher. Provider options: (a) Cloudflare Email Routing/Workers (free, needs DNS on
+  Cloudflare); (b) Postmark Inbound (simplest signed webhook); (c) Mailgun Routes;
+  (d) Gmail auto-forward of RBC mail → any of the above. **Use a dedicated SUBDOMAIN
+  MX (e.g. rbc.bscbahamas.com)** so the founder's Gmail MX on the apex is untouched.
+  Address form: `rbc-reports+bsc-<id>-<token>@rbc.bscbahamas.com`. Secrets (webhook
+  signing key, token) in Vercel env only.
+
+**Data model (SQL, after sample seen):** `rbc_reports` (file_url, received_at,
+source upload|email, status, counts) · `rbc_transactions` (report_id, processing/
+txn date+time, trace_number, auth_code, amount, card_type, terminal_id, fee,
+matched, matched_order_id, confirmed_at, raw). RLS on, service-role API only.
+
+**Portal sections:** Daily RBC Inbox · Auto-Matched Paid · Unmatched · Manual Match
+· Payment Audit Trail · Bank File Storage · Founder AI daily payment summary.
+**Founder Setup Guide** (in-portal): the RBC steps (More → Manage Notifications →
+Alerts → add the portal address → enable txn/payment + failed/awaiting/rejected/
+expired alerts → save → test) + the exact copy/paste address + status states
+(Not connected → Waiting for test → Test received → File verified → Auto active).
+
+**Guardrail:** confirms payment ONLY by matching auth_code/trace + amount. **Never**
+touches tax/sales-tax math. Online checkout orders only (not POS).
+
+**Open decisions for Founder:** (1) start Phase 1 (manual) now? (2) a sample RBC
+report file to lock the parser. (3) Phase 2 provider + where DNS lives.
 
 ### C. Retail Online Market pricing module (channel-scoped)
 - **CRITICAL GUARDRAIL (Architect):** the enum value `online_market` is referenced across POS/market/pricing/brief code. **DO NOT rename the enum or DB value.** "Rename Online Market → Retail Online Market" is a **display-label change only** (UI strings). Renaming the underlying channel would break every channel calc — forbidden by Rule #1.
