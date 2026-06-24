@@ -8,6 +8,12 @@
 **None in progress.** Founder picks the next item from the BACKLOG.
 
 ### Done this cycle
+- **A — Processing Records Per Batch Pull (shipped 2026-06-24):**
+  `/api/spinytails/batch-pull/[batch]` + `/spinytails/batch/[batch]` + scan card on
+  the hub. One batch = one complete read-only audit file (receiving→export) from
+  spinytails_*; missing-doc + non-conformance alerts; print-to-PDF. No schema
+  change. (Future: per-lot 'Pull' button on lot-detail; simple processor step
+  cards Scan→Weight→Temp→Photo→Step→Save already partly exist in /spinytails/processing.)
 - **C — Retail Online Market module · Phase 1 (shipped 2026-06-24):** `/founder/retail`
   + `/api/founder/retail`. Read-only analytics: case→unit economics, fast/slow
   movers (order_cogs_lines), supplier price changes (product_costs history),
