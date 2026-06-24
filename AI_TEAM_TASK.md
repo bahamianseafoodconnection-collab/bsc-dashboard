@@ -8,6 +8,14 @@
 **None in progress.** Founder picks the next item from the BACKLOG.
 
 ### Done this cycle
+- **B — RBC Daily Payment Confirmation Portal · AUTOMATIC (shipped 2026-06-24):**
+  `/founder/rbc` + `lib/rbc/process.ts` (shared engine) + `/api/rbc/inbound`
+  (token-secured auto ingestion), `/api/rbc/portal` (data+manual match),
+  `/api/rbc/import` (re-upload fallback). Parses the real RBC .docx, matches by
+  auth_code+amount via payment_transactions → recovers pending orders to paid.
+  ACTIVATION: (1) run rbc_reports/rbc_transactions SQL; (2) set RBC_INBOUND_TOKEN
+  in Vercel env + redeploy; (3) paste the Gmail Apps Script from the portal +
+  daily trigger. Phase 2 = inbound provider on rbc.bscbahamas.com (deferred).
 - **D — Supplier Handler Product Photos (shipped 2026-06-24):**
   `/supplier-handler/photos` + `/api/supplier-handler/products` + `/api/supplier-
   handler/set-photo`. Upload + in-browser square cropper (drag+zoom, no deps) →
