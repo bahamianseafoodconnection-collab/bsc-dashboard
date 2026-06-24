@@ -60,6 +60,39 @@ export default function RetailMarketDashboard() {
   }, [supabase, router]);
   useEffect(() => { load(); }, [load]);
 
+  // ── Receive cases ──
+  const [recv, setRecv] = useState<Row | null>(null);
+  const [cases, setCases] = useState('');
+  const [caseCost, setCaseCost] = useState('');
+  const [upc, setUpc] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
+
+  function openRecv(r: Row) {
+    setRecv(r); setCases(''); setCaseCost(''); setUpc(r.units_per_case ? String(r.units_per_case) : '');
+  }
+  const upcNum = Number(upc) || (recv?.units_per_case ?? 0);
+  const previewUnit = upcNum > 0 && Number(caseCost) > 0 ? Number(caseCost) / upcNum : null;
+
+  async function submitRecv() {
+    if (!recv) return;
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/founder/retail/receive-cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ product_id: recv.id, cases: Number(cases), case_cost: Number(caseCost), units_per_case: Number(upc) || undefined }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { flash(j.error || 'Receive failed'); return; }
+      flash(`✓ ${j.units_added} units added · unit cost $${Number(j.unit_cost).toFixed(2)}${j.warning ? ` · ${j.warning}` : ''}`);
+      setRecv(null);
+      await load();
+    } finally { setBusy(false); }
+  }
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       <header style={{ backgroundColor: INK, padding: '16px 20px', borderBottom: `1px solid ${BORDER}` }}>
@@ -144,7 +177,7 @@ export default function RetailMarketDashboard() {
                 <tr style={{ background: '#0a1220', textAlign: 'right', color: 'rgba(255,255,255,0.5)' }}>
                   <th style={{ ...th, textAlign: 'left' }}>Product</th>
                   <th style={th}>Unit cost</th><th style={th}>Case cost</th><th style={th}>Retail $</th>
-                  <th style={th}>Profit/unit</th><th style={th}>Margin</th><th style={th}>Sold 30d</th><th style={th}>Stock</th><th style={th}>Cases left</th>
+                  <th style={th}>Profit/unit</th><th style={th}>Margin</th><th style={th}>Sold 30d</th><th style={th}>Stock</th><th style={th}>Cases left</th><th style={th}></th>
                 </tr>
               </thead>
               <tbody>
@@ -159,6 +192,10 @@ export default function RetailMarketDashboard() {
                     <td style={{ ...td, fontWeight: 700 }}>{r.sold_30d}</td>
                     <td style={td}>{r.stock_count ?? '—'}</td>
                     <td style={td}>{r.cases_remaining ?? '—'}</td>
+                    <td style={td}>
+                      <button onClick={() => openRecv(r)} title="Receive supplier cases into retail stock"
+                        style={{ background: 'rgba(245,197,24,0.14)', color: GOLD, border: '1px solid rgba(245,197,24,0.4)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>📦 Receive</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -166,10 +203,44 @@ export default function RetailMarketDashboard() {
           </div>
           {(d?.products.length ?? 0) === 0 && !loading && <Empty>No retail products.</Empty>}
         </section>
-        <p style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>Read-only analytics — pricing math + margins are unchanged. Set a product&apos;s case size on its supplier page to enable case economics.</p>
+        <p style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>Pricing math + margins are unchanged. Receiving cases derives unit cost (case cost ÷ units per case) through the existing cost system and adds units to retail stock.</p>
       </main>
+
+      {/* Receive cases modal */}
+      {recv && (
+        <div onClick={() => !busy && setRecv(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, padding: 18 }}>
+            <div style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>📦 Receive cases</div>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 14 }}>{recv.name}</div>
+            <Field label="Units per case">
+              <input type="number" inputMode="numeric" value={upc} onChange={e => setUpc(e.target.value)} placeholder="e.g. 20" style={inp} />
+            </Field>
+            <Field label="Number of cases">
+              <input type="number" inputMode="numeric" value={cases} onChange={e => setCases(e.target.value)} placeholder="e.g. 1" style={inp} />
+            </Field>
+            <Field label="Case cost (BSD)">
+              <input type="number" inputMode="decimal" step="0.01" value={caseCost} onChange={e => setCaseCost(e.target.value)} placeholder="e.g. 100.00" style={inp} />
+            </Field>
+            <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 10, fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: '6px 0 14px' }}>
+              {previewUnit != null
+                ? <>Unit cost <strong style={{ color: GOLD }}>${previewUnit.toFixed(4)}</strong> · adds <strong style={{ color: '#4ade80' }}>{(Number(cases) || 0) * upcNum}</strong> units to stock</>
+                : <>Enter case size, cases, and case cost.</>}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setRecv(null)} disabled={busy} style={{ flex: 1, background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '10px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={submitRecv} disabled={busy || previewUnit == null || !(Number(cases) > 0)} style={{ flex: 1, background: GOLD, color: INK, border: 'none', borderRadius: 10, padding: '10px', fontWeight: 900, fontSize: 13, cursor: busy ? 'wait' : 'pointer', opacity: (previewUnit == null || !(Number(cases) > 0)) ? 0.5 : 1 }}>{busy ? 'Receiving…' : 'Receive'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: '#0f1a2e', color: '#fff', borderRadius: 10, padding: '10px 16px', fontSize: 12.5, fontWeight: 700, zIndex: 80, border: `1px solid ${GOLD}`, maxWidth: '90vw', textAlign: 'center' }}>{toast}</div>}
     </div>
   );
+}
+
+const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.06)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '9px 11px', fontSize: 14 };
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div style={{ marginBottom: 10 }}><label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>{label}</label>{children}</div>;
 }
 
 const th: React.CSSProperties = { padding: '9px 8px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' };
