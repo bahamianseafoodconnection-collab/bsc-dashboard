@@ -5,7 +5,16 @@
 ---
 
 ## CURRENT APPROVED TASK
-**None in progress.** Founder to pick the next feature from the BACKLOG below (sequenced by the Architect). Until then, no agent should start app changes.
+**None in progress.** Founder picks the next item from the BACKLOG.
+
+### Done this cycle
+- **C — Retail Online Market module · Phase 1 (shipped 2026-06-24):** `/founder/retail`
+  + `/api/founder/retail`. Read-only analytics: case→unit economics, fast/slow
+  movers (order_cogs_lines), supplier price changes (product_costs history),
+  reorder recs, founder alerts. Display label renamed Online Market → "Retail
+  Online Market" (enum `online_market` UNCHANGED). **Phase 2 (deferred):**
+  structured case_cost + retail inventory reservation/accumulation vs master case
+  (needs schema — probe live first).
 
 ---
 
