@@ -8,6 +8,8 @@
 // /supplier hub), the forms, and a summary. Counts come from
 // /api/supplier-handler/dashboard (server-authoritative).
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
@@ -76,7 +78,7 @@ export default function SupplierHandlerDashboard() {
     { key: 'pricelists',     label: 'Active suppliers missing a pricelist',   value: data.today.pricelists_missing,           href: '/supplier', cta: 'Upload pricelist' },
     { key: 'extraction',     label: 'Pricelists uploaded, products not yet extracted', value: data.today.products_awaiting_extraction, href: '/supplier', cta: 'Extract' },
     { key: 'approval',       label: 'Products awaiting approval',             value: data.today.products_pending_approval,    href: '/supplier', cta: 'Approve' },
-    { key: 'photos',         label: 'Live products missing a photo',          value: data.today.products_missing_photos,      href: '/supplier', cta: 'Add photos' },
+    { key: 'photos',         label: 'Live products missing a photo',          value: data.today.products_missing_photos,      href: '/supplier-handler/photos', cta: 'Add photos' },
     { key: 'off_channels',   label: 'Active products switched off everywhere (out of stock?)', value: data.today.products_off_all_channels, href: '/supplier', cta: 'Set availability' },
   ] : [];
 
@@ -85,7 +87,7 @@ export default function SupplierHandlerDashboard() {
     { label: 'Upload Pricelist', desc: 'Attach a supplier pricelist', href: '/supplier', icon: '📄' },
     { label: 'Approve Products', desc: 'Review extracted products',   href: '/supplier', icon: '✅' },
     { label: 'Availability',     desc: 'Switch products ON / OFF',    href: '/supplier', icon: '🔌' },
-    { label: 'Product Photos',   desc: 'Upload images for online',    href: '/supplier', icon: '📷' },
+    { label: 'Product Photos',   desc: 'Upload + crop for online',    href: '/supplier-handler/photos', icon: '📷' },
   ];
 
   const totalToDo = todoRows.reduce((s, r) => s + (r.value ?? 0), 0);
