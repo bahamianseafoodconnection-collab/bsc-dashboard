@@ -76,9 +76,12 @@ export async function POST(req: NextRequest) {
   if (costErr || !costRow) return NextResponse.json({ ok: false, error: `Cost insert failed: ${costErr?.message ?? 'unknown'}` }, { status: 500 });
   const costRowId = (costRow as { id: string }).id;
 
-  // 2) Bump retail stock (and backfill units_per_case if it was missing).
+  // 2) Bump retail stock (and backfill units_per_case if it was missing). Receiving
+  //    a case to sell retail means selling INDIVIDUAL UNITS — set unit_of_measure
+  //    'each' so the Retail Online Market sells per item (cost is already the
+  //    per-unit cost, so the auto-recomputed online price is per item too).
   const newStock = (Number(prod.stock_count) || 0) + unitsAdded;
-  const prodUpdate: Record<string, unknown> = { stock_count: newStock };
+  const prodUpdate: Record<string, unknown> = { stock_count: newStock, unit_of_measure: 'each' };
   if ((!prod.units_per_case || prod.units_per_case <= 0) && upcOverride && upcOverride > 0) prodUpdate.units_per_case = upcOverride;
   const { error: stockErr } = await admin.from('products').update(prodUpdate).eq('id', prod.id);
   if (stockErr) return NextResponse.json({ ok: false, error: `Stock update failed: ${stockErr.message}` }, { status: 500 });

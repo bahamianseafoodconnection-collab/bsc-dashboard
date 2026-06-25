@@ -238,7 +238,7 @@ export default function ReportPage() {
                 <p style={{ margin: '0 0 12px', color: '#f5c518', fontWeight: 'bold', fontSize: 13 }}>BSC Margin Reference</p>
                 {[
                   { channel: 'POS Physical Store',  margin: '38%',    note: 'Walk-in customers',    color: '#4ade80' },
-                  { channel: 'Online Marketplace',   margin: '25%',    note: 'Delivery + Pickup',    color: '#60a5fa' },
+                  { channel: 'Retail Online Market',   margin: '25%',    note: 'Delivery + Pickup',    color: '#60a5fa' },
                   { channel: 'Wholesale / Bulk',     margin: '15%',    note: 'Business orders 10lb+',color: '#f5c518' },
                   { channel: 'Utility Bills',        margin: '$5 + 5%',note: 'Service fee',          color: '#a78bfa' },
                 ].map(r => (

@@ -27,7 +27,7 @@ type Dash = {
 
 const money = (n: number | null | undefined) => n == null ? '—' : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num = (n: number | null | undefined) => n == null ? '—' : String(n);
-const CHANNEL_LABEL: Record<string, string> = { nassau_pos: 'POS Nassau', andros_pos: 'POS Andros', online_market: 'Online market', whatsapp: 'WhatsApp', online: 'Online', other: 'Other' };
+const CHANNEL_LABEL: Record<string, string> = { nassau_pos: 'POS Nassau', andros_pos: 'POS Andros', online_market: 'Retail Online Market', whatsapp: 'WhatsApp', online: 'Online', other: 'Other' };
 
 export default function FounderDashboard() {
   const router = useRouter();

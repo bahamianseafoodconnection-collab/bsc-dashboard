@@ -74,7 +74,7 @@ const MARGIN_CHANNELS = ['nassau_pos', 'andros_pos', 'online_market', 'local_who
 const CHANNEL_LABELS: Record<string, string> = {
   nassau_pos:      'Nassau POS',
   andros_pos:      'Andros POS',
-  online_market:   'Online /market',
+  online_market:   'Retail Online Market',
   local_wholesale: 'Local Wholesale',
   us_resale:       'US Resale',
   today_deals:     "Today's Deals",
@@ -107,7 +107,7 @@ const DEAL_CHANNELS: { channel: string; label: string }[] = [
 const ADD_CHANNELS: { flag: 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale'; channel: string; label: string }[] = [
   { flag: 'sell_nassau',    channel: 'nassau_pos',      label: 'Nassau POS' },
   { flag: 'sell_andros',    channel: 'andros_pos',      label: 'Andros POS' },
-  { flag: 'sell_online',    channel: 'online_market',   label: 'Online /market' },
+  { flag: 'sell_online',    channel: 'online_market',   label: 'Retail Online Market' },
   { flag: 'sell_wholesale', channel: 'local_wholesale', label: 'Local Wholesale' },
 ];
 const DEFAULT_MARGIN_PCT: Record<string, number> = {

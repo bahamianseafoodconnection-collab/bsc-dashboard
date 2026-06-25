@@ -23,7 +23,7 @@ const FOUNDER_ID = '7b62672c-9259-4c1b-98d4-3b78369a52ab';
 const CHANNELS = [
   { key: 'nassau_pos',     label: 'Nassau POS',    emoji: '🟡', margin: 0.38 },
   { key: 'andros_pos',     label: 'Andros POS',    emoji: '🟣', margin: 0.43 },
-  { key: 'online_market',  label: 'Online Market', emoji: '🛒', margin: 0.25 },
+  { key: 'online_market',  label: 'Retail Online Market', emoji: '🛒', margin: 0.25 },
   { key: 'local_wholesale',label: 'Wholesale',     emoji: '📦', margin: 0.15 },
 ];
 
@@ -1316,7 +1316,7 @@ export default function ProductsPage() {
                   {[
                     { k: 'nassau_pos',    l: '🟡 Nassau POS' },
                     { k: 'andros_pos',    l: '🟣 Andros POS' },
-                    { k: 'online_retail', l: '🛒 Online' },
+                    { k: 'online_retail', l: '🛒 Retail Online' },
                     { k: 'wholesale',     l: '📦 Wholesale' },
                   ].map(c => (
                     <button key={c.k} onClick={() => setSaleChannel(c.k as SaleChannel)}
@@ -1466,7 +1466,7 @@ function BscPricingPreview({ cost, unit, productId }: { cost: number; unit: stri
   const channels: { ch: PricingChannel; label: string; retailQty: number; upgradeQty: number }[] = [
     { ch: 'nassau_pos',    label: '🟡 Nassau POS',     retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
     { ch: 'andros_pos',    label: '🟢 Andros POS',     retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
-    { ch: 'online_market', label: '🛒 Online',          retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
+    { ch: 'online_market', label: '🛒 Retail Online',          retailQty: 1, upgradeQty: isWeight ? 10 : 1 },
   ];
   const saleUnit = (isWeight ? 'lb' : 'each') as 'lb' | 'each';
 

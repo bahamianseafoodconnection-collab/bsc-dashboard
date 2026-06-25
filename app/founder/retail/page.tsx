@@ -24,6 +24,7 @@ type Row = {
   case_cost: number | null; profit_per_unit: number | null; profit_per_case: number | null; margin_pct: number | null;
   stock_count: number | null; cases_remaining: number | null; units_remaining: number | null;
   pack_size: string | null; sold_1d: number; sold_7d: number; sold_30d: number; revenue_30d: number; profit_30d: number;
+  unit_of_measure: string | null; sells_per_item: boolean;
 };
 type Change = { id: string; name: string; supplier: string | null; old_cost: number; new_cost: number; diff: number; direction: string; changed_at: string | null };
 type Reorder = { id: string; name: string; supplier: string | null; units_remaining: number | null; units_per_case: number | null; recommend_cases: number | null; velocity_7d: number };
@@ -74,6 +75,22 @@ export default function RetailMarketDashboard() {
   }
   const upcNum = Number(upc) || (recv?.units_per_case ?? 0);
   const previewUnit = upcNum > 0 && Number(caseCost) > 0 ? Number(caseCost) / upcNum : null;
+
+  async function setPerItem(r: Row) {
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/founder/retail/set-unit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ product_id: r.id, units_per_case: r.units_per_case || undefined }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { flash(j.error || 'Failed'); return; }
+      flash(`✓ ${r.name} now sells per item`);
+      await load();
+    } finally { setBusy(false); }
+  }
 
   async function submitRecv() {
     if (!recv) return;
@@ -172,12 +189,12 @@ export default function RetailMarketDashboard() {
         <section style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
           <div style={{ padding: '12px 14px' }}><SecTitle>💰 Retail economics</SecTitle></div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, color: '#e2e8f0', minWidth: 760 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, color: '#e2e8f0', minWidth: 880 }}>
               <thead>
                 <tr style={{ background: '#0a1220', textAlign: 'right', color: 'rgba(255,255,255,0.5)' }}>
                   <th style={{ ...th, textAlign: 'left' }}>Product</th>
                   <th style={th}>Unit cost</th><th style={th}>Case cost</th><th style={th}>Retail $</th>
-                  <th style={th}>Profit/unit</th><th style={th}>Margin</th><th style={th}>Sold 30d</th><th style={th}>Stock</th><th style={th}>Cases left</th><th style={th}></th>
+                  <th style={th}>Profit/unit</th><th style={th}>Margin</th><th style={th}>Sold 30d</th><th style={th}>Stock</th><th style={th}>Cases left</th><th style={{ ...th, textAlign: 'center' }}>Sells</th><th style={th}></th>
                 </tr>
               </thead>
               <tbody>
@@ -192,6 +209,14 @@ export default function RetailMarketDashboard() {
                     <td style={{ ...td, fontWeight: 700 }}>{r.sold_30d}</td>
                     <td style={td}>{r.stock_count ?? '—'}</td>
                     <td style={td}>{r.cases_remaining ?? '—'}</td>
+                    <td style={{ ...td, textAlign: 'center' }}>
+                      {r.sells_per_item
+                        ? <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 10 }}>✓ per item</span>
+                        : <button onClick={() => setPerItem(r)} title={`Currently sells per ${r.unit_of_measure ?? 'unit'} — switch to selling individual items`}
+                            style={{ background: 'rgba(251,191,36,0.14)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.45)', borderRadius: 6, padding: '3px 7px', fontSize: 9, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            per {r.unit_of_measure ?? 'case'} → item
+                          </button>}
+                    </td>
                     <td style={td}>
                       <button onClick={() => openRecv(r)} title="Receive supplier cases into retail stock"
                         style={{ background: 'rgba(245,197,24,0.14)', color: GOLD, border: '1px solid rgba(245,197,24,0.4)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>📦 Receive</button>

@@ -34,7 +34,7 @@ const CHANNEL_MARGIN: Record<string, number> = {
 const CHANNEL_DISPLAY: { key: string; label: string; color: string }[] = [
   { key: 'pos_sale_nassau', label: '🟡 Nassau', color: '#fef9e7' },
   { key: 'pos_sale_andros', label: '🟣 Andros', color: '#f5f0ff' },
-  { key: 'online_market',   label: '🛒 Online', color: '#e8f4fd' },
+  { key: 'online_market',   label: '🛒 Retail Online', color: '#e8f4fd' },
   { key: 'wholesale',       label: '📦 Wholesale', color: '#f0fde8' },
 ];
 

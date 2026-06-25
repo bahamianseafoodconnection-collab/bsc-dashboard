@@ -93,6 +93,7 @@ export async function GET(req: NextRequest) {
     const s = sales[p.id] ?? { u30: 0, u7: 0, u1: 0, rev: 0, profit: 0 };
     return {
       id: p.id, name: p.name, supplier: p.primary_supplier_id ? (supMap[p.primary_supplier_id] ?? null) : null,
+      unit_of_measure: p.unit_of_measure, sells_per_item: (p.unit_of_measure ?? 'each') === 'each',
       unit_cost: cost, retail_price: price, units_per_case: upc,
       case_cost: cost != null && upc ? r2(cost * upc) : null,
       profit_per_unit: profitPerUnit,

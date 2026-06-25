@@ -32,7 +32,7 @@ type Bucket = 'day' | 'week' | 'month';
 const CHANNELS = ['all', 'nassau_pos', 'andros_pos', 'online_market', 'local_wholesale'] as const;
 const CHANNEL_LABEL: Record<string, string> = {
   all: 'All channels', nassau_pos: 'Nassau POS', andros_pos: 'Andros POS',
-  online_market: 'Online', local_wholesale: 'Wholesale',
+  online_market: 'Retail Online', local_wholesale: 'Wholesale',
 };
 const money = (n: number) => `$${(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

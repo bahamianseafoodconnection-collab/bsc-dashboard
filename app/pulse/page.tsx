@@ -56,7 +56,7 @@ type CustomerRow = {
 };
 
 const CHANNEL_LABEL: Record<string, string> = {
-  online_market: 'Online Market',
+  online_market: 'Retail Online Market',
   pos_nassau:    'Nassau POS',
   pos_andros:    'Andros POS',
   wholesale:     'Wholesale',
