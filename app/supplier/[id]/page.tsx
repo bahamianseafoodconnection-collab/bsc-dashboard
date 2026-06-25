@@ -179,6 +179,13 @@ export default function SupplierDetailPage() {
   // durable draft so edits survive closing the modal (D2 / Phase 5).
   const { save: saveDraft, state: draftState } = useServerSave('/api/supplier/save-extract-draft');
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Price-from-case modal: unit cost = case cost ÷ units per case (units read
+  // from the first number in the Pack field, e.g. "20/50c" → 20).
+  const [priceFromCase, setPriceFromCase] = useState<SupplierProduct | null>(null);
+  const [pcCaseCost, setPcCaseCost] = useState('');
+  const [pcUpc, setPcUpc] = useState('');
+  const [pcBusy, setPcBusy] = useState(false);
+
   // Full-screen product editor — opens when you tap a product card
   const [editingProduct, setEditingProduct] = useState<SupplierProduct | null>(null);
   const [editForm, setEditForm] = useState<ProductEditForm | null>(null);
@@ -733,6 +740,36 @@ export default function SupplierDetailPage() {
     }
   }
 
+  // Units per case = first number in the Pack field (e.g. "20/50c" → 20).
+  function unitsFromPack(pack: string | null): number | null {
+    const m = String(pack ?? '').match(/\d+/);
+    const n = m ? parseInt(m[0], 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  function openPriceFromCase(p: SupplierProduct) {
+    setPriceFromCase(p); setPcCaseCost(''); setPcUpc(unitsFromPack(p.pack_size) ? String(unitsFromPack(p.pack_size)) : '');
+  }
+  const pcUpcNum = Number(pcUpc) || 0;
+  const pcUnitCost = pcUpcNum > 0 && Number(pcCaseCost) > 0 ? Number(pcCaseCost) / pcUpcNum : null;
+  async function submitPriceFromCase() {
+    if (!priceFromCase || pcUnitCost == null) return;
+    setPcBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { showToast('Sign-in expired — refresh.', false); return; }
+      const res = await fetch('/api/founder/retail/receive-cases', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ product_id: priceFromCase.id, cases: 0, case_cost: Number(pcCaseCost), units_per_case: pcUpcNum }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { showToast(j.error || 'Failed', false); return; }
+      setProducts(prev => prev.map(x => x.id === priceFromCase.id ? { ...x, cost_per_unit: Number(j.unit_cost), unit_of_measure: 'each' } : x));
+      showToast(`✓ ${priceFromCase.name}: per-item cost $${Number(j.unit_cost).toFixed(2)}${j.online_price != null ? ` · retail $${Number(j.online_price).toFixed(2)}` : ''}`);
+      setPriceFromCase(null);
+    } finally { setPcBusy(false); }
+  }
+
   // Make a product sell PER ITEM (Retail Online Market) — unit_of_measure='each'.
   // Uses the retail set-unit endpoint (allows supplier_handler too). No price math
   // change; for correct per-item pricing set the per-unit cost via Receive Cases.
@@ -1133,6 +1170,8 @@ export default function SupplierDetailPage() {
                                   }
                                 }}
                                 style={{ ...inputStyle, textAlign: 'right' }} />
+                              <button onClick={() => openPriceFromCase(p)} title="Set the per-item cost from case cost ÷ units per case (units read from Pack)"
+                                style={{ marginTop: 3, fontSize: 9, color: '#fbbf24', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 800, padding: 0, textDecoration: 'underline', display: 'block', width: '100%', textAlign: 'right' }}>💲 from case</button>
                             </td>
                             <td style={{ padding: '6px 8px' }}>
                               <select value={p.vat_code ?? 'X'}
@@ -1475,6 +1514,33 @@ export default function SupplierDetailPage() {
                     Open in /admin/inventory for pricing & advanced fields →
                   </Link>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Price-from-case modal */}
+        {priceFromCase && (
+          <div onClick={() => !pcBusy && setPriceFromCase(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 360, background: '#0f1a2e', borderRadius: 14, border: '1px solid rgba(255,255,255,0.12)', padding: 18 }}>
+              <div style={{ color: '#fff', fontWeight: 900, fontSize: 15 }}>💲 Price from case</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 14 }}>{priceFromCase.name}</div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Units per case{priceFromCase.pack_size ? ` · from Pack "${priceFromCase.pack_size}"` : ''}</label>
+                <input type="number" inputMode="numeric" value={pcUpc} onChange={e => setPcUpc(e.target.value)} placeholder="e.g. 20" style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.06)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '9px 11px', fontSize: 14 }} />
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Case cost (BSD)</label>
+                <input type="number" inputMode="decimal" step="0.01" value={pcCaseCost} onChange={e => setPcCaseCost(e.target.value)} placeholder="e.g. 47.60" style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.06)', color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '9px 11px', fontSize: 14 }} />
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 10, fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: '4px 0 14px' }}>
+                {pcUnitCost != null
+                  ? <>Per-item cost <strong style={{ color: '#f5c518' }}>${pcUnitCost.toFixed(2)}</strong> ({Number(pcCaseCost).toFixed(2)} ÷ {pcUpcNum}) · sets the cost; online price recomputes per item. No stock added.</>
+                  : <>Enter units per case + case cost.</>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setPriceFromCase(null)} disabled={pcBusy} style={{ flex: 1, background: 'transparent', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={submitPriceFromCase} disabled={pcBusy || pcUnitCost == null} style={{ flex: 1, background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 10, padding: '10px', fontWeight: 900, fontSize: 13, cursor: pcBusy ? 'wait' : 'pointer', opacity: pcUnitCost == null ? 0.5 : 1 }}>{pcBusy ? 'Saving…' : 'Set price'}</button>
               </div>
             </div>
           </div>
