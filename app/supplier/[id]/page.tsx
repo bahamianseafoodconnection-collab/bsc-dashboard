@@ -701,6 +701,25 @@ export default function SupplierDetailPage() {
     return { ...r, priced };
   }
 
+  // The per-product "go live" write — least-privilege endpoint so SUPPLIER
+  // HANDLERS (assigned users), not just founder/managers, can send products live.
+  // Only flips sell_* (+ promotes status). Returns true on confirmed success.
+  async function setChannelLive(id: string, ch: ChannelFlag, value: boolean, status?: string): Promise<boolean> {
+    setRowStatus(id, 'saving');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setRowStatus(id, 'error', 'Sign-in expired'); return false; }
+      const res = await fetch('/api/supplier-handler/set-channel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ product_id: id, channel: ch, value, status }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setRowStatus(id, 'error', j.error || `HTTP ${res.status}`); return false; }
+      setRowStatus(id, 'saved'); return true;
+    } catch (e) { setRowStatus(id, 'error', e instanceof Error ? e.message : 'save failed'); return false; }
+  }
+
   // Toggle ONE sell channel from the "Live" popover. The lifecycle `status`
   // enum (product_status: draft | pending_approval | active | discontinued |
   // archived) is SEPARATE from per-channel visibility (sell_*). Turning a
@@ -717,10 +736,8 @@ export default function SupplierDetailPage() {
 
     // Optimistic
     setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [ch]: nextVal, status: nextStatus } : x));
-    const patch: Record<string, unknown> = { [ch]: nextVal };
-    if (nextStatus !== prevStatus) patch.status = nextStatus;
 
-    const ok = await patchProduct(p.id, patch);
+    const ok = await setChannelLive(p.id, ch, nextVal, nextStatus !== prevStatus ? nextStatus : undefined);
     if (!ok) {
       // Revert — never leave the switch showing ON when the DB write failed.
       setProducts(prev => prev.map(x => x.id === p.id ? { ...x, [ch]: prevVal, status: prevStatus } : x));
