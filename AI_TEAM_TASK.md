@@ -7,6 +7,18 @@
 ## CURRENT APPROVED TASK
 **None in progress.** Founder picks the next item from the BACKLOG.
 
+## TRIGGER-BASED FOLLOW-UPS (condition, not date)
+- **🔔 ACTIVATE RBC ORDER-MATCHING — trigger: when POS Nassau starts ringing up
+  sales IN the BSC system** (BSC becomes system of record), or online checkout
+  goes live. The RBC ingestion + daily settlement view are LIVE; the matcher is
+  built + dormant (`matchOneRbcTxn` → POS card sale by amount+date, reconcile-only).
+  When the trigger fires: (1) hit "↻ Re-match now" on /founder/rbc (calls
+  /api/rbc/rematch) to back-fill the already-stored reports; (2) verify
+  pos_amount_date matches are correct; (3) if amount+date collide too often, add
+  last-4 (RBC card_last4 is stored; POS orders would need to capture card last-4)
+  or a tighter time window. Reason 0 matches today: online not live + POS Nassau
+  on a different system, so no BSC orders exist to match. (Founder noted 2026-06-24.)
+
 ### Done this cycle
 - **B — RBC Daily Payment Confirmation Portal · AUTOMATIC (shipped 2026-06-24):**
   `/founder/rbc` + `lib/rbc/process.ts` (shared engine) + `/api/rbc/inbound`
