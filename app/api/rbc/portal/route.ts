@@ -42,12 +42,39 @@ export async function GET(req: NextRequest) {
   const matched = allTxns.filter(t => t.matched);
   const unmatched = allTxns.filter(t => !t.matched);
 
-  // Candidate orders for unmatched lines: pending online orders, matched by amount.
+  // Candidate orders for unmatched lines: POS register card sales, matched by
+  // amount (this RBC report is the in-store POS terminal). Empty until BSC starts
+  // recording POS Nassau sales — then suggestions/auto-match light up.
   const { data: pend } = await admin.from('orders')
-    .select('id, total, payment_status, created_at, customer_name, channel')
-    .in('payment_status', PENDING)
-    .order('created_at', { ascending: false }).limit(400);
+    .select('id, total, created_at, customer_name, channel')
+    .in('channel', ['nassau_pos', 'andros_pos'])
+    .in('payment_method', ['card', 'split'])
+    .order('created_at', { ascending: false }).limit(600);
   const pendingOrders = (pend ?? []) as Array<{ id: string; total: number | null; created_at: string; customer_name: string | null; channel: string | null }>;
+
+  // Daily card-settlement summary (income view straight from the RBC reports —
+  // valuable now even before order-matching is active).
+  const dayMap = new Map<string, { count: number; gross: number; fees: number }>();
+  const cardMap = new Map<string, { count: number; gross: number }>();
+  let tGross = 0, tFees = 0;
+  for (const t of allTxns) {
+    const amt = Number(t.amount) || 0, fee = Number(t.fee) || 0;
+    const day = String(t.txn_date ?? 'unknown').slice(0, 10);
+    const e = dayMap.get(day) ?? { count: 0, gross: 0, fees: 0 };
+    e.count++; e.gross += amt; e.fees += fee; dayMap.set(day, e);
+    const ct = String(t.card_type ?? '—');
+    const c = cardMap.get(ct) ?? { count: 0, gross: 0 };
+    c.count++; c.gross += amt; cardMap.set(ct, c);
+    tGross += amt; tFees += fee;
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const settlements = {
+    days: [...dayMap.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, v]) => ({ date, count: v.count, gross: r2(v.gross), fees: r2(v.fees), net: r2(v.gross - v.fees) })),
+    by_card_type: [...cardMap.entries()].sort((a, b) => b[1].gross - a[1].gross)
+      .map(([card_type, v]) => ({ card_type, count: v.count, gross: r2(v.gross) })),
+    totals: { count: allTxns.length, gross: r2(tGross), fees: r2(tFees), net: r2(tGross - tFees) },
+  };
   const unmatchedOut = unmatched.slice(0, 80).map(t => {
     const amt = Number(t.amount) || 0;
     const suggestions = pendingOrders.filter(o => Math.abs((Number(o.total) || 0) - amt) <= 0.01)
@@ -83,6 +110,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     inbound,
+    settlements,
     summary: { reports: (reports ?? []).length, transactions: allTxns.length, matched: matched.length, unmatched: unmatched.length, confirmed_amount: Math.round(confirmedAmount * 100) / 100 },
     reports: reports ?? [],
     matched: matched.slice(0, 60).map(t => ({ ...t, order: t.matched_order_id ? orderMap[t.matched_order_id as string] ?? null : null })),

@@ -20,6 +20,7 @@ type Txn = Record<string, unknown> & { id: string; amount: number | null; auth_c
 type Resp = {
   ok: boolean;
   inbound: { active: boolean; endpoint: string; token: string | null; last_email_report_at: string | null; status: string };
+  settlements: { days: { date: string; count: number; gross: number; fees: number; net: number }[]; by_card_type: { card_type: string; count: number; gross: number }[]; totals: { count: number; gross: number; fees: number; net: number } };
   summary: { reports: number; transactions: number; matched: number; unmatched: number; confirmed_amount: number };
   reports: Array<{ id: string; file_name: string | null; file_url: string | null; processing_date: string | null; source: string; transaction_count: number; matched_count: number; recovered_count: number; created_at: string }>;
   matched: Txn[];
@@ -62,6 +63,14 @@ export default function RbcPortal() {
     const j = await res.json();
     if (!res.ok || !j.ok) { flash(j.error || 'Match failed'); return; }
     flash(j.recovered ? '✓ Matched + order marked PAID' : '✓ Matched'); await load();
+  }
+
+  async function rematch() {
+    const t = await tok();
+    const res = await fetch('/api/rbc/rematch', { method: 'POST', headers: { Authorization: `Bearer ${t}` } });
+    const j = await res.json();
+    if (!res.ok || !j.ok) { flash(j.error || 'Re-match failed'); return; }
+    flash(`Re-matched: ${j.newly_matched} newly matched of ${j.scanned} unmatched`); await load();
   }
 
   async function uploadFallback(file: File) {
@@ -164,6 +173,48 @@ export default function RbcPortal() {
           <Tile label="Auto-matched" value={String(d?.summary.matched ?? 0)} c="#4ade80" />
           <Tile label="Unmatched" value={String(d?.summary.unmatched ?? 0)} c={(d?.summary.unmatched ?? 0) > 0 ? '#f87171' : '#4ade80'} />
           <Tile label="Confirmed $" value={bsd(d?.summary.confirmed_amount)} c={GOLD} />
+        </div>
+
+        {/* Daily card settlements — the income/audit value, live now */}
+        <section style={{ background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6 }}>
+            <span style={{ color: '#fff', fontWeight: 900, fontSize: 14 }}>💳 Daily card settlements (RBC POS terminal)</span>
+            <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>
+              Gross <b style={{ color: GOLD }}>{bsd(d?.settlements.totals.gross)}</b> · Fees <b style={{ color: '#f87171' }}>{bsd(d?.settlements.totals.fees)}</b> · Net <b style={{ color: '#4ade80' }}>{bsd(d?.settlements.totals.net)}</b>
+            </span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#e2e8f0', minWidth: 420 }}>
+              <thead><tr style={{ background: '#0a1220', color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>
+                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Date</th><th style={{ padding: '8px 12px' }}>Txns</th><th style={{ padding: '8px 12px' }}>Gross</th><th style={{ padding: '8px 12px' }}>Fees</th><th style={{ padding: '8px 12px' }}>Net</th>
+              </tr></thead>
+              <tbody>
+                {(d?.settlements.days ?? []).map(day => (
+                  <tr key={day.date} style={{ borderTop: `1px solid ${BORDER}`, textAlign: 'right' }}>
+                    <td style={{ padding: '7px 12px', textAlign: 'left', color: 'rgba(255,255,255,0.7)' }}>{day.date}</td>
+                    <td style={{ padding: '7px 12px' }}>{day.count}</td>
+                    <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{bsd(day.gross)}</td>
+                    <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: '#f87171' }}>{bsd(day.fees)}</td>
+                    <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: '#4ade80', fontWeight: 700 }}>{bsd(day.net)}</td>
+                  </tr>
+                ))}
+                {(d?.settlements.days.length ?? 0) === 0 && <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>{loading ? 'Loading…' : 'No settlements yet.'}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {(d?.settlements.by_card_type.length ?? 0) > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '10px 14px', borderTop: `1px solid ${BORDER}` }}>
+              {d!.settlements.by_card_type.map(c => (
+                <span key={c.card_type} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '5px 10px', fontSize: 11, color: 'rgba(255,255,255,0.7)' }}>{c.card_type}: <b style={{ color: GOLD }}>{bsd(c.gross)}</b> · {c.count}</span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Matching — dormant until BSC records the sales */}
+        <div style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 12, padding: '11px 14px', color: '#bfdbfe', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span>ℹ️ Order-matching activates once POS Nassau / online checkout record sales in this system. Until then, these are your card-settlement records. The matcher will back-fill automatically.</span>
+          <button onClick={rematch} style={{ background: 'transparent', color: '#93c5fd', border: '1px solid rgba(147,197,253,0.4)', borderRadius: 8, padding: '6px 12px', fontWeight: 800, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>↻ Re-match now</button>
         </div>
 
         {/* Unmatched — manual review */}
