@@ -92,6 +92,32 @@ export default function RetailMarketDashboard() {
     } finally { setBusy(false); }
   }
 
+  // Bulk "price all from pack" — dry-run preview → confirm → apply.
+  const [bulk, setBulk] = useState<{ count: number; total_retail: number; sample: { name: string; pack: string | null; units: number; current_cost: number; new_cost: number }[] } | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  async function bulkDryRun() {
+    setBulkBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/founder/retail/price-all-from-pack', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({}) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { flash(j.error || 'Preview failed'); return; }
+      if (j.count === 0) { flash('Nothing to change — all retail products already priced per item.'); return; }
+      setBulk({ count: j.count, total_retail: j.total_retail, sample: j.sample });
+    } finally { setBulkBusy(false); }
+  }
+  async function bulkApply() {
+    setBulkBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/founder/retail/price-all-from-pack', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ apply: true }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { flash(j.error || 'Apply failed'); return; }
+      flash(`✓ Priced ${j.applied} of ${j.attempted} products per item${j.errors?.length ? ` · ${j.errors.length} errors` : ''}`);
+      setBulk(null); await load();
+    } finally { setBulkBusy(false); }
+  }
+
   async function submitRecv() {
     if (!recv) return;
     setBusy(true);
@@ -121,6 +147,7 @@ export default function RetailMarketDashboard() {
             <div style={{ color: GOLD, fontWeight: 900, fontSize: 19 }}>🛒 Retail Online Market</div>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>Case→unit economics · movers · supplier price changes · reorder</div>
           </div>
+          <button onClick={bulkDryRun} disabled={bulkBusy} style={{ background: GOLD, color: INK, border: 'none', borderRadius: 10, padding: '8px 14px', fontWeight: 900, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>{bulkBusy ? '…' : '⚡ Price all from pack'}</button>
           <button onClick={load} disabled={loading} style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '8px 12px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{loading ? '…' : '↻'}</button>
         </div>
       </header>
@@ -232,6 +259,40 @@ export default function RetailMarketDashboard() {
         </section>
         <p style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>Pricing math + margins are unchanged. Receiving cases derives unit cost (case cost ÷ units per case) through the existing cost system and adds units to retail stock.</p>
       </main>
+
+      {/* Bulk price-from-pack confirm modal */}
+      {bulk && (
+        <div onClick={() => !bulkBusy && setBulk(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, maxHeight: '85vh', overflow: 'auto', background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, padding: 18 }}>
+            <div style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>⚡ Price all from pack</div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12.5, margin: '6px 0 12px' }}>
+              This will set per-item cost = current cost ÷ units-per-case for <strong style={{ color: GOLD }}>{bulk.count}</strong> of {bulk.total_retail} retail products (those with a pack count + a cost). Online prices recompute per item. <strong>Review before → after:</strong>
+            </div>
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, color: '#e2e8f0' }}>
+                <thead><tr style={{ background: '#0a1220', color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>
+                  <th style={{ padding: '6px 8px', textAlign: 'left' }}>Product</th><th style={{ padding: '6px 8px' }}>Pack÷</th><th style={{ padding: '6px 8px' }}>Cost now</th><th style={{ padding: '6px 8px' }}>→ per item</th>
+                </tr></thead>
+                <tbody>
+                  {bulk.sample.map((s, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${BORDER}`, textAlign: 'right' }}>
+                      <td style={{ padding: '5px 8px', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{s.name}</td>
+                      <td style={{ padding: '5px 8px' }}>{s.units}</td>
+                      <td style={{ padding: '5px 8px', fontFamily: 'monospace', color: '#f87171' }}>{bsd(s.current_cost)}</td>
+                      <td style={{ padding: '5px 8px', fontFamily: 'monospace', color: '#4ade80', fontWeight: 700 }}>{bsd(s.new_cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {bulk.count > bulk.sample.length && <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginBottom: 10 }}>…and {bulk.count - bulk.sample.length} more.</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setBulk(null)} disabled={bulkBusy} style={{ flex: 1, background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '10px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={bulkApply} disabled={bulkBusy} style={{ flex: 1, background: GOLD, color: INK, border: 'none', borderRadius: 10, padding: '10px', fontWeight: 900, fontSize: 13, cursor: bulkBusy ? 'wait' : 'pointer' }}>{bulkBusy ? 'Applying…' : `Apply to ${bulk.count}`}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Receive cases modal */}
       {recv && (
