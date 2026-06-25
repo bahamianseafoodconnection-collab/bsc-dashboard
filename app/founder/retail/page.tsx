@@ -104,7 +104,9 @@ export default function RetailMarketDashboard() {
       });
       const j = await res.json();
       if (!res.ok || !j.ok) { flash(j.error || 'Receive failed'); return; }
-      flash(`✓ ${j.units_added} units added · unit cost $${Number(j.unit_cost).toFixed(2)}${j.warning ? ` · ${j.warning}` : ''}`);
+      flash(j.units_added > 0
+        ? `✓ ${j.units_added} units added · per-item cost $${Number(j.unit_cost).toFixed(2)}${j.online_price != null ? ` · retail $${Number(j.online_price).toFixed(2)}` : ''}`
+        : `✓ Retail price set · per-item cost $${Number(j.unit_cost).toFixed(2)}${j.online_price != null ? ` · retail $${Number(j.online_price).toFixed(2)}` : ''}`);
       setRecv(null);
       await load();
     } finally { setBusy(false); }
@@ -218,8 +220,8 @@ export default function RetailMarketDashboard() {
                           </button>}
                     </td>
                     <td style={td}>
-                      <button onClick={() => openRecv(r)} title="Receive supplier cases into retail stock"
-                        style={{ background: 'rgba(245,197,24,0.14)', color: GOLD, border: '1px solid rgba(245,197,24,0.4)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>📦 Receive</button>
+                      <button onClick={() => openRecv(r)} title="Set the per-item retail price from case cost ÷ units per case (and optionally receive stock)"
+                        style={{ background: 'rgba(245,197,24,0.14)', color: GOLD, border: '1px solid rgba(245,197,24,0.4)', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>💲 Price</button>
                     </td>
                   </tr>
                 ))}
@@ -235,25 +237,25 @@ export default function RetailMarketDashboard() {
       {recv && (
         <div onClick={() => !busy && setRecv(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, padding: 18 }}>
-            <div style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>📦 Receive cases</div>
+            <div style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>📦 Price · receive cases</div>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 14 }}>{recv.name}</div>
             <Field label="Units per case">
               <input type="number" inputMode="numeric" value={upc} onChange={e => setUpc(e.target.value)} placeholder="e.g. 20" style={inp} />
             </Field>
-            <Field label="Number of cases">
-              <input type="number" inputMode="numeric" value={cases} onChange={e => setCases(e.target.value)} placeholder="e.g. 1" style={inp} />
+            <Field label="Number of cases — leave 0 to just set the price">
+              <input type="number" inputMode="numeric" value={cases} onChange={e => setCases(e.target.value)} placeholder="0 = price only" style={inp} />
             </Field>
             <Field label="Case cost (BSD)">
-              <input type="number" inputMode="decimal" step="0.01" value={caseCost} onChange={e => setCaseCost(e.target.value)} placeholder="e.g. 100.00" style={inp} />
+              <input type="number" inputMode="decimal" step="0.01" value={caseCost} onChange={e => setCaseCost(e.target.value)} placeholder="e.g. 47.60" style={inp} />
             </Field>
             <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 10, fontSize: 12, color: 'rgba(255,255,255,0.7)', margin: '6px 0 14px' }}>
               {previewUnit != null
-                ? <>Unit cost <strong style={{ color: GOLD }}>${previewUnit.toFixed(4)}</strong> · adds <strong style={{ color: '#4ade80' }}>{(Number(cases) || 0) * upcNum}</strong> units to stock</>
-                : <>Enter case size, cases, and case cost.</>}
+                ? <>Per-item cost <strong style={{ color: GOLD }}>${previewUnit.toFixed(2)}</strong> ({Number(caseCost).toFixed(2)} ÷ {upcNum}){Number(cases) > 0 ? <> · adds <strong style={{ color: '#4ade80' }}>{Number(cases) * upcNum}</strong> units to stock</> : <> · sets the retail price, no stock added</>}</>
+                : <>Enter units per case + case cost.</>}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setRecv(null)} disabled={busy} style={{ flex: 1, background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '10px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={submitRecv} disabled={busy || previewUnit == null || !(Number(cases) > 0)} style={{ flex: 1, background: GOLD, color: INK, border: 'none', borderRadius: 10, padding: '10px', fontWeight: 900, fontSize: 13, cursor: busy ? 'wait' : 'pointer', opacity: (previewUnit == null || !(Number(cases) > 0)) ? 0.5 : 1 }}>{busy ? 'Receiving…' : 'Receive'}</button>
+              <button onClick={submitRecv} disabled={busy || previewUnit == null} style={{ flex: 1, background: GOLD, color: INK, border: 'none', borderRadius: 10, padding: '10px', fontWeight: 900, fontSize: 13, cursor: busy ? 'wait' : 'pointer', opacity: previewUnit == null ? 0.5 : 1 }}>{busy ? 'Saving…' : (Number(cases) > 0 ? 'Receive' : 'Set price')}</button>
             </div>
           </div>
         </div>

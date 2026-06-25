@@ -37,11 +37,10 @@ export async function POST(req: NextRequest) {
   let b: { product_id?: unknown; cases?: unknown; case_cost?: unknown; units_per_case?: unknown; notes?: unknown };
   try { b = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
   const productId = typeof b.product_id === 'string' ? b.product_id : '';
-  const cases = Math.floor(Number(b.cases));
+  const cases = Number.isFinite(Number(b.cases)) ? Math.max(0, Math.floor(Number(b.cases))) : 0; // 0 = set price only (no stock)
   const caseCost = Number(b.case_cost);
   const upcOverride = b.units_per_case != null ? Math.floor(Number(b.units_per_case)) : null;
   if (!productId) return NextResponse.json({ ok: false, error: 'product_id required' }, { status: 400 });
-  if (!Number.isFinite(cases) || cases <= 0) return NextResponse.json({ ok: false, error: 'cases must be a positive whole number' }, { status: 400 });
   if (!Number.isFinite(caseCost) || caseCost <= 0) return NextResponse.json({ ok: false, error: 'case_cost must be greater than 0' }, { status: 400 });
   if (caseCost > 1_000_000) return NextResponse.json({ ok: false, error: 'case_cost looks too large (sanity check)' }, { status: 400 });
 
@@ -76,23 +75,22 @@ export async function POST(req: NextRequest) {
   if (costErr || !costRow) return NextResponse.json({ ok: false, error: `Cost insert failed: ${costErr?.message ?? 'unknown'}` }, { status: 500 });
   const costRowId = (costRow as { id: string }).id;
 
-  // 2) Bump retail stock (and backfill units_per_case if it was missing). Receiving
-  //    a case to sell retail means selling INDIVIDUAL UNITS — set unit_of_measure
-  //    'each' so the Retail Online Market sells per item (cost is already the
-  //    per-unit cost, so the auto-recomputed online price is per item too).
+  // 2) Set unit_of_measure='each' (sell per item) + units_per_case, and bump stock
+  //    ONLY when cases were actually received (cases=0 = price-only). The cost
+  //    above already made the online price per-unit via the recalc trigger.
   const newStock = (Number(prod.stock_count) || 0) + unitsAdded;
-  const prodUpdate: Record<string, unknown> = { stock_count: newStock, unit_of_measure: 'each' };
-  if ((!prod.units_per_case || prod.units_per_case <= 0) && upcOverride && upcOverride > 0) prodUpdate.units_per_case = upcOverride;
+  const prodUpdate: Record<string, unknown> = { unit_of_measure: 'each', units_per_case: upc };
+  if (cases > 0) prodUpdate.stock_count = newStock;
   const { error: stockErr } = await admin.from('products').update(prodUpdate).eq('id', prod.id);
-  if (stockErr) return NextResponse.json({ ok: false, error: `Stock update failed: ${stockErr.message}` }, { status: 500 });
+  if (stockErr) return NextResponse.json({ ok: false, error: `Update failed: ${stockErr.message}` }, { status: 500 });
 
-  // 3) Traceable receipt
-  const { error: recErr } = await admin.from('case_receipts').insert({
+  // 3) Traceable receipt — only for an actual physical receipt.
+  const recErr = cases > 0 ? (await admin.from('case_receipts').insert({
     product_id: prod.id, supplier_id: supplierId, cases_received: cases, units_per_case: upc,
     case_cost: Math.round(caseCost * 100) / 100, unit_cost: unitCost, units_added: unitsAdded,
     cost_row_id: costRowId, received_by: user.id,
     notes: typeof b.notes === 'string' ? b.notes.slice(0, 500) : null,
-  });
+  })).error : null;
   if (recErr) {
     // Cost + stock already applied; surface a soft warning (receipt log only).
     return NextResponse.json({ ok: true, warning: `Stock + cost recorded, but receipt log failed: ${recErr.message}. Run the case_receipts SQL.`, unit_cost: unitCost, units_added: unitsAdded, new_stock: newStock });
