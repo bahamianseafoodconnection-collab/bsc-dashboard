@@ -656,7 +656,7 @@ export default function SupplierDetailPage() {
   // ── Product card actions ──
   type ChannelFlag = 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale';
   const CHANNEL_LABEL: Record<ChannelFlag, string> = {
-    sell_nassau: 'Nassau', sell_andros: 'Andros', sell_online: 'Online', sell_wholesale: 'Wholesale',
+    sell_nassau: 'Nassau', sell_andros: 'Andros', sell_online: 'Retail Online', sell_wholesale: 'Wholesale',
   };
   // pricing-channel + priced_* field that pairs with each sell_* flag.
   const CHANNEL_PRICE: Record<ChannelFlag, { channel: string; pricedField: keyof SupplierProduct }> = {
@@ -1030,7 +1030,7 @@ export default function SupplierDetailPage() {
                         <th style={{ padding: '10px 8px', minWidth: 220 }}>Image</th>
                         <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Nas</th>
                         <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>And</th>
-                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Onl</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 54 }}>Retail</th>
                         <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Whs</th>
                         <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}></th>
                       </tr>
@@ -1048,7 +1048,7 @@ export default function SupplierDetailPage() {
                         const CHANNELS: { flag: ChannelFlag; abbr: string; label: string; priced: boolean }[] = [
                           { flag: 'sell_nassau',    abbr: 'Nas', label: 'Nassau POS / shop', priced: !!p.priced_nassau },
                           { flag: 'sell_andros',    abbr: 'And', label: 'Andros',            priced: !!p.priced_andros },
-                          { flag: 'sell_online',    abbr: 'Onl', label: 'Retail Online Market',     priced: !!p.priced_online },
+                          { flag: 'sell_online',    abbr: 'Ret', label: 'Retail Online Market',     priced: !!p.priced_online },
                           { flag: 'sell_wholesale', abbr: 'Whs', label: 'Wholesale',         priced: !!p.priced_wholesale },
                         ];
                         return (
@@ -1280,7 +1280,7 @@ export default function SupplierDetailPage() {
                         <th style={{ padding: '8px 6px' }}>Image URL (optional)</th>
                         <th style={{ padding: '8px 6px', textAlign: 'center' }}>Nas</th>
                         <th style={{ padding: '8px 6px', textAlign: 'center' }}>And</th>
-                        <th style={{ padding: '8px 6px', textAlign: 'center' }}>Onl</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center' }}>Retail</th>
                         <th style={{ padding: '8px 6px', textAlign: 'center' }}>Whs</th>
                       </tr>
                     </thead>
