@@ -17,6 +17,12 @@ export const dynamic = 'force-dynamic';
 const FOUNDER_ROLES = new Set(['founder', 'co_founder', 'control_admin']);
 const CHANNEL = 'online_market';
 const r2 = (n: number) => Math.round(n * 100) / 100;
+// Units per case = the FIRST number in the Pack field (e.g. "20/50c" → 20).
+const unitsFromPack = (pack: string | null): number | null => {
+  const m = String(pack ?? '').match(/\d+/);
+  const n = m ? parseInt(m[0], 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
 
 async function safe<T>(p: PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
   try { const { data, error } = await p; return error ? [] : (data ?? []); } catch { return []; }
@@ -86,7 +92,8 @@ export async function GET(req: NextRequest) {
   const rows = products.map(p => {
     const cost = costMap[p.id] ?? null;
     const price = priceMap[p.id] ?? null;
-    const upc = p.units_per_case && p.units_per_case > 0 ? p.units_per_case : null;
+    // Prefer the stored units_per_case; otherwise read it from the Pack field.
+    const upc = (p.units_per_case && p.units_per_case > 0) ? p.units_per_case : unitsFromPack(p.pack_size);
     const profitPerUnit = cost != null && price != null ? r2(price - cost) : null;
     const marginPct = cost != null && price != null && cost > 0 ? Math.round(((price - cost) / cost) * 100) : null;
     const stock = p.stock_count != null ? Number(p.stock_count) : null;

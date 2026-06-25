@@ -239,7 +239,7 @@ export default function RetailMarketDashboard() {
           <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 380, background: CARD, borderRadius: 14, border: `1px solid ${BORDER}`, padding: 18 }}>
             <div style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>📦 Price · receive cases</div>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 14 }}>{recv.name}</div>
-            <Field label="Units per case">
+            <Field label={`Units per case${recv.pack_size ? ` · read from Pack "${recv.pack_size}"` : ''}`}>
               <input type="number" inputMode="numeric" value={upc} onChange={e => setUpc(e.target.value)} placeholder="e.g. 20" style={inp} />
             </Field>
             <Field label="Number of cases — leave 0 to just set the price">

@@ -18,6 +18,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED = new Set(['founder', 'co_founder', 'control_admin', 'manager', 'supplier_handler']);
+// Units per case = first number in the Pack field (e.g. "20/50c" → 20).
+const unitsFromPack = (pack: string | null): number | null => {
+  const m = String(pack ?? '').match(/\d+/);
+  const n = m ? parseInt(m[0], 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
 
 export async function POST(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -48,14 +54,17 @@ export async function POST(req: NextRequest) {
 
   const { data: prod, error: prodErr } = await admin
     .from('products')
-    .select('id, name, status, unit_of_measure, units_per_case, stock_count, primary_supplier_id')
+    .select('id, name, status, unit_of_measure, units_per_case, stock_count, primary_supplier_id, pack_size')
     .eq('id', productId)
-    .maybeSingle<{ id: string; name: string; status: string | null; unit_of_measure: string | null; units_per_case: number | null; stock_count: number | null; primary_supplier_id: string | null }>();
+    .maybeSingle<{ id: string; name: string; status: string | null; unit_of_measure: string | null; units_per_case: number | null; stock_count: number | null; primary_supplier_id: string | null; pack_size: string | null }>();
   if (prodErr || !prod) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 });
   if ((prod.status ?? '').toLowerCase() !== 'active') return NextResponse.json({ ok: false, error: `Product status is "${prod.status}" — activate it first.` }, { status: 409 });
 
-  const upc = (upcOverride && upcOverride > 0) ? upcOverride : (prod.units_per_case && prod.units_per_case > 0 ? prod.units_per_case : 0);
-  if (upc <= 0) return NextResponse.json({ ok: false, error: 'This product has no units-per-case set. Provide units_per_case (how many sellable units are in one case).' }, { status: 400 });
+  // units per case: explicit override → stored value → first number in Pack.
+  const upc = (upcOverride && upcOverride > 0) ? upcOverride
+    : (prod.units_per_case && prod.units_per_case > 0) ? prod.units_per_case
+    : (unitsFromPack(prod.pack_size) ?? 0);
+  if (upc <= 0) return NextResponse.json({ ok: false, error: 'No units-per-case found. Add it as the first number in the Pack field (e.g. "20/50c") or enter it here.' }, { status: 400 });
 
   const unitCost = Math.round((caseCost / upc) * 10000) / 10000;
   const unitsAdded = cases * upc;
