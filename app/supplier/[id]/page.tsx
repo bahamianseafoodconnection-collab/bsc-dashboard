@@ -733,6 +733,23 @@ export default function SupplierDetailPage() {
     }
   }
 
+  // Make a product sell PER ITEM (Retail Online Market) — unit_of_measure='each'.
+  // Uses the retail set-unit endpoint (allows supplier_handler too). No price math
+  // change; for correct per-item pricing set the per-unit cost via Receive Cases.
+  async function setPerItem(p: SupplierProduct) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { showToast('Sign-in expired — refresh.', false); return; }
+    const res = await fetch('/api/founder/retail/set-unit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ product_id: p.id }),
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) { showToast(j.error || 'Failed', false); return; }
+    setProducts(prev => prev.map(x => x.id === p.id ? { ...x, unit_of_measure: 'each' } : x));
+    showToast(`✓ ${p.name} now sells per item`);
+  }
+
   function openProductEditor(p: SupplierProduct) {
     setEditingProduct(p);
     setEditForm({
@@ -1084,6 +1101,12 @@ export default function SupplierDetailPage() {
                                 defaultValue={p.unit_of_measure ?? ''}
                                 onBlur={(e) => { if (e.target.value !== (p.unit_of_measure ?? '')) patchField(p.id, 'unit_of_measure', e.target.value || null); }}
                                 style={inputStyle} />
+                              <div style={{ marginTop: 3 }}>
+                                {(p.unit_of_measure ?? '') === 'each'
+                                  ? <span style={{ fontSize: 9, color: '#4ade80', fontWeight: 800 }}>✓ sells per item</span>
+                                  : <button onClick={() => setPerItem(p)} title="Sell this product as individual items (Retail Online Market). Set the per-unit cost so the item price is right."
+                                      style={{ fontSize: 9, color: '#fbbf24', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 800, padding: 0, textDecoration: 'underline' }}>→ sell per item</button>}
+                              </div>
                             </td>
                             <td style={{ padding: '6px 8px' }}>
                               <input
