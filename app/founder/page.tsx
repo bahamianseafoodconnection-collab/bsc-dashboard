@@ -69,6 +69,7 @@ export default function FounderDashboard() {
     { label: 'RBC Payment Confirm', desc: 'Auto-match daily RBC report',  href: '/founder/rbc',      icon: '💳' },
     { label: 'Retail Online Market',desc: 'Per item · movers · prices',   href: '/founder/retail',   icon: '🛒' },
     { label: 'Wholesale Online Mkt', desc: 'Sold by the case',            href: '/founder/wholesale',icon: '📦' },
+    { label: 'Channel Margins',      desc: '6 channels · markups',         href: '/founder/channels', icon: '📊' },
     { label: 'Control Center',      desc: 'All 80+ admin tools',        href: '/dashboard',        icon: '🎛️' },
     { label: 'Cashier',             desc: 'POS, orders, invoices',      href: '/cashier',          icon: '🧾' },
     { label: 'Supplier Handler',    desc: 'Suppliers, catalogue',       href: '/supplier-handler', icon: '🏪' },
