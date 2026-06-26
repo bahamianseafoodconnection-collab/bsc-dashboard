@@ -33,7 +33,7 @@ interface Product {
   category: string
   is_bsc_processed: boolean
   sell_price: number              // nassau_pos retail snapshot
-  wholesale_price: number | null  // local_wholesale snapshot (drives auto-upgrade at 10+ lbs / by case)
+  wholesale_price: number | null  // nassau_wholesale snapshot (in-store 22%; drives auto-upgrade at 10+ lbs / by case)
   promo_price: number | null
   promo_label: string | null
   is_per_lb: boolean
@@ -421,16 +421,18 @@ export default function POSPage() {
 
       const productIds = (productsRaw ?? []).map((p: any) => p.id)
 
-      // Separate fetch for local_wholesale prices so we can auto-upgrade
-      // at 10+ lbs of one product / by the case. Missing wholesale price
-      // = no auto-upgrade for that product (retail price always applies).
+      // Separate fetch for nassau_wholesale (in-store wholesale, 22%) prices
+      // so we can auto-upgrade at 10+ lbs of one product / by the case.
+      // Missing wholesale price = no auto-upgrade for that product (retail
+      // price always applies). NOTE: this is the IN-STORE wholesale channel,
+      // distinct from local_wholesale (the 19% online wholesale tier).
       let wholesaleMap = new Map<string, number>()
       if (productIds.length > 0) {
         const { data: wholesaleRaw } = await supabase
           .from('product_pricing')
           .select('product_id, manual_unit_price')
           .in('product_id', productIds)
-          .eq('channel', 'local_wholesale')
+          .eq('channel', 'nassau_wholesale')
           .eq('is_current', true)
           .eq('is_active', true)
         for (const row of (wholesaleRaw ?? []) as { product_id: string; manual_unit_price: number }[]) {
@@ -1725,7 +1727,7 @@ export default function POSPage() {
                   </p>
                   {pricing.qualifies_as_wholesale && !pricing.wholesale_price_available && pricing.applied_channel !== 'promo' && (
                     <p className="text-[10px] mt-1" style={{ color: '#fbbf24' }}>
-                      ⚠ Qualifies for wholesale — no local_wholesale price set
+                      ⚠ Qualifies for wholesale — no nassau_wholesale price set
                     </p>
                   )}
                 </div>
@@ -1783,7 +1785,7 @@ export default function POSPage() {
                           </p>
                           {pricing.qualifies_as_wholesale && !pricing.wholesale_price_available && pricing.applied_channel !== 'promo' && (
                             <p className="text-[10px] mt-0.5" style={{ color: '#fbbf24' }}>
-                              ⚠ Qualifies for wholesale — set local_wholesale price on /products
+                              ⚠ Qualifies for wholesale — set nassau_wholesale price on /products
                             </p>
                           )}
                         </div>
