@@ -12,7 +12,7 @@ const FOUNDER_ROLES = new Set(['founder', 'co_founder']);
 const ALLOWED_ROLES = [
   'founder', 'co_founder', 'control_admin', 'manager', 'supervisor',
   'cashier', 'right_hand', 'processor', 'driver', 'strategist',
-  'supplier', 'partner_us',
+  'supplier', 'supplier_handler', 'partner_us',
 ];
 
 type Body = {

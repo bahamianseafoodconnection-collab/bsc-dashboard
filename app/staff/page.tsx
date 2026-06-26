@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const ALLOWED_ROLES = [
   'founder', 'co_founder', 'control_admin', 'manager', 'supervisor',
   'cashier', 'right_hand', 'processor', 'driver', 'strategist',
-  'supplier', 'partner_us',
+  'supplier', 'supplier_handler', 'partner_us',
 ];
 const LOCATIONS = ['Nassau', 'Andros', 'all_locations'];
 
