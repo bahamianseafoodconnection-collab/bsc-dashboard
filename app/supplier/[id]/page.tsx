@@ -55,18 +55,21 @@ interface SupplierProduct {
   status: string;
   image_url: string | null;
   vat_code: 'X' | 'T' | 'F' | null;          // X=0%  T=10%  F=5%
-  sell_nassau: boolean;
-  sell_andros: boolean;
-  sell_online: boolean;
-  sell_wholesale: boolean;
+  sell_nassau: boolean;            // Nassau POS — Retail
+  sell_nassau_wholesale: boolean;  // Nassau POS — Wholesale
+  sell_andros: boolean;            // Andros POS — Retail
+  sell_andros_wholesale: boolean;  // Andros POS — Wholesale
+  sell_online: boolean;            // Online — Retail
+  sell_wholesale: boolean;         // Online — Wholesale
   cost_per_unit: number | null;              // current cost from product_costs join
   retail_margin_pct: number;                  // current online_market margin (default 35)
   wholesale_margin_pct: number;               // current local_wholesale margin (default 15)
   // Whether a CURRENT product_pricing row exists for each channel. A product is
-  // only truly "live" to customers when its sell_* flag is on AND a price exists
-  // (the storefront/POS filter on a current channel price). Defaults false.
+  // only truly "live" to customers when its sell_* flag is on AND a price exists.
   priced_nassau?: boolean;
+  priced_nassau_ws?: boolean;
   priced_andros?: boolean;
+  priced_andros_ws?: boolean;
   priced_online?: boolean;
   priced_wholesale?: boolean;
 }
@@ -296,10 +299,11 @@ export default function SupplierDetailPage() {
         category: string | null; unit_of_measure: string | null; pack_size: string | null;
         status: string; image_url: string | null; vat_code: 'X'|'T'|'F'|null;
         sell_nassau: boolean; sell_andros: boolean; sell_online: boolean; sell_wholesale: boolean;
+        sell_nassau_wholesale: boolean; sell_andros_wholesale: boolean;
       };
       const { data: prods, error: prodErr } = await supabase
         .from('products')
-        .select('id, sku, name, description, category, unit_of_measure, pack_size, status, image_url, vat_code, sell_nassau, sell_andros, sell_online, sell_wholesale')
+        .select('id, sku, name, description, category, unit_of_measure, pack_size, status, image_url, vat_code, sell_nassau, sell_andros, sell_online, sell_wholesale, sell_nassau_wholesale, sell_andros_wholesale')
         .eq('primary_supplier_id', id)
         .order('name');
       if (prodErr) {
@@ -312,7 +316,7 @@ export default function SupplierDetailPage() {
       // Per-product set of channels that have a CURRENT price (manual_unit_price
       // not null). Drives the price-aware "Live" pill — a sell_* flag without a
       // price doesn't actually show to customers.
-      const pricedMap: Record<string, { nassau: boolean; andros: boolean; online: boolean; wholesale: boolean }> = {};
+      const pricedMap: Record<string, { nassau: boolean; nassau_ws: boolean; andros: boolean; andros_ws: boolean; online: boolean; wholesale: boolean }> = {};
       // Chunk the id-set so .in() never builds an oversized request URL — a
       // ~1,800-product supplier would otherwise blow the URL limit and throw.
       const ids = productList.map((p) => p.id);
@@ -326,7 +330,7 @@ export default function SupplierDetailPage() {
           supabase.from('product_pricing')
             .select('product_id, channel, margin_multiplier, manual_unit_price')
             .in('product_id', slice).eq('is_current', true).eq('is_active', true)
-            .in('channel', ['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale']),
+            .in('channel', ['nassau_pos', 'andros_pos', 'online_market', 'local_wholesale', 'nassau_wholesale', 'andros_wholesale']),
         ]);
         for (const c of ((costs ?? []) as Array<{ product_id: string; cost_per_unit: number | null }>)) {
           costMap[c.product_id] = c.cost_per_unit != null ? Number(c.cost_per_unit) : null;
@@ -338,11 +342,13 @@ export default function SupplierDetailPage() {
             if (row.channel === 'local_wholesale') wholeMap[row.product_id]  = pct;
           }
           if (row.manual_unit_price != null) {
-            const e = (pricedMap[row.product_id] ??= { nassau: false, andros: false, online: false, wholesale: false });
-            if (row.channel === 'nassau_pos')      e.nassau    = true;
-            if (row.channel === 'andros_pos')      e.andros    = true;
-            if (row.channel === 'online_market')   e.online    = true;
-            if (row.channel === 'local_wholesale') e.wholesale = true;
+            const e = (pricedMap[row.product_id] ??= { nassau: false, nassau_ws: false, andros: false, andros_ws: false, online: false, wholesale: false });
+            if (row.channel === 'nassau_pos')        e.nassau    = true;
+            if (row.channel === 'nassau_wholesale')  e.nassau_ws = true;
+            if (row.channel === 'andros_pos')        e.andros    = true;
+            if (row.channel === 'andros_wholesale')  e.andros_ws = true;
+            if (row.channel === 'online_market')     e.online    = true;
+            if (row.channel === 'local_wholesale')   e.wholesale = true;
           }
         }
       }
@@ -352,7 +358,9 @@ export default function SupplierDetailPage() {
         retail_margin_pct:    retailMap[p.id] ?? DEFAULT_RETAIL_MARGIN,
         wholesale_margin_pct: wholeMap[p.id]  ?? DEFAULT_WHOLESALE_MARGIN,
         priced_nassau:    pricedMap[p.id]?.nassau    ?? false,
+        priced_nassau_ws: pricedMap[p.id]?.nassau_ws ?? false,
         priced_andros:    pricedMap[p.id]?.andros    ?? false,
+        priced_andros_ws: pricedMap[p.id]?.andros_ws ?? false,
         priced_online:    pricedMap[p.id]?.online    ?? false,
         priced_wholesale: pricedMap[p.id]?.wholesale ?? false,
       })));
@@ -661,16 +669,20 @@ export default function SupplierDetailPage() {
   }
 
   // ── Product card actions ──
-  type ChannelFlag = 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale';
+  type ChannelFlag = 'sell_nassau' | 'sell_nassau_wholesale' | 'sell_andros' | 'sell_andros_wholesale' | 'sell_online' | 'sell_wholesale';
   const CHANNEL_LABEL: Record<ChannelFlag, string> = {
-    sell_nassau: 'Nassau', sell_andros: 'Andros', sell_online: 'Retail Online', sell_wholesale: 'Wholesale',
+    sell_nassau: 'Nassau POS Retail', sell_nassau_wholesale: 'Nassau POS Wholesale',
+    sell_andros: 'Andros POS Retail', sell_andros_wholesale: 'Andros POS Wholesale',
+    sell_online: 'Retail Online', sell_wholesale: 'Online Wholesale',
   };
   // pricing-channel + priced_* field that pairs with each sell_* flag.
   const CHANNEL_PRICE: Record<ChannelFlag, { channel: string; pricedField: keyof SupplierProduct }> = {
-    sell_nassau:    { channel: 'nassau_pos',      pricedField: 'priced_nassau' },
-    sell_andros:    { channel: 'andros_pos',      pricedField: 'priced_andros' },
-    sell_online:    { channel: 'online_market',   pricedField: 'priced_online' },
-    sell_wholesale: { channel: 'local_wholesale', pricedField: 'priced_wholesale' },
+    sell_nassau:           { channel: 'nassau_pos',       pricedField: 'priced_nassau' },
+    sell_nassau_wholesale: { channel: 'nassau_wholesale', pricedField: 'priced_nassau_ws' },
+    sell_andros:           { channel: 'andros_pos',       pricedField: 'priced_andros' },
+    sell_andros_wholesale: { channel: 'andros_wholesale', pricedField: 'priced_andros_ws' },
+    sell_online:           { channel: 'online_market',    pricedField: 'priced_online' },
+    sell_wholesale:        { channel: 'local_wholesale',  pricedField: 'priced_wholesale' },
   };
 
   // Re-read the authoritative DB state for one product — sell_* flags, status,
@@ -679,22 +691,22 @@ export default function SupplierDetailPage() {
   async function refreshProductState(productId: string) {
     const [{ data: prow }, { data: prices }] = await Promise.all([
       supabase.from('products')
-        .select('sell_nassau, sell_andros, sell_online, sell_wholesale, status')
+        .select('sell_nassau, sell_nassau_wholesale, sell_andros, sell_andros_wholesale, sell_online, sell_wholesale, status')
         .eq('id', productId).maybeSingle(),
       supabase.from('product_pricing')
         .select('channel, manual_unit_price')
         .eq('product_id', productId).eq('is_current', true).eq('is_active', true),
     ]);
     if (!prow) return null;
-    const r = prow as Pick<SupplierProduct, 'sell_nassau' | 'sell_andros' | 'sell_online' | 'sell_wholesale' | 'status'>;
-    const priced = { nassau_pos: false, andros_pos: false, online_market: false, local_wholesale: false } as Record<string, boolean>;
+    const r = prow as Pick<SupplierProduct, 'sell_nassau' | 'sell_nassau_wholesale' | 'sell_andros' | 'sell_andros_wholesale' | 'sell_online' | 'sell_wholesale' | 'status'>;
+    const priced = { nassau_pos: false, nassau_wholesale: false, andros_pos: false, andros_wholesale: false, online_market: false, local_wholesale: false } as Record<string, boolean>;
     for (const row of (prices ?? []) as Array<{ channel: string; manual_unit_price: number | null }>) {
       if (row.manual_unit_price != null) priced[row.channel] = true;
     }
     const fresh: Partial<SupplierProduct> = {
-      sell_nassau: r.sell_nassau, sell_andros: r.sell_andros, sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
+      sell_nassau: r.sell_nassau, sell_nassau_wholesale: r.sell_nassau_wholesale, sell_andros: r.sell_andros, sell_andros_wholesale: r.sell_andros_wholesale, sell_online: r.sell_online, sell_wholesale: r.sell_wholesale,
       status: r.status,
-      priced_nassau: priced.nassau_pos, priced_andros: priced.andros_pos, priced_online: priced.online_market, priced_wholesale: priced.local_wholesale,
+      priced_nassau: priced.nassau_pos, priced_nassau_ws: priced.nassau_wholesale, priced_andros: priced.andros_pos, priced_andros_ws: priced.andros_wholesale, priced_online: priced.online_market, priced_wholesale: priced.local_wholesale,
     };
     setProducts(prev => prev.map(x => x.id === productId ? { ...x, ...fresh } : x));
     console.log('[Live toggle] DB confirm', { productId, db: r, pricedChannels: priced });
@@ -1099,11 +1111,14 @@ export default function SupplierDetailPage() {
                         // Each sell channel is its own always-visible, directly-tappable
                         // chip (no popover/backdrop — those could swallow taps on mobile).
                         // green = live (on + priced) · amber = on but no price · grey = off.
+                        // Six channels = 3 locations × {retail, wholesale}, each its own margin.
                         const CHANNELS: { flag: ChannelFlag; abbr: string; label: string; priced: boolean }[] = [
-                          { flag: 'sell_nassau',    abbr: 'Nas', label: 'Nassau POS / shop', priced: !!p.priced_nassau },
-                          { flag: 'sell_andros',    abbr: 'And', label: 'Andros',            priced: !!p.priced_andros },
-                          { flag: 'sell_online',    abbr: 'Ret', label: 'Retail Online Market',     priced: !!p.priced_online },
-                          { flag: 'sell_wholesale', abbr: 'Whs', label: 'Wholesale',         priced: !!p.priced_wholesale },
+                          { flag: 'sell_nassau',           abbr: 'Nas·R', label: 'Nassau POS — Retail',    priced: !!p.priced_nassau },
+                          { flag: 'sell_nassau_wholesale', abbr: 'Nas·W', label: 'Nassau POS — Wholesale', priced: !!p.priced_nassau_ws },
+                          { flag: 'sell_andros',           abbr: 'And·R', label: 'Andros POS — Retail',    priced: !!p.priced_andros },
+                          { flag: 'sell_andros_wholesale', abbr: 'And·W', label: 'Andros POS — Wholesale', priced: !!p.priced_andros_ws },
+                          { flag: 'sell_online',           abbr: 'Onl·R', label: 'Online — Retail',        priced: !!p.priced_online },
+                          { flag: 'sell_wholesale',        abbr: 'Onl·W', label: 'Online — Wholesale',     priced: !!p.priced_wholesale },
                         ];
                         return (
                           <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', backgroundColor: rowBg, opacity: isActive ? 1 : 0.55 }}>

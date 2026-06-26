@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ALLOWED = new Set(['supplier_handler', 'manager', 'right_hand', 'founder', 'co_founder', 'control_admin', 'basic_admin']);
-const CHANNEL_FLAGS = new Set(['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale']);
+const CHANNEL_FLAGS = new Set(['sell_nassau', 'sell_andros', 'sell_online', 'sell_wholesale', 'sell_nassau_wholesale', 'sell_andros_wholesale']);
 
 export async function POST(req: NextRequest) {
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
