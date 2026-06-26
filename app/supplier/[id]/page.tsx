@@ -148,11 +148,13 @@ interface ProductEditForm {
   unit_of_measure: string;
   pack_size:       string;
   image_url:       string;
-  sell_nassau:     boolean;
-  sell_andros:     boolean;
-  sell_online:     boolean;
-  sell_wholesale:  boolean;
-  status:          string;
+  sell_nassau:           boolean;
+  sell_nassau_wholesale: boolean;
+  sell_andros:           boolean;
+  sell_andros_wholesale: boolean;
+  sell_online:           boolean;
+  sell_wholesale:        boolean;
+  status:                string;
 }
 
 export default function SupplierDetailPage() {
@@ -824,11 +826,13 @@ export default function SupplierDetailPage() {
       unit_of_measure: p.unit_of_measure ?? '',
       pack_size:       p.pack_size ?? '',
       image_url:       p.image_url ?? '',
-      sell_nassau:     p.sell_nassau,
-      sell_andros:     p.sell_andros,
-      sell_online:     p.sell_online,
-      sell_wholesale:  p.sell_wholesale,
-      status:          p.status,
+      sell_nassau:           p.sell_nassau,
+      sell_nassau_wholesale: p.sell_nassau_wholesale,
+      sell_andros:           p.sell_andros,
+      sell_andros_wholesale: p.sell_andros_wholesale,
+      sell_online:           p.sell_online,
+      sell_wholesale:        p.sell_wholesale,
+      status:                p.status,
     });
   }
 
@@ -873,11 +877,13 @@ export default function SupplierDetailPage() {
           unit_of_measure: editForm.unit_of_measure || null,
           pack_size:       editForm.pack_size || null,
           image_url:       editForm.image_url || null,
-          sell_nassau:     editForm.sell_nassau,
-          sell_andros:     editForm.sell_andros,
-          sell_online:     editForm.sell_online,
-          sell_wholesale:  editForm.sell_wholesale,
-          status:          editForm.status,
+          sell_nassau:           editForm.sell_nassau,
+          sell_nassau_wholesale: editForm.sell_nassau_wholesale,
+          sell_andros:           editForm.sell_andros,
+          sell_andros_wholesale: editForm.sell_andros_wholesale,
+          sell_online:           editForm.sell_online,
+          sell_wholesale:        editForm.sell_wholesale,
+          status:                editForm.status,
         }),
       });
       const j = await res.json();
@@ -891,11 +897,13 @@ export default function SupplierDetailPage() {
         unit_of_measure: editForm.unit_of_measure || null,
         pack_size:       editForm.pack_size || null,
         image_url:       editForm.image_url || null,
-        sell_nassau:     editForm.sell_nassau,
-        sell_andros:     editForm.sell_andros,
-        sell_online:     editForm.sell_online,
-        sell_wholesale:  editForm.sell_wholesale,
-        status:          editForm.status,
+        sell_nassau:           editForm.sell_nassau,
+        sell_nassau_wholesale: editForm.sell_nassau_wholesale,
+        sell_andros:           editForm.sell_andros,
+        sell_andros_wholesale: editForm.sell_andros_wholesale,
+        sell_online:           editForm.sell_online,
+        sell_wholesale:        editForm.sell_wholesale,
+        status:                editForm.status,
       } : x));
       closeProductEditor();
     } finally {
@@ -1094,10 +1102,12 @@ export default function SupplierDetailPage() {
                         <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}>Whsl %</th>
                         <th style={{ padding: '10px 8px', width: 90, textAlign: 'right', color: '#86efac' }}>Whsl $</th>
                         <th style={{ padding: '10px 8px', minWidth: 220 }}>Image</th>
-                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Nas</th>
-                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>And</th>
-                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 54 }}>Retail</th>
-                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Whs</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Nas·R</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Nas·W</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>And·R</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>And·W</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Onl·R</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'center', width: 46 }}>Onl·W</th>
                         <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}></th>
                       </tr>
                     </thead>
@@ -1266,7 +1276,7 @@ export default function SupplierDetailPage() {
                                 )}
                               </div>
                             </td>
-                            {(['sell_nassau','sell_andros','sell_online','sell_wholesale'] as const).map(ch => (
+                            {(['sell_nassau','sell_nassau_wholesale','sell_andros','sell_andros_wholesale','sell_online','sell_wholesale'] as const).map(ch => (
                               <td key={ch} style={{ padding: '6px 8px', textAlign: 'center' }}>
                                 <input type="checkbox" checked={p[ch]}
                                   onChange={(e) => patchField(p.id, ch, e.target.checked)} />
@@ -1526,10 +1536,12 @@ export default function SupplierDetailPage() {
                   <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 12px' }}>Where this product is sold. Pricing per channel is set via /admin/inventory.</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                     {([
-                      ['sell_nassau',    '🟡 Nassau POS / shop'],
-                      ['sell_andros',    '🟣 Andros'],
-                      ['sell_online',    '🌐 Retail Online'],
-                      ['sell_wholesale', '📦 Wholesale'],
+                      ['sell_nassau',           '🟡 Nassau POS — Retail'],
+                      ['sell_nassau_wholesale',  '🟡 Nassau POS — Wholesale'],
+                      ['sell_andros',           '🟣 Andros POS — Retail'],
+                      ['sell_andros_wholesale',  '🟣 Andros POS — Wholesale'],
+                      ['sell_online',           '🌐 Online — Retail'],
+                      ['sell_wholesale',        '📦 Online — Wholesale'],
                     ] as const).map(([key, label]) => (
                       <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, backgroundColor: editForm[key] ? 'rgba(245,197,24,0.15)' : 'rgba(255,255,255,0.04)', cursor: 'pointer', border: `1px solid ${editForm[key] ? 'rgba(245,197,24,0.4)' : 'rgba(255,255,255,0.08)'}` }}>
                         <input type="checkbox" checked={editForm[key]} onChange={e => setEditForm({ ...editForm, [key]: e.target.checked })} />
