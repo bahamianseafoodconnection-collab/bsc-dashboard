@@ -1197,9 +1197,13 @@ export default function POSPage() {
           `Do NOT re-ring this sale. Open /pos/sales-history to retry the receipt manually or flag stock to admin.`
         )
       } else {
+        // Surface the raw server/DB error too — the friendly `msg` masks the
+        // real cause (a masked trigger error once cost a long blind debug).
+        const detail = (err instanceof Error ? err.message : String(err ?? '')).slice(0, 300)
         alert(
           `Order failed: ${msg}\n\n` +
-          `The sale was NOT saved — try again. If it keeps failing, take cash + write a paper receipt + call Dedrick.`
+          `The sale was NOT saved — try again. If it keeps failing, take cash + write a paper receipt + call Dedrick.` +
+          (detail && detail !== msg ? `\n\n[tech: ${detail}]` : '')
         )
       }
     } finally {
