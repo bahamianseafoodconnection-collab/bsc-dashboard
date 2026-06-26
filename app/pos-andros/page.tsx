@@ -19,6 +19,8 @@ import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
 import { plainError } from '@/lib/plain-error';
 import { splitSale, recordSaleFinancials } from '@/lib/finance';
+import { priceCartLine, type CartLinePricing } from '@/lib/cart-pricing';
+import { type SaleUnit } from '@/lib/pricing';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
 import {
   fetchOverheadMetrics,
@@ -61,7 +63,10 @@ type SellableProduct = {
   pack_size: string | null;
   image_url: string | null;
   is_bsc_processed: boolean;
-  unit_price: number;
+  unit_price: number;              // tile display price (promo ?? retail)
+  retail_price: number;            // andros_pos regular price
+  wholesale_price: number | null;  // andros_wholesale snapshot (in-store 22%) — null = no auto-upgrade
+  promo_price: number | null;      // active closed-date special (wins over wholesale)
   cost_per_unit: number;
 };
 
@@ -69,11 +74,31 @@ type CartItem = {
   product_id: string;
   sku: string;
   name: string;
-  unit_price: number;
+  unit_price: number;              // retained for back-compat; live price = linePricing(it).unit_price
+  retail_price: number;
+  wholesale_price: number | null;
+  promo_price: number | null;
   cost_per_unit: number;
   unit_of_measure: string;
   qty: number;
 };
+
+// Map a free-text unit_of_measure to the SaleUnit the wholesale rule cares
+// about. Only 'case' and 'lb' can qualify (by case, or 10+ lb of one item).
+function unitOf(u: string): SaleUnit {
+  return u === 'lb' ? 'lb' : u === 'case' ? 'case' : 'each';
+}
+
+// Effective per-line pricing — swaps to the andros_wholesale snapshot when the
+// line qualifies (by case OR 10+ lb of one product). Mirrors Nassau POS via the
+// shared lib/cart-pricing helper. A closed-date special (promo_price) still wins.
+function linePricing(it: CartItem): CartLinePricing {
+  return priceCartLine(
+    { retail_price: it.retail_price, wholesale_price: it.wholesale_price, promo_price: it.promo_price },
+    it.qty,
+    unitOf(it.unit_of_measure),
+  );
+}
 
 type PaymentMethod = 'cash' | 'card' | 'transfer' | 'account';
 
@@ -322,6 +347,23 @@ export default function AndrosPOSPage() {
         }
       }
 
+      // Side-fetch andros_wholesale (in-store 22%) snapshots so a qualifying
+      // line (by case OR 10+ lb of one product) auto-upgrades. Missing price
+      // = no upgrade (retail always applies). Mirrors Nassau POS.
+      const wholesaleMap = new Map<string, number>();
+      if (catalogIds.length > 0) {
+        const { data: wsRaw } = await supabase
+          .from('product_pricing')
+          .select('product_id, manual_unit_price')
+          .in('product_id', catalogIds)
+          .eq('channel', 'andros_wholesale')
+          .eq('is_current', true)
+          .eq('is_active', true);
+        for (const row of (wsRaw ?? []) as { product_id: string; manual_unit_price: number }[]) {
+          wholesaleMap.set(row.product_id, Number(row.manual_unit_price));
+        }
+      }
+
       const sellable: SellableProduct[] = [];
       let unsellable = 0;
       ((rows as CatalogRow[]) || []).forEach((r) => {
@@ -345,6 +387,11 @@ export default function AndrosPOSPage() {
           image_url: r.image_url,
           is_bsc_processed: r.is_bsc_processed,
           unit_price,
+          // Fall back to the display price if the formula price is un-priceable
+          // (special-only rows), so wholesale qualification never reads a NaN.
+          retail_price: Number.isFinite(regular_price) && regular_price > 0 ? regular_price : unit_price,
+          wholesale_price: wholesaleMap.get(r.id) ?? null,
+          promo_price: special != null ? Number(special) : null,
           cost_per_unit: r.cost_per_unit ? Number(r.cost_per_unit) : 0,
         });
       });
@@ -387,6 +434,9 @@ export default function AndrosPOSPage() {
           sku: p.sku,
           name: p.name,
           unit_price: p.unit_price,
+          retail_price: p.retail_price,
+          wholesale_price: p.wholesale_price,
+          promo_price: p.promo_price,
           cost_per_unit: p.cost_per_unit,
           unit_of_measure: p.unit_of_measure,
           qty: 1,
@@ -403,7 +453,9 @@ export default function AndrosPOSPage() {
     setCart((prev) => prev.filter((i) => i.product_id !== id));
   }
 
-  const subtotal = cart.reduce((s, i) => s + i.unit_price * i.qty, 0);
+  // Wholesale-aware: each line prices at retail OR andros_wholesale depending
+  // on whether its qty qualifies (by case / 10+ lb). promo still wins.
+  const subtotal = cart.reduce((s, i) => s + linePricing(i).unit_price * i.qty, 0);
   const costTotal = cart.reduce((s, i) => s + i.cost_per_unit * i.qty, 0);
   // splitSale strips VAT before computing BSC profit (the prior `subtotal *
   // 0.43` overstated profit by ~57%).
@@ -419,17 +471,20 @@ export default function AndrosPOSPage() {
     const ref = genRef();
     try {
       const supabase = getSupabase();
-      const lineItems = cart.map((i) => ({
-        product_id: i.product_id,
-        sku: i.sku,
-        name: i.name,
-        qty: i.qty,
-        unit: i.unit_of_measure,
-        unit_price: Number(i.unit_price.toFixed(2)),
-        cost_per_unit: Number(i.cost_per_unit.toFixed(2)),
-        line_total: Number((i.unit_price * i.qty).toFixed(2)),
-        line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)),
-      }));
+      const lineItems = cart.map((i) => {
+        const lp = linePricing(i);
+        return {
+          product_id: i.product_id,
+          sku: i.sku,
+          name: i.name,
+          qty: i.qty,
+          unit: i.unit_of_measure,
+          unit_price: Number(lp.unit_price.toFixed(2)),
+          cost_per_unit: Number(i.cost_per_unit.toFixed(2)),
+          line_total: Number((lp.unit_price * i.qty).toFixed(2)),
+          line_cost: Number((i.cost_per_unit * i.qty).toFixed(2)),
+        };
+      });
 
       const customerNameClean = customerName.trim();
       const customerPhoneClean = customerPhone.trim();
@@ -980,7 +1035,9 @@ export default function AndrosPOSPage() {
               Tap a product to add it.
             </div>
           )}
-          {cart.map((it) => (
+          {cart.map((it) => {
+            const lp = linePricing(it);
+            return (
             <div
               key={it.product_id}
               style={{
@@ -994,10 +1051,20 @@ export default function AndrosPOSPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#4c1d95' }}>
                   {it.name}
+                  {lp.upgraded_to_wholesale && (
+                    <span style={{ marginLeft: 6, display: 'inline-block', padding: '1px 5px', borderRadius: 4, fontSize: 9, fontWeight: 800, background: '#16a34a', color: '#fff', verticalAlign: 'middle' }}>
+                      WHOLESALE
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>
-                  ${it.unit_price.toFixed(2)} × {it.qty} = ${(it.unit_price * it.qty).toFixed(2)}
+                  ${lp.unit_price.toFixed(2)} × {it.qty} = ${(lp.unit_price * it.qty).toFixed(2)}
                 </div>
+                {lp.qualifies_as_wholesale && !lp.wholesale_price_available && lp.applied_channel !== 'promo' && (
+                  <div style={{ fontSize: 10, color: '#d97706', marginTop: 1 }}>
+                    ⚠ Qualifies for wholesale — no andros_wholesale price set
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <button
@@ -1024,7 +1091,8 @@ export default function AndrosPOSPage() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Customer + payment */}

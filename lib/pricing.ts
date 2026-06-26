@@ -8,6 +8,7 @@
 
 export type PricingChannel =
   | 'nassau_wholesale'
+  | 'andros_wholesale'
   | 'local_wholesale'
   | 'online_market'
   | 'nassau_pos'
@@ -71,7 +72,8 @@ export interface PricingResult {
 // VAT until BSC is approved. Restore the rates here (22/19/35/40/40 with the
 // 10% VAT block) once approval lands.
 export const BSC_PRICING_RULES: Record<PricingChannel, PricingRule> = {
-  nassau_wholesale: { channel: 'nassau_wholesale', markupPct: 22, vatPct: 0, description: 'In-store wholesale: 10+ lbs of one product OR by case, Nassau or Andros POS' },
+  nassau_wholesale: { channel: 'nassau_wholesale', markupPct: 22, vatPct: 0, description: 'In-store wholesale: 10+ lbs of one product OR by case, Nassau POS' },
+  andros_wholesale: { channel: 'andros_wholesale', markupPct: 22, vatPct: 0, description: 'In-store wholesale: 10+ lbs of one product OR by case, Andros POS' },
   local_wholesale:  { channel: 'local_wholesale',  markupPct: 19, vatPct: 0, description: 'Online wholesale: 10+ lbs of one product OR by case, online store' },
   online_market:    { channel: 'online_market',    markupPct: 35, vatPct: 0, description: 'Under 10 lbs, per bag, or per portion (online)' },
   nassau_pos:       { channel: 'nassau_pos',       markupPct: 40, vatPct: 0, description: 'Nassau POS retail, unless qualifies as in-store wholesale' },
@@ -98,8 +100,9 @@ function round2(n: number): number {
 // Route a qualified POS line to in-store wholesale (22%); a qualified
 // online line to online wholesale (19%).
 function routeWholesale(channel: PricingChannel): PricingChannel {
-  if (channel === 'nassau_pos' || channel === 'andros_pos') return 'nassau_wholesale';
-  if (channel === 'online_market')                          return 'local_wholesale';
+  if (channel === 'nassau_pos')    return 'nassau_wholesale';
+  if (channel === 'andros_pos')    return 'andros_wholesale';
+  if (channel === 'online_market') return 'local_wholesale';
   return channel;
 }
 

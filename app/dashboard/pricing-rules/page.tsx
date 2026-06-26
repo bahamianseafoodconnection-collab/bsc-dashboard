@@ -50,7 +50,8 @@ interface AuditRow {
 interface ProfileMini { id: string; full_name: string | null; }
 
 const CHANNEL_META: Record<PricingChannel, { label: string; emoji: string; color: string }> = {
-  nassau_wholesale:   { label: 'In-store Wholesale', emoji: '📦', color: '#a78bfa' },
+  nassau_wholesale:   { label: 'Nassau Wholesale',   emoji: '📦', color: '#a78bfa' },
+  andros_wholesale:   { label: 'Andros Wholesale',   emoji: '📦', color: '#c4b5fd' },
   local_wholesale:    { label: 'Online Wholesale',   emoji: '🌐', color: '#22d3ee' },
   online_market:      { label: 'Online Retail',      emoji: '🛒', color: '#60a5fa' },
   nassau_pos:         { label: 'Nassau POS',         emoji: '🟡', color: '#f5c518' },
