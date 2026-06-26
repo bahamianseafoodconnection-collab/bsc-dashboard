@@ -74,9 +74,10 @@ export default function StaffAdminPage() {
   const [aLocation, setALocation] = useState('Nassau');
   const [aHourly, setAHourly]   = useState('');
   const [aHours, setAHours]     = useState('40');
+  const [aPassword, setAPassword] = useState('');
   const [aBusy, setABusy]       = useState(false);
   const [aError, setAError]     = useState<string | null>(null);
-  const [newToken, setNewToken] = useState<{ name: string; link: string } | null>(null);
+  const [newCred, setNewCred]   = useState<{ name: string; email: string; password: string; signInUrl: string } | null>(null);
 
   const aMonthlyPreview = (() => {
     const hr  = Number(aHourly);
@@ -110,6 +111,10 @@ export default function StaffAdminPage() {
       setAError('Hourly rate and hours per week must be positive numbers.');
       return;
     }
+    if (aPassword.trim() && aPassword.trim().length < 8) {
+      setAError('Password must be at least 8 characters (or leave blank to auto-generate).');
+      return;
+    }
     setABusy(true);
     const j = await authedFetch('create', {
       email: aEmail.trim(),
@@ -118,12 +123,18 @@ export default function StaffAdminPage() {
       primary_location: aLocation,
       hourly_rate: hr,
       hours_per_week: hpw,
+      password: aPassword.trim() || undefined,
     });
     setABusy(false);
     if (!j.ok) { setAError(j.error || 'Create failed'); return; }
-    setNewToken({ name: aName.trim(), link: `${origin}/staff/activate?token=${j.activation_token}` });
+    setNewCred({
+      name: aName.trim(),
+      email: aEmail.trim().toLowerCase(),
+      password: j.password as string,
+      signInUrl: `${origin}/staff-login`,
+    });
     setAEmail(''); setAName(''); setARole('cashier'); setALocation('Nassau');
-    setAHourly(''); setAHours('40');
+    setAHourly(''); setAHours('40'); setAPassword('');
     load();
   }
 
@@ -230,7 +241,7 @@ export default function StaffAdminPage() {
             📜 Audit log
           </Link>
           <button
-            onClick={() => { setShowAdd((v) => !v); setNewToken(null); }}
+            onClick={() => { setShowAdd((v) => !v); setNewCred(null); }}
             style={{
               background: showAdd ? '#4b5563' : '#f5c518',
               color:      showAdd ? '#fff'    : '#060d1f',
@@ -250,35 +261,51 @@ export default function StaffAdminPage() {
 
       {error && <ErrorBox text={error} />}
 
-      {newToken && (
+      {newCred && (
         <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', marginBottom: 6 }}>
-            ✓ {newToken.name} created. Send them this activation link:
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', marginBottom: 8 }}>
+            ✓ {newCred.name} created — ready to sign in. Hand over these credentials:
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              readOnly
-              value={newToken.link}
-              style={{ flex: 1, padding: '8px 10px', borderRadius: 6, background: '#0a1628', border: '1px solid #1e3a5f', color: '#fff', fontSize: 11, fontFamily: 'monospace', boxSizing: 'border-box' }}
-              onFocus={(e) => e.target.select()}
-            />
+          <div style={{ display: 'grid', gap: 6 }}>
+            <CredRow label="Sign-in page" value={newCred.signInUrl} />
+            <CredRow label="Email"        value={newCred.email} />
+            <CredRow label="Password"     value={newCred.password} mono bold />
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
             <button
               onClick={async () => {
-                try { await navigator.clipboard.writeText(newToken.link); alert('Copied'); } catch { /* ignore */ }
+                const text = `BSC staff sign-in\n${newCred.signInUrl}\nEmail: ${newCred.email}\nPassword: ${newCred.password}\n\nAfter you sign in, change your password under Account → Change password.`;
+                try { await navigator.clipboard.writeText(text); alert('Credentials copied'); } catch { /* ignore */ }
               }}
               style={miniBtn('#22c55e')}
             >
-              Copy
+              Copy all
             </button>
+            <button onClick={() => setNewCred(null)} style={miniBtn('#64748b')}>Done</button>
+          </div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8, lineHeight: 1.5 }}>
+            They sign in with this immediately. Tell them to change it after first sign-in at
+            <strong style={{ color: '#cbd5e1' }}> Account → Change password</strong> (verifies the old password first).
           </div>
         </div>
       )}
 
-      {showAdd && !newToken && (
+      {showAdd && !newCred && (
         <div style={{ ...cardStyle, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#f5c518', marginBottom: 8 }}>+ New staff</div>
           <input value={aName} onChange={(e) => setAName(e.target.value)} placeholder="Full name" style={inputStyle} />
           <input value={aEmail} onChange={(e) => setAEmail(e.target.value)} placeholder="Email" type="email" style={inputStyle} />
+          <input
+            value={aPassword}
+            onChange={(e) => setAPassword(e.target.value)}
+            placeholder="Initial password (blank = auto-generate)"
+            type="text"
+            autoComplete="off"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2, marginBottom: 8 }}>
+            They sign in with this right away — no activation link. ≥ 8 characters. They can change it after sign-in.
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <select value={aRole} onChange={(e) => setARole(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
               {ALLOWED_ROLES.map((r) => <option key={r}>{r}</option>)}
@@ -321,7 +348,7 @@ export default function StaffAdminPage() {
             disabled={aBusy}
             style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 8, padding: '10px 14px', fontWeight: 800, fontSize: 13, cursor: 'pointer', opacity: aBusy ? 0.5 : 1 }}
           >
-            {aBusy ? 'Creating…' : 'Create + generate activation link'}
+            {aBusy ? 'Creating…' : 'Create staff (ready to sign in)'}
           </button>
         </div>
       )}
@@ -431,6 +458,25 @@ function ErrorBox({ text }: { text: string }) {
 
 function miniBtn(color: string): React.CSSProperties {
   return { background: 'transparent', border: `1px solid ${color}`, color, borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' };
+}
+
+function CredRow({ label, value, mono, bold }: { label: string; value: string; mono?: boolean; bold?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ width: 92, flexShrink: 0, fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>{label}</span>
+      <input
+        readOnly
+        value={value}
+        onFocus={(e) => e.target.select()}
+        style={{
+          flex: 1, padding: '7px 10px', borderRadius: 6, background: '#0a1628',
+          border: '1px solid #1e3a5f', color: bold ? '#f5c518' : '#fff',
+          fontSize: mono ? 13 : 12, fontFamily: mono ? 'monospace' : 'inherit',
+          fontWeight: bold ? 800 : 400, boxSizing: 'border-box',
+        }}
+      />
+    </div>
+  );
 }
 
 const pgStyle: React.CSSProperties = { padding: 16, backgroundColor: '#060d1f', minHeight: '100vh', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: 80, maxWidth: 720, margin: '0 auto' };

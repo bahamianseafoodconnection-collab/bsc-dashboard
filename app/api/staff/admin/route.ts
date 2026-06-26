@@ -26,6 +26,7 @@ type Body = {
   hourly_rate?: number | null;
   hours_per_week?: number | null;
   new_password?: string;
+  password?: string;        // initial sign-in password set at create time
   _secret?: string;
 };
 
@@ -147,6 +148,23 @@ function genToken(): string {
   return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Readable temp password the staff member can type on a POS keyboard — no
+// ambiguous characters (0/O, 1/l/I), one uppercase + digits + a symbol so it
+// satisfies common policies. Used when the founder doesn't type one in.
+function genReadablePassword(): string {
+  const letters = 'ABCDEFGHJKMNPQRSTUVWXYZ'; // no I, L, O
+  const digits  = '23456789';                // no 0, 1
+  const arr = new Uint8Array(8);
+  (globalThis.crypto as Crypto).getRandomValues(arr);
+  const pick = (set: string, i: number) => set[arr[i] % set.length];
+  return (
+    'BSC' +
+    pick(letters, 0) + pick(letters, 1) + pick(letters, 2) +
+    pick(digits, 3) + pick(digits, 4) + pick(digits, 5) +
+    '!'
+  );
+}
+
 export async function POST(req: Request) {
   const admin = adminClient();
   if (!admin) return NextResponse.json({ ok: false, error: 'Server not configured' }, { status: 500 });
@@ -188,10 +206,16 @@ export async function POST(req: Request) {
       const hpw    = body.hours_per_week != null ? Number(body.hours_per_week) : null;
       const monthly = computeMonthly(hourly, hpw);
 
-      const tempPassword = genToken().slice(0, 16) + 'A1!';
+      // Initial sign-in password. Founder may type one; otherwise we generate a
+      // readable one and RETURN it so it can be handed over. No activation link.
+      const providedPw = typeof body.password === 'string' ? body.password.trim() : '';
+      if (providedPw && providedPw.length < 8) {
+        return NextResponse.json({ ok: false, error: 'Password must be at least 8 characters' }, { status: 400 });
+      }
+      const signInPassword = providedPw || genReadablePassword();
       const { data: created, error: authErr } = await admin.auth.admin.createUser({
         email,
-        password: tempPassword,
+        password: signInPassword,
         email_confirm: true,
         // Seed the profile mirror (handle_new_user trigger) with the real staff
         // role + name, so middleware grants them the right access immediately.
@@ -228,7 +252,7 @@ export async function POST(req: Request) {
           id: userId, email, role,
           full_name:        body.full_name || null,
           primary_location: body.primary_location || null,
-          is_active:        false,
+          is_active:        true,
           activation_token: token,
           hourly_rate:      hourly,
           hours_per_week:   hpw,
@@ -239,7 +263,7 @@ export async function POST(req: Request) {
           id: userId, email, role,
           name:             body.full_name || null,
           primary_location: body.primary_location || null,
-          is_active:        false,
+          is_active:        true,
           activation_token: token,
           hourly_rate:      hourly,
           hours_per_week:   hpw,
@@ -273,7 +297,15 @@ export async function POST(req: Request) {
         hourly_rate: hourly, hours_per_week: hpw, monthly_salary: monthly, expense_id: expenseId,
       });
 
-      return NextResponse.json({ ok: true, id: userId, activation_token: token, monthly_salary: monthly, expense_id: expenseId });
+      return NextResponse.json({
+        ok: true,
+        id: userId,
+        email,
+        password: signInPassword,          // hand this to the staff member; they can change it after sign-in
+        activation_token: token,           // legacy fallback link still works if ever needed
+        monthly_salary: monthly,
+        expense_id: expenseId,
+      });
     }
 
     case 'update': {
