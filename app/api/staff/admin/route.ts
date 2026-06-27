@@ -98,6 +98,29 @@ async function resolveCaller(req: Request, admin: SupabaseClient, body: Body): P
   };
 }
 
+// users.primary_location has a CHECK constraint — only these values are legal.
+// The old dropdown sent 'Nassau'/'Andros', which FAILED the check and silently
+// dropped staff into staff_roster (invisible to the list). Normalize here so a
+// bad/legacy value maps to a valid one, or becomes NULL (never breaks insert).
+const VALID_LOCATIONS = new Set([
+  'bsc_marketplace_nassau', 'spiny_tail_nassau', 'cetas_andros', 'us_partner', 'all_locations',
+]);
+const LOCATION_ALIASES: Record<string, string> = {
+  nassau: 'bsc_marketplace_nassau',
+  andros: 'cetas_andros',
+  'spiny tail': 'spiny_tail_nassau',
+  'spiny_tail': 'spiny_tail_nassau',
+  'us partner': 'us_partner',
+  all: 'all_locations',
+};
+function normLocation(loc: unknown): string | null {
+  if (typeof loc !== 'string') return null;
+  const v = loc.trim();
+  if (!v) return null;
+  if (VALID_LOCATIONS.has(v)) return v;
+  return LOCATION_ALIASES[v.toLowerCase()] ?? null;
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -207,7 +230,22 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: error.message, debug: 'users query failed' }, { status: 500 });
       }
 
-      return NextResponse.json({ ok: true, users: data || [], debug_count: data?.length ?? 0 });
+      // Defensive: also surface any staff who only landed in staff_roster (e.g.
+      // a legacy bad primary_location dropped them out of `users`). Best-effort —
+      // a staff_roster read error just yields the users-only list.
+      const merged = [...((data || []) as Record<string, unknown>[])];
+      const seen = new Set(merged.map((u) => String(u.id)));
+      const { data: sr } = await admin
+        .from('staff_roster')
+        .select('id, email, role, full_name, primary_location, is_active, activation_token, created_at, hourly_rate, hours_per_week, monthly_salary, expense_id');
+      for (const r of ((sr || []) as Record<string, unknown>[])) {
+        if (!seen.has(String(r.id))) {
+          merged.push({ ...r, last_login_at: null, needs_repair: true });
+          seen.add(String(r.id));
+        }
+      }
+
+      return NextResponse.json({ ok: true, users: merged, debug_count: merged.length });
     }
 
     case 'create': {
@@ -221,6 +259,9 @@ export async function POST(req: Request) {
       const hourly = body.hourly_rate != null ? Number(body.hourly_rate) : null;
       const hpw    = body.hours_per_week != null ? Number(body.hours_per_week) : null;
       const monthly = computeMonthly(hourly, hpw);
+      // Map the location to a CHECK-valid value (else the users insert fails the
+      // primary_location constraint and the staff member silently vanishes).
+      const location = normLocation(body.primary_location);
 
       // Initial sign-in password. Founder may type one; otherwise we generate a
       // readable one and RETURN it so it can be handed over. No activation link.
@@ -279,7 +320,7 @@ export async function POST(req: Request) {
       // can hold its expense_id.
       let expenseId: string | null = null;
       if (monthly !== null && hourly !== null && hpw !== null) {
-        const desc = expenseDescription(body.full_name, hourly, hpw, body.primary_location);
+        const desc = expenseDescription(body.full_name, hourly, hpw, location);
         const { data: exp, error: expErr } = await admin
           .from('expenses')
           .insert({ amount: monthly, category: 'salaries', description: desc })
@@ -292,7 +333,7 @@ export async function POST(req: Request) {
         {
           id: userId, email, role,
           full_name:        body.full_name || null,
-          primary_location: body.primary_location || null,
+          primary_location: location,
           is_active:        true,
           activation_token: token,
           hourly_rate:      hourly,
@@ -303,7 +344,7 @@ export async function POST(req: Request) {
         {
           id: userId, email, role,
           name:             body.full_name || null,
-          primary_location: body.primary_location || null,
+          primary_location: location,
           is_active:        true,
           activation_token: token,
           hourly_rate:      hourly,
@@ -334,7 +375,7 @@ export async function POST(req: Request) {
         const upErr = await patchUser(admin, userId, {
           email, role,
           full_name:        body.full_name || null,
-          primary_location: body.primary_location || null,
+          primary_location: location,
           is_active:        true,
           hourly_rate:      hourly,
           hours_per_week:   hpw,
@@ -385,7 +426,7 @@ export async function POST(req: Request) {
       const patch: Record<string, unknown> = {};
       if (body.full_name        !== undefined) patch.full_name        = body.full_name;
       if (body.role             !== undefined) patch.role             = body.role;
-      if (body.primary_location !== undefined) patch.primary_location = body.primary_location;
+      if (body.primary_location !== undefined) patch.primary_location = normLocation(body.primary_location);
       if (body.is_active        !== undefined) patch.is_active        = body.is_active;
 
       // Recompute monthly_salary if hourly or hours/wk changed.

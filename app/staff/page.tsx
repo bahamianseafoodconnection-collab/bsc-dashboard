@@ -11,7 +11,14 @@ const ALLOWED_ROLES = [
   'cashier', 'right_hand', 'processor', 'driver', 'strategist',
   'supplier', 'supplier_handler', 'partner_us',
 ];
-const LOCATIONS = ['Nassau', 'Andros', 'all_locations'];
+// value = the CHECK-valid users.primary_location; label = what the founder sees.
+const LOCATIONS: { value: string; label: string }[] = [
+  { value: 'bsc_marketplace_nassau', label: 'Nassau' },
+  { value: 'cetas_andros',           label: 'Andros' },
+  { value: 'spiny_tail_nassau',      label: 'Spiny Tail (Nassau)' },
+  { value: 'us_partner',             label: 'US Partner' },
+  { value: 'all_locations',          label: 'All locations' },
+];
 
 type Staff = {
   id: string;
@@ -71,7 +78,7 @@ export default function StaffAdminPage() {
   const [aEmail, setAEmail]     = useState('');
   const [aName, setAName]       = useState('');
   const [aRole, setARole]       = useState('cashier');
-  const [aLocation, setALocation] = useState('Nassau');
+  const [aLocation, setALocation] = useState('bsc_marketplace_nassau');
   const [aHourly, setAHourly]   = useState('');
   const [aHours, setAHours]     = useState('40');
   const [aPassword, setAPassword] = useState('');
@@ -134,7 +141,7 @@ export default function StaffAdminPage() {
       signInUrl: `${origin}/staff-login`,
       adopted: !!j.adopted,
     });
-    setAEmail(''); setAName(''); setARole('cashier'); setALocation('Nassau');
+    setAEmail(''); setAName(''); setARole('cashier'); setALocation('bsc_marketplace_nassau');
     setAHourly(''); setAHours('40'); setAPassword('');
     load();
   }
@@ -317,7 +324,7 @@ export default function StaffAdminPage() {
               {ALLOWED_ROLES.map((r) => <option key={r}>{r}</option>)}
             </select>
             <select value={aLocation} onChange={(e) => setALocation(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-              {LOCATIONS.map((l) => <option key={l}>{l}</option>)}
+              {LOCATIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -408,8 +415,8 @@ export default function StaffAdminPage() {
               <select value={s.role || 'cashier'} onChange={(e) => setRole(s, e.target.value)} disabled={busyId === s.id} style={selectInline}>
                 {ALLOWED_ROLES.map((r) => <option key={r}>{r}</option>)}
               </select>
-              <select value={s.primary_location || 'Nassau'} onChange={(e) => setLocation(s, e.target.value)} disabled={busyId === s.id} style={selectInline}>
-                {LOCATIONS.map((l) => <option key={l}>{l}</option>)}
+              <select value={s.primary_location || 'bsc_marketplace_nassau'} onChange={(e) => setLocation(s, e.target.value)} disabled={busyId === s.id} style={selectInline}>
+                {LOCATIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </div>
 
