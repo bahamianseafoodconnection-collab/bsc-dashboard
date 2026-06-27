@@ -47,6 +47,7 @@ function fmt(n: number | null | undefined, dp = 2): string {
 
 export default function DailySalesPage() {
   const [date,      setDate]      = useState(bahamasToday());
+  const [channel,   setChannel]   = useState<'nassau' | 'andros' | 'online' | 'all'>('nassau');
   const [suppliers, setSuppliers] = useState<SupplierAgg[]>([]);
   const [totals,    setTotals]    = useState<Totals>({ revenue: 0, cogs: 0, supplier_count: 0, product_count: 0, order_count: 0 });
   const [loading,   setLoading]   = useState(true);
@@ -60,7 +61,7 @@ export default function DailySalesPage() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) { setError('Sign in required'); return; }
-        const res = await fetch(`/api/dashboard/daily-sales-report?date=${date}`, {
+        const res = await fetch(`/api/dashboard/daily-sales-report?date=${date}&channel=${channel}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const j = await res.json();
@@ -75,7 +76,7 @@ export default function DailySalesPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [date]);
+  }, [date, channel]);
 
   // Flat CSV of every (supplier, product) row + a supplier-total row
   // after each group + a grand-total row at the bottom.
@@ -123,6 +124,14 @@ export default function DailySalesPage() {
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700"
             />
             <button onClick={() => setDate(bahamasToday())} className="text-xs font-bold text-slate-600 hover:text-navy underline">today</button>
+            <div className="ml-2 flex items-center gap-1">
+              {([['nassau', 'Nassau POS'], ['andros', 'Andros POS'], ['online', 'Online'], ['all', 'All']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => setChannel(v)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold ${channel === v ? 'bg-navy text-gold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <button
             onClick={downloadCsv}

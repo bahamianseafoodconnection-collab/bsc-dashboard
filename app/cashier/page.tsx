@@ -103,6 +103,11 @@ export default function CashierDashboard() {
             style={{ background: GOLD, color: INK, border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
             🧾 Open Register
           </button>
+          <button onClick={() => router.push('/cashier/phone-orders')}
+            style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '10px 12px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            title="Approved phone orders — print invoices">
+            📞 Phone orders
+          </button>
           <button onClick={() => router.push('/account/password')}
             style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '10px 12px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
             title="Change your password">

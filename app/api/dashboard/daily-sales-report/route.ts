@@ -86,16 +86,24 @@ export async function GET(req: NextRequest) {
   if (!caller.ok) return NextResponse.json({ ok: false, error: caller.error }, { status: 403 });
 
   const date = (req.nextUrl.searchParams.get('date') || bahamasToday()).slice(0, 10);
+  // Pillar 1 channel scope. Default 'nassau' (Nassau POS daily sales) — can
+  // expand to all/andros/online. Filters by orders.order_type.
+  const channel = (req.nextUrl.searchParams.get('channel') || 'nassau').toLowerCase();
 
   // Pull every order on the given Bahamas-local day. Range is
   // computed as the UTC instants that correspond to local 00:00
   // and 24:00 — uses Postgres's AT TIME ZONE in the filter.
-  const { data: orders, error: oErr } = await admin
+  let query = admin
     .from('orders')
     .select('id, created_at, status, wholesale_items')
     .gte('created_at', `${date}T00:00:00-05:00`)  // tz-loose lower bound — keeps the day intact even during DST flips
     .lt ('created_at', `${date}T24:00:00-04:00`)
     .order('created_at', { ascending: true });
+  if (channel === 'nassau')      query = query.eq('order_type', 'pos_sale_nassau');
+  else if (channel === 'andros') query = query.eq('order_type', 'pos_sale_andros');
+  else if (channel === 'online') query = query.not('order_type', 'ilike', 'pos_sale%').neq('order_type', 'phone_order');
+  // 'all' → no order_type filter (every channel)
+  const { data: orders, error: oErr } = await query;
   if (oErr) return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 });
 
   // Flatten the JSON line items into rows we can enrich with product

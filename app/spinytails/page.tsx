@@ -215,6 +215,7 @@ export default function SpinytailsHubPage() {
             <NavTile href="/spinytails/audits"    icon="🔐" label="Inspector audit access" hint="Token + QR for BAHFSA / Customs / Marine Resources" />
             <NavTile href="/lobster-intake"        icon="🦞" label="Lobster Intake (door)"  hint="Upstream / fisherman-facing" />
             <NavTile href="/dashboard/processing-batches" icon="🏭" label="Processing batches" hint="Bridge to existing traceability_batches" />
+            <NavTile href="/spinytails/phone-orders" icon="📞" label="Phone order pick tickets" hint="Approved phone orders to assemble + pack" />
           </div>
         </div>
 
