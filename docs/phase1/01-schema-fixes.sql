@@ -30,8 +30,10 @@ CREATE TABLE IF NOT EXISTS public.business_accounts (
   auth_user_id            uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   buyer_type              text NOT NULL DEFAULT 'commercial'
                             CHECK (buyer_type IN ('commercial','international')),
-  assigned_tier           text NOT NULL
-                            CHECK (assigned_tier IN ('commercial_restaurant','commercial_hotel','commercial_distributor','commercial_vip')),
+  -- NULL for international buyers (they get normal online pricing, no tier).
+  -- Commercial buyers MUST have one — enforced in the app at create time.
+  assigned_tier           text
+                            CHECK (assigned_tier IS NULL OR assigned_tier IN ('commercial_restaurant','commercial_hotel','commercial_distributor','commercial_vip')),
   company_name            text,
   business_license_number text,
   vat_number              text,

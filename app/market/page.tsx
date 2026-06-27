@@ -171,9 +171,23 @@ function MarketPageInner() {
   const [placing, setPlacing] = useState(false);
   const [orderDone, setOrderDone] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [isIntl, setIsIntl] = useState(false);   // international export buyer → export-only catalog
 
   useEffect(() => {
     (async () => {
+      // International export buyers see ONLY sell_export products. Default
+      // domestic/anonymous (intlOnly=false) → unchanged behavior. Failure-safe:
+      // any error leaves intlOnly=false so the normal catalog always renders.
+      let intlOnly = false;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const who = await fetch('/api/international/whoami', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+          intlOnly = !!who?.is_international;
+          setIsIntl(intlOnly);
+        }
+      } catch { /* default domestic */ }
+
       // Step 1: Get all current online_market prices (retail base)
       const { data: pricingData, error: pricingErr } = await supabase
         .from('product_pricing')
@@ -236,13 +250,15 @@ function MarketPageInner() {
       // read unit_of_measure here so lb products always price + display as
       // weight-based even if unit_type ever drifts. Plus the special_*
       // columns to override price during a "closed date" promo window.
-      const { data: mp, error: mpErr } = await supabase
+      let pq = supabase
         .from('products')
-        .select('id, sku, name, description, category, image_url, sell_online, status, unit_of_measure, unit_type, special_price, special_starts_at, special_ends_at, special_label')
+        .select('id, sku, name, description, category, image_url, sell_online, sell_export, status, unit_of_measure, unit_type, special_price, special_starts_at, special_ends_at, special_label')
         .eq('sell_online', true)
         .eq('status', 'active')
         .in('id', productIds)
         .order('name');
+      if (intlOnly) pq = pq.eq('sell_export', true);   // export-only catalog for international buyers
+      const { data: mp, error: mpErr } = await pq;
 
       if (mpErr) {
         setLoading(false);
@@ -579,6 +595,13 @@ function MarketPageInner() {
           </div>
         </div>
       </header>
+
+      {/* ─── International export-buyer banner (only when the gate is active) ─── */}
+      {isIntl && (
+        <div className="bg-emerald-700 px-4 py-2 text-center text-sm font-semibold text-white">
+          🌍 Export Catalog — you’re viewing BSC products approved for international export only.
+        </div>
+      )}
 
       {/* ─── Hero — welcome banner with sign-up CTAs + trust bar
             (founder design 2026-05-27, "header" mockup). Auth-aware:
