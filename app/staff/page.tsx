@@ -77,7 +77,7 @@ export default function StaffAdminPage() {
   const [aPassword, setAPassword] = useState('');
   const [aBusy, setABusy]       = useState(false);
   const [aError, setAError]     = useState<string | null>(null);
-  const [newCred, setNewCred]   = useState<{ name: string; email: string; password: string; signInUrl: string } | null>(null);
+  const [newCred, setNewCred]   = useState<{ name: string; email: string; password: string; signInUrl: string; adopted: boolean } | null>(null);
 
   const aMonthlyPreview = (() => {
     const hr  = Number(aHourly);
@@ -132,6 +132,7 @@ export default function StaffAdminPage() {
       email: aEmail.trim().toLowerCase(),
       password: j.password as string,
       signInUrl: `${origin}/staff-login`,
+      adopted: !!j.adopted,
     });
     setAEmail(''); setAName(''); setARole('cashier'); setALocation('Nassau');
     setAHourly(''); setAHours('40'); setAPassword('');
@@ -264,8 +265,13 @@ export default function StaffAdminPage() {
       {newCred && (
         <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid #22c55e', borderRadius: 10, padding: 12, marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#22c55e', marginBottom: 8 }}>
-            ✓ {newCred.name} created — ready to sign in. Hand over these credentials:
+            ✓ {newCred.name} {newCred.adopted ? 'linked + ready to sign in' : 'created — ready to sign in'}. Hand over these credentials:
           </div>
+          {newCred.adopted && (
+            <div style={{ fontSize: 11, color: '#fbbf24', marginBottom: 8 }}>
+              🔗 An account for this email already existed — it&apos;s now linked to the staff list and its password was reset to the one below.
+            </div>
+          )}
           <div style={{ display: 'grid', gap: 6 }}>
             <CredRow label="Sign-in page" value={newCred.signInUrl} />
             <CredRow label="Email"        value={newCred.email} />

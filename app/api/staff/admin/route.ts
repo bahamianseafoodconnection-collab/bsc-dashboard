@@ -148,6 +148,22 @@ function genToken(): string {
   return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Find an existing auth user id by email (case-insensitive). Used to ADOPT a
+// stranded auth account — one registered in auth.users by a prior half-finished
+// add but never written into the staff `users` table (so it never showed on the
+// staff page). Paginates listUsers; BSC's auth.users is small.
+async function findAuthUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+  const target = email.trim().toLowerCase();
+  for (let page = 1; page <= 25; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data?.users?.length) return null;
+    const hit = data.users.find((u) => (u.email || '').toLowerCase() === target);
+    if (hit) return hit.id;
+    if (data.users.length < 200) return null; // last page reached
+  }
+  return null;
+}
+
 // Readable temp password the staff member can type on a POS keyboard — no
 // ambiguous characters (0/O, 1/l/I), one uppercase + digits + a symbol so it
 // satisfies common policies. Used when the founder doesn't type one in.
@@ -221,10 +237,35 @@ export async function POST(req: Request) {
         // role + name, so middleware grants them the right access immediately.
         user_metadata: { role, name: body.full_name || '' },
       });
-      if (authErr || !created.user) {
-        return NextResponse.json({ ok: false, error: authErr?.message || 'Auth create failed' }, { status: 500 });
+
+      let userId: string;
+      let adopted = false;
+      if (created?.user) {
+        userId = created.user.id;
+      } else {
+        // Email already in auth.users (a prior half-finished add). ADOPT it
+        // rather than dead-ending: reset the password + confirm + stamp the
+        // role, then continue to write the staff row so they get LISTED.
+        const m = (authErr?.message || '').toLowerCase();
+        const code = (authErr as { code?: string } | null)?.code ?? '';
+        const alreadyExists =
+          code === 'email_exists' ||
+          (m.includes('already') && (m.includes('regist') || m.includes('exist')));
+        const existingId = alreadyExists ? await findAuthUserIdByEmail(admin, email) : null;
+        if (!existingId) {
+          return NextResponse.json({ ok: false, error: authErr?.message || 'Auth create failed' }, { status: 500 });
+        }
+        const { error: updErr } = await admin.auth.admin.updateUserById(existingId, {
+          password: signInPassword,
+          email_confirm: true,
+          user_metadata: { role, name: body.full_name || '' },
+        });
+        if (updErr) {
+          return NextResponse.json({ ok: false, error: `Found existing account but could not reset it: ${updErr.message}` }, { status: 500 });
+        }
+        userId = existingId;
+        adopted = true;
       }
-      const userId = created.user.id;
 
       // Belt-and-suspenders: guarantee profiles carries the real role + name
       // (the trigger uses on-conflict-do-nothing, and we never want a staff
@@ -286,8 +327,26 @@ export async function POST(req: Request) {
         }
       }
 
+      // A duplicate-key means a staff row for this id already exists — UPDATE it
+      // (role/name/active) rather than failing. Happens on the adopt path when
+      // the user was partially set up before.
+      if (insErr && /duplicate|already exists|unique/i.test(insErr)) {
+        const upErr = await patchUser(admin, userId, {
+          email, role,
+          full_name:        body.full_name || null,
+          primary_location: body.primary_location || null,
+          is_active:        true,
+          hourly_rate:      hourly,
+          hours_per_week:   hpw,
+          monthly_salary:   monthly,
+        });
+        insErr = upErr; // null on success
+      }
+
       if (insErr) {
-        await admin.auth.admin.deleteUser(userId).catch(() => {});
+        // Only delete the auth user if WE created it in this call. NEVER delete
+        // an adopted (pre-existing) account just because the staff row failed.
+        if (!adopted) await admin.auth.admin.deleteUser(userId).catch(() => {});
         if (expenseId) await admin.from('expenses').delete().eq('id', expenseId).then(() => undefined, () => undefined);
         return NextResponse.json({ ok: false, error: insErr }, { status: 500 });
       }
@@ -302,6 +361,7 @@ export async function POST(req: Request) {
         id: userId,
         email,
         password: signInPassword,          // hand this to the staff member; they can change it after sign-in
+        adopted,                           // true = linked a pre-existing auth account (password was reset)
         activation_token: token,           // legacy fallback link still works if ever needed
         monthly_salary: monthly,
         expense_id: expenseId,
