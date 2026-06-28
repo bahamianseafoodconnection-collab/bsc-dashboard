@@ -72,6 +72,8 @@ export default function FounderDashboard() {
     { label: 'Channel Margins',      desc: '6 channels · markups',         href: '/founder/channels', icon: '📊' },
     { label: 'Paid Orders → Suppliers', desc: 'RBC-paid · grouped · route', href: '/founder/paid-orders',  icon: '🧾' },
     { label: 'Daily Sales + Profit', desc: 'POS daily · supplier profit',  href: '/dashboard/daily-sales', icon: '📈' },
+    { label: 'Slow Movers',          desc: 'Keep · discount · cut',        href: '/founder/slow-movers',  icon: '🐌' },
+    { label: 'Invoice → Catalog',    desc: 'Add new SKUs from an invoice',  href: '/founder/invoice-import', icon: '📥' },
     { label: 'Phone Orders',         desc: 'Approve · route · print',      href: '/founder/phone-orders', icon: '📞' },
     { label: 'Control Center',      desc: 'All 80+ admin tools',        href: '/dashboard',        icon: '🎛️' },
     { label: 'Cashier',             desc: 'POS, orders, invoices',      href: '/cashier',          icon: '🧾' },
