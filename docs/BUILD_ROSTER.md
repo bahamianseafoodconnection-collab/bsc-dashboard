@@ -27,6 +27,7 @@
       • supplier invoice → Purchase Orders
       • fishing-boat receipt (uploaded by a **processor**) → PO routed to **Spiny Tail** → starts intake + traceability (lot `STPC-YYYYMMDD-VV-NN`); **boat registration auto-pulled from the fisherman/boat (vessel) file**.
       ↳ NEEDS 2 answers: (a) `purchase_orders` vs `purchase_invoices`? (b) how is a boat receipt distinguished — uploader role=processor, or a doc-type pick?
+- [ ] ⭐ **PACKAGE 3 — Payment Terminal Integration (PRIORITY)** — real-time RBC terminal (MID 024150/TID 02415004) + Plug'n Pay webhooks → auto-confirm paid orders; declined/timeout → hold "Payment Pending" + `/founder/payment-approvals` manual override. New: `orders.payment_approval_status` + `payment_webhook_received_at` + `payment_webhooks` table + order-confirm gating + 2 webhook endpoints. ⚠️ BLOCKED on Julian (webhook docs/creds/signature algo/sandbox); migration + manual page + gating buildable now, signature validation NOT. Test staging first. NEVER auto-process unpaid.
 - [ ] **Supplier Catalog Image Pipeline** (spec 2026-06-28) — private `supplier_catalogs` bucket (is_staff RLS) → extract images from PDFs/email → match to pricelist by Item ID → `{supplier}_{product_id}` upload → auth URLs → "Image URL" column. NDC first (207 lines, 19 images). ⚠️ source files EXTERNAL — founder must provide. Reusable code buildable without them. Verify bucket + report first batch before push.
 - [ ] `get_my_user_record` hardening (fallback to staff_roster) — recommended, prevents recurrence.
 
