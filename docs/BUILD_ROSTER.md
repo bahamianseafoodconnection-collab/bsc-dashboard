@@ -15,16 +15,19 @@
 - [ ] **push #2** (all of the above together) — awaiting go
 
 ## 🟢 QUEUED (in order)
-- [ ] **Directives System** (founder→staff assignment board) — handoff 2026-06-27.
-      4 tables (directives / directive_targets / directive_instances / directive_receipts) + RLS,
-      `/founder/directives` composer (founder-only), staff "My Tasks" feed on landing pages,
-      tri-lingual manual fields (EN/HT/ES, no translation API), duties=live-inherit / tasks=snapshot.
-      ↳ STEP 1 verify-live + report BEFORE any SQL; STEP 2 connector mapping; STEP 3 build.
+- [~] **Directives System** (founder→staff assignment board) — handoff 2026-06-27. Decisions: body_cr / all-4-landings / defer auto-fire.
+      - [x] STEP 1 verify-live + STEP 2 connector mapping (reported)
+      - [x] STEP 3a migration → `docs/directives/01-migration.sql` (helper now plpgsql, paren-safe) — FOUNDER TO RUN (first attempt pasted the handoff block by mistake)
+      - [x] STEP 3b `/founder/directives` composer (API + page) — built local, compiles. Task/duty, 3-lang body, role/location/user targets, seen/done counts, close. Audit→ai_writes.
+      - [x] STEP 3d task=1 instance / duty=current-cycle instance on create (cycleKey helper)
+      - [x] STEP 3c staff feed: `/api/directives/feed` (targeting + lazy duty-cycle + tri-lingual via profiles.language + seen/done) + `components/directives/MyDirectives.tsx` (fail-silent) embedded on /founder, /cashier, /spinytails, /supplier-handler
+      - [ ] **BLOCKER:** migration not yet applied live (0 tables — pasted wrong text twice). Re-deliver as fenced block. Then push composer + feed.
 - [ ] **FIX 2** — auto-return to dashboard after a photo upload (brief "Photo attached to PO #__" confirm).
 - [ ] **FIX 3** — photo routing/filing:
       • supplier invoice → Purchase Orders
       • fishing-boat receipt (uploaded by a **processor**) → PO routed to **Spiny Tail** → starts intake + traceability (lot `STPC-YYYYMMDD-VV-NN`); **boat registration auto-pulled from the fisherman/boat (vessel) file**.
       ↳ NEEDS 2 answers: (a) `purchase_orders` vs `purchase_invoices`? (b) how is a boat receipt distinguished — uploader role=processor, or a doc-type pick?
+- [ ] **Supplier Catalog Image Pipeline** (spec 2026-06-28) — private `supplier_catalogs` bucket (is_staff RLS) → extract images from PDFs/email → match to pricelist by Item ID → `{supplier}_{product_id}` upload → auth URLs → "Image URL" column. NDC first (207 lines, 19 images). ⚠️ source files EXTERNAL — founder must provide. Reusable code buildable without them. Verify bucket + report first batch before push.
 - [ ] `get_my_user_record` hardening (fallback to staff_roster) — recommended, prevents recurrence.
 
 ## ⏸ DEFERRED (blocked / by date)

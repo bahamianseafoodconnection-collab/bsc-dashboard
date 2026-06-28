@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import MyDirectives from '@/components/directives/MyDirectives';
 
 const STAFF_ROLES = new Set(['founder','co_founder','control_admin','basic_admin','manager','processor','receiver']);
 
@@ -139,6 +140,7 @@ export default function SpinytailsHubPage() {
           )}
         </div>
       </header>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 16px' }}><MyDirectives /></div>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16 }}>
         {/* ── PROCESSING RECORDS PER BATCH PULL — one batch = one audit file ── */}

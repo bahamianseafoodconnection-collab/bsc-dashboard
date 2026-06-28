@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
+import MyDirectives from '@/components/directives/MyDirectives';
 
 const GOLD = '#f4c842';
 const INK = '#060d1f';
@@ -112,6 +113,7 @@ export default function SupplierHandlerDashboard() {
       </header>
 
       <main style={{ maxWidth: 880, margin: '0 auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <MyDirectives />
         {err && (
           <div style={{ padding: 14, borderRadius: 10, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)', color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>
             ⚠️ {err} <button onClick={load} style={{ marginLeft: 8, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', color: '#b91c1c' }}>retry</button>

@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
+import MyDirectives from '@/components/directives/MyDirectives';
 
 const GOLD = '#f4c842';
 const INK = '#060d1f';
@@ -119,6 +120,7 @@ export default function CashierDashboard() {
           </button>
         </div>
       </header>
+      <div style={{ maxWidth: 880, margin: '0 auto', padding: '0 16px' }}><MyDirectives /></div>
 
       <main style={{ maxWidth: 880, margin: '0 auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {err && (

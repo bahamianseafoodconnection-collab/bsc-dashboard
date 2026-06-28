@@ -10,6 +10,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
+import MyDirectives from '@/components/directives/MyDirectives';
 
 const GOLD = '#f5c518';
 const INK = '#060d1f';
@@ -75,6 +76,7 @@ export default function FounderDashboard() {
     { label: 'Slow Movers',          desc: 'Keep · discount · cut',        href: '/founder/slow-movers',  icon: '🐌' },
     { label: 'Invoice → Catalog',    desc: 'Add new SKUs from an invoice',  href: '/founder/invoice-import', icon: '📥' },
     { label: 'Phone Orders',         desc: 'Approve · route · print',      href: '/founder/phone-orders', icon: '📞' },
+    { label: 'Directives',           desc: 'Assign tasks + duties to staff', href: '/founder/directives',  icon: '📋' },
     { label: 'Control Center',      desc: 'All 80+ admin tools',        href: '/dashboard',        icon: '🎛️' },
     { label: 'Cashier',             desc: 'POS, orders, invoices',      href: '/cashier',          icon: '🧾' },
     { label: 'Supplier Handler',    desc: 'Suppliers, catalogue',       href: '/supplier-handler', icon: '🏪' },
@@ -112,6 +114,7 @@ export default function FounderDashboard() {
           </button>
         </div>
       </header>
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '0 16px' }}><MyDirectives /></div>
 
       <main style={{ maxWidth: 980, margin: '0 auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {err && (
