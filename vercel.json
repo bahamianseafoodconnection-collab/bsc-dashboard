@@ -30,6 +30,14 @@
       "schedule": "0 12 * * 1"
     },
     {
+      "path": "/api/cron/customer-weekly-statements",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/customer-weekly-statements",
+      "schedule": "0 13 28-31 * *"
+    },
+    {
       "path": "/api/notifications/send",
       "schedule": "*/10 * * * *"
     }
