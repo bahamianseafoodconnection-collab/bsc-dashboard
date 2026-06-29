@@ -64,6 +64,19 @@ export default function CashierPhoneOrdersPage() {
     load();
   }
 
+  async function billToAccount(id: string) {
+    setBusy(id); setError(null);
+    const { data: { session } } = await sb().auth.getSession();
+    const res = await fetch(`/api/phone-orders/${id}/bill-credit`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: JSON.stringify({}), cache: 'no-store',
+    });
+    const j = await res.json().catch(() => ({ ok: false }));
+    setBusy(null); setPicker(null);
+    if (!res.ok || !j.ok) { setError(j.error || 'Bill to account failed'); return; }
+    load();
+  }
+
   const TabBtn = ({ id, label, n }: { id: typeof tab; label: string; n: number }) => (
     <button onClick={() => setTab(id)} style={{ ...pill, cursor: 'pointer', background: tab === id ? GOLD : 'transparent', color: tab === id ? INK : '#cbd5e1', fontWeight: tab === id ? 800 : 500 }}>{label} {n > 0 ? `(${n})` : ''}</button>
   );
@@ -102,7 +115,10 @@ export default function CashierPhoneOrdersPage() {
                     {tab === 'pending' && <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>awaiting founder</span>}
                     {tab === 'paid' && <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700 }}>paid</span>}
                     <a href={o.payment_ref ? `/invoice?id=${o.payment_ref}` : '#'} target="_blank" rel="noreferrer" style={{ ...printBtn, opacity: o.payment_ref ? 1 : 0.4, pointerEvents: o.payment_ref ? 'auto' : 'none' }}>🖨</a>
-                    {tab === 'collect' && (
+                    {tab === 'collect' && o.payment_type === 'credit' && (
+                      <button onClick={() => billToAccount(o.id)} disabled={!!busy} style={{ ...printBtn, background: '#7c3aed', color: '#fff' }}>{busy === o.id ? '…' : '🧾 Bill to account'}</button>
+                    )}
+                    {tab === 'collect' && o.payment_type !== 'credit' && (
                       <button onClick={() => setPicker(picker === o.id ? null : o.id)} disabled={!!busy} style={{ ...printBtn, background: '#16a34a', color: '#fff' }}>{busy === o.id ? '…' : '💵 Collect'}</button>
                     )}
                   </div>
