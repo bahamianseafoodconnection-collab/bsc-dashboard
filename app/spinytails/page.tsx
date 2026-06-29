@@ -212,6 +212,7 @@ export default function SpinytailsHubPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
             <NavTile href="/spinytails/intake"    icon="📥" label="New intake (Step 1-2)"  hint="Receive lobster, generate lot code, run CCP-1" />
             <NavTile href="/spinytails/vessels"   icon="🛥"  label="Vessels"                hint="Registry + color tags" />
+            <NavTile href="/spinytails/freezer-log" icon="🌡️" label="Freezer temp log"      hint="Blast + holding · 3×/day" />
             <NavTile href="/spinytails/steps"     icon="📚" label="Step-by-step SOPs"      hint="Walkthrough of all 11 steps + CCPs" />
             <NavTile href="/spinytails/documents" icon="📜" label="Document library"       hint="SOP · SSOP · HACCP · upload + versioning" />
             <NavTile href="/spinytails/audits"    icon="🔐" label="Inspector audit access" hint="Token + QR for BAHFSA / Customs / Marine Resources" />
