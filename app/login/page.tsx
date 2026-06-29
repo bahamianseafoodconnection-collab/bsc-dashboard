@@ -52,6 +52,7 @@ function LoginInner() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   // Resend-confirmation state — surfaced when sign-in fails because the
   // email was never confirmed.
   const [needsConfirm, setNeedsConfirm] = useState(false);
@@ -151,6 +152,26 @@ function LoginInner() {
       });
       if (err) {
         setError(err.message);
+        setLoading(false);
+        return;
+      }
+      // Already-registered email → Supabase returns a user with NO identities
+      // and SENDS NOTHING on signup (anti-enumeration). Rather than dead-end a
+      // returning customer who forgot they have an account, AUTO-send a password
+      // reset (reuses the working reset flow) so they can get straight back in —
+      // no duplicate accounts, no repeated sign-up attempts. Best-effort send.
+      if (data.user && (data.user.identities?.length ?? 0) === 0) {
+        await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${publicSiteUrl()}/reset-password`,
+        }).catch(() => undefined);
+        setInfo("This email is already registered. We've sent you a password reset link — check your email (and spam) to log back in.");
+        setLoading(false);
+        return;
+      }
+      // Email-confirmation required → no session yet. The confirmation email is
+      // sent; don't redirect them into a page they can't access unconfirmed.
+      if (data.user && !data.session) {
+        setInfo('✅ Account created — check your inbox (and spam) to confirm your email, then sign in.');
         setLoading(false);
         return;
       }
@@ -284,6 +305,12 @@ function LoginInner() {
                 <div className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-semibold text-red-600">
                   <span>⚠️</span>
                   <span>{error}</span>
+                </div>
+              )}
+              {info && (
+                <div className="mb-5 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-sm font-semibold text-emerald-700">
+                  <span>📩</span>
+                  <span>{info}</span>
                 </div>
               )}
 
