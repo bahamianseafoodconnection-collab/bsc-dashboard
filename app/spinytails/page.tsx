@@ -161,6 +161,7 @@ export default function SpinytailsHubPage() {
           const lc = (s: string) => openLots.filter(l => l.status === s).length;
           const tasks: { icon: string; label: string; href: string; count: number | null; cta: string; danger?: boolean }[] = [
             { icon: '📥', label: 'Receive incoming product — weigh, temp (CCP-1), generate lot', href: '/spinytails/receiving', count: null, cta: 'Receive' },
+            { icon: '🍤', label: 'Spiny Tail orders to assemble — phone · online · Nassau POS', href: '/spinytails/orders', count: null, cta: 'Open' },
             { icon: '📦', label: 'Lots received, awaiting processing',        href: '/spinytails/processing', count: lc('received'), cta: 'Start' },
             { icon: '🧊', label: 'Lots in processing / blast freezing',       href: '/spinytails/processing', count: lc('processing') + lc('blast_freezing'), cta: 'Open' },
             { icon: '🌡️', label: 'Temperature excursions to correct (today)', href: '/spinytails/processing', count: tempExcursions, cta: 'Correct', danger: true },
