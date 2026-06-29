@@ -135,6 +135,8 @@ export async function POST(req: NextRequest) {
         qc_results:            qc,
         qc_pass:               qcPass,
         harvest_photos:        Array.isArray(b.harvest_photos) ? b.harvest_photos : [],
+        reject_ratio_pct:      num(b.reject_ratio_pct),
+        harvest_positions:     Array.isArray(b.harvest_positions) ? b.harvest_positions : [],
       });
       if (intakeErr) err = intakeErr.message;
     }

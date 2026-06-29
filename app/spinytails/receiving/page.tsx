@@ -17,7 +17,7 @@ import { printLabels } from '@/lib/label-print';
 export const dynamic = 'force-dynamic';
 
 interface Species { code: string; name: string; grade_set: string[]; qc_fields: string[]; ccp_limits: Record<string, unknown>; }
-interface Vessel { id: string; vessel_code: string | null; vessel_name: string | null; fisherman_name: string | null; fisherman_phone: string | null; license_number: string | null; }
+interface Vessel { id: string; vessel_code: string | null; vessel_name: string | null; fisherman_name: string | null; fisherman_phone: string | null; license_number: string | null; color_tag: string | null; }
 interface Photo { url: string; lat: number | null; lng: number | null; captured_at: string; }
 
 const DEVICE_ID = 'RECEIVING-STATION-1';
@@ -42,6 +42,8 @@ export default function ReceivingStationPage() {
   const [fishingMethod, setFishingMethod] = useState('');
   const [tripStart, setTripStart] = useState('');
   const [tripEnd, setTripEnd] = useState('');
+  const [rejectRatio, setRejectRatio] = useState('');                    // % rejects per bag
+  const [positions, setPositions] = useState<string[]>(['', '', '', '']); // 3–4 harvest GPS positions
   const [qc, setQc] = useState<Record<string, string | number | boolean>>({});
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [busy, setBusy] = useState(false);
@@ -61,7 +63,7 @@ export default function ReceivingStationPage() {
       setAuth('ok');
       const [{ data: sps }, { data: vs }] = await Promise.all([
         supabase.from('spinytails_species').select('code, name, grade_set, qc_fields, ccp_limits').eq('active', true).order('name'),
-        supabase.from('spinytails_vessels').select('id, vessel_code, vessel_name, fisherman_name, fisherman_phone, license_number').eq('status', 'approved').order('fisherman_name'),
+        supabase.from('spinytails_vessels').select('id, vessel_code, vessel_name, fisherman_name, fisherman_phone, license_number, color_tag').eq('status', 'approved').order('fisherman_name'),
       ]);
       setSpecies((sps ?? []) as Species[]);
       setVessels((vs ?? []) as Vessel[]);
@@ -140,6 +142,8 @@ export default function ReceivingStationPage() {
           core_temp_f: coreTemp ? parseFloat(coreTemp) : null,
           fishing_area: fishingArea, fishing_method: fishingMethod,
           trip_start_location: tripStart, trip_end_location: tripEnd,
+          reject_ratio_pct: rejectRatio ? parseFloat(rejectRatio) : null,
+          harvest_positions: positions.map((p) => p.trim()).filter(Boolean),
           qc_results: qc, harvest_photos: photos, device_id: DEVICE_ID,
         }),
       });
@@ -152,7 +156,7 @@ export default function ReceivingStationPage() {
         supplier: v?.fisherman_name ?? '', species: sp?.name ?? speciesCode,
       });
       // reset the per-lot fields, keep vessel/species for the next bag of the same delivery
-      setProductName(''); setNumBags(''); setTotalWeight(''); setWeightPerBag(''); setGrade(''); setCondition(''); setCoreTemp(''); setQc({}); setPhotos([]);
+      setProductName(''); setNumBags(''); setTotalWeight(''); setWeightPerBag(''); setGrade(''); setCondition(''); setCoreTemp(''); setQc({}); setPhotos([]); setRejectRatio(''); setPositions(['', '', '', '']);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Receiving failed');
     } finally { setBusy(false); }
@@ -200,9 +204,9 @@ export default function ReceivingStationPage() {
         <div style={lbl}>1 · Supplier (approved vessel)</div>
         <select value={vesselId} onChange={(e) => setVesselId(e.target.value)} style={inp}>
           <option value="">— select fisherman / vessel —</option>
-          {vessels.map((v) => <option key={v.id} value={v.id}>{v.fisherman_name} · {v.vessel_name ?? v.vessel_code} {v.license_number ? `· Lic ${v.license_number}` : ''}</option>)}
+          {vessels.map((v) => <option key={v.id} value={v.id}>{v.fisherman_name} · {v.vessel_name ?? v.vessel_code} {v.license_number ? `· Lic ${v.license_number}` : ''}{v.color_tag ? ` · 🎨 ${v.color_tag}` : ''}</option>)}
         </select>
-        {vesselId && (() => { const v = vessels.find((x) => x.id === vesselId); return v ? <div style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>{v.fisherman_phone ? `📞 ${v.fisherman_phone}` : ''}</div> : null; })()}
+        {vesselId && (() => { const v = vessels.find((x) => x.id === vesselId); return v ? <div style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>{v.fisherman_phone ? `📞 ${v.fisherman_phone}` : ''}{v.color_tag ? <span style={{ marginLeft: 8, fontWeight: 800, color: '#0b1628' }}>🎨 Color string: {v.color_tag}</span> : null}</div> : null; })()}
       </div>
 
       {/* 2. Product */}
@@ -230,7 +234,10 @@ export default function ReceivingStationPage() {
           </select>
         )}
         <input placeholder="Product condition" value={condition} onChange={(e) => setCondition(e.target.value)} style={inp} />
-        <div><div style={lbl}>Temp on arrival (°F)</div><input type="number" inputMode="decimal" value={coreTemp} onChange={(e) => setCoreTemp(e.target.value)} style={inp} /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div><div style={lbl}>Temp on arrival (°F)</div><input type="number" inputMode="decimal" value={coreTemp} onChange={(e) => setCoreTemp(e.target.value)} style={inp} /></div>
+          <div><div style={lbl}>Reject ratio (% / bag)</div><input type="number" inputMode="decimal" value={rejectRatio} onChange={(e) => setRejectRatio(e.target.value)} style={inp} /></div>
+        </div>
       </div>
 
       {/* 3. Harvest verification */}
@@ -242,6 +249,13 @@ export default function ReceivingStationPage() {
           <input placeholder="Trip start location" value={tripStart} onChange={(e) => setTripStart(e.target.value)} style={inp} />
           <input placeholder="Trip end location" value={tripEnd} onChange={(e) => setTripEnd(e.target.value)} style={inp} />
         </div>
+        <div style={lbl}>Harvest positions (3–4 — where the catch was taken)</div>
+        {positions.map((p, i) => (
+          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+            <input placeholder={`Position ${i + 1} (lat, lng or description)`} value={p} onChange={(e) => setPositions((ps) => ps.map((x, j) => (j === i ? e.target.value : x)))} style={{ ...inp, marginBottom: 0 }} />
+            <button onClick={() => { if (navigator.geolocation) navigator.geolocation.getCurrentPosition((pos) => setPositions((ps) => ps.map((x, j) => (j === i ? `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}` : x)))); }} style={{ ...inp, marginBottom: 0, width: 54, flexShrink: 0, background: '#0b1628', color: '#fff', cursor: 'pointer', fontWeight: 800 }} title="Use current GPS">📍</button>
+          </div>
+        ))}
         <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ ...inp, background: '#0b1628', color: '#fff', fontWeight: 800, cursor: 'pointer', textAlign: 'center' }}>📷 Capture harvest photo (GPS-tagged)</button>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           {photos.map((p, i) => (
