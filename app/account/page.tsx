@@ -290,6 +290,7 @@ export default function AccountPage() {
       {/* Quick stats */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <QuickLink href="/my-orders" label="Orders" value={orderCount ?? 0} icon="📦" />
+        <QuickLink href="/account/statements" label="Statements" value="→" icon="🧾" />
         <QuickLink href="/wishlist" label="Wishlist" value={wishlistCount ?? 0} icon="♡" />
         <QuickLink href="/market" label="Browse market" value="→" icon="🛒" />
       </div>
