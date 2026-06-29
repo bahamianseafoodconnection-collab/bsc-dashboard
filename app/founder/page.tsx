@@ -83,6 +83,7 @@ export default function FounderDashboard() {
     { label: 'Receiving',            desc: 'Verify invoices → stock → paid',  href: '/founder/receiving', icon: '📦' },
     { label: 'Credit Approval',      desc: 'Approve credit accounts + terms', href: '/founder/credit', icon: '🧾' },
     { label: 'Customer Intakes',     desc: 'Approve signups / WhatsApp leads', href: '/founder/customer-approvals', icon: '👥' },
+    { label: 'CITES Export Quota',   desc: 'Lobster export vs CITES ceiling',  href: '/founder/cites-quota', icon: '📜' },
     { label: 'Control Center',      desc: 'All 80+ admin tools',        href: '/dashboard',        icon: '🎛️' },
     { label: 'Cashier',             desc: 'POS, orders, invoices',      href: '/cashier',          icon: '🧾' },
     { label: 'Supplier Handler',    desc: 'Suppliers, catalogue',       href: '/supplier-handler', icon: '🏪' },
