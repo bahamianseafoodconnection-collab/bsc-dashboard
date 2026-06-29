@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
   let q = admin.from('orders')
-    .select('id, created_at, customer_name, customer_phone, payment_type, wholesale_items, subtotal, total, status, payment_ref, admin_notes')
+    .select('id, created_at, customer_name, customer_phone, payment_type, wholesale_items, subtotal, total, status, payment_status, payment_ref, admin_notes')
     .eq('order_type', 'phone_order')
     .order('created_at', { ascending: false })
     .limit(limit);
