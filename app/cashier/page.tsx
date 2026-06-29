@@ -85,8 +85,10 @@ export default function CashierDashboard() {
   const forms: { label: string; desc: string; href: string; icon: string }[] = [
     { label: 'New Sale',           desc: 'Ring up at POS Nassau',          href: '/pos',               icon: '🧾' },
     { label: 'Andros Sale',        desc: 'Ring up at POS Andros',          href: '/pos-andros',        icon: '🏝️' },
-    { label: 'Customer Order',     desc: 'Phone / WhatsApp order',         href: '/orders',            icon: '📞' },
-    { label: 'Upload Invoice',     desc: 'Photo → purchase order',         href: '/documents/capture', icon: '📸' },
+    { label: 'Phone Order',        desc: 'Take a phone / WhatsApp order',  href: '/phone-order',       icon: '📞' },
+    { label: 'Orders',             desc: 'View · collect payment',         href: '/orders',            icon: '📋' },
+    { label: 'Scan Invoice',       desc: 'Photo → purchase order / expense', href: '/documents/capture', icon: '📸' },
+    { label: 'Expenses',           desc: 'View · add expenses',            href: '/expenses',          icon: '💸' },
     { label: 'Purchase Order',     desc: 'Create / view supplier POs',     href: '/purchase-orders',   icon: '📦' },
   ];
 

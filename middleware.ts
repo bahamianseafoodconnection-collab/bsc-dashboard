@@ -34,7 +34,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   founder:       ['*'],
   co_founder:    ['*'],
   manager:       ['/ashley', '/cashier', '/supplier-handler', '/credit', '/pos', '/orders', '/pickup-queue', '/pulse', '/wholesale-orders', '/inventory', '/supplier', '/purchase-orders', '/supplier-purchases', '/yield', '/labels', '/captains', '/accounts-payable', '/customers', '/reports', '/notifications', '/products', '/wholesale-products', '/landed-cost', '/lobster-intake', '/yield-measure', '/lobster-labels', '/igloo', '/promos', '/reviews-admin', '/partner-tokens', '/dashboard-guide'],
-  cashier:       ['/cashier', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/documents', '/purchase-orders', '/credit'],
+  cashier:       ['/cashier', '/pos', '/pos-andros', '/orders', '/pickup-queue', '/documents', '/purchase-orders', '/credit', '/expenses', '/phone-order'],
   // Internal staff who manage suppliers/catalogue (NOT the external supplier
   // portal). Add the role to a profile and they land on /supplier-handler.
   supplier_handler: ['/supplier-handler', '/supplier', '/products', '/documents', '/purchase-orders'],

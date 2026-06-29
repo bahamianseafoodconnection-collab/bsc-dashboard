@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { createBrowserClient } from '@supabase/ssr';
-import { canLock, useUserRole } from '@/lib/role';
+import { canManageSuppliers, useUserRole } from '@/lib/role';
 import AddInventoryButton from '@/components/intake/AddInventoryButton';
 
 let _supabase: ReturnType<typeof createBrowserClient> | null = null;
@@ -116,7 +116,9 @@ const [productsLoading, setProductsLoading] = useState<string | null>(null);
 
 // Role gate: only founder + co_founder can flip status / channel toggles.
 const { role } = useUserRole();
-const canEdit = canLock(role);
+// supplier_handler (+ manager/admins) can run the full supplier catalogue
+// workflow: add/edit suppliers + products, pricelist upload, extract, toggle.
+const canEdit = canManageSuppliers(role);
 
 function showToast(msg: string, ok = true) {
 setToast({ msg, ok });

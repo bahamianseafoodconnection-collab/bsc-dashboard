@@ -213,7 +213,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {showBackToDashboard && (
           <button
-            onClick={() => router.push(['founder', 'co_founder', 'control_admin'].includes(roleState) ? '/founder' : '/dashboard')}
+            onClick={() => {
+              // Every role lands on THEIR own dashboard/home — never a route
+              // their role can't access (was sending cashier/supplier_handler/
+              // processor to /dashboard, which middleware forbids → bounce).
+              // Mirrors middleware homeMap so there's no redirect loop.
+              const ROLE_HOME: Record<string, string> = {
+                founder: '/founder', co_founder: '/founder', control_admin: '/founder',
+                manager: '/ashley', right_hand: '/ashley', strategist: '/ashley',
+                cashier: '/cashier', supplier_handler: '/supplier-handler',
+                andros_staff: '/pos-andros', processor: '/spinytails',
+                operations: '/processor', supplier: '/supplier-portal', partner_us: '/supplier-portal',
+              };
+              router.push(ROLE_HOME[roleState] ?? '/founder');
+            }}
             aria-label="Back to dashboard"
             style={{
               position: 'fixed',

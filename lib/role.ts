@@ -17,6 +17,10 @@ import { supabase } from './supabase';
 // co_founder kept for forward-compat with any role-schema split.
 const LOCK_ROLES      = new Set(['founder', 'co_founder', 'control_admin']);
 const VIEW_LOCK_ROLES = new Set(['founder', 'co_founder', 'control_admin', 'manager']);
+// Roles allowed to MANAGE the supplier catalogue: add/edit suppliers +
+// products, upload pricelists, extract, toggle online. supplier_handler is
+// the dedicated internal role for exactly this work (founder 2026-06-28).
+const SUPPLIER_MANAGE_ROLES = new Set(['founder', 'co_founder', 'control_admin', 'manager', 'supplier_handler']);
 
 let cachedRole: string | null | undefined = undefined; // undefined = unfetched
 let inflight: Promise<string | null> | null = null;
@@ -70,6 +74,10 @@ export function useUserRole(): { role: string | null; loading: boolean } {
 
 export function canLock(role: string | null): boolean {
   return role !== null && LOCK_ROLES.has(role);
+}
+
+export function canManageSuppliers(role: string | null): boolean {
+  return role !== null && SUPPLIER_MANAGE_ROLES.has(role);
 }
 
 export function canSeeLockIcon(role: string | null): boolean {

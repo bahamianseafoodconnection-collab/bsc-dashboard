@@ -308,12 +308,17 @@ export async function POST(req: Request) {
         adopted = true;
       }
 
-      // Belt-and-suspenders: guarantee profiles carries the real role + name
-      // (the trigger uses on-conflict-do-nothing, and we never want a staff
-      // member stranded as 'customer' in middleware). Best-effort.
-      await admin.from('profiles')
-        .upsert({ id: userId, email, role, full_name: body.full_name || null }, { onConflict: 'id' })
-        .then(() => undefined, () => undefined);
+      // The profiles row is REQUIRED, not best-effort. Staff are gated
+      // through it (get_my_role / middleware), and a SILENT failure here is
+      // exactly how Kerline/Johnette ended up with a users row but no profile
+      // → half-provisioned. Surface the error + roll back the auth user we
+      // just made, rather than returning a broken account as "success".
+      const { error: profErr } = await admin.from('profiles')
+        .upsert({ id: userId, email, role, full_name: body.full_name || null }, { onConflict: 'id' });
+      if (profErr) {
+        if (!adopted) await admin.auth.admin.deleteUser(userId).catch(() => {});
+        return NextResponse.json({ ok: false, error: `Profile create failed: ${profErr.message}` }, { status: 500 });
+      }
       const token = genToken();
 
       // Create the salaries-category expense row first so the staff row
@@ -354,18 +359,19 @@ export async function POST(req: Request) {
         },
       ];
 
-      const tables = ['users', 'staff_roster'];
+      // The users row is the SOURCE OF TRUTH — get_my_user_record() and
+      // is_staff() read ONLY users. NEVER fall back to staff_roster as a
+      // "success": that's what stranded staff invisible (profiles + roster
+      // but no users row → "could not look up your account"). Insert into
+      // users only; try the column-name variants for schema tolerance. If
+      // users genuinely can't take the row, that's a hard error below.
       let insErr: string | null = 'unknown';
-
-      outer:
-      for (const table of tables) {
-        for (const row of insertVariants) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error } = await admin.from(table).insert(row as any);
-          if (!error) { insErr = null; break outer; }
-          insErr = error.message;
-          if (!error.message.toLowerCase().includes('column')) break;
-        }
+      for (const row of insertVariants) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await admin.from('users').insert(row as any);
+        if (!error) { insErr = null; break; }
+        insErr = error.message;
+        if (!error.message.toLowerCase().includes('column')) break;
       }
 
       // A duplicate-key means a staff row for this id already exists — UPDATE it
@@ -390,6 +396,21 @@ export async function POST(req: Request) {
         if (!adopted) await admin.auth.admin.deleteUser(userId).catch(() => {});
         if (expenseId) await admin.from('expenses').delete().eq('id', expenseId).then(() => undefined, () => undefined);
         return NextResponse.json({ ok: false, error: insErr }, { status: 500 });
+      }
+
+      // Final guarantee: BOTH the users row and the profiles row must exist
+      // at userId, else this is a half-provisioned account and the login
+      // will break (the class of bug audited 2026-06-28). Fail loudly here
+      // rather than reporting a broken staffer as "added".
+      const [{ data: uChk }, { data: pChk }] = await Promise.all([
+        admin.from('users').select('id').eq('id', userId).maybeSingle(),
+        admin.from('profiles').select('id').eq('id', userId).maybeSingle(),
+      ]);
+      if (!uChk || !pChk) {
+        return NextResponse.json({
+          ok: false,
+          error: `Half-provisioned account (users:${!!uChk} profiles:${!!pChk}) — refusing to report as success. Contact Dedrick.`,
+        }, { status: 500 });
       }
 
       await logChange(admin, userId, 'create', caller.userId, {
