@@ -7,6 +7,8 @@ const PUBLIC_ROUTES = [
   '/login',
   '/staff-login',
   '/staff/activate',
+  '/auth/',          // email confirm/recovery links land here with NO session yet
+  '/reset-password', // password-reset landing (session set by /auth/confirm)
   '/market',
   '/product/',
   '/track/',
