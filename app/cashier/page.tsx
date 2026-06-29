@@ -93,6 +93,7 @@ export default function CashierDashboard() {
     { label: 'New Sale',           desc: 'Ring up at POS Nassau',          href: '/pos',               icon: '🧾' },
     { label: 'Andros Sale',        desc: 'Ring up at POS Andros',          href: '/pos-andros',        icon: '🏝️' },
     { label: 'Phone Order',        desc: 'Take a phone / WhatsApp order',  href: '/phone-order',       icon: '📞' },
+    { label: 'Add Customer',       desc: 'New / returning · phone-matched', href: '/cashier/add-customer', icon: '👤' },
     { label: 'Orders',             desc: 'View · collect payment',         href: '/orders',            icon: '📋' },
     { label: 'Scan Invoice',       desc: 'Photo → purchase order / expense', href: '/documents/capture', icon: '📸' },
     { label: 'Expenses',           desc: 'View · add expenses',            href: '/expenses',          icon: '💸' },
