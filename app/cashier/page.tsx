@@ -12,6 +12,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import MyDirectives from '@/components/directives/MyDirectives';
+import { clearSignIn } from '@/lib/staff-session';
 
 const GOLD = '#f4c842';
 const INK = '#060d1f';
@@ -49,6 +50,12 @@ export default function CashierDashboard() {
   const [data, setData] = useState<Dash | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  async function signOut() {
+    clearSignIn();
+    await supabase.auth.signOut();
+    router.replace('/staff-login');
+  }
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -119,6 +126,11 @@ export default function CashierDashboard() {
           <button onClick={load} disabled={loading}
             style={{ background: 'transparent', color: 'rgba(255,255,255,0.7)', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '10px 12px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
             {loading ? '…' : '↻'}
+          </button>
+          <button onClick={signOut}
+            style={{ background: 'transparent', color: '#fca5a5', border: '1px solid rgba(248,113,113,0.4)', borderRadius: 10, padding: '10px 12px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            title="Sign out">
+            ⎋ Sign out
           </button>
         </div>
       </header>

@@ -300,7 +300,16 @@ export default function POSPage() {
   const [shiftBusy,       setShiftBusy]       = useState(false)
 
   async function loadCashierSession() {
-    const { data: { user } } = await supabase.auth.getUser()
+    // Retry the session a few times before giving up — on a fresh load the
+    // auth session can lag, and a single getUser() that returns null would
+    // leave cashierSession null and surface a phantom "No shift" even when a
+    // shift is open. Mirrors pos-shell's 4-attempt session warm-up.
+    let user = null as Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']
+    for (let i = 0; i < 4 && !user; i++) {
+      const { data } = await supabase.auth.getUser()
+      user = data.user
+      if (!user) await new Promise((r) => setTimeout(r, 350))
+    }
     if (!user) return
     const { data } = await supabase
       .from('cash_drawer_sessions')
