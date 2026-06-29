@@ -22,6 +22,11 @@ export const dynamic = 'force-dynamic';
 
 // Creating master records (suppliers/customers) is an admin action.
 const ADMIN = new Set(['founder', 'co_founder', 'control_admin', 'basic_admin', 'manager']);
+// Operational capture (a photographed invoice → PO, a receipt → pending
+// expense) is part of the cashier/POS receiving lane.
+const OPS = new Set([...ADMIN, 'cashier', 'andros_staff']);
+const MASTER_TARGETS = ['customer', 'supplier', 'fisherman'];
+const OPS_TARGETS = ['purchase', 'expense'];
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
 function firstOf(f: Record<string, unknown>, keys: string[]): string | null {
@@ -52,14 +57,17 @@ export async function POST(req: NextRequest) {
   if (userErr || !user) return NextResponse.json({ ok: false, error: 'Invalid session' }, { status: 401 });
   const { data: prof } = await userClient.from('profiles').select('role').eq('id', user.id).maybeSingle();
   const role = (prof as { role?: string | null } | null)?.role ?? null;
-  if (!role || !ADMIN.has(role)) return NextResponse.json({ ok: false, error: `Role "${role ?? 'none'}" cannot create records from documents.` }, { status: 403 });
 
   let b: { document_id?: unknown; target?: unknown; fields?: unknown };
   try { b = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 }); }
   const docId = str(b.document_id);
-  const target = (['customer', 'supplier', 'fisherman', 'purchase'].includes(b.target as string)) ? b.target as string : '';
+  const target = ([...MASTER_TARGETS, ...OPS_TARGETS].includes(b.target as string)) ? b.target as string : '';
   const f = (b.fields && typeof b.fields === 'object') ? b.fields as Record<string, unknown> : {};
-  if (!target) return NextResponse.json({ ok: false, error: "target must be 'customer', 'supplier', 'fisherman', or 'purchase'" }, { status: 400 });
+  if (!target) return NextResponse.json({ ok: false, error: 'target must be customer, supplier, fisherman, purchase, or expense' }, { status: 400 });
+  // Master records (customer/supplier/fisherman) = admin only. Operational
+  // capture (purchase invoice, expense) = ops staff incl cashiers.
+  const allowed = MASTER_TARGETS.includes(target) ? ADMIN : OPS;
+  if (!role || !allowed.has(role)) return NextResponse.json({ ok: false, error: `Role "${role ?? 'none'}" cannot create a ${target} from documents.` }, { status: 403 });
   const money = (v: unknown) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };
 
   const admin = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -82,7 +90,7 @@ export async function POST(req: NextRequest) {
         if (error) throw new Error(error.message);
         recordId = (ins as { id: string }).id; created = true;
       }
-    } else {
+    } else if (target === 'supplier' || target === 'fisherman') {
       // supplier / fisherman → suppliers table
       recordType = 'supplier';
       const isFisherman = target === 'fisherman';
@@ -124,6 +132,28 @@ export async function POST(req: NextRequest) {
       }).select('id').single();
       if (error) throw new Error(error.message);
       recordId = (ins as { id: string }).id; created = true; name = `${invoiceRef} · ${supplierName} · $${total.toFixed(2)}`;
+    }
+
+    if (target === 'expense') {
+      // Receipt photo → a PENDING expense for founder approval. The captured
+      // document's file_url is attached as the receipt image.
+      recordType = 'expense';
+      const vendor = firstOf(f, ['vendor', 'merchant', 'supplier_name', 'company_name', 'payee', 'store']) ?? 'Unknown vendor';
+      const amount = money(f.total ?? f.amount ?? f.grand_total ?? f.amount_paid ?? f.subtotal);
+      const category = firstOf(f, ['category', 'expense_category', 'type']) ?? 'general';
+      const desc = firstOf(f, ['description', 'summary', 'memo']) ?? `${vendor} receipt`;
+      let imageUrl: string | null = null;
+      if (docId) {
+        const { data: doc } = await admin.from('captured_documents').select('file_url').eq('id', docId).maybeSingle();
+        imageUrl = (doc as { file_url?: string } | null)?.file_url ?? null;
+      }
+      const { data: ins, error } = await admin.from('expenses').insert({
+        vendor, amount, amount_bsd: amount, category, description: desc,
+        image_url: imageUrl, status: 'pending_approval', created_by: user.id,
+        notes: 'Captured from receipt photo — pending founder approval',
+      }).select('id').single();
+      if (error) throw new Error(error.message);
+      recordId = (ins as { id: string }).id; created = true; name = `${vendor} · $${amount.toFixed(2)}`;
     }
 
     // Link the captured document to the record (mirroring).

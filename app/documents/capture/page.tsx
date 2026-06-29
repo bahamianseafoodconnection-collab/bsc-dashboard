@@ -77,7 +77,7 @@ export default function DocumentCapturePage() {
     reader.readAsDataURL(file);
   }
 
-  async function createEntity(target: 'supplier' | 'fisherman' | 'customer' | 'purchase', label: string, r: Result | null = res) {
+  async function createEntity(target: 'supplier' | 'fisherman' | 'customer' | 'purchase' | 'expense', label: string, r: Result | null = res) {
     if (!r) return;
     setCreating(target); setErr('');
     try {
@@ -108,6 +108,7 @@ export default function DocumentCapturePage() {
     if (c.includes('fisherman') || c.includes('vessel')) { setAssistant('Creating / linking fisherman / vessel…'); createEntity('fisherman', 'Fisherman / Vessel', r); return; }
     if (c.includes('supplier')) { setAssistant('Creating / linking supplier…'); createEntity('supplier', 'Supplier', r); return; }
     if (c.includes('customer')) { setAssistant('Creating / linking customer…'); createEntity('customer', 'Customer', r); return; }
+    if (c.includes('expense') || c.includes('receipt')) { setAssistant('Filing expense for approval…'); createEntity('expense', 'Expense', r); return; }
     if (c.includes('purchase') || c.includes('invoice') || c.includes(' po') || c.includes('order')) { setAssistant('Creating purchase invoice…'); createEntity('purchase', 'Purchase Invoice', r); return; }
     if (c.includes('inventory') || c.includes('export') || c.includes('shipment')) { setAssistant(`This is a ${what}. Data is extracted + mirrored; that record type lands in a later phase.`); return; }
     setAssistant(`This looks like a ${what}. ${r.summary} Try: "create supplier", "create receiving record", or "create purchase invoice".`);
@@ -116,12 +117,14 @@ export default function DocumentCapturePage() {
   // Which "create record" actions apply, based on the extracted fields.
   const f = res?.fields ?? {};
   const has = (...keys: string[]) => keys.some((k) => f[k]);
-  type Tgt = 'supplier' | 'fisherman' | 'customer' | 'purchase';
+  type Tgt = 'supplier' | 'fisherman' | 'customer' | 'purchase' | 'expense';
   const actions: Array<{ target: Tgt; label: string }> = res ? [
     (res.doc_type === 'landing_report' || has('fisherman_name', 'vessel_name', 'vessel_registration')) ? { target: 'fisherman' as const, label: 'Fisherman / Vessel' } : null,
     has('supplier_name', 'company_name') ? { target: 'supplier' as const, label: 'Supplier' } : null,
     has('customer', 'customer_name', 'customer_phone') ? { target: 'customer' as const, label: 'Customer' } : null,
     (res.doc_type === 'purchase_invoice' || res.doc_type === 'purchase_order' || has('invoice_number', 'line_items')) ? { target: 'purchase' as const, label: 'Purchase Invoice' } : null,
+    // Any receipt / amount-bearing doc can be filed as an expense (→ founder approval).
+    (res.doc_type === 'expense' || res.doc_type === 'receipt' || has('total', 'amount', 'grand_total', 'amount_paid')) ? { target: 'expense' as const, label: 'Expense' } : null,
   ].filter(Boolean) as Array<{ target: Tgt; label: string }> : [];
   const canReceive = !!res && (res.doc_type === 'landing_report' || has('fisherman_name', 'vessel_name', 'fishing_area'));
 

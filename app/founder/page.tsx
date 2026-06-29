@@ -79,6 +79,7 @@ export default function FounderDashboard() {
     { label: 'Directives',           desc: 'Assign tasks + duties to staff', href: '/founder/directives',  icon: '📋' },
     { label: 'Payment Approvals',    desc: 'Hold / approve pending payments', href: '/founder/payment-approvals', icon: '🔐' },
     { label: 'Customer Statements',  desc: 'Approve + send weekly statements',  href: '/founder/statements', icon: '🧾' },
+    { label: 'Expense Approvals',    desc: 'Review + approve staff receipts', href: '/founder/expenses', icon: '💸' },
     { label: 'Control Center',      desc: 'All 80+ admin tools',        href: '/dashboard',        icon: '🎛️' },
     { label: 'Cashier',             desc: 'POS, orders, invoices',      href: '/cashier',          icon: '🧾' },
     { label: 'Supplier Handler',    desc: 'Suppliers, catalogue',       href: '/supplier-handler', icon: '🏪' },
