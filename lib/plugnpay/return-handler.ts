@@ -78,6 +78,23 @@ function readHash(fields: Record<string, string>): string {
   return fields.pt_transaction_response_hash || fields.resphash || '';
 }
 
+/**
+ * With the `hidden` transition, Plug'n Pay POSTs to us server-to-server and
+ * returns OUR response body to the customer's browser — so we must return
+ * HTML (a bare 302 may not be forwarded). This HTML immediately redirects the
+ * browser to the destination; it also works for a normal browser return.
+ */
+function htmlRedirect(url: string): NextResponse {
+  const attr = url.replace(/"/g, '&quot;');
+  const body = `<!doctype html><html><head><meta charset="utf-8">`
+    + `<meta http-equiv="refresh" content="0;url=${attr}">`
+    + `<script>window.location.replace(${JSON.stringify(url)});</script>`
+    + `<title>Redirecting…</title></head>`
+    + `<body style="font-family:system-ui;text-align:center;padding:48px;color:#1a2e5a">`
+    + `Payment received — <a href="${attr}">continue to your order</a>.</body></html>`;
+  return new NextResponse(body, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
 export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promise<NextResponse> {
   const fields = await readReturnFields(req);
 
@@ -99,7 +116,7 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
 
   // If we don't have an order id, we can't tie this back to anything.
   if (!clientOrderId) {
-    return NextResponse.redirect(`${origin}/checkout?problem=missing_order_id`);
+    return htmlRedirect(`${origin}/checkout?problem=missing_order_id`);
   }
 
   // Verify hash (first factor). Pass the fields object so verifyResponseHash
@@ -307,7 +324,7 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
   // because the customer experience differs significantly.
   if (isPaid) {
     // Branded, visual "Payment confirmed" screen → then on to the marketplace.
-    return NextResponse.redirect(`${origin}/order-confirmed?order=${clientOrderId}`);
+    return htmlRedirect(`${origin}/order-confirmed?order=${clientOrderId}`);
   }
   // Hard decline / must-contact-bank / fraud → the clear "Payment declined"
   // screen with the safe "contact your bank" copy. Fraud uses the same copy
@@ -316,8 +333,8 @@ export async function handlePnpReturn(req: NextRequest, hint: ReturnHint): Promi
       || outcome.bucket === 'declined'
       || outcome.bucket === 'contact'
       || hint === 'declined') {
-    return NextResponse.redirect(`${origin}/payment-declined?reason=declined`);
+    return htmlRedirect(`${origin}/payment-declined?reason=declined`);
   }
   // Retry / unknown / gateway problem → "try again in a moment" screen.
-  return NextResponse.redirect(`${origin}/payment-declined?reason=problem`);
+  return htmlRedirect(`${origin}/payment-declined?reason=problem`);
 }

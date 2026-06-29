@@ -147,8 +147,13 @@ export function buildSubmission(input: SubmissionInput): { action: string; field
     pt_client_orderid:            input.clientOrderId,
     // Return URLs — Plug'n Pay POSTs to script-style URLs, GETs to .html.
     pb_success_url:               input.successUrl,
-    pb_bad_card_url:              input.badCardUrl,
-    pb_problem_url:               input.problemUrl,
+    // Hidden transition = a direct server-to-server POST to pb_success_url the
+    // moment an authorization succeeds — reliable, not browser-dependent (fixes
+    // the lost-browser-return "stranded card order" class). Per Plug'n Pay
+    // (James Turansky, 2026-06-29): do NOT set bad_card/problem URLs — that lets
+    // a FAILED transaction return the customer to PnP's billing page to retry,
+    // so only an APPROVED authorization ever calls our callback.
+    pb_transition_type:           'hidden',
     // Response shape — 'querystring' lets us read off req.url params
     // when PnP redirects (works for both POST and GET targets).
     pb_response_message_type:     input.responseMessageType ?? 'querystring',
