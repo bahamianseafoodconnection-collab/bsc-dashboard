@@ -16,7 +16,10 @@ export const dynamic = 'force-dynamic';
 interface Lot { id: string; batch_number: string | null; lot_code: string; species_code: string | null; status: string; }
 interface Species { code: string; name: string; processing_types: string[]; }
 const DEVICE_ID = 'PROCESSING-STATION-1';
-const PURPOSES = ['processing','pos_nassau','pos_andros','wholesale','export','sampling','qc','disposal'];
+// Reason a product is pulled from the freezer (founder spec 2026-06-29):
+// deveine+sleeve for blast freeze · for a Nassau POS / online order · any
+// other processing stage. Free-text in the DB; this is the operator picklist.
+const PURPOSES = ['deveine_sleeve_blast','pos_nassau','online_order','pos_andros','wholesale','export','other_processing','sampling','qc','disposal'];
 
 export default function ProcessingStationPage() {
   const [auth, setAuth] = useState<'checking'|'no'|'forbidden'|'ok'>('checking');
@@ -29,7 +32,7 @@ export default function ProcessingStationPage() {
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // freezer removal
-  const [rmWeight, setRmWeight] = useState(''); const [rmPurpose, setRmPurpose] = useState('processing');
+  const [rmWeight, setRmWeight] = useState(''); const [rmPurpose, setRmPurpose] = useState('deveine_sleeve_blast');
   const [rmTray, setRmTray] = useState(''); const [rmRack, setRmRack] = useState(''); const [rmFreezer, setRmFreezer] = useState(''); const [rmStorage, setRmStorage] = useState('');
   // processing
   const [pbId, setPbId] = useState<string | null>(null);
