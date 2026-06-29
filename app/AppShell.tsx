@@ -8,8 +8,21 @@ import { t, type Lang } from '@/lib/i18n';
 import { clearSignIn } from '@/lib/staff-session';
 
 const STAFF_ROLES = new Set([
-  'founder','co_founder','cashier','manager','basic_admin','control_admin','andros_staff','supplier','receiver'
+  'founder','co_founder','control_admin','basic_admin','manager','supervisor','right_hand','strategist',
+  'cashier','andros_staff','processor','operations','qc_staff','receiver','supplier_handler','driver',
+  'supplier','partner_us',
 ]);
+
+// Every role's home dashboard — the page they land on at login + where the
+// "back to dashboard" / nav-home must return them. Staff NEVER default to
+// /market (that's the customer home). Mirrors the middleware homeMap.
+const ROLE_HOME: Record<string, string> = {
+  founder: '/founder', co_founder: '/founder', control_admin: '/founder',
+  basic_admin: '/jaquel', manager: '/ashley', right_hand: '/ashley', strategist: '/ashley',
+  cashier: '/cashier', andros_staff: '/pos-andros', receiver: '/spinytails',
+  supplier_handler: '/supplier-handler', processor: '/spinytails', operations: '/processor',
+  driver: '/driver', supplier: '/supplier-portal', partner_us: '/supplier-portal',
+};
 
 const STAFF_ONLY_PREFIXES = [
   '/pos','/dashboard','/report','/inventory','/jaquel',
@@ -197,12 +210,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       pathname.startsWith('/dashboard/')
     );
 
-  const navItems =
-    roleState !== 'loading' &&
-    roleState !== 'unauthenticated' &&
-    STAFF_NAV[roleState]
-      ? STAFF_NAV[roleState]
-      : CUSTOMER_NAV;
+  // Staff always get a "Dashboard → their own home" as the first nav item and
+  // NEVER fall back to CUSTOMER_NAV (whose Home/Shop point at /market). Only
+  // actual customers get the marketplace nav.
+  const isStaffRole = roleState !== 'loading' && roleState !== 'unauthenticated' && STAFF_ROLES.has(roleState);
+  const roleHome = ROLE_HOME[roleState] ?? '/founder';
+  const navItems = isStaffRole
+    ? [{ label: 'nav.dashboard', href: roleHome, icon: '🏠' }, ...(STAFF_NAV[roleState] ?? []).filter((i) => i.href !== roleHome)]
+    : CUSTOMER_NAV;
 
   return (
     <PageErrorBoundary>
@@ -213,20 +228,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {showBackToDashboard && (
           <button
-            onClick={() => {
-              // Every role lands on THEIR own dashboard/home — never a route
-              // their role can't access (was sending cashier/supplier_handler/
-              // processor to /dashboard, which middleware forbids → bounce).
-              // Mirrors middleware homeMap so there's no redirect loop.
-              const ROLE_HOME: Record<string, string> = {
-                founder: '/founder', co_founder: '/founder', control_admin: '/founder',
-                manager: '/ashley', right_hand: '/ashley', strategist: '/ashley',
-                cashier: '/cashier', supplier_handler: '/supplier-handler',
-                andros_staff: '/pos-andros', processor: '/spinytails',
-                operations: '/processor', supplier: '/supplier-portal', partner_us: '/supplier-portal',
-              };
-              router.push(ROLE_HOME[roleState] ?? '/founder');
-            }}
+            onClick={() => router.push(ROLE_HOME[roleState] ?? '/founder')}
             aria-label="Back to dashboard"
             style={{
               position: 'fixed',
