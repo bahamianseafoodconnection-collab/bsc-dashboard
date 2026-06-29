@@ -126,9 +126,16 @@ export async function POST(req: NextRequest) {
       const invoiceRef = firstOf(f, ['invoice_number', 'po_number']) ?? `CAP-${Date.now().toString(36).toUpperCase()}`;
       const total = money(f.total ?? f.subtotal);
       const items = Array.isArray(f.line_items) ? f.line_items : [];
+      // Attach the captured invoice photo so the founder sees the same
+      // document when verifying + receiving it into stock (G4).
+      let photoUrl: string | null = null;
+      if (docId) {
+        const { data: doc } = await admin.from('captured_documents').select('file_url').eq('id', docId).maybeSingle();
+        photoUrl = (doc as { file_url?: string } | null)?.file_url ?? null;
+      }
       const { data: ins, error } = await admin.from('purchase_invoices').insert({
-        invoice_ref: invoiceRef, total_amount: total, balance_owed: total, status: 'unpaid',
-        items, summary: `Invoice from ${supplierName} (auto-captured from document)`,
+        supplier_name: supplierName, invoice_ref: invoiceRef, total_amount: total, balance_owed: total, status: 'unpaid',
+        items, image_urls: photoUrl ? [photoUrl] : [], summary: `Invoice from ${supplierName} (auto-captured from document)`,
       }).select('id').single();
       if (error) throw new Error(error.message);
       recordId = (ins as { id: string }).id; created = true; name = `${invoiceRef} · ${supplierName} · $${total.toFixed(2)}`;
