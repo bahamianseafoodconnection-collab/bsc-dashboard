@@ -25,6 +25,8 @@ interface ApplyBody {
   offering?:       unknown;  // what they catch / grow
   volume?:         unknown;  // typical weekly volume
   notes?:          unknown;
+  vessel_registration_number?: unknown;  // boat registration number (G13)
+  cert_url?:       unknown;               // uploaded boat registration cert photo URL (G13)
 }
 
 const NOTIFY_TO = process.env.SUPPLIER_APPLICATION_INBOX || 'admin@bscbahamas.com';
@@ -65,6 +67,10 @@ export async function POST(req: NextRequest) {
 
   // Generate a unique code so two applicants with the same name don't collide.
   const code = `${type.toUpperCase().slice(0,4)}_${slug(name) || 'applicant'}_${Date.now().toString(36).slice(-5)}`.toUpperCase();
+  // Store the application details on the row so the founder approval queue
+  // (G13) can show + onboard it — not just the founder's email.
+  const certUrl = typeof body.cert_url === 'string' ? body.cert_url.trim() : '';
+  const vesselReg = typeof body.vessel_registration_number === 'string' ? body.vessel_registration_number.trim() : '';
   const supplierRow: Record<string, unknown> = {
     code,
     name,
@@ -73,6 +79,12 @@ export async function POST(req: NextRequest) {
     country:       'Bahamas',
     currency:      'BSD',
     emoji:         type === 'fisherman' ? '🎣' : '🌱',
+    contact_phone: phone || null,
+    contact_email: email || null,
+    vessel_name:   type === 'fisherman' && businessName ? businessName : null,
+    vessel_registration_number:  vesselReg || null,
+    vessel_registration_doc_url: certUrl || null,
+    notes:         [island && `Island: ${island}`, offering && `Sells: ${offering}`, volume && `Volume: ${volume}`, notes].filter(Boolean).join(' · ') || null,
   };
 
   let supplierId: string | null = null;
