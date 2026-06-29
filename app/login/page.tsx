@@ -171,7 +171,7 @@ function LoginInner() {
       // Email-confirmation required → no session yet. The confirmation email is
       // sent; don't redirect them into a page they can't access unconfirmed.
       if (data.user && !data.session) {
-        setInfo('✅ Account created — check your inbox (and spam) to confirm your email, then sign in.');
+        setInfo('✅ Account created! Confirm registration in your email. Check your spam folder or primary inbox.');
         setLoading(false);
         return;
       }
