@@ -86,6 +86,7 @@ interface MarketProduct {
   category: string;             // display bucket (CATEGORY_MAP) — used by the legacy in-page filter
   categoryRaw: string;          // exact products.category value — drives departments + All-view grouping
   price: number;                // regular online_market price (NEVER overridden — keeps wholesale-upgrade math sane)
+  retail_baseline?: number | null; // commercial buyer: the retail price to show struck-through next to their tier price (G9)
   special_price?: number | null; // active special_price within the window; passed as promo_price to cart pricing so it wins over wholesale upgrade
   wholesale_price?: number | null; // local_wholesale snapshot — drives auto-upgrade at 10+ lbs / by case
   unit: string;
@@ -172,6 +173,7 @@ function MarketPageInner() {
   const [orderDone, setOrderDone] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [isIntl, setIsIntl] = useState(false);   // international export buyer → export-only catalog
+  const [commTier, setCommTier] = useState<string | null>(null); // commercial buyer → tier (14%) pricing
 
   useEffect(() => {
     (async () => {
@@ -179,12 +181,20 @@ function MarketPageInner() {
       // domestic/anonymous (intlOnly=false) → unchanged behavior. Failure-safe:
       // any error leaves intlOnly=false so the normal catalog always renders.
       let intlOnly = false;
+      const commPrices = new Map<string, number>();   // commercial buyer → per-product 14% price
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           const who = await fetch('/api/international/whoami', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' }).then((r) => r.json()).catch(() => null);
           intlOnly = !!who?.is_international;
           setIsIntl(intlOnly);
+          if (who?.is_commercial) {
+            const cp = await fetch('/api/commercial/prices', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+            if (cp?.is_commercial) {
+              setCommTier(cp.tier ?? null);
+              for (const [pid, price] of Object.entries((cp.prices ?? {}) as Record<string, number>)) commPrices.set(pid, Number(price));
+            }
+          }
         }
       } catch { /* default domestic */ }
 
@@ -267,7 +277,8 @@ function MarketPageInner() {
 
       const nowMs = Date.now();
       const market: MarketProduct[] = (mp || []).map((p: any) => {
-        const regular = priceMap.get(p.id) ?? 0;
+        // Commercial buyers see their tier (14%) price; everyone else the online_market price.
+        const regular = commPrices.get(p.id) ?? priceMap.get(p.id) ?? 0;
         const startMs = p.special_starts_at ? new Date(p.special_starts_at).getTime() : -Infinity;
         const endMs   = p.special_ends_at   ? new Date(p.special_ends_at).getTime()   :  Infinity;
         const onSpecial = p.special_price != null && startMs <= nowMs && nowMs <= endMs;
@@ -282,6 +293,9 @@ function MarketPageInner() {
           category: CATEGORY_MAP[p.category ?? 'other'] ?? 'Other',
           categoryRaw: (p.category ?? 'other') as string,
           price: regular,
+          // Commercial buyer: a tier price replaced `regular`. Keep the retail
+          // baseline so the card can show the savings (Amazon-style). (G9)
+          retail_baseline: commPrices.has(p.id) && (priceMap.get(p.id) ?? 0) > regular ? (priceMap.get(p.id) ?? null) : null,
           special_price: onSpecial ? Number(p.special_price) : null,
           wholesale_price: wholesaleMap.get(p.id) ?? null,
           unit_type: uom,
@@ -600,6 +614,11 @@ function MarketPageInner() {
       {isIntl && (
         <div className="bg-emerald-700 px-4 py-2 text-center text-sm font-semibold text-white">
           🌍 Export Catalog — you’re viewing BSC products approved for international export only.
+        </div>
+      )}
+      {commTier && (
+        <div className="bg-blue-800 px-4 py-2 text-center text-sm font-semibold text-white">
+          🏢 Wholesale pricing applied — {({ commercial_restaurant: 'Restaurant', commercial_hotel: 'Hotel', commercial_distributor: 'Distributor', commercial_vip: 'VIP' } as Record<string, string>)[commTier] ?? 'Commercial'} account.
         </div>
       )}
 
@@ -977,6 +996,12 @@ function ProductCard({ product, inCartQty, onAdd, onCardClick, showBrand }: {
           </span>
           {product.is_on_special && product.special_price != null && (
             <span className="ml-1 text-[11px] font-semibold text-slate-400 line-through">${product.price.toFixed(2)}</span>
+          )}
+          {!product.is_on_special && product.retail_baseline != null && product.retail_baseline > product.price && (
+            <>
+              <span className="ml-1 text-[11px] font-semibold text-slate-400 line-through">${product.retail_baseline.toFixed(2)}</span>
+              <span className="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">Save {Math.round((1 - product.price / product.retail_baseline) * 100)}%</span>
+            </>
           )}
         </div>
         {product.is_on_special && product.special_ends_at && (
