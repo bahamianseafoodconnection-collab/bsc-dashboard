@@ -7,10 +7,11 @@
 //   1. Authenticates the customer (bearer token).
 //   2. Verifies the referenced order exists, belongs to them, and is in
 //      a pending state.
-//   3. Logs a pending row to payment_transactions (attempt audit).
-//   4. Calls lib/plugnpay/buildSubmission() to assemble the Smart
-//      Screens v2 form fields.
-//   5. Returns { action, fields, attempt_id } to the client, which then
+//   3. Maps the order into Smart Screens v2 item-cart lines (the demobahami
+//      screen is item-cart driven — see lib/plugnpay).
+//   4. Calls lib/plugnpay/buildSubmission() to assemble the form fields.
+//   5. Logs a pending row to payment_transactions (attempt audit).
+//   6. Returns { action, fields, attempt_id } to the client, which then
 //      renders an auto-submit <form method="POST" action={action}> so
 //      the browser navigates to pay1.plugnpay.com. PAN never touches us.
 //
@@ -21,7 +22,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { buildSubmission, isPnpConfigured } from '@/lib/plugnpay';
+import { buildSubmission, isPnpConfigured, type SubmissionLineItem } from '@/lib/plugnpay';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,14 +32,72 @@ interface StartBody {
 }
 
 interface OrderRow {
-  id:             string;
-  customer_id:    string | null;
-  total:          number | null;
-  subtotal:       number | null;
-  vat_amount:     number | null;
-  currency?:      string | null;
-  payment_status: string | null;
-  customer_email: string | null;
+  id:              string;
+  customer_id:     string | null;
+  total:           number | null;
+  subtotal:        number | null;
+  vat_amount:      number | null;
+  currency?:       string | null;
+  payment_status:  string | null;
+  customer_email:  string | null;
+  items?:          unknown;
+  wholesale_items?: unknown;
+}
+
+/**
+ * Maps an order into Smart Screens v2 item-cart lines that sum EXACTLY to
+ * order.total. Delivery/fees become their own reconciliation line. If the
+ * per-line prices can't be trusted (missing/!finite) or imply a discount
+ * (line-sum > total), we fall back to a single consolidated line for the
+ * whole order so the charge always equals the authoritative total.
+ */
+function toLineItems(order: OrderRow): SubmissionLineItem[] {
+  const totalCents = Math.round(Number(order.total) * 100);
+  const raw: Record<string, unknown>[] =
+    Array.isArray(order.items) && order.items.length > 0
+      ? (order.items as Record<string, unknown>[])
+      : Array.isArray(order.wholesale_items)
+        ? (order.wholesale_items as Record<string, unknown>[])
+        : [];
+
+  const lines: SubmissionLineItem[] = [];
+  let sumCents = 0;
+  let ok = raw.length > 0;
+
+  for (let i = 0; i < raw.length && ok; i++) {
+    const it   = raw[i] ?? {};
+    const qty  = Math.trunc(Number(it.quantity ?? it.qty ?? 1));
+    const unit = Number(it.unit_price ?? it.price ?? NaN);
+    if (!Number.isFinite(qty) || qty < 1 || !Number.isFinite(unit) || unit < 0) { ok = false; break; }
+    const unitCents = Math.round(unit * 100);
+    sumCents += unitCents * qty;
+    lines.push({
+      identifier:  String(it.sku ?? it.id ?? i + 1),
+      description: String(it.name ?? it.description ?? `Item ${i + 1}`),
+      unitCost:    (unitCents / 100).toFixed(2),
+      quantity:    qty,
+    });
+  }
+
+  if (ok) {
+    const diff = totalCents - sumCents;
+    if (diff > 0) {
+      // Delivery / handling / anything not itemized → one reconciliation line.
+      lines.push({ identifier: 'DELIVERY', description: 'Delivery & handling', unitCost: (diff / 100).toFixed(2), quantity: 1 });
+    } else if (diff < 0) {
+      ok = false; // lines exceed total (discount/mismatch) → consolidated fallback
+    }
+  }
+
+  if (!ok) {
+    return [{
+      identifier:  'ORDER',
+      description: `BSC Marketplace order ${order.id.slice(0, 8)}`,
+      unitCost:    (totalCents / 100).toFixed(2),
+      quantity:    1,
+    }];
+  }
+  return lines;
 }
 
 export async function POST(req: NextRequest) {
@@ -130,21 +189,32 @@ export async function POST(req: NextRequest) {
   }
 
   // Build the Smart Screens v2 form data. Return URLs are absolute —
-  // PnP requires fully-qualified domain names.
+  // PnP requires fully-qualified domain names. Item lines are mapped from
+  // the order and asserted to sum to the authoritative total inside
+  // buildSubmission (money-integrity guard).
   const origin = req.headers.get('origin')
               ?? req.nextUrl.origin
               ?? 'https://bscbahamas.com';
-  const submission = buildSubmission({
-    clientOrderId:  order.id,
-    amount:         totalNum.toFixed(2),
-    currency:       order.currency || 'BSD',
-    subtotal:       typeof order.subtotal === 'number'   ? order.subtotal.toFixed(2)   : undefined,
-    taxAmount:      typeof order.vat_amount === 'number' ? order.vat_amount.toFixed(2) : undefined,
-    customerEmail:  order.customer_email ?? user.email ?? undefined,
-    successUrl:     `${origin}/api/payment/return/success`,
-    badCardUrl:     `${origin}/api/payment/return/declined`,
-    problemUrl:     `${origin}/api/payment/return/problem`,
-  });
+
+  let submission: { action: string; fields: Record<string, string>; total: string };
+  try {
+    submission = buildSubmission({
+      clientOrderId:  order.id,
+      items:          toLineItems(order),
+      expectedTotal:  totalNum.toFixed(2),
+      currency:       order.currency || 'BSD',
+      customerEmail:  order.customer_email ?? user.email ?? undefined,
+      successUrl:     `${origin}/api/payment/return/success`,
+    });
+  } catch (err) {
+    // A throw here means the cart couldn't be reconciled to the order total
+    // (or env missing). Don't POST a mismatched charge — surface safely.
+    return NextResponse.json({
+      ok: false,
+      error: 'Could not prepare the card payment for this order. Please contact BSC support or choose Cash on Delivery.',
+      detail: err instanceof Error ? err.message : 'submission build failed',
+    }, { status: 500 });
+  }
 
   // Mark the order as payment_pending (idempotent — safe to re-call).
   await admin.from('orders').update({ payment_status: 'payment_pending', payment_method: 'card' }).eq('id', order.id);
@@ -156,7 +226,7 @@ export async function POST(req: NextRequest) {
       order_id:              order.id,
       customer_id:           order.customer_id,
       pt_gateway_account:    submission.fields.pt_gateway_account,
-      pt_transaction_amount: Number(submission.fields.pt_transaction_amount),
+      pt_transaction_amount: Number(submission.total),
       pt_currency:           submission.fields.pt_currency,
       pt_client_orderid:     order.id,
       raw_submission:        submission.fields,
