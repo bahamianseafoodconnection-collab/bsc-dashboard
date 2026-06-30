@@ -342,14 +342,27 @@ export default function DashboardPage() {
         if (cancelled) return;
         const prof = profRes.data;
         const role = prof?.role ?? null;
-        if (role !== 'founder' && role !== 'co_founder') {
-          if (role === 'basic_admin')     window.location.href = '/jaquel';
-          else if (role === 'manager')    window.location.href = '/jaquel';
-          else if (role === 'cashier')    window.location.href = '/pos';
-          else if (role === 'receiver')   window.location.href = '/intake/scan-invoice';
-          else if (role === 'processor')  window.location.href = '/processor';
-          else if (role === 'supplier')   window.location.href = '/supplier';
-          else                            window.location.href = '/market';
+        // Full-access admins (founder / co_founder / control_admin) stay on the
+        // overview. Everyone else is routed to THEIR OWN dashboard home — NEVER
+        // the customer marketplace. Bug fix 2026-06-30: control_admin + 8 other
+        // staff roles previously fell through the if/else chain to '/market'
+        // (e.g. control_admin tapping "← Dashboard" from a supplier page landed
+        // on the shop). Map mirrors AppShell ROLE_HOME / staff-login roleHome so
+        // every role has one consistent landing; only genuine non-staff get the
+        // marketplace.
+        const FULL_ACCESS = role === 'founder' || role === 'co_founder' || role === 'control_admin';
+        if (!FULL_ACCESS) {
+          const STAFF_HOME: Record<string, string> = {
+            basic_admin: '/jaquel', manager: '/jaquel',
+            right_hand: '/ashley', strategist: '/ashley',
+            cashier: '/pos', andros_staff: '/pos-andros',
+            receiver: '/intake/scan-invoice', processor: '/processor',
+            operations: '/processor', supplier_handler: '/supplier-handler',
+            qc_staff: '/spinytails', driver: '/driver',
+            supplier: '/supplier', partner_us: '/supplier-portal',
+          };
+          // Known staff role → their own home; genuine non-staff → marketplace.
+          window.location.href = (role && STAFF_HOME[role]) ? STAFF_HOME[role] : '/market';
           return;
         }
         if (cancelled) return;
