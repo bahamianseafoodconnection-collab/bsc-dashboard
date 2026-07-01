@@ -1,9 +1,11 @@
 // /api/spinytails/processing
 //
-// Processing Station device endpoint (Phase 3). One route, eight actions:
+// Processing Station device endpoint (Phase 3). One route, nine actions:
 //   • blast_temp — blast-freezer start temp log vs −10°F (start of the 24h clock).
-//   • grade — walk-in grading: per-size counts → one spinytails_cases row per
-//     10-lb box + inventory 'in' (0°F holding) + lot → 'mastered'.
+//   • grade — LOBSTER walk-in grading: per-size counts → one spinytails_cases row
+//     per 10-lb box + inventory 'in' (0°F holding) + lot → 'mastered'.
+//   • pack_conch — CONCH master-case packing: clean spec (80/90/95%) + 15/20/50-lb
+//     cases → spinytails_cases (product_type='conch') + inventory 'in' + 'mastered'.
 //   • freezer_removal — record a freezer pull (purpose + tray/rack/freezer) and
 //     reconcile weight: received vs already-removed vs remaining.
 //   • pull    — pull from holding: starts the expiry clock (date_pulled +
@@ -273,6 +275,77 @@ export async function POST(req: NextRequest) {
         await admin.from('spinytails_lots').update({ status: 'mastered', holding_freezer_location: freezerLoc }).eq('id', lotId);
         const received = await receivedLbs(admin, lotId);
         resp = { cases_created: inserted.length, boxed_lbs: boxedLbs, received_lbs: received, yield_lbs: r2(received - boxedLbs), cases: inserted };
+      }
+
+    } else if (action === 'pack_conch') {
+      // CONCH master-case packing. Cleaning spec (80/90/95%) + case sizes
+      // (15/20/50 lb, count each) → one spinytails_cases row per master case +
+      // inventory 'in' into 0°F holding; lot → 'mastered'. Optional walk-in temp
+      // + cleaned weight.
+      let pbId = str(b.processing_batch_id);
+      if (!pbId) {
+        const { data: pb } = await admin.from('spinytails_processing_batches')
+          .select('id').eq('lot_id', lotId).order('started_at', { ascending: false }).limit(1).maybeSingle<{ id: string }>();
+        pbId = pb?.id ?? null;
+      }
+      const cleanPct   = num(b.conch_clean_pct);
+      const packs      = Array.isArray(b.packs) ? b.packs as Array<Record<string, unknown>> : [];
+      const freezerLoc = str(b.holding_freezer_location) ?? str(b.freezer_location);
+      if (cleanPct == null || ![80, 90, 95].includes(cleanPct)) {
+        return NextResponse.json({ ok: false, error: 'conch_clean_pct must be 80, 90 or 95.' }, { status: 400 });
+      }
+
+      const walkinTemp = num(b.walkin_temp_f);
+      if (walkinTemp != null) {
+        await admin.from('spinytails_temperature_logs').insert({
+          logged_at: nowIso, location: 'processing_room_ambient', lot_id: lotId,
+          reading_f: walkinTemp, within_limit: true, recorded_by: user.id, notes: 'Conch pack / walk-in pull',
+        });
+      }
+
+      const { data: lotRow } = await admin.from('spinytails_lots')
+        .select('best_used_by, date_pulled, cites_cert_no, inspection_cert_no')
+        .eq('id', lotId).maybeSingle<{ best_used_by: string | null; date_pulled: string | null; cites_cert_no: string | null; inspection_cert_no: string | null }>();
+      const packedBy = lotRow?.date_pulled ? String(lotRow.date_pulled).slice(0, 10) : nowIso.slice(0, 10);
+
+      const casesToInsert: Record<string, unknown>[] = [];
+      let boxedLbs = 0;
+      for (const p of packs) {
+        const nw = num(p.net_weight_lbs);
+        const count = num(p.count) ?? 0;
+        if (!nw || nw <= 0 || count <= 0) continue;
+        for (let i = 1; i <= count; i++) {
+          const caseCode = `${batch}-${nw}LB-${String(i).padStart(2, '0')}`;
+          casesToInsert.push({
+            lot_id: lotId, case_code: caseCode, product_type: 'conch', grade: null,
+            conch_clean_pct: cleanPct, net_weight_lbs: nw, packed_by: packedBy, best_used_by: lotRow?.best_used_by ?? null,
+            cites_cert_no: lotRow?.cites_cert_no ?? null, inspection_cert_no: lotRow?.inspection_cert_no ?? null,
+            barcode: caseCode, freezer_location: freezerLoc, status: 'in_holding', created_by: user.id,
+          });
+          boxedLbs += nw;
+        }
+      }
+      if (casesToInsert.length === 0) return NextResponse.json({ ok: false, error: 'Enter at least one case size with a count.' }, { status: 400 });
+
+      // Record the cleaned weight as a processing step for the yield trail.
+      const cleanedWeight = num(b.cleaned_weight_lbs);
+      if (pbId && cleanedWeight != null) {
+        await admin.from('spinytails_processing_steps').insert({
+          batch_number: batch, lot_id: lotId, step_no: 99, step_name: `clean ${cleanPct}%`, weight_lbs: cleanedWeight, employee_id: user.id,
+        });
+      }
+
+      const { data: insertedCases, error } = await admin.from('spinytails_cases').insert(casesToInsert).select('id, case_code, net_weight_lbs');
+      if (error) err = error.message;
+      else {
+        const inserted = (insertedCases ?? []) as Array<{ id: string; case_code: string; net_weight_lbs: number }>;
+        await admin.from('spinytails_inventory').insert(inserted.map((c) => ({
+          lot_id: lotId, case_id: c.id, direction: 'in', freezer: 'holding',
+          product_type: 'conch', grade: null, qty_cases: 1, scanned_barcode: c.case_code, employee_id: user.id,
+        })));
+        await admin.from('spinytails_lots').update({ status: 'mastered', holding_freezer_location: freezerLoc }).eq('id', lotId);
+        const received = await receivedLbs(admin, lotId);
+        resp = { cases_created: inserted.length, boxed_lbs: boxedLbs, received_lbs: received, yield_lbs: r2(received - boxedLbs), clean_pct: cleanPct, cases: inserted };
       }
 
     } else {

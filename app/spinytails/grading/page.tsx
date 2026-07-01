@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { printLabels } from '@/lib/label-print';
+import { printProductLabels } from '@/lib/spinytails-product-label';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,7 @@ const GRADES: { value: string; label: string }[] = [
 
 interface Lot {
   id: string; batch_number: string | null; lot_code: string; species_code: string | null;
-  status: string; best_used_by: string | null; color_strap: string | null; vessel_id: string;
+  status: string; best_used_by: string | null; date_pulled: string | null; color_strap: string | null; vessel_id: string;
 }
 
 export default function GradingPage() {
@@ -55,7 +55,7 @@ export default function GradingPage() {
 
   async function load() {
     const { data } = await supabase.from('spinytails_lots')
-      .select('id, batch_number, lot_code, species_code, status, best_used_by, color_strap, vessel_id')
+      .select('id, batch_number, lot_code, species_code, status, best_used_by, date_pulled, color_strap, vessel_id')
       .eq('status', 'blast_freezing').order('receipt_date', { ascending: false });
     setLots((data ?? []) as Lot[]);
   }
@@ -101,17 +101,16 @@ export default function GradingPage() {
   function printCaseLabels() {
     if (!done || !sel) return;
     const gLabel = (v: string) => GRADES.find((g) => g.value === v)?.label ?? v;
-    const labels = done.cases.map((c) => ({
-      title: 'LOBSTER CASE', product_name: 'Spiny Lobster Tail', batch_number: c.case_code,
-      weight: '10 lb', date: new Date().toLocaleDateString('en-US'), supplier: boat,
-      extra: [
-        { label: 'Size', value: gLabel(c.grade) },
-        ...(sel.best_used_by ? [{ label: 'Best Used By', value: sel.best_used_by }] : []),
-        ...(sulfite ? [{ label: 'Contains', value: 'SULFITES' }] : []),
-        ...(sel.color_strap ? [{ label: 'Color strap', value: sel.color_strap }] : []),
-      ],
-    }));
-    printLabels(labels, { widthIn: 4, heightIn: 6 });
+    const packedBy = sel.date_pulled ? String(sel.date_pulled).slice(0, 10) : new Date().toISOString().slice(0, 10);
+    printProductLabels(done.cases.map((c) => ({
+      productType: 'lobster' as const,
+      lotCode:     c.case_code,
+      netWeight:   '10 lb case',
+      size:        gLabel(c.grade),
+      packedBy,
+      bestUsedBy:  sel.best_used_by ?? undefined,
+      sulfite,
+    })), { widthIn: 4, heightIn: 6 });
   }
 
   if (auth === 'checking') return <C>Checking…</C>;
