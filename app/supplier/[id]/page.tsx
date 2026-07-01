@@ -120,9 +120,44 @@ interface ExtractDiagnostic {
   pdf_bytes: number;
 }
 
-const CATEGORIES_FOR_EXTRACT = [
-  'Seafood','Meat','Poultry','Produce','Dry Goods','Frozen',
-  'Dairy & Eggs','Beverages','Snacks','Cleaning & Paper','Personal Care','Other',
+// Category picklist. `value` MUST be a valid product_category ENUM value (the
+// column is an enum — sending a label like 'Seafood' 500s the row). `label` is
+// what the operator sees. New non-food values (hardware/automotive/…) require
+// the matching `alter type product_category add value` migration to be run
+// FIRST (docs/categories/add-item-categories.sql).
+const CATEGORIES_FOR_EXTRACT: { label: string; value: string }[] = [
+  // Food & grocery
+  { label: 'Fresh Seafood',        value: 'fresh_seafood' },
+  { label: 'Frozen Seafood',       value: 'frozen_seafood' },
+  { label: 'Meat',                 value: 'meat' },
+  { label: 'Frozen Meat',          value: 'frozen_meat' },
+  { label: 'Poultry',              value: 'poultry' },
+  { label: 'Produce',              value: 'produce' },
+  { label: 'Dairy & Eggs',         value: 'dairy_eggs' },
+  { label: 'Dry Goods',            value: 'dry_goods' },
+  { label: 'Grocery',              value: 'grocery' },
+  { label: 'Snacks',               value: 'snack' },
+  { label: 'Spices',               value: 'spices' },
+  { label: 'Beverages',            value: 'beverages' },
+  { label: 'Household / Cleaning', value: 'household' },
+  { label: 'Personal Care',        value: 'toiletries' },
+  // General merchandise
+  { label: 'Hardware',             value: 'hardware' },
+  { label: 'Automotive',           value: 'automotive' },
+  { label: 'Tools',                value: 'tools' },
+  { label: 'Electrical',           value: 'electrical' },
+  { label: 'Plumbing',             value: 'plumbing' },
+  { label: 'Building Materials',   value: 'building_materials' },
+  { label: 'Office Supplies',      value: 'office_supplies' },
+  { label: 'Electronics',          value: 'electronics' },
+  { label: 'Packaging & Disposables', value: 'packaging' },
+  { label: 'Kitchenware',          value: 'kitchenware' },
+  { label: 'Apparel',              value: 'apparel' },
+  { label: 'Pet Supplies',         value: 'pet_supplies' },
+  { label: 'Health',               value: 'health' },
+  { label: 'Lawn & Garden',        value: 'lawn_garden' },
+  { label: 'Party Supplies',       value: 'party_supplies' },
+  { label: 'Other',                value: 'other' },
 ];
 
 // Shared input/select styling for the inline inventory table cells.
@@ -191,6 +226,9 @@ export default function SupplierDetailPage() {
   const [pcUpc, setPcUpc] = useState('');
   const [pcBusy, setPcBusy] = useState(false);
 
+  // Bulk-activate progress (imports land at 'pending_approval').
+  const [activatingAll, setActivatingAll] = useState(false);
+
   // Full-screen product editor — opens when you tap a product card
   const [editingProduct, setEditingProduct] = useState<SupplierProduct | null>(null);
   const [editForm, setEditForm] = useState<ProductEditForm | null>(null);
@@ -250,6 +288,25 @@ export default function SupplierDetailPage() {
   function patchField<K extends keyof SupplierProduct>(id: string, field: K, value: SupplierProduct[K]) {
     setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
     patchProduct(id, { [field]: value });
+  }
+
+  // Bulk-activate every loaded product. Imports land at 'pending_approval';
+  // this promotes them to 'active' (never 'inactive' — not in the enum). Sell
+  // channels are left untouched, so nothing becomes customer-visible until a
+  // channel is toggled on — this just clears the not-yet-live state.
+  async function setAllActive() {
+    const todo = products.filter(p => p.status !== 'active');
+    if (todo.length === 0) { showToast('All products are already active.'); return; }
+    if (!confirm(`Set all ${todo.length} product(s) on this page to ACTIVE?`)) return;
+    setActivatingAll(true);
+    let ok = 0, fail = 0;
+    for (const p of todo) {
+      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, status: 'active' } : x));
+      const done = await patchProduct(p.id, { status: 'active' });
+      if (done) ok++; else fail++;
+    }
+    setActivatingAll(false);
+    showToast(`Activated ${ok}${fail ? ` · ${fail} failed` : ''}.`, fail === 0);
   }
 
   // Per-channel margin save. PATCH /api/admin/products/[id] accepts
@@ -1031,9 +1088,16 @@ export default function SupplierDetailPage() {
                   {autoImportBusy ? '⏳ Importing…' : '🚀 Extract & import all'}
                 </button>
               )}
+              {canEdit && products.length > 0 && (
+                <button onClick={setAllActive} disabled={activatingAll}
+                  style={{ padding: '7px 12px', borderRadius: 8, backgroundColor: 'rgba(34,197,94,0.18)', color: '#15803d', border: 'none', fontSize: 12, fontWeight: 800, cursor: activatingAll ? 'wait' : 'pointer', opacity: activatingAll ? 0.6 : 1, marginLeft: 'auto' }}
+                  title="Promote every product on this page from pending to active">
+                  {activatingAll ? '⏳ Activating…' : '✓ Set all active'}
+                </button>
+              )}
               {canEdit && (
                 <Link href={`/admin/inventory?supplier=${supplier.id}`}
-                  style={{ padding: '7px 12px', borderRadius: 8, backgroundColor: '#f4c842', color: '#060d1f', textDecoration: 'none', fontSize: 12, fontWeight: 800, marginLeft: 'auto' }}>
+                  style={{ padding: '7px 12px', borderRadius: 8, backgroundColor: '#f4c842', color: '#060d1f', textDecoration: 'none', fontSize: 12, fontWeight: 800, marginLeft: products.length > 0 ? 0 : 'auto' }}>
                   + Add product
                 </Link>
               )}
@@ -1172,7 +1236,7 @@ export default function SupplierDetailPage() {
                                 onChange={(e) => patchField(p.id, 'category', e.target.value || null)}
                                 style={selectStyle}>
                                 <option value="">—</option>
-                                {CATEGORIES_FOR_EXTRACT.map(c => <option key={c} value={c}>{c}</option>)}
+                                {CATEGORIES_FOR_EXTRACT.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                               </select>
                             </td>
                             <td style={{ padding: '6px 8px' }}>
@@ -1376,7 +1440,7 @@ export default function SupplierDetailPage() {
                           <td style={{ padding: '6px 6px' }}>
                             <select value={p.category} onChange={e => patchExtractRow(i, { category: e.target.value })}
                               style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0a1220', color: '#fff', fontSize: 12 }}>
-                              {CATEGORIES_FOR_EXTRACT.map(c => <option key={c} value={c}>{c}</option>)}
+                              {CATEGORIES_FOR_EXTRACT.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>
                           </td>
                           <td style={{ padding: '6px 6px' }}>
@@ -1501,7 +1565,7 @@ export default function SupplierDetailPage() {
                       <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0a1220', color: '#fff', fontSize: 14, boxSizing: 'border-box' }}>
                         <option value="">— pick one —</option>
-                        {CATEGORIES_FOR_EXTRACT.map(c => <option key={c} value={c}>{c}</option>)}
+                        {CATEGORIES_FOR_EXTRACT.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                       </select>
                     </div>
                     <div>
