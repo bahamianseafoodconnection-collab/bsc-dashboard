@@ -63,23 +63,30 @@ export async function GET(req: NextRequest) {
     ids.length ? admin.from('directive_instances').select('id, directive_id').in('directive_id', ids) : Promise.resolve({ data: [] }),
   ]);
   const instIds = (insts ?? []).map((i: { id: string }) => i.id);
-  const { data: rcpts } = instIds.length ? await admin.from('directive_receipts').select('instance_id, seen_at, done_at').in('instance_id', instIds) : { data: [] };
+  const { data: rcpts } = instIds.length ? await admin.from('directive_receipts').select('instance_id, seen_at, done_at, user_id').in('instance_id', instIds) : { data: [] };
   const instToDir = new Map((insts ?? []).map((i: { id: string; directive_id: string }) => [i.id, i.directive_id]));
+
+  // Picker data + a name map so receipts can show WHO marked done.
+  const { data: staff } = await admin.from('users').select('id, full_name, email, role').eq('is_active', true).order('full_name');
+  const { data: locs }  = await admin.from('inventory_locations').select('code, name').eq('is_active', true).order('name');
+  const nameById = new Map((staff ?? []).map((s: { id: string; full_name: string | null; email: string | null }) => [s.id, s.full_name || s.email || 'Staff']));
+
   const seenBy = new Map<string, number>(), doneBy = new Map<string, number>();
-  for (const r of (rcpts ?? []) as { instance_id: string; seen_at: string | null; done_at: string | null }[]) {
+  const doneRcptsBy = new Map<string, Array<{ name: string; done_at: string }>>();
+  for (const r of (rcpts ?? []) as { instance_id: string; seen_at: string | null; done_at: string | null; user_id: string }[]) {
     const dir = instToDir.get(r.instance_id); if (!dir) continue;
     if (r.seen_at) seenBy.set(dir, (seenBy.get(dir) ?? 0) + 1);
-    if (r.done_at) doneBy.set(dir, (doneBy.get(dir) ?? 0) + 1);
+    if (r.done_at) {
+      doneBy.set(dir, (doneBy.get(dir) ?? 0) + 1);
+      const a = doneRcptsBy.get(dir) ?? []; a.push({ name: nameById.get(r.user_id) ?? 'Staff', done_at: r.done_at }); doneRcptsBy.set(dir, a);
+    }
   }
   const tByDir = new Map<string, Array<{ target_type: string; target_value: string }>>();
   for (const t of (tgts ?? []) as { directive_id: string; target_type: string; target_value: string }[]) {
     const a = tByDir.get(t.directive_id) ?? []; a.push({ target_type: t.target_type, target_value: t.target_value }); tByDir.set(t.directive_id, a);
   }
-  const out = (dirs ?? []).map((d: { id: string }) => ({ ...d, targets: tByDir.get(d.id) ?? [], seen_count: seenBy.get(d.id) ?? 0, done_count: doneBy.get(d.id) ?? 0 }));
+  const out = (dirs ?? []).map((d: { id: string }) => ({ ...d, targets: tByDir.get(d.id) ?? [], seen_count: seenBy.get(d.id) ?? 0, done_count: doneBy.get(d.id) ?? 0, done_receipts: doneRcptsBy.get(d.id) ?? [] }));
 
-  // Picker data for the composer: active staff (named-user targets), roles, locations.
-  const { data: staff } = await admin.from('users').select('id, full_name, email, role').eq('is_active', true).order('full_name');
-  const { data: locs }  = await admin.from('inventory_locations').select('code, name').eq('is_active', true).order('name');
   return NextResponse.json({ ok: true, directives: out, staff: staff ?? [], locations: locs ?? [] });
 }
 
