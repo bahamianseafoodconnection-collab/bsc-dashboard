@@ -153,11 +153,15 @@ export async function POST(req: NextRequest) {
       bub.setMonth(bub.getMonth() + months);
       const bestUsedBy = bub.toISOString().slice(0, 10);
 
-      // Record the freezer removal (best-effort weight reconcile).
+      // Record the freezer removal (best-effort weight reconcile). `reason`
+      // (defrost_for_processing / bsc_sales / external_order) is captured as the
+      // purpose so the audit shows WHY; `storage_location` carries the freezer
+      // it was pulled from (Holding / Blast).
       if (wt && wt > 0) {
         await admin.from('spinytails_freezer_removals').insert({
-          batch_number: batch, lot_id: lotId, weight_removed_lbs: wt,
-          purpose: destination === 'retail' ? 'retail' : 'processing',
+          batch_number: batch, lot_id: lotId, product_name: str(b.product_name),
+          weight_removed_lbs: wt,
+          purpose: str(b.reason) ?? (destination === 'retail' ? 'retail' : 'processing'),
           storage_location: str(b.storage_location), employee_id: user.id, device_id: str(b.device_id),
         });
       }

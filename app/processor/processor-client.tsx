@@ -18,6 +18,12 @@ interface Supplier { id: string; code: string | null; name: string; }
 interface SupProduct { sku: string; name: string; }
 interface Loc { code: string; name: string; }
 interface FeedRow { lot_code: string; species: string; status: string; created_at: string; boat: string; weight: number | null; who: string; }
+interface FreezerLot { lot_id: string; batch_number: string; status: string; receipt_date: string | null; product_name: string; species_name: string | null; catch_location: string | null; current_freezer: string | null; boat: string | null; captain: string | null; registration: string | null; registration_cert_url: string | null; received_lbs: number; removed_lbs: number; remaining_lbs: number; }
+const PULL_REASONS: { value: string; label: string; destination: 'processing' | 'retail' }[] = [
+  { value: 'defrost_for_processing', label: '🧊 Defrost for processing', destination: 'processing' },
+  { value: 'bsc_sales',              label: '🛒 BSC sales',             destination: 'retail' },
+  { value: 'external_order',         label: '📦 External order',        destination: 'retail' },
+];
 type QC = { discoloration: boolean; egg_bearing: boolean; softshell_damage: boolean; undersized: boolean; odor: boolean };
 const QC_FIELDS: { k: keyof QC; label: string }[] = [
   { k: 'discoloration', label: 'Discoloration' }, { k: 'egg_bearing', label: 'Egg-bearing' },
@@ -52,8 +58,15 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [invSupplierId, setInvSupplierId] = useState('');
   const [supProducts, setSupProducts] = useState<SupProduct[]>([]);
   const [invSku, setInvSku] = useState(''); const [invQty, setInvQty] = useState(''); const [invCost, setInvCost] = useState(''); const [invLoc, setInvLoc] = useState(''); const [invInvoice, setInvInvoice] = useState('');
+  // Card 3 — remove from freezer
+  const [freezerLots, setFreezerLots] = useState<FreezerLot[]>([]);
+  const [pullLotId, setPullLotId] = useState('');
+  const [pullFreezer, setPullFreezer] = useState<'Holding' | 'Blast'>('Holding');
+  const [pullReason, setPullReason] = useState('');
+  const [pullWeight, setPullWeight] = useState('');
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
+  const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
 
   const loadVessels = useCallback(async () => {
     const { data } = await supabase.from('spinytails_vessels').select(VESSEL_COLS).eq('status', 'approved').order('vessel_name');
@@ -90,6 +103,13 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     })));
   }, []);
 
+  const loadFreezerLots = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/processor/freezer-lots', { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
+    const j = await res.json().catch(() => ({ ok: false }));
+    setFreezerLots(j.ok ? (j.lots as FreezerLot[]) : []);
+  }, []);
+
   useEffect(() => { (async () => {
     const [{ data: sp }, { data: sup }, { data: locs }] = await Promise.all([
       supabase.from('spinytails_species').select('code, name').order('name'),
@@ -98,8 +118,8 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     ]);
     setSpecies((sp ?? []) as Species[]);
     setSuppliers((sup ?? []) as Supplier[]); setLocations((locs ?? []) as Loc[]);
-    await loadVessels(); await loadFeed();
-  })(); }, [loadVessels, loadFeed]);
+    await loadVessels(); await loadFeed(); await loadFreezerLots();
+  })(); }, [loadVessels, loadFeed, loadFreezerLots]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
 
@@ -112,13 +132,14 @@ export default function ProcessorClient({ displayName }: { userId: string; email
 
   function flash(ok: boolean, text: string) { setMsg({ ok, text }); setTimeout(() => setMsg(null), 6000); }
 
-  async function viewCert() {
-    const path = vessel?.registration_cert_url; if (!path) { flash(false, 'No cert on file for this boat.'); return; }
+  async function openCert(path: string | null) {
+    if (!path) { flash(false, 'No cert on file for this boat.'); return; }
     if (/^https?:\/\//.test(path)) { window.open(path, '_blank'); return; }
     const { data, error } = await supabase.storage.from('vessel-certs').createSignedUrl(path, 3600);
     if (error || !data) { flash(false, 'Could not open cert.'); return; }
     window.open(data.signedUrl, '_blank');
   }
+  const viewCert = () => openCert(vessel?.registration_cert_url ?? null);
 
   async function addBoat() {
     if (!nbName.trim() || !nbReg.trim()) { flash(false, 'Boat name + registration required.'); return; }
@@ -198,6 +219,32 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       flash(true, `✓ ${invQty} × ${supProducts.find(p => p.sku === invSku)?.name ?? invSku} → ${locations.find(l => l.code === invLoc)?.name}`);
       setInvQty(''); setInvCost(''); setInvInvoice(''); setInvSku('');
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Intake failed'); }
+    finally { setBusy(false); }
+  }
+
+  async function submitPull() {
+    if (!pullLot) { flash(false, 'Select a batch.'); return; }
+    if (!pullReason) { flash(false, 'Pick a reason.'); return; }
+    const wt = parseFloat(pullWeight);
+    if (!(wt > 0)) { flash(false, 'Enter weight to remove.'); return; }
+    const reason = PULL_REASONS.find(r => r.value === pullReason);
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({
+          action: 'pull', lot_id: pullLot.lot_id, batch_number: pullLot.batch_number,
+          pulled_weight_lbs: wt, destination: reason?.destination ?? 'processing', reason: pullReason,
+          storage_location: pullFreezer, product_name: pullLot.product_name, device_id: 'PROCESSOR-CARD-3',
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(true, `✓ Pulled ${wt} lb · ${pullLot.product_name} (${pullLot.batch_number}) from ${pullFreezer} — ${reason?.label.replace(/^\S+\s/, '')}`);
+      setPullWeight(''); setPullReason(''); setPullLotId('');
+      await loadFreezerLots(); await loadFeed();
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Pull failed'); }
     finally { setBusy(false); }
   }
 
@@ -317,6 +364,50 @@ export default function ProcessorClient({ displayName }: { userId: string; email
             </div>
             <div><div style={lbl}>Invoice # (optional)</div><input value={invInvoice} onChange={e => setInvInvoice(e.target.value)} style={inp} /></div>
             <button onClick={submitInventory} disabled={busy} style={{ width: '100%', marginTop: 10, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: busy ? '#6b7280' : GOLD, color: NAVY, border: 'none', cursor: busy ? 'wait' : 'pointer' }}>{busy ? 'Working…' : '✓ Receive into inventory'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 3 — remove from freezer (Holding or Blast) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>3 · 🧊 Remove from freezer</div>
+        {freezerLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>No batches in a freezer yet. Receive raw product (Card 1) — it lands here once it&apos;s in the receiving freezer.</div>
+        ) : (
+          <>
+            <div style={lbl}>Batch</div>
+            <select value={pullLotId} onChange={e => setPullLotId(e.target.value)} style={inp}>
+              <option value="">— select batch —</option>
+              {freezerLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name} · {l.remaining_lbs} lb left</option>)}
+            </select>
+
+            {pullLot && (
+              <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <b style={{ color: GOLD }}>{pullLot.batch_number}</b>
+                  <button onClick={() => openCert(pullLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: pullLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: pullLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {pullLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
+                </div>
+                <div>🦞 {pullLot.product_name}{pullLot.species_name && pullLot.species_name !== pullLot.product_name ? ` · ${pullLot.species_name}` : ''}</div>
+                <div>📅 Received {pullLot.receipt_date ?? '—'} · 🧊 {pullLot.current_freezer ?? 'freezer'} · {pullLot.status.replace(/_/g, ' ')}</div>
+                <div>🚤 {pullLot.boat ?? '—'} · 👤 {pullLot.captain ?? '—'} · 🪪 {pullLot.registration ?? 'no reg'}</div>
+                <div>📍 Catch: {pullLot.catch_location ?? '—'}</div>
+                <div style={{ color: '#8ea3c0' }}>⚖️ {pullLot.received_lbs} lb received · {pullLot.removed_lbs} lb removed · <b style={{ color: '#4ade80' }}>{pullLot.remaining_lbs} lb remaining</b></div>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div><div style={lbl}>From freezer</div>
+                <select value={pullFreezer} onChange={e => setPullFreezer(e.target.value as 'Holding' | 'Blast')} style={inp}>
+                  <option value="Holding">Holding</option><option value="Blast">Blast</option>
+                </select></div>
+              <div><div style={lbl}>Weight to remove (lb)</div><input type="number" inputMode="decimal" value={pullWeight} onChange={e => setPullWeight(e.target.value)} style={inp} /></div>
+            </div>
+            <div style={{ marginTop: 10 }}><div style={lbl}>Reason</div>
+              <select value={pullReason} onChange={e => setPullReason(e.target.value)} style={inp}>
+                <option value="">— why —</option>
+                {PULL_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select></div>
+            <button onClick={submitPull} disabled={busy || !pullLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !pullLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !pullLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🧊 Remove from freezer'}</button>
           </>
         )}
       </div>
