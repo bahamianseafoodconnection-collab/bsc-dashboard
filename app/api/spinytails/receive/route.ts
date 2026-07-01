@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
       receipt_date:             receiptDate,
       vessel_id:                vesselId,
       daily_sequence:           seq,
-      status:                   decision === 'reject' ? 'rejected' : 'received',
+      status:                   decision === 'reject' ? 'rejected' : 'in_receiving_freezer',
       rejected_at:              decision === 'reject' ? new Date().toISOString() : null,
       rejected_reason:          decision === 'reject' ? (str(b.reject_reason) ?? 'QC rejected at intake — held/quarantine') : null,
       color_strap:              colorStrap,
