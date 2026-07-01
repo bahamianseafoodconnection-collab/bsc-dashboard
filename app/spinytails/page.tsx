@@ -43,6 +43,10 @@ export default function SpinytailsHubPage() {
     const b = batchQuery.trim();
     if (b) window.location.href = `/spinytails/batch/${encodeURIComponent(b)}`;
   }
+  function openFisheriesPacket() {
+    const b = batchQuery.trim();
+    if (b) window.location.href = `/founder/fisheries-export/${encodeURIComponent(b)}`;
+  }
 
   async function sendSsopDigest() {
     setSsopBusy(true); setSsopToast(null);
@@ -153,6 +157,8 @@ export default function SpinytailsHubPage() {
               style={{ flex: 1, background: 'rgba(0,0,0,0.25)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 9, padding: '10px 12px', fontSize: 13, fontFamily: 'monospace' }} />
             <button onClick={openBatchPull} disabled={!batchQuery.trim()}
               style={{ background: '#f5c518', color: '#060d1f', border: 'none', borderRadius: 9, padding: '10px 16px', fontWeight: 900, fontSize: 13, cursor: batchQuery.trim() ? 'pointer' : 'not-allowed', opacity: batchQuery.trim() ? 1 : 0.5 }}>Pull →</button>
+            <button onClick={openFisheriesPacket} disabled={!batchQuery.trim()} title="Bahamas Fisheries export packet (7-record PDF)"
+              style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: '1px solid #60a5fa', borderRadius: 9, padding: '10px 14px', fontWeight: 900, fontSize: 13, cursor: batchQuery.trim() ? 'pointer' : 'not-allowed', opacity: batchQuery.trim() ? 1 : 0.5 }}>📋 Packet</button>
           </div>
         </div>
 
@@ -219,6 +225,7 @@ export default function SpinytailsHubPage() {
             <NavTile href="/spinytails/grading"    icon="📏" label="Walk-in grading"       hint="Lobster · grade by size → 10-lb cases" />
             <NavTile href="/spinytails/conch-packing" icon="🐚" label="Conch packing"       hint="Clean 80/90/95% → 15/20/50-lb master cases" />
             <NavTile href="/spinytails/inventory"  icon="📦" label="Finished inventory"    hint="On-hand counts · FIFO expiry · scan-out" />
+            <NavTile href="/spinytails/sanitation" icon="🧼" label="Daily sanitation (SSOP)" hint="Start + end of day P/F checklist" />
             <NavTile href="/spinytails/steps"     icon="📚" label="Step-by-step SOPs"      hint="Walkthrough of all 11 steps + CCPs" />
             <NavTile href="/spinytails/documents" icon="📜" label="Document library"       hint="SOP · SSOP · HACCP · upload + versioning" />
             <NavTile href="/spinytails/audits"    icon="🔐" label="Inspector audit access" hint="Token + QR for BAHFSA / Customs / Marine Resources" />
