@@ -14,6 +14,9 @@ const NAVY = '#060e1c', GOLD = '#c8860f';
 
 interface Vessel { id: string; vessel_code: string; vessel_name: string | null; fisherman_name: string; captain_name: string | null; license_number: string | null; color_tag: string | null; registration_cert_url: string | null; }
 interface Species { code: string; name: string; }
+interface Supplier { id: string; code: string | null; name: string; }
+interface SupProduct { sku: string; name: string; }
+interface Loc { code: string; name: string; }
 interface FeedRow { lot_code: string; species: string; status: string; created_at: string; boat: string; weight: number | null; who: string; }
 type QC = { discoloration: boolean; egg_bearing: boolean; softshell_damage: boolean; undersized: boolean; odor: boolean };
 const QC_FIELDS: { k: keyof QC; label: string }[] = [
@@ -43,6 +46,12 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   // inline add-boat
   const [addOpen, setAddOpen] = useState(false);
   const [nbName, setNbName] = useState(''); const [nbReg, setNbReg] = useState(''); const [nbCaptain, setNbCaptain] = useState(''); const [nbCert, setNbCert] = useState<File | null>(null);
+  // Card 2 — inventory intake (finished product from supplier)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [locations, setLocations] = useState<Loc[]>([]);
+  const [invSupplierId, setInvSupplierId] = useState('');
+  const [supProducts, setSupProducts] = useState<SupProduct[]>([]);
+  const [invSku, setInvSku] = useState(''); const [invQty, setInvQty] = useState(''); const [invCost, setInvCost] = useState(''); const [invLoc, setInvLoc] = useState(''); const [invInvoice, setInvInvoice] = useState('');
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
 
@@ -82,12 +91,24 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   }, []);
 
   useEffect(() => { (async () => {
-    const { data: sp } = await supabase.from('spinytails_species').select('code, name').order('name');
+    const [{ data: sp }, { data: sup }, { data: locs }] = await Promise.all([
+      supabase.from('spinytails_species').select('code, name').order('name'),
+      supabase.from('suppliers').select('id, code, name').order('name'),
+      supabase.from('inventory_locations').select('code, name').eq('is_active', true).order('name'),
+    ]);
     setSpecies((sp ?? []) as Species[]);
+    setSuppliers((sup ?? []) as Supplier[]); setLocations((locs ?? []) as Loc[]);
     await loadVessels(); await loadFeed();
   })(); }, [loadVessels, loadFeed]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
+
+  // Card 2: load the selected supplier's products.
+  useEffect(() => { (async () => {
+    if (!invSupplierId) { setSupProducts([]); return; }
+    const { data } = await supabase.from('products').select('sku, name').eq('primary_supplier_id', invSupplierId).order('name');
+    setSupProducts((data ?? []) as SupProduct[]); setInvSku('');
+  })(); }, [invSupplierId]);
 
   function flash(ok: boolean, text: string) { setMsg({ ok, text }); setTimeout(() => setMsg(null), 6000); }
 
@@ -157,6 +178,26 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       setQc({ discoloration: false, egg_bearing: false, softshell_damage: false, undersized: false, odor: false });
       await loadFeed();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Take-in failed'); }
+    finally { setBusy(false); }
+  }
+
+  async function submitInventory() {
+    if (!invSku) { flash(false, 'Select a product.'); return; }
+    if (!(parseFloat(invQty) > 0)) { flash(false, 'Enter quantity.'); return; }
+    if (!invLoc) { flash(false, 'Select a location.'); return; }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const supplier = suppliers.find(s => s.id === invSupplierId);
+      const res = await fetch('/api/processor/inventory-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ sku: invSku, quantity: parseFloat(invQty), to_location_code: invLoc, supplier_code: supplier?.code ?? null, cost_per_unit: invCost ? parseFloat(invCost) : null, invoice_number: invInvoice || null }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(true, `✓ ${invQty} × ${supProducts.find(p => p.sku === invSku)?.name ?? invSku} → ${locations.find(l => l.code === invLoc)?.name}`);
+      setInvQty(''); setInvCost(''); setInvInvoice(''); setInvSku('');
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Intake failed'); }
     finally { setBusy(false); }
   }
 
@@ -254,6 +295,30 @@ export default function ProcessorClient({ displayName }: { userId: string; email
           <button onClick={() => takeIn('reject')} disabled={busy} style={{ flex: 1, padding: 15, borderRadius: 12, fontWeight: 900, fontSize: 15, background: 'transparent', color: '#f87171', border: '2px solid #dc2626', cursor: busy ? 'wait' : 'pointer' }}>⛔ Reject → hold</button>
           <button onClick={() => takeIn('accept')} disabled={busy} style={{ flex: 2, padding: 15, borderRadius: 12, fontWeight: 900, fontSize: 16, background: busy ? '#6b7280' : GOLD, color: NAVY, border: 'none', cursor: busy ? 'wait' : 'pointer' }}>{busy ? 'Working…' : '✓ Accept → batch → freezer'}</button>
         </div>
+      </div>
+
+      {/* CARD 2 — inventory intake: finished product from supplier */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>2 · 📦 Inventory intake — finished product from supplier</div>
+        {locations.length === 0 ? (
+          <div style={{ color: '#fbbf24', fontSize: 13 }}>⚠ No inventory location set up yet — add one first (founder) before receiving supplier stock.</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><div style={lbl}>Supplier</div>
+                <select value={invSupplierId} onChange={e => setInvSupplierId(e.target.value)} style={inp}><option value="">— supplier —</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+              <div><div style={lbl}>Product</div>
+                <select value={invSku} onChange={e => setInvSku(e.target.value)} style={inp} disabled={!invSupplierId}><option value="">{invSupplierId ? '— product —' : 'pick supplier first'}</option>{supProducts.map(p => <option key={p.sku} value={p.sku}>{p.name}</option>)}</select></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div><div style={lbl}>Quantity</div><input type="number" inputMode="decimal" value={invQty} onChange={e => setInvQty(e.target.value)} style={inp} /></div>
+              <div><div style={lbl}>Cost / unit ($)</div><input type="number" inputMode="decimal" value={invCost} onChange={e => setInvCost(e.target.value)} placeholder="blank = current" style={inp} /></div>
+              <div><div style={lbl}>Location</div><select value={invLoc} onChange={e => setInvLoc(e.target.value)} style={inp}><option value="">— where —</option>{locations.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></div>
+            </div>
+            <div><div style={lbl}>Invoice # (optional)</div><input value={invInvoice} onChange={e => setInvInvoice(e.target.value)} style={inp} /></div>
+            <button onClick={submitInventory} disabled={busy} style={{ width: '100%', marginTop: 10, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: busy ? '#6b7280' : GOLD, color: NAVY, border: 'none', cursor: busy ? 'wait' : 'pointer' }}>{busy ? 'Working…' : '✓ Receive into inventory'}</button>
+          </>
+        )}
       </div>
 
       {/* Live activity feed (founder-visible) */}
