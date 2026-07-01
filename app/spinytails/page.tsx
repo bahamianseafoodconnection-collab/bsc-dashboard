@@ -214,6 +214,9 @@ export default function SpinytailsHubPage() {
             <NavTile href="/spinytails/intake"    icon="📥" label="New intake (Step 1-2)"  hint="Receive lobster, generate lot code, run CCP-1" />
             <NavTile href="/spinytails/vessels"   icon="🛥"  label="Vessels"                hint="Registry + color tags" />
             <NavTile href="/spinytails/freezer-log" icon="🌡️" label="Freezer temp log"      hint="Blast + holding · 3×/day" />
+            <NavTile href="/spinytails/defrost"    icon="🧊" label="Pull + Defrost"        hint="Pull from holding · ice-bath 32°F hourly" />
+            <NavTile href="/spinytails/processing" icon="⚙️" label="Processing"            hint="Devein · sleeve · blast + tray labels" />
+            <NavTile href="/spinytails/grading"    icon="📏" label="Walk-in grading"       hint="Grade by size → 10-lb cases → holding" />
             <NavTile href="/spinytails/steps"     icon="📚" label="Step-by-step SOPs"      hint="Walkthrough of all 11 steps + CCPs" />
             <NavTile href="/spinytails/documents" icon="📜" label="Document library"       hint="SOP · SSOP · HACCP · upload + versioning" />
             <NavTile href="/spinytails/audits"    icon="🔐" label="Inspector audit access" hint="Token + QR for BAHFSA / Customs / Marine Resources" />

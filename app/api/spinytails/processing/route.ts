@@ -1,7 +1,9 @@
 // /api/spinytails/processing
 //
-// Processing Station device endpoint (Phase 3). One route, seven actions:
+// Processing Station device endpoint (Phase 3). One route, eight actions:
 //   • blast_temp — blast-freezer start temp log vs −10°F (start of the 24h clock).
+//   • grade — walk-in grading: per-size counts → one spinytails_cases row per
+//     10-lb box + inventory 'in' (0°F holding) + lot → 'mastered'.
 //   • freezer_removal — record a freezer pull (purpose + tray/rack/freezer) and
 //     reconcile weight: received vs already-removed vs remaining.
 //   • pull    — pull from holding: starts the expiry clock (date_pulled +
@@ -55,6 +57,7 @@ export async function POST(req: NextRequest) {
   const action = String(b.action ?? '');
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const bool = (v: unknown) => v === true;
   const lotId = str(b.lot_id);
   const batch = str(b.batch_number);
   if (!lotId || !batch) return NextResponse.json({ ok: false, error: 'lot_id + batch_number required' }, { status: 400 });
@@ -204,6 +207,73 @@ export async function POST(req: NextRequest) {
       });
       if (error) err = error.message;
       else resp = { within_limit: within, target_f: target, reading_f: reading };
+
+    } else if (action === 'grade') {
+      // WALK-IN GRADING → box. Records per-size grade counts (spinytails_batch_grades),
+      // creates one spinytails_cases row per 10-lb box, logs an inventory 'in'
+      // movement into 0°F holding, flips the lot to 'mastered'. Optional walk-in temp.
+      let pbId = str(b.processing_batch_id);
+      if (!pbId) {
+        const { data: pb } = await admin.from('spinytails_processing_batches')
+          .select('id').eq('lot_id', lotId).order('started_at', { ascending: false }).limit(1).maybeSingle<{ id: string }>();
+        pbId = pb?.id ?? null;
+      }
+      const grades = Array.isArray(b.grades) ? b.grades as Array<Record<string, unknown>> : [];
+      const productType = str(b.product_type) ?? 'lobster';
+      const freezerLoc  = str(b.holding_freezer_location) ?? str(b.freezer_location);
+      const sulfite     = bool(b.sulfite);
+
+      // Optional walk-in temperature (processing room, when pulled from blast).
+      const walkinTemp = num(b.walkin_temp_f);
+      if (walkinTemp != null) {
+        await admin.from('spinytails_temperature_logs').insert({
+          logged_at: nowIso, location: 'processing_room_ambient', lot_id: lotId,
+          reading_f: walkinTemp, within_limit: true, recorded_by: user.id, notes: 'Walk-in grading pull',
+        });
+      }
+
+      // Lot context → case fields (best-used-by, packed_by, certs).
+      const { data: lotRow } = await admin.from('spinytails_lots')
+        .select('best_used_by, date_pulled, cites_cert_no, inspection_cert_no')
+        .eq('id', lotId).maybeSingle<{ best_used_by: string | null; date_pulled: string | null; cites_cert_no: string | null; inspection_cert_no: string | null }>();
+      const packedBy = lotRow?.date_pulled ? String(lotRow.date_pulled).slice(0, 10) : nowIso.slice(0, 10);
+
+      const casesToInsert: Record<string, unknown>[] = [];
+      const gradeRows: Record<string, unknown>[] = [];
+      let boxedLbs = 0;
+      for (const g of grades) {
+        const grade = str(g.grade);
+        const boxes = num(g.box_count) ?? 0;
+        if (!grade || boxes <= 0) continue;
+        const wt = num(g.weight_lbs) ?? boxes * 10;
+        if (pbId) gradeRows.push({ batch_id: pbId, grade, weight_lbs: wt, box_count: boxes });
+        for (let i = 1; i <= boxes; i++) {
+          const caseCode = `${batch}-${grade}-${String(i).padStart(2, '0')}`;
+          casesToInsert.push({
+            lot_id: lotId, case_code: caseCode, product_type: productType, grade,
+            net_weight_lbs: 10, sulfite, packed_by: packedBy, best_used_by: lotRow?.best_used_by ?? null,
+            cites_cert_no: lotRow?.cites_cert_no ?? null, inspection_cert_no: lotRow?.inspection_cert_no ?? null,
+            barcode: caseCode, freezer_location: freezerLoc, status: 'in_holding', created_by: user.id,
+          });
+          boxedLbs += 10;
+        }
+      }
+      if (casesToInsert.length === 0) return NextResponse.json({ ok: false, error: 'Enter at least one graded size with a box count.' }, { status: 400 });
+
+      if (gradeRows.length) await admin.from('spinytails_batch_grades').insert(gradeRows);
+      const { data: insertedCases, error } = await admin.from('spinytails_cases').insert(casesToInsert).select('id, case_code, grade');
+      if (error) err = error.message;
+      else {
+        const inserted = (insertedCases ?? []) as Array<{ id: string; case_code: string; grade: string }>;
+        await admin.from('spinytails_inventory').insert(inserted.map((c) => ({
+          lot_id: lotId, case_id: c.id, direction: 'in', freezer: 'holding',
+          product_type: productType, grade: c.grade, qty_cases: 1,
+          scanned_barcode: c.case_code, employee_id: user.id,
+        })));
+        await admin.from('spinytails_lots').update({ status: 'mastered', holding_freezer_location: freezerLoc }).eq('id', lotId);
+        const received = await receivedLbs(admin, lotId);
+        resp = { cases_created: inserted.length, boxed_lbs: boxedLbs, received_lbs: received, yield_lbs: r2(received - boxedLbs), cases: inserted };
+      }
 
     } else {
       return NextResponse.json({ ok: false, error: `Unknown action "${action}"` }, { status: 400 });
