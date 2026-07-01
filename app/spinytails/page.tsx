@@ -218,6 +218,7 @@ export default function SpinytailsHubPage() {
             <NavTile href="/spinytails/processing" icon="⚙️" label="Processing"            hint="Devein · sleeve · blast + tray labels" />
             <NavTile href="/spinytails/grading"    icon="📏" label="Walk-in grading"       hint="Lobster · grade by size → 10-lb cases" />
             <NavTile href="/spinytails/conch-packing" icon="🐚" label="Conch packing"       hint="Clean 80/90/95% → 15/20/50-lb master cases" />
+            <NavTile href="/spinytails/inventory"  icon="📦" label="Finished inventory"    hint="On-hand counts · FIFO expiry · scan-out" />
             <NavTile href="/spinytails/steps"     icon="📚" label="Step-by-step SOPs"      hint="Walkthrough of all 11 steps + CCPs" />
             <NavTile href="/spinytails/documents" icon="📜" label="Document library"       hint="SOP · SSOP · HACCP · upload + versioning" />
             <NavTile href="/spinytails/audits"    icon="🔐" label="Inspector audit access" hint="Token + QR for BAHFSA / Customs / Marine Resources" />
