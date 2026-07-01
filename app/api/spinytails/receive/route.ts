@@ -107,6 +107,8 @@ export async function POST(req: NextRequest) {
   const colorStrapReused = bool(b.color_strap_reused);
   const holdingLocation  = str(b.holding_freezer_location);
   const lotBagNo         = str(b.lot_bag_no);
+  const purchaseCost     = num(b.purchase_cost);           // supplier / direct purchase cost of the raw batch
+  const decision         = b.decision === 'reject' ? 'reject' : 'accept';
   const rq = (b.receiving_qc && typeof b.receiving_qc === 'object') ? b.receiving_qc as Record<string, unknown> : {};
 
   // ── Insert lot (lot_code = batch_number) + intake + receiving-QC ──────────
@@ -120,7 +122,9 @@ export async function POST(req: NextRequest) {
       receipt_date:             receiptDate,
       vessel_id:                vesselId,
       daily_sequence:           seq,
-      status:                   'received',
+      status:                   decision === 'reject' ? 'rejected' : 'received',
+      rejected_at:              decision === 'reject' ? new Date().toISOString() : null,
+      rejected_reason:          decision === 'reject' ? (str(b.reject_reason) ?? 'QC rejected at intake — held/quarantine') : null,
       color_strap:              colorStrap,
       color_strap_reused:       colorStrapReused,
       holding_freezer_location: holdingLocation,
@@ -132,6 +136,7 @@ export async function POST(req: NextRequest) {
         lot_id:                 lotId,
         intake_time:            new Date().toISOString(),
         quantity_lbs:           qty,
+        purchase_cost:          purchaseCost,
         product_state:          state,
         core_temp_f_at_receipt: coreTemp,
         fishing_area:           str(b.fishing_area),
@@ -199,6 +204,7 @@ export async function POST(req: NextRequest) {
     batch_number: batchNumber,
     lot_id: lotId,
     qc_pass: qcPass,
+    decision,
     ccp_warnings: ccpWarnings,
     label: {
       batch_number: batchNumber,
