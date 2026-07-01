@@ -3,8 +3,10 @@
 // /spinytails/processing — Processing Station device (Phase 3)
 //
 // Freezer removal (purpose + weight reconciliation) → start processing (DB
-// no-mixing lock) → ordered species steps → completion (yield/loss/remaining)
-// → tray label. The permanent batch number threads through unchanged.
+// no-mixing lock) → ordered species steps (devein / sleeve …, optional weight)
+// → completion (yield/loss/remaining) + blast-freezer start temp (−10°F) →
+// one label per tray (30–40 lb). The permanent batch number threads through
+// unchanged.
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
@@ -13,12 +15,9 @@ import { printLabels } from '@/lib/label-print';
 
 export const dynamic = 'force-dynamic';
 
-interface Lot { id: string; batch_number: string | null; lot_code: string; species_code: string | null; status: string; }
+interface Lot { id: string; batch_number: string | null; lot_code: string; species_code: string | null; status: string; color_strap: string | null; }
 interface Species { code: string; name: string; processing_types: string[]; }
 const DEVICE_ID = 'PROCESSING-STATION-1';
-// Reason a product is pulled from the freezer (founder spec 2026-06-29):
-// deveine+sleeve for blast freeze · for a Nassau POS / online order · any
-// other processing stage. Free-text in the DB; this is the operator picklist.
 const PURPOSES = ['deveine_sleeve_blast','pos_nassau','online_order','pos_andros','wholesale','export','other_processing','sampling','qc','disposal'];
 
 export default function ProcessingStationPage() {
@@ -38,10 +37,13 @@ export default function ProcessingStationPage() {
   const [pbId, setPbId] = useState<string | null>(null);
   const [startWt, setStartWt] = useState('');
   const [steps, setSteps] = useState<string[]>([]);
-  // complete
+  const [stepWeight, setStepWeight] = useState(''); // optional weight for the next step tapped (e.g. weight after veining)
+  // complete + blast
   const [finName, setFinName] = useState(''); const [finWt, setFinWt] = useState(''); const [pkgs, setPkgs] = useState('');
   const [cTray, setCTray] = useState(''); const [cRack, setCRack] = useState(''); const [cFreezer, setCFreezer] = useState('');
-  const [done, setDone] = useState<{ yield_pct: number | null; loss: number | null; remaining: number | null } | null>(null);
+  const [blastTemp, setBlastTemp] = useState('');
+  const [numTrays, setNumTrays] = useState(''); const [lbPerTray, setLbPerTray] = useState('');
+  const [done, setDone] = useState<{ yield_pct: number | null; loss: number | null; remaining: number | null; blast_ok: boolean | null } | null>(null);
   const printedTray = useRef('');
 
   const lot = lots.find((l) => l.id === lotId);
@@ -53,7 +55,7 @@ export default function ProcessingStationPage() {
 
   async function load() {
     const [{ data: ls }, { data: sps }] = await Promise.all([
-      supabase.from('spinytails_lots').select('id, batch_number, lot_code, species_code, status')
+      supabase.from('spinytails_lots').select('id, batch_number, lot_code, species_code, status, color_strap')
         .in('status', ['received','in_receiving_freezer','thawing','processing']).order('receipt_date', { ascending: false }),
       supabase.from('spinytails_species').select('code, name, processing_types'),
     ]);
@@ -73,7 +75,7 @@ export default function ProcessingStationPage() {
   })(); }, []);
 
   async function selectLot(id: string) {
-    setLotId(id); setPbId(null); setSteps([]); setDone(null);
+    setLotId(id); setPbId(null); setSteps([]); setDone(null); setStepWeight(''); setBlastTemp(''); setNumTrays(''); setLbPerTray('');
     const l = lots.find((x) => x.id === id); if (!l) return;
     const bn = l.batch_number ?? l.lot_code;
     const [{ data: intakes }, { data: removals }] = await Promise.all([
@@ -119,10 +121,12 @@ export default function ProcessingStationPage() {
 
   async function recordStep(name: string) {
     setBusy(true);
-    const j = await call({ action: 'step', step_no: steps.length + 1, step_name: name });
+    const w = stepWeight ? parseFloat(stepWeight) : null;
+    const j = await call({ action: 'step', step_no: steps.length + 1, step_name: name, weight_lbs: Number.isFinite(w as number) ? w : null });
     setBusy(false);
     if (!j.ok) { flash(false, j.error); return; }
     setSteps((s) => [...s, name]);
+    setStepWeight('');
   }
 
   async function complete() {
@@ -132,20 +136,32 @@ export default function ProcessingStationPage() {
     const j = await call({ action: 'complete', processing_batch_id: pbId, finished_product_name: finName || sp?.name,
       finished_weight_lbs: parseFloat(finWt), packages_produced: pkgs ? parseInt(pkgs, 10) : null,
       tray_number: cTray || null, rack_number: cRack || null, blast_freezer_location: cFreezer || null });
+    if (!j.ok) { setBusy(false); flash(false, j.error); return; }
+    // Blast-freezer start temp (−10°F) — logged after the batch is completed into blast.
+    let blastOk: boolean | null = null;
+    if (blastTemp !== '' && Number.isFinite(parseFloat(blastTemp))) {
+      const bt = await call({ action: 'blast_temp', reading_f: parseFloat(blastTemp) });
+      if (bt.ok) blastOk = bt.within_limit;
+    }
     setBusy(false);
-    if (!j.ok) { flash(false, j.error); return; }
-    setDone({ yield_pct: j.yield_pct, loss: j.processing_loss_lbs, remaining: j.remaining_raw_lbs });
-    flash(true, `Complete · yield ${j.yield_pct ?? '—'}%`);
+    setDone({ yield_pct: j.yield_pct, loss: j.processing_loss_lbs, remaining: j.remaining_raw_lbs, blast_ok: blastOk });
+    flash(true, `Complete · yield ${j.yield_pct ?? '—'}%${blastOk === false ? ' · ⚠ blast not at −10°F' : ''}`);
     await load();
   }
 
-  function printTray() {
-    printLabels([{
+  function printTrays() {
+    const n = Math.max(1, parseInt(numTrays || '1', 10) || 1);
+    const per = lbPerTray || (finWt ? String(Math.round((parseFloat(finWt) / n) * 10) / 10) : '');
+    const labels = Array.from({ length: n }, (_, i) => ({
       title: 'TRAY', product_name: finName || sp?.name || '', batch_number: batch,
-      weight: finWt ? `${finWt} lb` : '', date: new Date().toLocaleDateString('en-US'),
-      tray_number: cTray, rack_number: cRack,
-      extra: [cFreezer ? { label: 'Blast Freezer', value: cFreezer } : { label: 'Species', value: sp?.name ?? '' }],
-    }], { widthIn: 4, heightIn: 6 });
+      weight: per ? `${per} lb` : '', date: new Date().toLocaleDateString('en-US'),
+      tray_number: `${i + 1} of ${n}`, rack_number: cRack,
+      extra: [
+        { label: 'Blast freezer', value: cFreezer || '—' },
+        ...(lot?.color_strap ? [{ label: 'Color strap', value: lot.color_strap }] : []),
+      ],
+    }));
+    printLabels(labels, { widthIn: 4, heightIn: 6 });
     printedTray.current = batch;
   }
 
@@ -206,9 +222,10 @@ export default function ProcessingStationPage() {
             </>
           ) : (
             <>
-              <div style={{ fontSize: 13, color: '#475569', marginBottom: 8 }}>Tap each step as completed:</div>
+              <div style={{ fontSize: 13, color: '#475569', marginBottom: 8 }}>Optional weight for the next step (e.g. weight after veining), then tap the step:</div>
+              <input type="number" inputMode="decimal" value={stepWeight} onChange={(e) => setStepWeight(e.target.value)} placeholder="weight after this step (lb) — optional" style={{ ...inp, marginTop: 0, marginBottom: 8 }} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {(sp?.processing_types ?? []).map((st, i) => {
+                {(sp?.processing_types ?? ['devein', 'sleeve']).map((st, i) => {
                   const recorded = steps.includes(st);
                   return <button key={i} onClick={() => recordStep(st)} disabled={busy || recorded} style={{ padding: '10px 14px', borderRadius: 10, fontWeight: 700, fontSize: 13, border: '2px solid', borderColor: recorded ? '#16a34a' : '#cbd5e1', background: recorded ? '#16a34a' : '#fff', color: recorded ? '#fff' : '#0b1628' }}>{recorded ? '✓ ' : ''}{st}</button>;
                 })}
@@ -218,10 +235,10 @@ export default function ProcessingStationPage() {
           )}
         </div>
 
-        {/* Completion */}
+        {/* Completion + blast */}
         {processing && (
           <div style={sec}>
-            <div style={lbl}>Completion</div>
+            <div style={lbl}>Completion → blast freeze (24h)</div>
             <input placeholder="Finished product name" value={finName} onChange={(e) => setFinName(e.target.value)} style={inp} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div><div style={lbl}>Finished weight (lb)</div><input type="number" inputMode="decimal" value={finWt} onChange={(e) => setFinWt(e.target.value)} style={inp} /></div>
@@ -232,18 +249,24 @@ export default function ProcessingStationPage() {
               <input placeholder="Rack #" value={cRack} onChange={(e) => setCRack(e.target.value)} style={inp} />
               <input placeholder="Blast freezer" value={cFreezer} onChange={(e) => setCFreezer(e.target.value)} style={inp} />
             </div>
-            <button onClick={complete} disabled={busy} style={{ ...inp, background: '#16a34a', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>✓ Complete processing</button>
+            <div><div style={lbl}>Blast-freezer start temp (°F · target −10)</div><input type="number" inputMode="decimal" value={blastTemp} onChange={(e) => setBlastTemp(e.target.value)} placeholder="-10" style={inp} /></div>
+            <button onClick={complete} disabled={busy} style={{ ...inp, background: '#16a34a', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>✓ Complete → into blast freezer</button>
           </div>
         )}
 
         {done && (
           <div style={{ ...sec, border: '2px solid #16a34a', background: '#f0fdf4' }}>
-            <div style={{ display: 'flex', gap: 16, fontSize: 15 }}>
+            <div style={{ display: 'flex', gap: 16, fontSize: 15, flexWrap: 'wrap' }}>
               <span>Yield <b>{done.yield_pct ?? '—'}%</b></span>
               <span>Loss <b>{done.loss ?? '—'} lb</b></span>
               <span>Remaining raw <b>{done.remaining ?? '—'} lb</b></span>
+              {done.blast_ok !== null && <span style={{ color: done.blast_ok ? '#15803d' : '#b91c1c', fontWeight: 800 }}>Blast {done.blast_ok ? '✓ −10°F' : '⚠ NOT at −10°F'}</span>}
             </div>
-            <button onClick={printTray} style={{ ...inp, background: '#0b1628', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>🖨 Print tray label (Rollo · batch + QR + barcode)</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div><div style={lbl}># Trays (30–40 lb each)</div><input type="number" inputMode="numeric" value={numTrays} onChange={(e) => setNumTrays(e.target.value)} placeholder="staff decides" style={inp} /></div>
+              <div><div style={lbl}>Lb per tray</div><input type="number" inputMode="decimal" value={lbPerTray} onChange={(e) => setLbPerTray(e.target.value)} placeholder="auto = finished ÷ trays" style={inp} /></div>
+            </div>
+            <button onClick={printTrays} style={{ ...inp, background: '#0b1628', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>🖨 Print tray labels (one per tray · batch + QR + barcode + weight)</button>
           </div>
         )}
       </>}

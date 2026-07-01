@@ -1,6 +1,7 @@
 // /api/spinytails/processing
 //
-// Processing Station device endpoint (Phase 3). One route, six actions:
+// Processing Station device endpoint (Phase 3). One route, seven actions:
+//   • blast_temp — blast-freezer start temp log vs −10°F (start of the 24h clock).
 //   • freezer_removal — record a freezer pull (purpose + tray/rack/freezer) and
 //     reconcile weight: received vs already-removed vs remaining.
 //   • pull    — pull from holding: starts the expiry clock (date_pulled +
@@ -179,6 +180,27 @@ export async function POST(req: NextRequest) {
         recorded_by:   user.id,
         action_if_fail: within ? null : (str(b.action_if_fail) ?? 'Add ice / adjust bath toward 32°F; re-check.'),
         notes:         str(b.notes),
+      });
+      if (error) err = error.message;
+      else resp = { within_limit: within, target_f: target, reading_f: reading };
+
+    } else if (action === 'blast_temp') {
+      // Blast-freezer start temperature. Target −10°F (must be at/below to start
+      // the 24h blast clock). Logged to temperature_logs at blast_freezer.
+      const reading = num(b.reading_f);
+      if (reading == null) return NextResponse.json({ ok: false, error: 'reading_f required' }, { status: 400 });
+      const target = -10;
+      const tol = num(b.tolerance_f) ?? 2;
+      const within = reading <= target + tol;
+      const { error } = await admin.from('spinytails_temperature_logs').insert({
+        logged_at:      str(b.logged_at) ?? nowIso,
+        location:       'blast_freezer',
+        lot_id:         lotId,
+        reading_f:      reading,
+        within_limit:   within,
+        recorded_by:    user.id,
+        action_if_fail: within ? null : (str(b.action_if_fail) ?? 'Blast not at −10°F — verify freezer; do not start the 24h clock until reached.'),
+        notes:          str(b.notes),
       });
       if (error) err = error.message;
       else resp = { within_limit: within, target_f: target, reading_f: reading };
