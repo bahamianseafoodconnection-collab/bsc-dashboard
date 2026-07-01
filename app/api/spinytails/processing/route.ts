@@ -1,8 +1,12 @@
 // /api/spinytails/processing
 //
-// Processing Station device endpoint (Phase 3). One route, four actions:
+// Processing Station device endpoint (Phase 3). One route, six actions:
 //   • freezer_removal — record a freezer pull (purpose + tray/rack/freezer) and
 //     reconcile weight: received vs already-removed vs remaining.
+//   • pull    — pull from holding: starts the expiry clock (date_pulled +
+//     best_used_by = date_pulled + species.shelf_life_months), routes by
+//     destination ('processing' → thawing, 'retail' → in_distribution).
+//   • defrost_temp — ice-bath (thaw_vat) hourly temperature log vs 32°F.
 //   • start    — begin processing a batch. Sets lot status='processing'; the
 //     DB partial-unique index (uq_spinytails_one_processing) enforces NO BATCH
 //     MIXING — only one lot may be 'processing' at a time. A 2nd start fails.
@@ -123,6 +127,62 @@ export async function POST(req: NextRequest) {
           processing_loss_lbs: loss, remaining_raw_lbs: r2(received - removed),
         };
       }
+    } else if (action === 'pull') {
+      // PULL FROM HOLDING → starts the expiry clock. Records the freezer pull,
+      // stamps date_pulled + best_used_by (= date_pulled + species.shelf_life_months),
+      // and routes by destination: 'processing' → thawing (defrost), 'retail' →
+      // in_distribution (skip processing, direct shipment).
+      const wt = num(b.pulled_weight_lbs) ?? num(b.weight_removed_lbs);
+      const destination = b.destination === 'retail' ? 'retail' : 'processing';
+      const pulledAt = str(b.pulled_at) ?? nowIso;
+
+      // Shelf life from the lot's species (default 24 months).
+      const { data: lotRow } = await admin.from('spinytails_lots').select('species_code').eq('id', lotId).maybeSingle<{ species_code: string | null }>();
+      let months = 24;
+      if (lotRow?.species_code) {
+        const { data: spRow } = await admin.from('spinytails_species').select('shelf_life_months').eq('code', lotRow.species_code).maybeSingle<{ shelf_life_months: number | null }>();
+        if (spRow?.shelf_life_months) months = spRow.shelf_life_months;
+      }
+      const bub = new Date(pulledAt);
+      bub.setMonth(bub.getMonth() + months);
+      const bestUsedBy = bub.toISOString().slice(0, 10);
+
+      // Record the freezer removal (best-effort weight reconcile).
+      if (wt && wt > 0) {
+        await admin.from('spinytails_freezer_removals').insert({
+          batch_number: batch, lot_id: lotId, weight_removed_lbs: wt,
+          purpose: destination === 'retail' ? 'retail' : 'processing',
+          storage_location: str(b.storage_location), employee_id: user.id, device_id: str(b.device_id),
+        });
+      }
+      const { error } = await admin.from('spinytails_lots').update({
+        date_pulled:  pulledAt,
+        best_used_by: bestUsedBy,
+        status:       destination === 'retail' ? 'in_distribution' : 'thawing',
+      }).eq('id', lotId);
+      if (error) err = error.message;
+      else resp = { date_pulled: pulledAt, best_used_by: bestUsedBy, shelf_life_months: months, destination, pulled_weight_lbs: wt };
+
+    } else if (action === 'defrost_temp') {
+      // Ice-bath (thaw_vat) hourly temperature log. Target 32°F ± tolerance.
+      const reading = num(b.reading_f);
+      if (reading == null) return NextResponse.json({ ok: false, error: 'reading_f required' }, { status: 400 });
+      const target = 32;
+      const tol = num(b.tolerance_f) ?? 3;
+      const within = Math.abs(reading - target) <= tol;
+      const { error } = await admin.from('spinytails_temperature_logs').insert({
+        logged_at:     str(b.logged_at) ?? nowIso,
+        location:      'thaw_vat',
+        lot_id:        lotId,
+        reading_f:     reading,
+        within_limit:  within,
+        recorded_by:   user.id,
+        action_if_fail: within ? null : (str(b.action_if_fail) ?? 'Add ice / adjust bath toward 32°F; re-check.'),
+        notes:         str(b.notes),
+      });
+      if (error) err = error.message;
+      else resp = { within_limit: within, target_f: target, reading_f: reading };
+
     } else {
       return NextResponse.json({ ok: false, error: `Unknown action "${action}"` }, { status: 400 });
     }
