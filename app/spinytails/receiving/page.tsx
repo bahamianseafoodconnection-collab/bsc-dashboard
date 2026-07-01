@@ -1,13 +1,18 @@
 'use client';
 
-// /spinytails/receiving — Receiving Station device (Phase 2)
+// /spinytails/receiving — Receiving Station device
 //
 // Tablet-optimized station for the Receiving Department. Captures supplier
 // (approved vessel), product, harvest verification (GPS photos), and a
 // species-aware receiving inspection, then generates the permanent
-// species-prefixed batch number (CON-/LOB-/SNP-YYYYMMDD-NNN) server-side and
-// records the lot + intake. CCP-1 (temp + sulfite) is validated against the
-// species' configured limits on submit.
+// species-prefixed batch number (CON-/LOB-/SNP-YYYYMMDD-NNN) server-side so
+// staff recognize product type by eye on the bin + tie-strap. CCP-1 (temp +
+// sulfite) is validated against the species' configured limits on submit.
+//
+// Cold-chain additions: color tie-strap (new or reused-from-freezer),
+// holding-freezer location, a scanned bag/barcode, and the 5 Fisheries
+// Receiving-Log QC flags (egg-bearing / discoloration / softshell / undersized
+// / odor). The receiving label prints the batch code + color strap + barcode.
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
@@ -17,10 +22,19 @@ import { printLabels } from '@/lib/label-print';
 export const dynamic = 'force-dynamic';
 
 interface Species { code: string; name: string; grade_set: string[]; qc_fields: string[]; ccp_limits: Record<string, unknown>; }
-interface Vessel { id: string; vessel_code: string | null; vessel_name: string | null; fisherman_name: string | null; fisherman_phone: string | null; license_number: string | null; color_tag: string | null; }
+interface Vessel { id: string; vessel_code: string | null; vessel_name: string | null; fisherman_name: string | null; captain_name: string | null; fisherman_phone: string | null; license_number: string | null; color_tag: string | null; }
 interface Photo { url: string; lat: number | null; lng: number | null; captured_at: string; }
+interface LabelData { batch_number: string; species: string; boat: string; captain: string; registration: string | null; color_strap: string; reused: boolean; barcode: string | null; temp_f: number | null; receipt_date: string; }
+type RQ = { egg_bearing: boolean; discoloration: boolean; softshell_damage: boolean; undersized: boolean; odor: boolean };
 
 const DEVICE_ID = 'RECEIVING-STATION-1';
+const RQ_FIELDS: { key: keyof RQ; label: string }[] = [
+  { key: 'egg_bearing',      label: 'Egg-bearing' },
+  { key: 'discoloration',    label: 'Discoloration' },
+  { key: 'softshell_damage', label: 'Softshell / damage' },
+  { key: 'undersized',       label: 'Undersized' },
+  { key: 'odor',             label: 'Off-odor' },
+];
 
 export default function ReceivingStationPage() {
   const [species, setSpecies] = useState<Species[]>([]);
@@ -42,12 +56,19 @@ export default function ReceivingStationPage() {
   const [fishingMethod, setFishingMethod] = useState('');
   const [tripStart, setTripStart] = useState('');
   const [tripEnd, setTripEnd] = useState('');
-  const [rejectRatio, setRejectRatio] = useState('');                    // % rejects per bag
-  const [positions, setPositions] = useState<string[]>(['', '', '', '']); // 3–4 harvest GPS positions
+  const [rejectRatio, setRejectRatio] = useState('');
+  const [positions, setPositions] = useState<string[]>(['', '', '', '']);
   const [qc, setQc] = useState<Record<string, string | number | boolean>>({});
   const [photos, setPhotos] = useState<Photo[]>([]);
+  // cold-chain
+  const [colorStrap, setColorStrap] = useState('');
+  const [colorStrapReused, setColorStrapReused] = useState(false);
+  const [holdingLocation, setHoldingLocation] = useState('');
+  const [lotBagNo, setLotBagNo] = useState('');
+  const [rq, setRq] = useState<RQ>({ egg_bearing: false, discoloration: false, softshell_damage: false, undersized: false, odor: false });
+
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ batch: string; warnings: string[]; pass: boolean; product: string; weight: string; supplier: string; species: string } | null>(null);
+  const [result, setResult] = useState<{ label: LabelData; warnings: string[]; pass: boolean; weight: string } | null>(null);
   const [err, setErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -63,14 +84,20 @@ export default function ReceivingStationPage() {
       setAuth('ok');
       const [{ data: sps }, { data: vs }] = await Promise.all([
         supabase.from('spinytails_species').select('code, name, grade_set, qc_fields, ccp_limits').eq('active', true).order('name'),
-        supabase.from('spinytails_vessels').select('id, vessel_code, vessel_name, fisherman_name, fisherman_phone, license_number, color_tag').eq('status', 'approved').order('fisherman_name'),
+        supabase.from('spinytails_vessels').select('id, vessel_code, vessel_name, fisherman_name, captain_name, fisherman_phone, license_number, color_tag').eq('status', 'approved').order('fisherman_name'),
       ]);
       setSpecies((sps ?? []) as Species[]);
       setVessels((vs ?? []) as Vessel[]);
     })();
   }, []);
 
-  // Phase 2b: prefill from a captured document (?doc=…) once species+vessels load.
+  // Default the tie-strap color to the selected vessel's registered color.
+  useEffect(() => {
+    const v = vessels.find((x) => x.id === vesselId);
+    if (v?.color_tag) setColorStrap(v.color_tag);
+  }, [vesselId, vessels]);
+
+  // Prefill from a captured document (?doc=…) once species+vessels load.
   useEffect(() => {
     const docId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('doc') : null;
     if (!docId || species.length === 0) return;
@@ -102,7 +129,6 @@ export default function ReceivingStationPage() {
   async function capturePhoto(file: File) {
     setBusy(true);
     try {
-      // Grab GPS (best-effort) in parallel with the upload.
       const gps = await new Promise<{ lat: number | null; lng: number | null }>((resolve) => {
         if (!navigator.geolocation) return resolve({ lat: null, lng: null });
         navigator.geolocation.getCurrentPosition(
@@ -145,21 +171,42 @@ export default function ReceivingStationPage() {
           reject_ratio_pct: rejectRatio ? parseFloat(rejectRatio) : null,
           harvest_positions: positions.map((p) => p.trim()).filter(Boolean),
           qc_results: qc, harvest_photos: photos, device_id: DEVICE_ID,
+          // cold-chain
+          color_strap: colorStrap || null,
+          color_strap_reused: colorStrapReused,
+          holding_freezer_location: holdingLocation || null,
+          lot_bag_no: lotBagNo || null,
+          receiving_qc: rq,
         }),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
-      const v = vessels.find((x) => x.id === vesselId);
-      setResult({
-        batch: j.batch_number, warnings: j.ccp_warnings ?? [], pass: j.qc_pass,
-        product: productName || sp?.name || '', weight: `${totalWeight} lb`,
-        supplier: v?.fisherman_name ?? '', species: sp?.name ?? speciesCode,
-      });
-      // reset the per-lot fields, keep vessel/species for the next bag of the same delivery
-      setProductName(''); setNumBags(''); setTotalWeight(''); setWeightPerBag(''); setGrade(''); setCondition(''); setCoreTemp(''); setQc({}); setPhotos([]); setRejectRatio(''); setPositions(['', '', '', '']);
+      setResult({ label: j.label as LabelData, warnings: j.ccp_warnings ?? [], pass: j.qc_pass, weight: `${totalWeight} lb` });
+      // reset the per-lot fields; keep vessel/species/strap for the next bag of the same delivery
+      setProductName(''); setNumBags(''); setTotalWeight(''); setWeightPerBag(''); setGrade(''); setCondition('');
+      setCoreTemp(''); setQc({}); setPhotos([]); setRejectRatio(''); setPositions(['', '', '', '']);
+      setLotBagNo(''); setHoldingLocation(''); setRq({ egg_bearing: false, discoloration: false, softshell_damage: false, undersized: false, odor: false });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Receiving failed');
     } finally { setBusy(false); }
+  }
+
+  function printReceivingLabel(L: LabelData, weight: string) {
+    printLabels([{
+      title: `RECEIVING · ${L.species}`,
+      product_name: L.species,
+      batch_number: L.batch_number,
+      weight,
+      date: new Date(L.receipt_date + 'T00:00:00').toLocaleDateString('en-US'),
+      supplier: L.boat,
+      extra: [
+        { label: 'Captain', value: L.captain },
+        { label: 'Reg #', value: L.registration ?? '—' },
+        { label: 'Color strap', value: `${L.color_strap}${L.reused ? ' (REUSED)' : ''}` },
+        { label: 'Temp', value: L.temp_f != null ? `${L.temp_f}°F` : '—' },
+        ...(L.barcode ? [{ label: 'Bag/Barcode', value: L.barcode }] : []),
+      ],
+    }], { widthIn: 4, heightIn: 6 });
   }
 
   if (auth === 'checking') return <Center>Checking…</Center>;
@@ -183,19 +230,18 @@ export default function ReceivingStationPage() {
       {result && (
         <div style={{ ...section, border: `2px solid ${result.pass ? '#16a34a' : '#dc2626'}`, background: result.pass ? '#f0fdf4' : '#fef2f2' }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: '#475569' }}>BATCH NUMBER GENERATED</div>
-          <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: '#0b1628' }}>{result.batch}</div>
+          <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: '#0b1628' }}>{result.label.batch_number}</div>
+          <div style={{ fontSize: 13, color: '#0b1628', marginTop: 4 }}>
+            🎨 Tie-strap: <b style={{ textTransform: 'capitalize' }}>{result.label.color_strap}</b>{result.label.reused ? ' · ♻ reused from freezer' : ' · new'}
+          </div>
           <div style={{ marginTop: 6, fontWeight: 800, color: result.pass ? '#16a34a' : '#dc2626' }}>
             {result.pass ? '✓ CCP-1 within limits — accepted' : '⚠ CCP-1 FAILED — reject/hold + corrective action'}
           </div>
           {result.warnings.map((w, i) => <div key={i} style={{ fontSize: 13, color: '#b91c1c', marginTop: 4 }}>• {w}</div>)}
           <button
-            onClick={() => printLabels([{
-              title: 'RECEIVING', product_name: result.product, batch_number: result.batch,
-              weight: result.weight, date: new Date().toLocaleDateString('en-US'),
-              supplier: result.supplier, extra: [{ label: 'Species', value: result.species }],
-            }], { widthIn: 4, heightIn: 6 })}
+            onClick={() => printReceivingLabel(result.label, result.weight)}
             style={{ marginTop: 12, width: '100%', padding: 14, background: '#0b1628', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer', fontSize: 15 }}
-          >🖨 Print receiving label (Rollo · batch + QR + barcode)</button>
+          >🖨 Print bin + strap label (batch + QR + barcode + color)</button>
         </div>
       )}
 
@@ -206,7 +252,7 @@ export default function ReceivingStationPage() {
           <option value="">— select fisherman / vessel —</option>
           {vessels.map((v) => <option key={v.id} value={v.id}>{v.fisherman_name} · {v.vessel_name ?? v.vessel_code} {v.license_number ? `· Lic ${v.license_number}` : ''}{v.color_tag ? ` · 🎨 ${v.color_tag}` : ''}</option>)}
         </select>
-        {vesselId && (() => { const v = vessels.find((x) => x.id === vesselId); return v ? <div style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>{v.fisherman_phone ? `📞 ${v.fisherman_phone}` : ''}{v.color_tag ? <span style={{ marginLeft: 8, fontWeight: 800, color: '#0b1628' }}>🎨 Color string: {v.color_tag}</span> : null}</div> : null; })()}
+        {vesselId && (() => { const v = vessels.find((x) => x.id === vesselId); return v ? <div style={{ fontSize: 13, color: '#475569', marginTop: 6 }}>{v.captain_name ? `👤 Capt. ${v.captain_name} · ` : ''}{v.fisherman_phone ? `📞 ${v.fisherman_phone}` : ''}</div> : null; })()}
       </div>
 
       {/* 2. Product */}
@@ -240,9 +286,33 @@ export default function ReceivingStationPage() {
         </div>
       </div>
 
-      {/* 3. Harvest verification */}
+      {/* 3. Tie-strap + storage (cold-chain) */}
       <div style={section}>
-        <div style={lbl}>3 · Harvest verification</div>
+        <div style={lbl}>3 · Color tie-strap + storage</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div style={lbl}>Color strap</div>
+            <input value={colorStrap} onChange={(e) => setColorStrap(e.target.value)} placeholder="defaults to vessel color" style={{ ...inp, textTransform: 'capitalize' }} />
+          </div>
+          <div>
+            <div style={lbl}>Holding freezer location</div>
+            <input value={holdingLocation} onChange={(e) => setHoldingLocation(e.target.value)} placeholder="e.g. Receiving Freezer · Rack 2" style={inp} />
+          </div>
+        </div>
+        <button onClick={() => setColorStrapReused((r) => !r)}
+          style={{ width: '100%', marginTop: 10, padding: 12, borderRadius: 10, fontWeight: 800, border: '2px solid', borderColor: colorStrapReused ? '#d97706' : '#cbd5e1', background: colorStrapReused ? '#fef3c7' : '#fff', color: colorStrapReused ? '#b45309' : '#475569', cursor: 'pointer' }}>
+          {colorStrapReused ? '♻ REUSING a color strap already in the freezer' : 'New strap (tap if reusing an existing strap)'}
+        </button>
+        <div style={{ marginTop: 10 }}>
+          <div style={lbl}>Bag / barcode (scan with Tera)</div>
+          <input value={lotBagNo} onChange={(e) => setLotBagNo(e.target.value)} placeholder="scan or type bag/lot barcode"
+            autoComplete="off" style={{ ...inp, fontFamily: 'monospace' }} />
+        </div>
+      </div>
+
+      {/* 4. Harvest verification */}
+      <div style={section}>
+        <div style={lbl}>4 · Harvest verification</div>
         <input placeholder="Catch area (e.g. FAO Area 31)" value={fishingArea} onChange={(e) => setFishingArea(e.target.value)} style={inp} />
         <input placeholder="Fishing method" value={fishingMethod} onChange={(e) => setFishingMethod(e.target.value)} style={inp} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -268,10 +338,24 @@ export default function ReceivingStationPage() {
         </div>
       </div>
 
-      {/* 4. Receiving inspection (species-aware) */}
+      {/* 5. Fisheries receiving QC flags */}
+      <div style={section}>
+        <div style={lbl}>5 · Receiving QC (Fisheries log) · Y = flag present</div>
+        {RQ_FIELDS.map(({ key, label }) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{label}</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setRq((s) => ({ ...s, [key]: false }))} style={{ padding: '8px 16px', borderRadius: 8, fontWeight: 800, border: '2px solid', borderColor: !rq[key] ? '#16a34a' : '#cbd5e1', background: !rq[key] ? '#16a34a' : '#fff', color: !rq[key] ? '#fff' : '#475569' }}>No</button>
+              <button onClick={() => setRq((s) => ({ ...s, [key]: true }))} style={{ padding: '8px 16px', borderRadius: 8, fontWeight: 800, border: '2px solid', borderColor: rq[key] ? '#dc2626' : '#cbd5e1', background: rq[key] ? '#dc2626' : '#fff', color: rq[key] ? '#fff' : '#475569' }}>Yes</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 6. Receiving inspection (species-aware) */}
       {sp && (
         <div style={section}>
-          <div style={lbl}>4 · Receiving inspection (CCP-1) · {sp.name}</div>
+          <div style={lbl}>6 · Receiving inspection (CCP-1) · {sp.name}</div>
           {sp.qc_fields.map((field) => {
             const isNum = field.endsWith('_ppm') || field.endsWith('_f');
             const isBool = field.endsWith('_ok') || field.endsWith('_absent') || field.endsWith('_present') || field.startsWith('adequately');
