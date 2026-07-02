@@ -230,6 +230,29 @@ export async function POST(req: NextRequest) {
         else resp = { status: 'blast_freezing', blast_temp_f: reading, within_limit: within, target_f: target, blast_freezer: blastLoc };
       }
 
+    } else if (action === 'clean_conch') {
+      // CONCH CLEANING (its own stage). Records the cleaning step (clean spec +
+      // weight cleaned) + an optional bath temperature. Status unchanged.
+      const cleanPct = num(b.conch_clean_pct);
+      if (cleanPct == null || ![80, 90, 95].includes(cleanPct)) return NextResponse.json({ ok: false, error: 'Cleaning spec must be 80, 90 or 95%.' }, { status: 400 });
+      const reading = num(b.reading_f);
+      let within: boolean | null = null;
+      if (reading != null) {
+        const target = 40, tol = num(b.tolerance_f) ?? 5;
+        within = reading <= target + tol;
+        await admin.from('spinytails_temperature_logs').insert({
+          logged_at: str(b.logged_at) ?? nowIso, location: 'processing_bath', lot_id: lotId, reading_f: reading,
+          within_limit: within, recorded_by: user.id,
+          action_if_fail: within ? null : (str(b.action_if_fail) ?? 'Cleaning bath above target — chill toward ≤40°F.'),
+          notes: 'Conch cleaning bath',
+        });
+      }
+      const { error: sErr } = await admin.from('spinytails_processing_steps').insert({
+        batch_number: batch, lot_id: lotId, step_no: num(b.step_no) ?? 15,
+        step_name: `Conch cleaning ${cleanPct}%`, weight_lbs: num(b.weight_lbs), employee_id: user.id, device_id: str(b.device_id),
+      });
+      if (sErr) err = sErr.message; else resp = { step: 'Conch cleaning', clean_pct: cleanPct, bath_temp_f: reading, within_limit: within };
+
     } else if (action === 'sleeve') {
       // SLEEVING (Card 6). Time/date-stamped processing step, tied to the
       // batch/boat via the lot. No bath temp. Status unchanged (line-stage step).

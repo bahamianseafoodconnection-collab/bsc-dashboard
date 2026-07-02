@@ -85,6 +85,11 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [deveinLotId, setDeveinLotId] = useState('');
   const [deveinTemp, setDeveinTemp] = useState('');
   const [deveinWeight, setDeveinWeight] = useState('');
+  // Card 5b — conch cleaning (conch only)
+  const [cleanLotId, setCleanLotId] = useState('');
+  const [cleanPct, setCleanPct] = useState<number>(90);
+  const [cleanWeight, setCleanWeight] = useState('');
+  const [cleanTemp, setCleanTemp] = useState('');
   // Card 6 — sleeving (time/date stamp)
   const [sleeveLotId, setSleeveLotId] = useState('');
   const [sleeveWeight, setSleeveWeight] = useState('');
@@ -113,6 +118,8 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
   const thawLot = useMemo(() => thawLots.find(l => l.lot_id === thawLotId) || null, [thawLots, thawLotId]);
   const deveinLot = useMemo(() => thawLots.find(l => l.lot_id === deveinLotId) || null, [thawLots, deveinLotId]);
+  const conchLots = useMemo(() => thawLots.filter(l => (l.species_code ?? '').toLowerCase().includes('con') || (l.species_name ?? '').toLowerCase().includes('conch') || l.batch_number.toUpperCase().startsWith('CON-')), [thawLots]);
+  const cleanLot = useMemo(() => conchLots.find(l => l.lot_id === cleanLotId) || null, [conchLots, cleanLotId]);
   const sleeveLot = useMemo(() => thawLots.find(l => l.lot_id === sleeveLotId) || null, [thawLots, sleeveLotId]);
   const blastLot = useMemo(() => thawLots.find(l => l.lot_id === blastLotId) || null, [thawLots, blastLotId]);
   const masterLot = useMemo(() => blastDoneLots.find(l => l.lot_id === masterLotId) || null, [blastDoneLots, masterLotId]);
@@ -338,6 +345,23 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} Deveining logged · ${deveinLot.batch_number} · bath ${reading}°F${j.within_limit ? '' : ' — ABOVE 40°F, chill the bath'}`);
       setDeveinTemp(''); setDeveinWeight('');
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Deveining log failed'); }
+    finally { setBusy(false); }
+  }
+
+  async function submitCleanConch() {
+    if (!cleanLot) { flash(false, 'Select a conch batch.'); return; }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ action: 'clean_conch', lot_id: cleanLot.lot_id, batch_number: cleanLot.batch_number, conch_clean_pct: cleanPct, weight_lbs: cleanWeight ? parseFloat(cleanWeight) : null, reading_f: cleanTemp ? parseFloat(cleanTemp) : null, device_id: 'PROCESSOR-CARD-5B' }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(j.within_limit !== false, `✓ Conch cleaning ${cleanPct}% logged · ${cleanLot.batch_number}${j.within_limit === false ? ' (⚠ bath above 40°F)' : ''}`);
+      setCleanWeight(''); setCleanTemp('');
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Cleaning log failed'); }
     finally { setBusy(false); }
   }
 
@@ -640,6 +664,42 @@ export default function ProcessorClient({ displayName }: { userId: string; email
               <div><div style={lbl}>Weight deveined (lb) — optional</div><input type="number" inputMode="decimal" value={deveinWeight} onChange={e => setDeveinWeight(e.target.value)} style={inp} /></div>
             </div>
             <button onClick={submitDevein} disabled={busy || !deveinLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !deveinLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !deveinLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🔪 Log deveining'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 5b — conch cleaning (conch batches only) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>5b · 🐚 Conch cleaning <span style={{ fontSize: 12, fontWeight: 700, color: '#8ea3c0' }}>· conch only · clean spec + weight</span></div>
+        {conchLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>No conch on the line. A conch batch appears here once it&apos;s pulled to defrost (Card 3 → thawing).</div>
+        ) : (
+          <>
+            <div style={lbl}>Conch batch</div>
+            <select value={cleanLotId} onChange={e => setCleanLotId(e.target.value)} style={inp}>
+              <option value="">— select batch —</option>
+              {conchLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name} · 🚤 {l.boat ?? '—'}</option>)}
+            </select>
+
+            {cleanLot && (
+              <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                <div><b style={{ color: GOLD }}>{cleanLot.batch_number}</b> · 🐚 {cleanLot.product_name} · ⚖️ {cleanLot.remaining_lbs} lb · 🚤 {cleanLot.boat ?? '—'}</div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 10 }}>
+              <div style={lbl}>Cleaning spec</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                {[80, 90, 95].map(p => (
+                  <button key={p} onClick={() => setCleanPct(p)} style={{ flex: 1, padding: 10, borderRadius: 10, fontWeight: 800, border: '1px solid', borderColor: cleanPct === p ? GOLD : '#2a3a52', background: cleanPct === p ? 'rgba(200,134,15,0.15)' : 'transparent', color: cleanPct === p ? GOLD : '#8ea3c0', cursor: 'pointer' }}>{p}% clean</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div><div style={lbl}>Weight cleaned (lb)</div><input type="number" inputMode="decimal" value={cleanWeight} onChange={e => setCleanWeight(e.target.value)} style={inp} /></div>
+              <div><div style={lbl}>Bath temp (°F) — optional</div><input type="number" inputMode="decimal" value={cleanTemp} onChange={e => setCleanTemp(e.target.value)} placeholder="≤ 40" style={inp} /></div>
+            </div>
+            <button onClick={submitCleanConch} disabled={busy || !cleanLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !cleanLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !cleanLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🐚 Log conch cleaning'}</button>
           </>
         )}
       </div>
