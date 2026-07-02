@@ -73,13 +73,12 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [supProducts, setSupProducts] = useState<SupProduct[]>([]);
   const [invSku, setInvSku] = useState(''); const [invQty, setInvQty] = useState(''); const [invCost, setInvCost] = useState(''); const [invLoc, setInvLoc] = useState(''); const [invInvoice, setInvInvoice] = useState('');
   // Card 3 — remove from freezer
-  const [freezerLots, setFreezerLots] = useState<FreezerLot[]>([]);
+  const [allLots, setAllLots] = useState<FreezerLot[]>([]);
   const [pullLotId, setPullLotId] = useState('');
   const [pullFreezer, setPullFreezer] = useState<'Holding' | 'Blast'>('Holding');
   const [pullReason, setPullReason] = useState('');
   const [pullWeight, setPullWeight] = useState('');
   // Card 4 — thaw / defrost temperature log
-  const [thawLots, setThawLots] = useState<FreezerLot[]>([]);
   const [thawLotId, setThawLotId] = useState('');
   const [thawReading, setThawReading] = useState('');
   // Card 5 — deveining (bath temp required)
@@ -96,7 +95,6 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [hist, setHist] = useState<TimelineEvent[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   // Card 8 — remove from blast → box + label → holding (final)
-  const [blastDoneLots, setBlastDoneLots] = useState<FreezerLot[]>([]);
   const [masterLotId, setMasterLotId] = useState('');
   const [masterFreezer, setMasterFreezer] = useState('');
   const [masterSulfite, setMasterSulfite] = useState(false);
@@ -107,6 +105,11 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [pendingLabels, setPendingLabels] = useState<ProductLabel[]>([]);
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
+  // One fetch (allLots), three stage-scoped views. Card 3 shows product sitting
+  // in a freezer; Cards 4/5/6 the thawing line; Card 8 the blast freezer.
+  const freezerLots = useMemo(() => allLots.filter(l => l.status === 'in_receiving_freezer' || l.status === 'blast_freezing' || l.status === 'mastered'), [allLots]);
+  const thawLots = useMemo(() => allLots.filter(l => l.status === 'thawing'), [allLots]);
+  const blastDoneLots = useMemo(() => allLots.filter(l => l.status === 'blast_freezing'), [allLots]);
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
   const thawLot = useMemo(() => thawLots.find(l => l.lot_id === thawLotId) || null, [thawLots, thawLotId]);
   const deveinLot = useMemo(() => thawLots.find(l => l.lot_id === deveinLotId) || null, [thawLots, deveinLotId]);
@@ -155,16 +158,14 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     })));
   }, []);
 
-  const fetchLots = useCallback(async (status?: string): Promise<FreezerLot[]> => {
+  // Single request → every processor-relevant lot (all stages Cards 3-8 need),
+  // grouped client-side by the memos above. Replaces 3 separate round-trips.
+  const loadLots = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-    const res = await fetch(`/api/processor/freezer-lots${qs}`, { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
+    const res = await fetch('/api/processor/freezer-lots?status=in_receiving_freezer,thawing,blast_freezing,mastered', { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
     const j = await res.json().catch(() => ({ ok: false }));
-    return j.ok ? (j.lots as FreezerLot[]) : [];
+    setAllLots(j.ok ? (j.lots as FreezerLot[]) : []);
   }, []);
-  const loadFreezerLots = useCallback(async () => { setFreezerLots(await fetchLots()); }, [fetchLots]);
-  const loadThawLots = useCallback(async () => { setThawLots(await fetchLots('thawing')); }, [fetchLots]);
-  const loadBlastDone = useCallback(async () => { setBlastDoneLots(await fetchLots('blast_freezing')); }, [fetchLots]);
 
   useEffect(() => { (async () => {
     const [{ data: sp }, { data: sup }, { data: locs }] = await Promise.all([
@@ -174,8 +175,8 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     ]);
     setSpecies((sp ?? []) as Species[]);
     setSuppliers((sup ?? []) as Supplier[]); setLocations((locs ?? []) as Loc[]);
-    await loadVessels(); await loadFeed(); await loadFreezerLots(); await loadThawLots(); await loadBlastDone();
-  })(); }, [loadVessels, loadFeed, loadFreezerLots, loadThawLots, loadBlastDone]);
+    await loadVessels(); await loadFeed(); await loadLots();
+  })(); }, [loadVessels, loadFeed, loadLots]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
 
@@ -320,7 +321,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
       flash(true, `✓ Pulled ${wt} lb · ${pullLot.product_name} (${pullLot.batch_number}) from ${pullFreezer} — ${reason?.label.replace(/^\S+\s/, '')}`);
       setPullWeight(''); setPullReason(''); setPullLotId('');
-      await loadFreezerLots(); await loadThawLots(); await loadFeed();
+      await loadLots(); await loadFeed();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Pull failed'); }
     finally { setBusy(false); }
   }
@@ -340,7 +341,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
       flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} ${reading}°F logged · ${thawLot.batch_number}${j.within_limit ? ' (within 32°F ±3)' : ' — OUT of range, correct the bath'}`);
       setThawReading('');
-      await loadThawLots();
+      await loadLots();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Log failed'); }
     finally { setBusy(false); }
   }
@@ -396,7 +397,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
       flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} ${blastLot.batch_number} → blast freezing · ${reading}°F${j.within_limit ? '' : ' — ABOVE −10°F, do not start the 24h clock'}`);
       setBlastTemp(''); setBlastFreezer(''); setBlastLotId('');
-      await loadThawLots(); await loadBlastDone(); await loadFeed();
+      await loadLots(); await loadFeed();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Blast-in failed'); }
     finally { setBusy(false); }
   }
@@ -438,7 +439,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       flash(true, `✓ ${cases.length} case(s) · ${lot.batch_number} → holding, ready to ship. Printing labels…`);
       setLobsterCounts({}); setConchCounts({}); setMasterFreezer(''); setMasterLotId('');
       if (labels.length) await printProductLabels(labels, { widthIn: 4, heightIn: 6 });
-      await loadBlastDone(); await loadFeed();
+      await loadLots(); await loadFeed();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Boxing failed'); }
     finally { setBusy(false); }
   }
