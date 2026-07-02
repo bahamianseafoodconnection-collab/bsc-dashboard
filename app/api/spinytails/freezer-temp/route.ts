@@ -22,9 +22,11 @@ const ALLOWED = new Set(['founder', 'co_founder', 'control_admin', 'manager', 's
 
 // Freezer ceilings (°F) — HACCP limits (founder 2026-06-29).
 const FREEZERS: Record<string, { label: string; maxF: number }> = {
-  blast_freezer:   { label: 'Blast Freezer',   maxF: -10 },
-  holding_freezer: { label: 'Holding Freezer', maxF: 0 },
+  blast_freezer:     { label: 'Blast Freezer',     maxF: -10 },
+  holding_freezer:   { label: 'Holding Freezer',   maxF: 0 },
+  inventory_freezer: { label: 'Inventory Freezer', maxF: 0 },
 };
+const FREEZER_CODES = Object.keys(FREEZERS);
 const TARGET_PER_DAY = 3;
 
 async function gate(req: NextRequest): Promise<{ admin: SupabaseClient; userId: string } | { error: string; status: number }> {
@@ -43,15 +45,48 @@ async function gate(req: NextRequest): Promise<{ admin: SupabaseClient; userId: 
   return { admin: createClient(url, svc, { auth: { autoRefreshToken: false, persistSession: false } }), userId: user.id };
 }
 
+// Three daily slots — the card shows which is still due ("noon not yet logged").
+const SLOTS: { key: string; label: string; from: number; to: number }[] = [
+  { key: 'morning', label: 'Morning', from: 0,  to: 12 },
+  { key: 'noon',    label: 'Noon',    from: 12, to: 17 },
+  { key: 'evening', label: 'Evening', from: 17, to: 24 },
+];
+
+// Bahamas-local (America/Nassau) date + hour — DST-aware, so slots + "today"
+// track the plant's clock, not the server's UTC.
+const NASSAU_TZ = 'America/Nassau';
+const nassauDate = (iso: string | Date) => new Intl.DateTimeFormat('en-CA', { timeZone: NASSAU_TZ }).format(new Date(iso)); // YYYY-MM-DD
+const nassauHour = (iso: string | Date) => parseInt(new Intl.DateTimeFormat('en-US', { timeZone: NASSAU_TZ, hour: 'numeric', hour12: false }).format(new Date(iso)), 10) % 24;
+
 export async function GET(req: NextRequest) {
   const g = await gate(req);
   if ('error' in g) return NextResponse.json({ ok: false, error: g.error }, { status: g.status });
-  const today = new Date().toISOString().slice(0, 10);
+  const todayNassau = nassauDate(new Date());
+  // Pull ~36h so late-evening Nassau readings (next-day UTC) are included, then
+  // keep only those whose Nassau calendar date is today.
+  const since = new Date(Date.now() - 36 * 3600 * 1000).toISOString();
   const { data } = await g.admin.from('spinytails_temperature_logs')
     .select('id, location, reading_f, within_limit, logged_at, action_if_fail, notes')
-    .gte('logged_at', `${today}T00:00:00`).order('logged_at', { ascending: false }).limit(60);
-  const freezers = Object.entries(FREEZERS).map(([code, f]) => ({ code, label: f.label, maxF: f.maxF, target: TARGET_PER_DAY }));
-  return NextResponse.json({ ok: true, freezers, today: data ?? [] });
+    .in('location', FREEZER_CODES)
+    .gte('logged_at', since).order('logged_at', { ascending: false }).limit(200);
+  const logs = ((data ?? []) as Array<{ location: string; reading_f: number | null; within_limit: boolean | null; logged_at: string }>)
+    .filter(l => nassauDate(l.logged_at) === todayNassau);
+
+  const freezers = Object.entries(FREEZERS).map(([code, f]) => {
+    const mine = logs.filter(l => l.location === code);
+    const last = mine[0] ?? null; // ordered desc
+    const slots = SLOTS.map(s => {
+      const hit = mine.find(l => { const h = nassauHour(l.logged_at); return h >= s.from && h < s.to; });
+      return { key: s.key, label: s.label, done: !!hit, reading_f: hit?.reading_f ?? null, within_limit: hit?.within_limit ?? null };
+    });
+    return {
+      code, label: f.label, maxF: f.maxF, target: TARGET_PER_DAY,
+      done_count: mine.length,
+      last_reading_f: last?.reading_f ?? null, last_within: last?.within_limit ?? null, last_at: last?.logged_at ?? null,
+      slots,
+    };
+  });
+  return NextResponse.json({ ok: true, freezers, today: logs });
 }
 
 export async function POST(req: NextRequest) {

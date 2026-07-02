@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { printProductLabels, type ProductLabel } from '@/lib/spinytails-product-label';
+import FreezerTempCard from './FreezerTempCard';
 
 const NAVY = '#060e1c', GOLD = '#c8860f';
 
@@ -460,6 +461,9 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       </div>
 
       {msg && <div style={{ ...card, borderColor: msg.ok ? '#16a34a' : '#dc2626', background: msg.ok ? 'rgba(22,163,74,0.12)' : 'rgba(220,38,38,0.12)', color: msg.ok ? '#4ade80' : '#f87171', fontWeight: 700 }}>{msg.text}</div>}
+
+      {/* FRONT-OF-DASHBOARD — record freezer temperature (3×/day, due-tracked) */}
+      <FreezerTempCard />
 
       {/* CARD 1 — New raw product from boat */}
       <div style={card}>
