@@ -73,11 +73,15 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [deveinLotId, setDeveinLotId] = useState('');
   const [deveinTemp, setDeveinTemp] = useState('');
   const [deveinWeight, setDeveinWeight] = useState('');
+  // Card 6 — sleeving (time/date stamp)
+  const [sleeveLotId, setSleeveLotId] = useState('');
+  const [sleeveWeight, setSleeveWeight] = useState('');
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
   const thawLot = useMemo(() => thawLots.find(l => l.lot_id === thawLotId) || null, [thawLots, thawLotId]);
   const deveinLot = useMemo(() => thawLots.find(l => l.lot_id === deveinLotId) || null, [thawLots, deveinLotId]);
+  const sleeveLot = useMemo(() => thawLots.find(l => l.lot_id === sleeveLotId) || null, [thawLots, sleeveLotId]);
 
   const loadVessels = useCallback(async () => {
     const { data } = await supabase.from('spinytails_vessels').select(VESSEL_COLS).eq('status', 'approved').order('vessel_name');
@@ -298,6 +302,23 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} Deveining logged · ${deveinLot.batch_number} · bath ${reading}°F${j.within_limit ? '' : ' — ABOVE 40°F, chill the bath'}`);
       setDeveinTemp(''); setDeveinWeight('');
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Deveining log failed'); }
+    finally { setBusy(false); }
+  }
+
+  async function submitSleeve() {
+    if (!sleeveLot) { flash(false, 'Select a batch.'); return; }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ action: 'sleeve', lot_id: sleeveLot.lot_id, batch_number: sleeveLot.batch_number, weight_lbs: sleeveWeight ? parseFloat(sleeveWeight) : null, device_id: 'PROCESSOR-CARD-6' }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(true, `✓ Sleeving logged · ${sleeveLot.batch_number} · ${sleeveLot.boat ?? '—'}`);
+      setSleeveWeight('');
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Sleeving log failed'); }
     finally { setBusy(false); }
   }
 
@@ -531,6 +552,32 @@ export default function ProcessorClient({ displayName }: { userId: string; email
               <div><div style={lbl}>Weight deveined (lb) — optional</div><input type="number" inputMode="decimal" value={deveinWeight} onChange={e => setDeveinWeight(e.target.value)} style={inp} /></div>
             </div>
             <button onClick={submitDevein} disabled={busy || !deveinLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !deveinLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !deveinLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🔪 Log deveining'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 6 — sleeving (time/date stamp) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>6 · 🧴 Sleeving <span style={{ fontSize: 12, fontWeight: 700, color: '#8ea3c0' }}>· time + date stamped</span></div>
+        {thawLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>No batches on the line yet. A batch appears here once it&apos;s been pulled to defrost (Card 3 → thawing).</div>
+        ) : (
+          <>
+            <div style={lbl}>Batch (boat)</div>
+            <select value={sleeveLotId} onChange={e => setSleeveLotId(e.target.value)} style={inp}>
+              <option value="">— select batch —</option>
+              {thawLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name} · 🚤 {l.boat ?? '—'}</option>)}
+            </select>
+
+            {sleeveLot && (
+              <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                <div><b style={{ color: GOLD }}>{sleeveLot.batch_number}</b> · 🦞 {sleeveLot.product_name} · ⚖️ {sleeveLot.remaining_lbs} lb</div>
+                <div>🚤 {sleeveLot.boat ?? '—'} · 🪪 {sleeveLot.registration ?? 'no reg'}</div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 10 }}><div style={lbl}>Weight sleeved (lb) — optional</div><input type="number" inputMode="decimal" value={sleeveWeight} onChange={e => setSleeveWeight(e.target.value)} style={inp} /></div>
+            <button onClick={submitSleeve} disabled={busy || !sleeveLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !sleeveLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !sleeveLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🧴 Log sleeving'}</button>
           </>
         )}
       </div>

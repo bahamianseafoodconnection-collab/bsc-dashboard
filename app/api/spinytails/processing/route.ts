@@ -202,6 +202,15 @@ export async function POST(req: NextRequest) {
         else resp = { step: 'Deveining', bath_temp_f: reading, within_limit: within, target_f: target };
       }
 
+    } else if (action === 'sleeve') {
+      // SLEEVING (Card 6). Time/date-stamped processing step, tied to the
+      // batch/boat via the lot. No bath temp. Status unchanged (line-stage step).
+      const { error: sErr } = await admin.from('spinytails_processing_steps').insert({
+        batch_number: batch, lot_id: lotId, step_no: num(b.step_no) ?? 20,
+        step_name: 'Sleeving', weight_lbs: num(b.weight_lbs), employee_id: user.id, device_id: str(b.device_id),
+      });
+      if (sErr) err = sErr.message; else resp = { step: 'Sleeving', at: nowIso };
+
     } else if (action === 'defrost_temp') {
       // Ice-bath (thaw_vat) hourly temperature log. Target 32°F ± tolerance.
       const reading = num(b.reading_f);
