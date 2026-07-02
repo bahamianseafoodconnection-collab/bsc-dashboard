@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { printProductLabels, type ProductLabel } from '@/lib/spinytails-product-label';
 import FreezerTempCard from './FreezerTempCard';
 import FishingBoatsCard from './FishingBoatsCard';
+import ProductsCard from './ProductsCard';
 
 const NAVY = '#060e1c', GOLD = '#c8860f';
 
@@ -166,16 +167,24 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     setAllLots(j.ok ? (j.lots as FreezerLot[]) : []);
   }, []);
 
+  // Active receiving products (spinytails_species) via the products API — fills
+  // Card 1's product dropdown; refreshes when the Products card adds one.
+  const loadSpecies = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/processor/products', { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
+    const j = await res.json().catch(() => ({ ok: false }));
+    const list = (j.ok ? j.products : []) as { code: string; name: string; active: boolean }[];
+    setSpecies(list.filter(p => p.active).map(p => ({ code: p.code, name: p.name })));
+  }, []);
+
   useEffect(() => { (async () => {
-    const [{ data: sp }, { data: sup }, { data: locs }] = await Promise.all([
-      supabase.from('spinytails_species').select('code, name').order('name'),
+    const [{ data: sup }, { data: locs }] = await Promise.all([
       supabase.from('suppliers').select('id, code, name').order('name'),
       supabase.from('inventory_locations').select('code, name').eq('is_active', true).order('name'),
     ]);
-    setSpecies((sp ?? []) as Species[]);
     setSuppliers((sup ?? []) as Supplier[]); setLocations((locs ?? []) as Loc[]);
-    await loadVessels(); await loadFeed(); await loadLots();
-  })(); }, [loadVessels, loadFeed, loadLots]);
+    await loadSpecies(); await loadVessels(); await loadFeed(); await loadLots();
+  })(); }, [loadSpecies, loadVessels, loadFeed, loadLots]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
 
@@ -433,6 +442,9 @@ export default function ProcessorClient({ displayName }: { userId: string; email
 
       {/* SETUP — fishing boats + their registration certificates */}
       <FishingBoatsCard onBoatsChanged={loadVessels} />
+
+      {/* SETUP — receiving products (fills Card 1's product dropdown) */}
+      <ProductsCard onProductsChanged={loadSpecies} />
 
       {/* CARD 1 — New raw product from boat */}
       <div style={card}>
