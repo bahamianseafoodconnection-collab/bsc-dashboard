@@ -77,6 +77,7 @@ export default function FounderDashboard() {
     { label: 'Invoice → Catalog',    desc: 'Add new SKUs from an invoice',  href: '/founder/invoice-import', icon: '📥' },
     { label: 'Phone Orders',         desc: 'Approve · route · print',      href: '/founder/phone-orders', icon: '📞' },
     { label: 'Directives',           desc: 'Assign tasks + duties to staff', href: '/founder/directives',  icon: '📋' },
+    { label: 'Processor Live Feed',  desc: 'Every stage, real time + temp alerts', href: '/founder/processor-feed', icon: '📡' },
     { label: 'Payment Approvals',    desc: 'Hold / approve pending payments', href: '/founder/payment-approvals', icon: '🔐' },
     { label: 'Customer Statements',  desc: 'Approve + send weekly statements',  href: '/founder/statements', icon: '🧾' },
     { label: 'Expense Approvals',    desc: 'Review + approve staff receipts', href: '/founder/expenses', icon: '💸' },
