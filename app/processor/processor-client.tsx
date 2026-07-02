@@ -9,8 +9,20 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { printProductLabels, type ProductLabel } from '@/lib/spinytails-product-label';
 
 const NAVY = '#060e1c', GOLD = '#c8860f';
+
+// lobster_grade enum → label (mirrors /spinytails/grading)
+const LOBSTER_GRADES: { value: string; label: string }[] = [
+  { value: '5oz', label: '5 oz' }, { value: '6oz', label: '6 oz' }, { value: '7oz', label: '7 oz' },
+  { value: '8oz', label: '8 oz' }, { value: '9oz', label: '9 oz' },
+  { value: '10_12oz', label: '10–12 oz' }, { value: '12_14oz', label: '12–14 oz' },
+  { value: '14_16oz', label: '14–16 oz' }, { value: '16_20oz', label: '16–20 oz' },
+  { value: '20oz_plus', label: '20 oz+' }, { value: 'not_for_export', label: 'Not for export' },
+];
+const CONCH_SIZES = [15, 20, 50];
+const CONCH_CLEAN = [80, 90, 95];
 
 interface Vessel { id: string; vessel_code: string; vessel_name: string | null; fisherman_name: string; captain_name: string | null; license_number: string | null; color_tag: string | null; registration_cert_url: string | null; }
 interface Species { code: string; name: string; }
@@ -20,7 +32,7 @@ interface Loc { code: string; name: string; }
 interface FeedRow { lot_code: string; species: string; status: string; created_at: string; boat: string; weight: number | null; who: string; }
 interface ThawLog { reading_f: number | null; within_limit: boolean | null; logged_at: string | null; }
 interface TimelineEvent { t: string; icon: string; text: string; ok: boolean | null; }
-interface FreezerLot { lot_id: string; batch_number: string; status: string; receipt_date: string | null; date_pulled?: string | null; best_used_by?: string | null; thaw_logs?: ThawLog[]; product_name: string; species_name: string | null; catch_location: string | null; current_freezer: string | null; boat: string | null; captain: string | null; registration: string | null; registration_cert_url: string | null; received_lbs: number; removed_lbs: number; remaining_lbs: number; }
+interface FreezerLot { lot_id: string; batch_number: string; status: string; receipt_date: string | null; date_pulled?: string | null; best_used_by?: string | null; thaw_logs?: ThawLog[]; product_name: string; species_code?: string | null; species_name: string | null; catch_location: string | null; current_freezer: string | null; boat: string | null; captain: string | null; registration: string | null; registration_cert_url: string | null; received_lbs: number; removed_lbs: number; remaining_lbs: number; }
 const PULL_REASONS: { value: string; label: string; destination: 'processing' | 'retail' }[] = [
   { value: 'defrost_for_processing', label: '🧊 Defrost for processing', destination: 'processing' },
   { value: 'bsc_sales',              label: '🛒 BSC sales',             destination: 'retail' },
@@ -83,6 +95,16 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [blastTemp, setBlastTemp] = useState('');
   const [hist, setHist] = useState<TimelineEvent[]>([]);
   const [histLoading, setHistLoading] = useState(false);
+  // Card 8 — remove from blast → box + label → holding (final)
+  const [blastDoneLots, setBlastDoneLots] = useState<FreezerLot[]>([]);
+  const [masterLotId, setMasterLotId] = useState('');
+  const [masterFreezer, setMasterFreezer] = useState('');
+  const [masterSulfite, setMasterSulfite] = useState(false);
+  const [lobsterCounts, setLobsterCounts] = useState<Record<string, string>>({});
+  const [conchCleanPct, setConchCleanPct] = useState<number>(90);
+  const [conchCounts, setConchCounts] = useState<Record<string, string>>({});
+  const [madeCases, setMadeCases] = useState<{ case_code: string; grade?: string; net_weight_lbs?: number }[]>([]);
+  const [pendingLabels, setPendingLabels] = useState<ProductLabel[]>([]);
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
@@ -90,6 +112,13 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const deveinLot = useMemo(() => thawLots.find(l => l.lot_id === deveinLotId) || null, [thawLots, deveinLotId]);
   const sleeveLot = useMemo(() => thawLots.find(l => l.lot_id === sleeveLotId) || null, [thawLots, sleeveLotId]);
   const blastLot = useMemo(() => thawLots.find(l => l.lot_id === blastLotId) || null, [thawLots, blastLotId]);
+  const masterLot = useMemo(() => blastDoneLots.find(l => l.lot_id === masterLotId) || null, [blastDoneLots, masterLotId]);
+  const isConch = useMemo(() => {
+    if (!masterLot) return false;
+    return (masterLot.species_code ?? '').toLowerCase().includes('conch')
+      || (masterLot.species_name ?? '').toLowerCase().includes('conch')
+      || masterLot.batch_number.toUpperCase().startsWith('CON-');
+  }, [masterLot]);
 
   const loadVessels = useCallback(async () => {
     const { data } = await supabase.from('spinytails_vessels').select(VESSEL_COLS).eq('status', 'approved').order('vessel_name');
@@ -135,6 +164,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   }, []);
   const loadFreezerLots = useCallback(async () => { setFreezerLots(await fetchLots()); }, [fetchLots]);
   const loadThawLots = useCallback(async () => { setThawLots(await fetchLots('thawing')); }, [fetchLots]);
+  const loadBlastDone = useCallback(async () => { setBlastDoneLots(await fetchLots('blast_freezing')); }, [fetchLots]);
 
   useEffect(() => { (async () => {
     const [{ data: sp }, { data: sup }, { data: locs }] = await Promise.all([
@@ -144,8 +174,8 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     ]);
     setSpecies((sp ?? []) as Species[]);
     setSuppliers((sup ?? []) as Supplier[]); setLocations((locs ?? []) as Loc[]);
-    await loadVessels(); await loadFeed(); await loadFreezerLots(); await loadThawLots();
-  })(); }, [loadVessels, loadFeed, loadFreezerLots, loadThawLots]);
+    await loadVessels(); await loadFeed(); await loadFreezerLots(); await loadThawLots(); await loadBlastDone();
+  })(); }, [loadVessels, loadFeed, loadFreezerLots, loadThawLots, loadBlastDone]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
 
@@ -366,8 +396,50 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
       flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} ${blastLot.batch_number} → blast freezing · ${reading}°F${j.within_limit ? '' : ' — ABOVE −10°F, do not start the 24h clock'}`);
       setBlastTemp(''); setBlastFreezer(''); setBlastLotId('');
-      await loadThawLots(); await loadFeed();
+      await loadThawLots(); await loadBlastDone(); await loadFeed();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Blast-in failed'); }
+    finally { setBusy(false); }
+  }
+
+  function labelsFor(cases: { case_code: string; grade?: string; net_weight_lbs?: number }[], lot: FreezerLot, conch: boolean, sulfite: boolean): ProductLabel[] {
+    const packedBy = (lot.date_pulled ? String(lot.date_pulled) : lot.receipt_date ?? '').slice(0, 10) || undefined;
+    const gLabel = (v?: string) => LOBSTER_GRADES.find(g => g.value === v)?.label ?? v;
+    return cases.map(c => conch
+      ? { productType: 'conch' as const, lotCode: c.case_code, netWeight: `${c.net_weight_lbs ?? ''} lb`, cleaningSpec: `${conchCleanPct}% clean`, packedBy, bestUsedBy: lot.best_used_by ?? undefined }
+      : { productType: 'lobster' as const, lotCode: c.case_code, netWeight: '10 lb case', size: gLabel(c.grade), packedBy, bestUsedBy: lot.best_used_by ?? undefined, sulfite });
+  }
+
+  async function submitMaster() {
+    if (!masterLot) { flash(false, 'Select a batch.'); return; }
+    const lot = masterLot, conch = isConch, sulfite = masterSulfite;
+    let body: Record<string, unknown>;
+    if (conch) {
+      const packs = CONCH_SIZES.map(nw => ({ net_weight_lbs: nw, count: parseInt(conchCounts[String(nw)] || '0', 10) || 0 })).filter(p => p.count > 0);
+      if (!packs.length) { flash(false, 'Enter at least one case size with a count.'); return; }
+      body = { action: 'pack_conch', lot_id: lot.lot_id, batch_number: lot.batch_number, conch_clean_pct: conchCleanPct, packs, holding_freezer_location: masterFreezer || null, device_id: 'PROCESSOR-CARD-8' };
+    } else {
+      const grades = LOBSTER_GRADES.map(g => ({ grade: g.value, box_count: parseInt(lobsterCounts[g.value] || '0', 10) || 0 })).filter(g => g.box_count > 0);
+      if (!grades.length) { flash(false, 'Enter at least one size with a box count.'); return; }
+      body = { action: 'grade', lot_id: lot.lot_id, batch_number: lot.batch_number, product_type: 'lobster', grades, sulfite, holding_freezer_location: masterFreezer || null, device_id: 'PROCESSOR-CARD-8' };
+    }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify(body),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      const cases = (j.cases ?? []) as { case_code: string; grade?: string; net_weight_lbs?: number }[];
+      setMadeCases(cases);
+      const labels = labelsFor(cases, lot, conch, sulfite);
+      setPendingLabels(labels);
+      flash(true, `✓ ${cases.length} case(s) · ${lot.batch_number} → holding, ready to ship. Printing labels…`);
+      setLobsterCounts({}); setConchCounts({}); setMasterFreezer(''); setMasterLotId('');
+      if (labels.length) await printProductLabels(labels, { widthIn: 4, heightIn: 6 });
+      await loadBlastDone(); await loadFeed();
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Boxing failed'); }
     finally { setBusy(false); }
   }
 
@@ -669,6 +741,76 @@ export default function ProcessorClient({ displayName }: { userId: string; email
               <div><div style={lbl}>Blast temp (°F) — required</div><input type="number" inputMode="decimal" value={blastTemp} onChange={e => setBlastTemp(e.target.value)} placeholder="≤ −10" style={inp} /></div>
             </div>
             <button onClick={submitBlast} disabled={busy || !blastLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !blastLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !blastLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '❄️ Record into blast freezer'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 8 — remove from blast → box + label → holding (final) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>8 · 📦 Box + label → holding <span style={{ fontSize: 12, fontWeight: 700, color: '#8ea3c0' }}>· final: cases, barcodes, ready-to-ship</span></div>
+        {blastDoneLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>No batches in the blast freezer. A batch reaches here after Card 7 (blast freezing).</div>
+        ) : (
+          <>
+            <div style={lbl}>Batch (from blast)</div>
+            <select value={masterLotId} onChange={e => { setMasterLotId(e.target.value); setMadeCases([]); setPendingLabels([]); }} style={inp}>
+              <option value="">— select batch —</option>
+              {blastDoneLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name} · 🚤 {l.boat ?? '—'}</option>)}
+            </select>
+
+            {masterLot && (
+              <>
+                <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <b style={{ color: GOLD }}>{masterLot.batch_number} · {isConch ? '🐚 Conch pack' : '🦞 Lobster grade'}</b>
+                    <button onClick={() => openCert(masterLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: masterLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: masterLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {masterLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
+                  </div>
+                  <div>{masterLot.product_name} · ⚖️ {masterLot.remaining_lbs} lb · 🚤 {masterLot.boat ?? '—'} · 🪪 {masterLot.registration ?? 'no reg'} · 📍 {masterLot.catch_location ?? '—'}</div>
+                </div>
+
+                {isConch ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={lbl}>Cleaning spec</div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                      {CONCH_CLEAN.map(p => (
+                        <button key={p} onClick={() => setConchCleanPct(p)} style={{ flex: 1, padding: 10, borderRadius: 10, fontWeight: 800, border: '1px solid', borderColor: conchCleanPct === p ? GOLD : '#2a3a52', background: conchCleanPct === p ? 'rgba(200,134,15,0.15)' : 'transparent', color: conchCleanPct === p ? GOLD : '#8ea3c0', cursor: 'pointer' }}>{p}% clean</button>
+                      ))}
+                    </div>
+                    <div style={{ ...lbl, marginTop: 10 }}>Cases by size — enter count</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 6 }}>
+                      {CONCH_SIZES.map(nw => (
+                        <div key={nw}><div style={{ fontSize: 12, color: '#cbd5e1', marginBottom: 2 }}>{nw} lb</div>
+                          <input type="number" inputMode="numeric" value={conchCounts[String(nw)] ?? ''} onChange={e => setConchCounts(c => ({ ...c, [String(nw)]: e.target.value }))} placeholder="0" style={inp} /></div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={lbl}>Boxes by grade — enter count (10 lb each)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 6 }}>
+                      {LOBSTER_GRADES.map(g => (
+                        <div key={g.value}><div style={{ fontSize: 11.5, color: '#cbd5e1', marginBottom: 2 }}>{g.label}</div>
+                          <input type="number" inputMode="numeric" value={lobsterCounts[g.value] ?? ''} onChange={e => setLobsterCounts(c => ({ ...c, [g.value]: e.target.value }))} placeholder="0" style={{ ...inp, marginTop: 0, padding: 9 }} /></div>
+                      ))}
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 13, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={masterSulfite} onChange={e => setMasterSulfite(e.target.checked)} /> Sodium Metabisulfite used (label declaration)
+                    </label>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 10 }}><div style={lbl}>Holding freezer</div><input value={masterFreezer} onChange={e => setMasterFreezer(e.target.value)} placeholder="e.g. Holding Freezer #1" style={inp} /></div>
+                <button onClick={submitMaster} disabled={busy} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: busy ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: busy ? 'wait' : 'pointer' }}>{busy ? 'Working…' : '📦 Box, label + move to holding'}</button>
+              </>
+            )}
+
+            {madeCases.length > 0 && (
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: 'rgba(22,163,74,0.10)', border: '1px solid #16a34a', fontSize: 13 }}>
+                <div style={{ fontWeight: 800, color: '#4ade80' }}>✓ {madeCases.length} case(s) made → holding, ready to ship</div>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', margin: '6px 0' }}>{madeCases.slice(0, 30).map((c, i) => <span key={i} style={{ fontSize: 11, background: '#0d1f3c', borderRadius: 12, padding: '2px 7px', color: '#cbd5e1' }}>{c.case_code}</span>)}</div>
+                <button onClick={() => pendingLabels.length && printProductLabels(pendingLabels, { widthIn: 4, heightIn: 6 })} style={{ marginTop: 4, padding: '8px 14px', borderRadius: 8, fontWeight: 800, fontSize: 13, background: 'transparent', border: `1px solid ${GOLD}`, color: GOLD, cursor: 'pointer' }}>🖨️ Print labels again</button>
+              </div>
+            )}
           </>
         )}
       </div>

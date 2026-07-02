@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
       best_used_by: r.best_used_by as string | null,
       thaw_logs: thawByLot.get(id) ?? [],
       product_name: prodByLot.get(id) ?? spByCode.get(r.species_code as string) ?? 'Product',
+      species_code: (r.species_code as string) ?? null,
       species_name: spByCode.get(r.species_code as string) ?? null,
       catch_location: catchByLot.get(id) ?? null,
       current_freezer: r.holding_freezer_location as string | null,
