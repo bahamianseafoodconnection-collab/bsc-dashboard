@@ -173,6 +173,35 @@ export async function POST(req: NextRequest) {
       if (error) err = error.message;
       else resp = { date_pulled: pulledAt, best_used_by: bestUsedBy, shelf_life_months: months, destination, pulled_weight_lbs: wt };
 
+    } else if (action === 'devein') {
+      // DEVEINING (Card 5). Records the deveining step + a REQUIRED bath
+      // temperature (kept cold — target ≤40°F). Both are stamped + tied to the
+      // batch/boat via the lot. Status is left unchanged (line-stage step).
+      const reading = num(b.reading_f);
+      if (reading == null) return NextResponse.json({ ok: false, error: 'Bath temperature is required for deveining.' }, { status: 400 });
+      const target = 40;
+      const tol = num(b.tolerance_f) ?? 5;
+      const within = reading <= target + tol;
+      const { error: tErr } = await admin.from('spinytails_temperature_logs').insert({
+        logged_at:      str(b.logged_at) ?? nowIso,
+        location:       'processing_bath',
+        lot_id:         lotId,
+        reading_f:      reading,
+        within_limit:   within,
+        recorded_by:    user.id,
+        action_if_fail: within ? null : (str(b.action_if_fail) ?? 'Deveining bath above target — add ice / chill product toward ≤40°F.'),
+        notes:          'Deveining bath',
+      });
+      if (tErr) err = tErr.message;
+      else {
+        const { error: sErr } = await admin.from('spinytails_processing_steps').insert({
+          batch_number: batch, lot_id: lotId, step_no: num(b.step_no) ?? 10,
+          step_name: 'Deveining', weight_lbs: num(b.weight_lbs), employee_id: user.id, device_id: str(b.device_id),
+        });
+        if (sErr) err = sErr.message;
+        else resp = { step: 'Deveining', bath_temp_f: reading, within_limit: within, target_f: target };
+      }
+
     } else if (action === 'defrost_temp') {
       // Ice-bath (thaw_vat) hourly temperature log. Target 32°F ± tolerance.
       const reading = num(b.reading_f);

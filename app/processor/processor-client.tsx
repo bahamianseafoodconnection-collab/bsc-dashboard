@@ -69,10 +69,15 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [thawLots, setThawLots] = useState<FreezerLot[]>([]);
   const [thawLotId, setThawLotId] = useState('');
   const [thawReading, setThawReading] = useState('');
+  // Card 5 — deveining (bath temp required)
+  const [deveinLotId, setDeveinLotId] = useState('');
+  const [deveinTemp, setDeveinTemp] = useState('');
+  const [deveinWeight, setDeveinWeight] = useState('');
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
   const thawLot = useMemo(() => thawLots.find(l => l.lot_id === thawLotId) || null, [thawLots, thawLotId]);
+  const deveinLot = useMemo(() => thawLots.find(l => l.lot_id === deveinLotId) || null, [thawLots, deveinLotId]);
 
   const loadVessels = useCallback(async () => {
     const { data } = await supabase.from('spinytails_vessels').select(VESSEL_COLS).eq('status', 'approved').order('vessel_name');
@@ -277,6 +282,25 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     finally { setBusy(false); }
   }
 
+  async function submitDevein() {
+    if (!deveinLot) { flash(false, 'Select a batch.'); return; }
+    const reading = parseFloat(deveinTemp);
+    if (!Number.isFinite(reading)) { flash(false, 'Bath temperature is required.'); return; }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ action: 'devein', lot_id: deveinLot.lot_id, batch_number: deveinLot.batch_number, reading_f: reading, weight_lbs: deveinWeight ? parseFloat(deveinWeight) : null, device_id: 'PROCESSOR-CARD-5' }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} Deveining logged · ${deveinLot.batch_number} · bath ${reading}°F${j.within_limit ? '' : ' — ABOVE 40°F, chill the bath'}`);
+      setDeveinTemp(''); setDeveinWeight('');
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Deveining log failed'); }
+    finally { setBusy(false); }
+  }
+
   const first = (displayName || '').split(' ')[0] || 'there';
   const inp: React.CSSProperties = { width: '100%', padding: 12, fontSize: 16, border: '1px solid #2a3a52', borderRadius: 10, marginTop: 6, background: '#0c1729', color: '#fff', boxSizing: 'border-box' };
   const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 800, color: '#8ea3c0', textTransform: 'uppercase', letterSpacing: 0.5 };
@@ -474,6 +498,39 @@ export default function ProcessorClient({ displayName }: { userId: string; email
             <div style={{ marginTop: 10 }}><div style={lbl}>Ice-bath temperature (°F)</div>
               <input type="number" inputMode="decimal" value={thawReading} onChange={e => setThawReading(e.target.value)} placeholder="e.g. 32" style={inp} /></div>
             <button onClick={submitThawTemp} disabled={busy || !thawLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !thawLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !thawLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🌡️ Log thaw temperature'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 5 — deveining (bath temp required) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>5 · 🔪 Deveining <span style={{ fontSize: 12, fontWeight: 700, color: '#8ea3c0' }}>· bath temp required, keep ≤ 40°F</span></div>
+        {thawLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>No batches ready to devein. A batch appears here once it&apos;s been pulled to defrost (Card 3 → thawing).</div>
+        ) : (
+          <>
+            <div style={lbl}>Batch</div>
+            <select value={deveinLotId} onChange={e => setDeveinLotId(e.target.value)} style={inp}>
+              <option value="">— select batch —</option>
+              {thawLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name}</option>)}
+            </select>
+
+            {deveinLot && (
+              <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <b style={{ color: GOLD }}>{deveinLot.batch_number}</b>
+                  <button onClick={() => openCert(deveinLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: deveinLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: deveinLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {deveinLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
+                </div>
+                <div>🦞 {deveinLot.product_name} · ⚖️ {deveinLot.remaining_lbs} lb</div>
+                <div>🚤 {deveinLot.boat ?? '—'} · 🪪 {deveinLot.registration ?? 'no reg'} · 📍 {deveinLot.catch_location ?? '—'}</div>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div><div style={lbl}>Bath temp (°F) — required</div><input type="number" inputMode="decimal" value={deveinTemp} onChange={e => setDeveinTemp(e.target.value)} placeholder="≤ 40" style={inp} /></div>
+              <div><div style={lbl}>Weight deveined (lb) — optional</div><input type="number" inputMode="decimal" value={deveinWeight} onChange={e => setDeveinWeight(e.target.value)} style={inp} /></div>
+            </div>
+            <button onClick={submitDevein} disabled={busy || !deveinLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !deveinLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !deveinLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🔪 Log deveining'}</button>
           </>
         )}
       </div>
