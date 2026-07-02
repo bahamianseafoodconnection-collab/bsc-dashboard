@@ -573,7 +573,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
                   <b style={{ color: GOLD }}>{pullLot.batch_number}</b>
                   <button onClick={() => openCert(pullLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: pullLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: pullLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {pullLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
                 </div>
-                <div>🦞 {pullLot.product_name}{pullLot.species_name && pullLot.species_name !== pullLot.product_name ? ` · ${pullLot.species_name}` : ''}</div>
+                <div>🐟 {pullLot.product_name}{pullLot.species_name && pullLot.species_name !== pullLot.product_name ? ` · ${pullLot.species_name}` : ''}</div>
                 <div>📅 Received {pullLot.receipt_date ?? '—'} · 🧊 {pullLot.current_freezer ?? 'freezer'} · {pullLot.status.replace(/_/g, ' ')}</div>
                 <div>🚤 {pullLot.boat ?? '—'} · 👤 {pullLot.captain ?? '—'} · 🪪 {pullLot.registration ?? 'no reg'}</div>
                 <div>📍 Catch: {pullLot.catch_location ?? '—'}</div>
@@ -613,8 +613,8 @@ export default function ProcessorClient({ displayName }: { userId: string; email
 
             {thawLot && (
               <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
-                <div><b style={{ color: GOLD }}>{thawLot.batch_number}</b> · 🦞 {thawLot.product_name}</div>
-                <div>🚤 {thawLot.boat ?? '—'} · 📅 Pulled {thawLot.date_pulled?.slice(0, 10) ?? '—'} · ⏳ Best used by {thawLot.best_used_by ?? '—'}</div>
+                <div><b style={{ color: GOLD }}>{thawLot.batch_number}</b> · 🐟 {thawLot.product_name} · ⚖️ {thawLot.remaining_lbs} lb</div>
+                <div>🚤 {thawLot.boat ?? '—'} · 🪪 {thawLot.registration ?? 'no reg'} · 📅 Pulled {thawLot.date_pulled?.slice(0, 10) ?? '—'} · ⏳ Best used by {thawLot.best_used_by ?? '—'}</div>
                 {(thawLot.thaw_logs?.length ?? 0) > 0 && (
                   <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #1c2c44' }}>
                     <div style={{ fontSize: 11, color: '#8ea3c0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Readings ({thawLot.thaw_logs!.length})</div>
@@ -654,7 +654,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
                   <b style={{ color: GOLD }}>{deveinLot.batch_number}</b>
                   <button onClick={() => openCert(deveinLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: deveinLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: deveinLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {deveinLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
                 </div>
-                <div>🦞 {deveinLot.product_name} · ⚖️ {deveinLot.remaining_lbs} lb</div>
+                <div>🐟 {deveinLot.product_name} · ⚖️ {deveinLot.remaining_lbs} lb</div>
                 <div>🚤 {deveinLot.boat ?? '—'} · 🪪 {deveinLot.registration ?? 'no reg'} · 📍 {deveinLot.catch_location ?? '—'}</div>
               </div>
             )}
@@ -719,7 +719,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
 
             {sleeveLot && (
               <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
-                <div><b style={{ color: GOLD }}>{sleeveLot.batch_number}</b> · 🦞 {sleeveLot.product_name} · ⚖️ {sleeveLot.remaining_lbs} lb</div>
+                <div><b style={{ color: GOLD }}>{sleeveLot.batch_number}</b> · 🐟 {sleeveLot.product_name} · ⚖️ {sleeveLot.remaining_lbs} lb</div>
                 <div>🚤 {sleeveLot.boat ?? '—'} · 🪪 {sleeveLot.registration ?? 'no reg'}</div>
               </div>
             )}
@@ -749,7 +749,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
                   <b style={{ color: GOLD }}>{blastLot.batch_number}</b>
                   <button onClick={() => openCert(blastLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: blastLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: blastLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {blastLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
                 </div>
-                <div>🦞 {blastLot.product_name} · ⚖️ {blastLot.remaining_lbs} lb · 🚤 {blastLot.boat ?? '—'} · 🪪 {blastLot.registration ?? 'no reg'}</div>
+                <div>🐟 {blastLot.product_name} · ⚖️ {blastLot.remaining_lbs} lb · 🚤 {blastLot.boat ?? '—'} · 🪪 {blastLot.registration ?? 'no reg'}</div>
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1c2c44' }}>
                   <div style={{ fontSize: 11, color: '#8ea3c0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Stage history {histLoading ? '· loading…' : `(${hist.length})`}</div>
                   {!histLoading && hist.length === 0 && <div style={{ color: '#5a6b85', fontSize: 12 }}>No prior stages logged.</div>}
@@ -789,7 +789,7 @@ export default function ProcessorClient({ displayName }: { userId: string; email
               <>
                 <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <b style={{ color: GOLD }}>{masterLot.batch_number} · {isConch ? '🐚 Conch pack' : '🦞 Lobster grade'}</b>
+                    <b style={{ color: GOLD }}>{masterLot.batch_number} · {isConch ? '🐚 Conch — clean & pack' : `📦 ${masterLot.product_name} — grade & box`}</b>
                     <button onClick={() => openCert(masterLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: masterLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: masterLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {masterLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
                   </div>
                   <div>{masterLot.product_name} · ⚖️ {masterLot.remaining_lbs} lb · 🚤 {masterLot.boat ?? '—'} · 🪪 {masterLot.registration ?? 'no reg'} · 📍 {masterLot.catch_location ?? '—'}</div>
