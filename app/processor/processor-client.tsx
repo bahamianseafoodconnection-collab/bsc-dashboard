@@ -19,6 +19,7 @@ interface SupProduct { sku: string; name: string; }
 interface Loc { code: string; name: string; }
 interface FeedRow { lot_code: string; species: string; status: string; created_at: string; boat: string; weight: number | null; who: string; }
 interface ThawLog { reading_f: number | null; within_limit: boolean | null; logged_at: string | null; }
+interface TimelineEvent { t: string; icon: string; text: string; ok: boolean | null; }
 interface FreezerLot { lot_id: string; batch_number: string; status: string; receipt_date: string | null; date_pulled?: string | null; best_used_by?: string | null; thaw_logs?: ThawLog[]; product_name: string; species_name: string | null; catch_location: string | null; current_freezer: string | null; boat: string | null; captain: string | null; registration: string | null; registration_cert_url: string | null; received_lbs: number; removed_lbs: number; remaining_lbs: number; }
 const PULL_REASONS: { value: string; label: string; destination: 'processing' | 'retail' }[] = [
   { value: 'defrost_for_processing', label: '🧊 Defrost for processing', destination: 'processing' },
@@ -76,12 +77,19 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   // Card 6 — sleeving (time/date stamp)
   const [sleeveLotId, setSleeveLotId] = useState('');
   const [sleeveWeight, setSleeveWeight] = useState('');
+  // Card 7 — blast freezer (stage history + blast-in temp)
+  const [blastLotId, setBlastLotId] = useState('');
+  const [blastFreezer, setBlastFreezer] = useState('');
+  const [blastTemp, setBlastTemp] = useState('');
+  const [hist, setHist] = useState<TimelineEvent[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
   const thawLot = useMemo(() => thawLots.find(l => l.lot_id === thawLotId) || null, [thawLots, thawLotId]);
   const deveinLot = useMemo(() => thawLots.find(l => l.lot_id === deveinLotId) || null, [thawLots, deveinLotId]);
   const sleeveLot = useMemo(() => thawLots.find(l => l.lot_id === sleeveLotId) || null, [thawLots, sleeveLotId]);
+  const blastLot = useMemo(() => thawLots.find(l => l.lot_id === blastLotId) || null, [thawLots, blastLotId]);
 
   const loadVessels = useCallback(async () => {
     const { data } = await supabase.from('spinytails_vessels').select(VESSEL_COLS).eq('status', 'approved').order('vessel_name');
@@ -140,6 +148,27 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   })(); }, [loadVessels, loadFeed, loadFreezerLots, loadThawLots]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
+
+  // Card 7: assemble the full stage history for the selected batch (reuse the
+  // read-only batch-pull audit endpoint → merged, time-sorted timeline).
+  useEffect(() => { (async () => {
+    if (!blastLot) { setHist([]); return; }
+    setHistLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/spinytails/batch-pull/${encodeURIComponent(blastLot.batch_number)}`, { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
+      const j = await res.json().catch(() => ({ ok: false }));
+      const s = (j.ok ? j.sections : {}) as Record<string, Array<Record<string, unknown>>>;
+      const ev: TimelineEvent[] = [];
+      const n = (v: unknown) => (v == null ? '?' : String(v));
+      for (const r of s.receiving ?? []) ev.push({ t: n(r.intake_time), icon: '📥', text: `Received ${n(r.quantity_lbs)} lb ${n(r.product_state)} @ ${n(r.core_temp_f_at_receipt)}°F`, ok: true });
+      for (const rm of s.freezer_removals ?? []) ev.push({ t: n(rm.removed_at), icon: '🧊', text: `Pulled ${n(rm.weight_removed_lbs)} lb (${n(rm.purpose)})${rm.storage_location ? ` — ${n(rm.storage_location)}` : ''}`, ok: true });
+      for (const t of s.temperature ?? []) ev.push({ t: n(t.logged_at), icon: '🌡️', text: `${n(t.location).replace(/_/g, ' ')} ${n(t.reading_f)}°F`, ok: t.within_limit as boolean | null });
+      for (const st of s.processing_steps ?? []) ev.push({ t: n(st.recorded_at), icon: '🔧', text: n(st.step_name), ok: true });
+      setHist(ev.filter(e => e.t && e.t !== '?').sort((a, b) => (a.t < b.t ? -1 : 1)));
+    } catch { setHist([]); }
+    finally { setHistLoading(false); }
+  })(); }, [blastLot]);
 
   // Card 2: load the selected supplier's products.
   useEffect(() => { (async () => {
@@ -319,6 +348,26 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       flash(true, `✓ Sleeving logged · ${sleeveLot.batch_number} · ${sleeveLot.boat ?? '—'}`);
       setSleeveWeight('');
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Sleeving log failed'); }
+    finally { setBusy(false); }
+  }
+
+  async function submitBlast() {
+    if (!blastLot) { flash(false, 'Select a batch.'); return; }
+    const reading = parseFloat(blastTemp);
+    if (!Number.isFinite(reading)) { flash(false, 'Blast-freezer temperature is required.'); return; }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ action: 'blast_in', lot_id: blastLot.lot_id, batch_number: blastLot.batch_number, reading_f: reading, blast_freezer_location: blastFreezer || null, device_id: 'PROCESSOR-CARD-7' }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} ${blastLot.batch_number} → blast freezing · ${reading}°F${j.within_limit ? '' : ' — ABOVE −10°F, do not start the 24h clock'}`);
+      setBlastTemp(''); setBlastFreezer(''); setBlastLotId('');
+      await loadThawLots(); await loadFeed();
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Blast-in failed'); }
     finally { setBusy(false); }
   }
 
@@ -578,6 +627,48 @@ export default function ProcessorClient({ displayName }: { userId: string; email
 
             <div style={{ marginTop: 10 }}><div style={lbl}>Weight sleeved (lb) — optional</div><input type="number" inputMode="decimal" value={sleeveWeight} onChange={e => setSleeveWeight(e.target.value)} style={inp} /></div>
             <button onClick={submitSleeve} disabled={busy || !sleeveLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !sleeveLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !sleeveLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🧴 Log sleeving'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 7 — blast freezer (stage history + blast-in temp) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>7 · ❄️ Blast freezer <span style={{ fontSize: 12, fontWeight: 700, color: '#8ea3c0' }}>· target ≤ −10°F to start the 24h clock</span></div>
+        {thawLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>No batches ready to blast. A batch reaches here after defrost + processing (Card 3 → thawing).</div>
+        ) : (
+          <>
+            <div style={lbl}>Batch (boat / origin)</div>
+            <select value={blastLotId} onChange={e => setBlastLotId(e.target.value)} style={inp}>
+              <option value="">— select batch —</option>
+              {thawLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name} · 🚤 {l.boat ?? '—'}</option>)}
+            </select>
+
+            {blastLot && (
+              <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <b style={{ color: GOLD }}>{blastLot.batch_number}</b>
+                  <button onClick={() => openCert(blastLot.registration_cert_url)} style={{ fontSize: 12, fontWeight: 800, padding: '4px 9px', borderRadius: 8, border: '1px solid', borderColor: blastLot.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: blastLot.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {blastLot.registration_cert_url ? 'View cert' : 'No cert'}</button>
+                </div>
+                <div>🦞 {blastLot.product_name} · ⚖️ {blastLot.remaining_lbs} lb · 🚤 {blastLot.boat ?? '—'} · 🪪 {blastLot.registration ?? 'no reg'}</div>
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1c2c44' }}>
+                  <div style={{ fontSize: 11, color: '#8ea3c0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Stage history {histLoading ? '· loading…' : `(${hist.length})`}</div>
+                  {!histLoading && hist.length === 0 && <div style={{ color: '#5a6b85', fontSize: 12 }}>No prior stages logged.</div>}
+                  {hist.map((e, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12.5, color: e.ok === false ? '#f87171' : '#cbd5e1', padding: '1px 0' }}>
+                      <span style={{ color: '#5a6b85', minWidth: 92 }}>{e.t.slice(5, 16).replace('T', ' ')}</span>
+                      <span>{e.icon} {e.text}{e.ok === false ? ' ⚠' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div><div style={lbl}>Blast freezer</div><input value={blastFreezer} onChange={e => setBlastFreezer(e.target.value)} placeholder="e.g. Blast Freezer #1" style={inp} /></div>
+              <div><div style={lbl}>Blast temp (°F) — required</div><input type="number" inputMode="decimal" value={blastTemp} onChange={e => setBlastTemp(e.target.value)} placeholder="≤ −10" style={inp} /></div>
+            </div>
+            <button onClick={submitBlast} disabled={busy || !blastLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !blastLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !blastLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '❄️ Record into blast freezer'}</button>
           </>
         )}
       </div>

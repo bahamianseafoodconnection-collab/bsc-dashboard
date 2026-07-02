@@ -202,6 +202,34 @@ export async function POST(req: NextRequest) {
         else resp = { step: 'Deveining', bath_temp_f: reading, within_limit: within, target_f: target };
       }
 
+    } else if (action === 'blast_in') {
+      // BLAST FREEZER IN (Card 7). Records the blast-in start temperature
+      // (target ≤ −10°F to start the 24h clock; the named blast freezer goes in
+      // the log notes since lots has no blast-location column) and flips the lot
+      // to 'blast_freezing'. Time/date stamped, tied to batch/boat.
+      const reading = num(b.reading_f);
+      if (reading == null) return NextResponse.json({ ok: false, error: 'Blast-freezer temperature is required.' }, { status: 400 });
+      const blastLoc = str(b.blast_freezer_location);
+      const target = -10;
+      const tol = num(b.tolerance_f) ?? 2;
+      const within = reading <= target + tol;
+      const { error: tErr } = await admin.from('spinytails_temperature_logs').insert({
+        logged_at:      str(b.logged_at) ?? nowIso,
+        location:       'blast_freezer',
+        lot_id:         lotId,
+        reading_f:      reading,
+        within_limit:   within,
+        recorded_by:    user.id,
+        action_if_fail: within ? null : (str(b.action_if_fail) ?? 'Blast not at −10°F — verify freezer; do not start the 24h clock until reached.'),
+        notes:          `Blast-in start${blastLoc ? ` · ${blastLoc}` : ''}`,
+      });
+      if (tErr) err = tErr.message;
+      else {
+        const { error: uErr } = await admin.from('spinytails_lots').update({ status: 'blast_freezing' }).eq('id', lotId);
+        if (uErr) err = uErr.message;
+        else resp = { status: 'blast_freezing', blast_temp_f: reading, within_limit: within, target_f: target, blast_freezer: blastLoc };
+      }
+
     } else if (action === 'sleeve') {
       // SLEEVING (Card 6). Time/date-stamped processing step, tied to the
       // batch/boat via the lot. No bath temp. Status unchanged (line-stage step).
