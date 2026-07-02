@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { printProductLabels, type ProductLabel } from '@/lib/spinytails-product-label';
 import FreezerTempCard from './FreezerTempCard';
+import FishingBoatsCard from './FishingBoatsCard';
 
 const NAVY = '#060e1c', GOLD = '#c8860f';
 
@@ -64,9 +65,6 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [qc, setQc] = useState<QC>({ discoloration: false, egg_bearing: false, softshell_damage: false, undersized: false, odor: false });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // inline add-boat
-  const [addOpen, setAddOpen] = useState(false);
-  const [nbName, setNbName] = useState(''); const [nbReg, setNbReg] = useState(''); const [nbCaptain, setNbCaptain] = useState(''); const [nbCert, setNbCert] = useState<File | null>(null);
   // Card 2 — inventory intake (finished product from supplier)
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [locations, setLocations] = useState<Loc[]>([]);
@@ -219,38 +217,6 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     window.open(data.signedUrl, '_blank');
   }
   const viewCert = () => openCert(vessel?.registration_cert_url ?? null);
-
-  async function addBoat() {
-    if (!nbName.trim() || !nbReg.trim()) { flash(false, 'Boat name + registration required.'); return; }
-    const used = new Set(vessels.map(v => v.vessel_code));
-    const words = nbName.trim().toUpperCase().replace(/[^A-Z ]/g, '').split(/\s+/).filter(Boolean);
-    let code = ((words[0]?.[0] ?? 'B') + (words[1]?.[0] ?? words[0]?.[1] ?? 'T')).replace(/[^A-Z]/g, 'X').slice(0, 2).padEnd(2, 'X');
-    let i = 0; while (used.has(code) && i < 26) { code = code[0] + String.fromCharCode(65 + i); i++; }
-    const palette = ['blue', 'green', 'orange', 'purple', 'yellow', 'red', 'black', 'white', 'pink', 'cyan', 'brown', 'gray'];
-    const usedColors = new Set(vessels.map(v => (v.color_tag || '').toLowerCase()));
-    const color = palette.find(c => !usedColors.has(c)) ?? 'gray';
-    setBusy(true);
-    try {
-      const { data: ins, error } = await supabase.from('spinytails_vessels').insert({
-        vessel_code: code, vessel_name: nbName.trim(), fisherman_name: nbCaptain.trim() || nbName.trim(),
-        captain_name: nbCaptain.trim() || null, license_number: nbReg.trim(), color_tag: color,
-        status: 'approved', approved_at: new Date().toISOString(),
-      }).select('id').single();
-      if (error) throw error;
-      const newId = (ins as { id: string }).id;
-      if (nbCert) {
-        const ext = (nbCert.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const path = `${code}/cert-${Date.now()}.${ext}`;
-        const up = await supabase.storage.from('vessel-certs').upload(path, nbCert, { upsert: true, contentType: nbCert.type || undefined });
-        if (!up.error) await supabase.from('spinytails_vessels').update({ registration_cert_url: path }).eq('id', newId);
-        else flash(false, `Boat added, but cert upload failed: ${up.error.message}`);
-      }
-      await loadVessels(); setVesselId(newId);
-      setAddOpen(false); setNbName(''); setNbReg(''); setNbCaptain(''); setNbCert(null);
-      flash(true, `✓ Added ${nbName.trim()} (${code})`);
-    } catch (e) { flash(false, e instanceof Error ? e.message : 'Add boat failed'); }
-    finally { setBusy(false); }
-  }
 
   async function takeIn(decision: 'accept' | 'reject') {
     if (!vesselId) { flash(false, 'Select the boat.'); return; }
@@ -465,6 +431,9 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       {/* FRONT-OF-DASHBOARD — record freezer temperature (3×/day, due-tracked) */}
       <FreezerTempCard />
 
+      {/* SETUP — fishing boats + their registration certificates */}
+      <FishingBoatsCard onBoatsChanged={loadVessels} />
+
       {/* CARD 1 — New raw product from boat */}
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -486,30 +455,11 @@ export default function ProcessorClient({ displayName }: { userId: string; email
             </select>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => setAddOpen(o => !o)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: '1px solid #2a3a52', background: 'transparent', color: '#8ea3c0', cursor: 'pointer' }}>＋ Add new boat</button>
-          {vessel && (
-            <>
-              <span style={{ fontSize: 12, color: '#8ea3c0' }}>🪪 {vessel.license_number ?? 'no reg'} · 👤 {vessel.captain_name ?? vessel.fisherman_name}</span>
-              <button onClick={viewCert} style={{ fontSize: 12, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: '1px solid', borderColor: vessel.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: vessel.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {vessel.registration_cert_url ? 'View cert' : 'No cert'}</button>
-              <button onClick={() => setColorReused(r => !r)} style={{ fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 999, border: '1px solid', borderColor: colorReused ? GOLD : '#2a3a52', background: colorReused ? 'rgba(200,134,15,0.2)' : 'transparent', color: colorReused ? GOLD : '#8ea3c0', cursor: 'pointer' }}>🎨 {colorStrap || '—'} {colorReused ? '♻' : ''}</button>
-            </>
-          )}
-        </div>
-
-        {addOpen && (
-          <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px dashed #2a3a52', background: '#0a1220' }}>
-            <div style={lbl}>Add new boat</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <input value={nbName} onChange={e => setNbName(e.target.value)} placeholder="Boat name *" style={inp} />
-              <input value={nbReg} onChange={e => setNbReg(e.target.value)} placeholder="Registration # *" style={inp} />
-              <input value={nbCaptain} onChange={e => setNbCaptain(e.target.value)} placeholder="Captain" style={inp} />
-              <label style={{ ...inp, display: 'flex', alignItems: 'center', cursor: 'pointer', color: nbCert ? '#4ade80' : '#8ea3c0' }}>
-                {nbCert ? `📄 ${nbCert.name.slice(0, 18)}` : '⬆ Cert (PDF/img)'}
-                <input type="file" accept="application/pdf,image/*" style={{ display: 'none' }} onChange={e => setNbCert(e.target.files?.[0] ?? null)} />
-              </label>
-            </div>
-            <button onClick={addBoat} disabled={busy} style={{ marginTop: 8, width: '100%', padding: 11, borderRadius: 10, fontWeight: 900, background: GOLD, color: NAVY, border: 'none', cursor: 'pointer' }}>{busy ? 'Adding…' : '✓ Add boat + attach cert'}</button>
+        {vessel && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: '#8ea3c0' }}>🪪 {vessel.license_number ?? 'no reg'} · 👤 {vessel.captain_name ?? vessel.fisherman_name}</span>
+            <button onClick={viewCert} style={{ fontSize: 12, fontWeight: 800, padding: '5px 10px', borderRadius: 8, border: '1px solid', borderColor: vessel.registration_cert_url ? GOLD : '#2a3a52', background: 'transparent', color: vessel.registration_cert_url ? GOLD : '#5a6b85', cursor: 'pointer' }}>📄 {vessel.registration_cert_url ? 'View cert' : 'No cert'}</button>
+            <button onClick={() => setColorReused(r => !r)} style={{ fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 999, border: '1px solid', borderColor: colorReused ? GOLD : '#2a3a52', background: colorReused ? 'rgba(200,134,15,0.2)' : 'transparent', color: colorReused ? GOLD : '#8ea3c0', cursor: 'pointer' }}>🎨 {colorStrap || '—'} {colorReused ? '♻' : ''}</button>
           </div>
         )}
 
