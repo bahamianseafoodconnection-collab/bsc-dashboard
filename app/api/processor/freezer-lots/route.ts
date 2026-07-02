@@ -1,10 +1,13 @@
 // /api/processor/freezer-lots
 //
-// Card 3 (Remove from freezer) list. Returns the batches currently sitting in a
-// freezer — status in ('in_receiving_freezer','blast_freezing','mastered') — each
-// with the display context the processor needs to recognise it by eye:
+// Processor batch list — powers Card 3 (Remove from freezer) and Card 4 (Thaw
+// log). Defaults to batches sitting in a freezer (in_receiving_freezer /
+// blast_freezing / mastered); pass ?status=thawing (comma-separated, whitelisted)
+// to scope to another stage. Each row carries the context the processor needs to
+// recognise it by eye:
 //   batch · product · receipt date · boat · registration cert · catch location
-// plus a weight reconcile (received − already-removed = remaining).
+// plus a weight reconcile (received − already-removed = remaining) and, for
+// thawing batches, the running thaw-vat temperature readings (Card 4).
 //
 // Read-only, staff-gated, service-role (bypasses RLS so the list always assembles).
 
@@ -16,6 +19,7 @@ export const dynamic = 'force-dynamic';
 
 const STAFF = new Set(['founder','co_founder','control_admin','basic_admin','manager','processor','receiver','qc_staff','operations']);
 const IN_FREEZER = ['in_receiving_freezer', 'blast_freezing', 'mastered'];
+const ALLOWED_STATUS = new Set(['received','in_receiving_freezer','thawing','processing','blast_freezing','mastered','in_distribution']);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function GET(req: NextRequest) {
@@ -35,9 +39,14 @@ export async function GET(req: NextRequest) {
 
   const admin: SupabaseClient = createClient(supaUrl, svcKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
+  const statusParam = new URL(req.url).searchParams.get('status');
+  const requested = (statusParam ?? '').split(',').map(s => s.trim()).filter(s => ALLOWED_STATUS.has(s));
+  const statuses = requested.length ? requested : IN_FREEZER;
+  const wantThawLogs = statuses.includes('thawing');
+
   const { data: lots, error } = await admin.from('spinytails_lots')
-    .select('id, batch_number, lot_code, status, receipt_date, species_code, vessel_id, holding_freezer_location')
-    .in('status', IN_FREEZER)
+    .select('id, batch_number, lot_code, status, receipt_date, date_pulled, best_used_by, species_code, vessel_id, holding_freezer_location')
+    .in('status', statuses)
     .order('receipt_date', { ascending: true });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   const rows = (lots ?? []) as Array<Record<string, unknown>>;
@@ -47,11 +56,12 @@ export async function GET(req: NextRequest) {
   const batches = rows.map(r => String(r.batch_number ?? r.lot_code ?? ''));
   const vesselIds = [...new Set(rows.map(r => r.vessel_id).filter(Boolean) as string[])];
 
-  const [{ data: intakes }, { data: removals }, { data: vessels }, { data: species }] = await Promise.all([
+  const [{ data: intakes }, { data: removals }, { data: vessels }, { data: species }, { data: thawLogs }] = await Promise.all([
     admin.from('spinytails_lot_intakes').select('lot_id, quantity_lbs, product_name, fishing_area').in('lot_id', lotIds),
     admin.from('spinytails_freezer_removals').select('lot_id, weight_removed_lbs').in('lot_id', lotIds),
     vesselIds.length ? admin.from('spinytails_vessels').select('id, vessel_name, fisherman_name, captain_name, license_number, registration_cert_url').in('id', vesselIds) : Promise.resolve({ data: [] }),
     admin.from('spinytails_species').select('code, name'),
+    wantThawLogs ? admin.from('spinytails_temperature_logs').select('lot_id, reading_f, within_limit, logged_at').in('lot_id', lotIds).eq('location', 'thaw_vat').order('logged_at', { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
 
   const num = (v: unknown) => Number(v ?? 0) || 0;
@@ -67,6 +77,10 @@ export async function GET(req: NextRequest) {
   }
   const vById = new Map((vessels ?? []).map((v: Record<string, unknown>) => [v.id as string, v]));
   const spByCode = new Map((species ?? []).map((s: { code: string; name: string }) => [s.code, s.name]));
+  const thawByLot = new Map<string, Array<{ reading_f: number | null; within_limit: boolean | null; logged_at: string | null }>>();
+  for (const t of (thawLogs ?? []) as Array<{ lot_id: string; reading_f: number | null; within_limit: boolean | null; logged_at: string | null }>) {
+    const a = thawByLot.get(t.lot_id) ?? []; a.push({ reading_f: t.reading_f, within_limit: t.within_limit, logged_at: t.logged_at }); thawByLot.set(t.lot_id, a);
+  }
 
   const out = rows.map(r => {
     const id = r.id as string;
@@ -78,6 +92,9 @@ export async function GET(req: NextRequest) {
       batch_number: (r.batch_number ?? r.lot_code) as string,
       status: r.status as string,
       receipt_date: r.receipt_date as string | null,
+      date_pulled: r.date_pulled as string | null,
+      best_used_by: r.best_used_by as string | null,
+      thaw_logs: thawByLot.get(id) ?? [],
       product_name: prodByLot.get(id) ?? spByCode.get(r.species_code as string) ?? 'Product',
       species_name: spByCode.get(r.species_code as string) ?? null,
       catch_location: catchByLot.get(id) ?? null,

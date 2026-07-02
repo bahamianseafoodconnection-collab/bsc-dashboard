@@ -18,7 +18,8 @@ interface Supplier { id: string; code: string | null; name: string; }
 interface SupProduct { sku: string; name: string; }
 interface Loc { code: string; name: string; }
 interface FeedRow { lot_code: string; species: string; status: string; created_at: string; boat: string; weight: number | null; who: string; }
-interface FreezerLot { lot_id: string; batch_number: string; status: string; receipt_date: string | null; product_name: string; species_name: string | null; catch_location: string | null; current_freezer: string | null; boat: string | null; captain: string | null; registration: string | null; registration_cert_url: string | null; received_lbs: number; removed_lbs: number; remaining_lbs: number; }
+interface ThawLog { reading_f: number | null; within_limit: boolean | null; logged_at: string | null; }
+interface FreezerLot { lot_id: string; batch_number: string; status: string; receipt_date: string | null; date_pulled?: string | null; best_used_by?: string | null; thaw_logs?: ThawLog[]; product_name: string; species_name: string | null; catch_location: string | null; current_freezer: string | null; boat: string | null; captain: string | null; registration: string | null; registration_cert_url: string | null; received_lbs: number; removed_lbs: number; remaining_lbs: number; }
 const PULL_REASONS: { value: string; label: string; destination: 'processing' | 'retail' }[] = [
   { value: 'defrost_for_processing', label: '🧊 Defrost for processing', destination: 'processing' },
   { value: 'bsc_sales',              label: '🛒 BSC sales',             destination: 'retail' },
@@ -64,9 +65,14 @@ export default function ProcessorClient({ displayName }: { userId: string; email
   const [pullFreezer, setPullFreezer] = useState<'Holding' | 'Blast'>('Holding');
   const [pullReason, setPullReason] = useState('');
   const [pullWeight, setPullWeight] = useState('');
+  // Card 4 — thaw / defrost temperature log
+  const [thawLots, setThawLots] = useState<FreezerLot[]>([]);
+  const [thawLotId, setThawLotId] = useState('');
+  const [thawReading, setThawReading] = useState('');
 
   const vessel = useMemo(() => vessels.find(v => v.id === vesselId) || null, [vessels, vesselId]);
   const pullLot = useMemo(() => freezerLots.find(l => l.lot_id === pullLotId) || null, [freezerLots, pullLotId]);
+  const thawLot = useMemo(() => thawLots.find(l => l.lot_id === thawLotId) || null, [thawLots, thawLotId]);
 
   const loadVessels = useCallback(async () => {
     const { data } = await supabase.from('spinytails_vessels').select(VESSEL_COLS).eq('status', 'approved').order('vessel_name');
@@ -103,12 +109,15 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     })));
   }, []);
 
-  const loadFreezerLots = useCallback(async () => {
+  const fetchLots = useCallback(async (status?: string): Promise<FreezerLot[]> => {
     const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch('/api/processor/freezer-lots', { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
+    const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await fetch(`/api/processor/freezer-lots${qs}`, { headers: { Authorization: `Bearer ${session?.access_token ?? ''}` }, cache: 'no-store' });
     const j = await res.json().catch(() => ({ ok: false }));
-    setFreezerLots(j.ok ? (j.lots as FreezerLot[]) : []);
+    return j.ok ? (j.lots as FreezerLot[]) : [];
   }, []);
+  const loadFreezerLots = useCallback(async () => { setFreezerLots(await fetchLots()); }, [fetchLots]);
+  const loadThawLots = useCallback(async () => { setThawLots(await fetchLots('thawing')); }, [fetchLots]);
 
   useEffect(() => { (async () => {
     const [{ data: sp }, { data: sup }, { data: locs }] = await Promise.all([
@@ -118,8 +127,8 @@ export default function ProcessorClient({ displayName }: { userId: string; email
     ]);
     setSpecies((sp ?? []) as Species[]);
     setSuppliers((sup ?? []) as Supplier[]); setLocations((locs ?? []) as Loc[]);
-    await loadVessels(); await loadFeed(); await loadFreezerLots();
-  })(); }, [loadVessels, loadFeed, loadFreezerLots]);
+    await loadVessels(); await loadFeed(); await loadFreezerLots(); await loadThawLots();
+  })(); }, [loadVessels, loadFeed, loadFreezerLots, loadThawLots]);
 
   useEffect(() => { if (vessel?.color_tag) setColorStrap(vessel.color_tag); }, [vessel]);
 
@@ -243,8 +252,28 @@ export default function ProcessorClient({ displayName }: { userId: string; email
       if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
       flash(true, `✓ Pulled ${wt} lb · ${pullLot.product_name} (${pullLot.batch_number}) from ${pullFreezer} — ${reason?.label.replace(/^\S+\s/, '')}`);
       setPullWeight(''); setPullReason(''); setPullLotId('');
-      await loadFreezerLots(); await loadFeed();
+      await loadFreezerLots(); await loadThawLots(); await loadFeed();
     } catch (e) { flash(false, e instanceof Error ? e.message : 'Pull failed'); }
+    finally { setBusy(false); }
+  }
+
+  async function submitThawTemp() {
+    if (!thawLot) { flash(false, 'Select a thawing batch.'); return; }
+    const reading = parseFloat(thawReading);
+    if (!Number.isFinite(reading)) { flash(false, 'Enter the ice-bath temperature.'); return; }
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/spinytails/processing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ action: 'defrost_temp', lot_id: thawLot.lot_id, batch_number: thawLot.batch_number, reading_f: reading, device_id: 'PROCESSOR-CARD-4' }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      flash(j.within_limit, `${j.within_limit ? '✓' : '⚠'} ${reading}°F logged · ${thawLot.batch_number}${j.within_limit ? ' (within 32°F ±3)' : ' — OUT of range, correct the bath'}`);
+      setThawReading('');
+      await loadThawLots();
+    } catch (e) { flash(false, e instanceof Error ? e.message : 'Log failed'); }
     finally { setBusy(false); }
   }
 
@@ -408,6 +437,43 @@ export default function ProcessorClient({ displayName }: { userId: string; email
                 {PULL_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select></div>
             <button onClick={submitPull} disabled={busy || !pullLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !pullLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !pullLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🧊 Remove from freezer'}</button>
+          </>
+        )}
+      </div>
+
+      {/* CARD 4 — thaw / defrost temperature log (ice bath, target 32°F) */}
+      <div style={card}>
+        <div style={{ fontSize: 15, fontWeight: 900, color: GOLD, marginBottom: 8 }}>4 · 🌡️ Thaw / defrost log <span style={{ fontSize: 12, fontWeight: 700, color: '#8ea3c0' }}>· ice bath, target 32°F ±3</span></div>
+        {thawLots.length === 0 ? (
+          <div style={{ color: '#8ea3c0', fontSize: 13 }}>Nothing thawing right now. Pull a batch in Card 3 with reason <b>Defrost for processing</b> — it lands here to log the ice-bath temperature.</div>
+        ) : (
+          <>
+            <div style={lbl}>Thawing batch</div>
+            <select value={thawLotId} onChange={e => setThawLotId(e.target.value)} style={inp}>
+              <option value="">— select batch —</option>
+              {thawLots.map(l => <option key={l.lot_id} value={l.lot_id}>{l.batch_number} · {l.product_name}</option>)}
+            </select>
+
+            {thawLot && (
+              <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: '#0c1729', border: '1px solid #1c2c44', fontSize: 13, lineHeight: 1.7 }}>
+                <div><b style={{ color: GOLD }}>{thawLot.batch_number}</b> · 🦞 {thawLot.product_name}</div>
+                <div>🚤 {thawLot.boat ?? '—'} · 📅 Pulled {thawLot.date_pulled?.slice(0, 10) ?? '—'} · ⏳ Best used by {thawLot.best_used_by ?? '—'}</div>
+                {(thawLot.thaw_logs?.length ?? 0) > 0 && (
+                  <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #1c2c44' }}>
+                    <div style={{ fontSize: 11, color: '#8ea3c0', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Readings ({thawLot.thaw_logs!.length})</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {thawLot.thaw_logs!.slice(0, 12).map((t, i) => (
+                        <span key={i} title={t.logged_at?.slice(0, 16) ?? ''} style={{ fontSize: 12, fontWeight: 800, padding: '2px 8px', borderRadius: 14, background: t.within_limit ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.14)', color: t.within_limit ? '#4ade80' : '#f87171' }}>{t.reading_f}°F</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: 10 }}><div style={lbl}>Ice-bath temperature (°F)</div>
+              <input type="number" inputMode="decimal" value={thawReading} onChange={e => setThawReading(e.target.value)} placeholder="e.g. 32" style={inp} /></div>
+            <button onClick={submitThawTemp} disabled={busy || !thawLotId} style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 12, fontWeight: 900, fontSize: 15, background: (busy || !thawLotId) ? '#3a4a63' : GOLD, color: NAVY, border: 'none', cursor: (busy || !thawLotId) ? 'not-allowed' : 'pointer' }}>{busy ? 'Working…' : '🌡️ Log thaw temperature'}</button>
           </>
         )}
       </div>
